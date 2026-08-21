@@ -48,6 +48,7 @@
       "adminTitle": "Admin",
       "audit": "Audit log",
       "backToApp": "Back to app",
+      "config": "Configuration",
       "dashboard": "Dashboard",
       "metaTitle": "Platform Admin",
       "platformBadge": "Platform",
@@ -334,6 +335,96 @@
     "signOut": "Sign out",
     "somethingWentWrong": "Something went wrong. Please try again.",
     "undo": "Undo"
+  },
+  "config": {
+    "ai": {
+      "anthropicModel": "Anthropic model",
+      "openaiModel": "OpenAI model",
+      "provider": "AI provider"
+    },
+    "areas": {
+      "ai": "AI assistant",
+      "branding": "Branding",
+      "cycles": "Cycles",
+      "env": "Environment",
+      "invite": "Invitations",
+      "limits": "Plan limits",
+      "log": "Logging",
+      "security": "Security",
+      "webhook": "Webhooks"
+    },
+    "branding": {
+      "appName": "Product name"
+    },
+    "cycles": {
+      "upcomingCount": "Upcoming cycles kept ready"
+    },
+    "description": "Every configurable knob, its effective value, and which layer supplied it. Values set here apply to every workspace unless a workspace overrides them.",
+    "env": {
+      "anthropicApiKey": "Anthropic API key",
+      "appUrl": "App URL",
+      "collabEnabled": "Collaborative editing enabled",
+      "databaseUrl": "Database URL",
+      "githubClientSecret": "GitHub client secret",
+      "googleClientSecret": "Google client secret",
+      "graphqlAllowedOrigins": "GraphQL allowed origins",
+      "jwtRefreshSecret": "JWT refresh secret",
+      "jwtSecret": "JWT secret",
+      "openaiApiKey": "OpenAI API key",
+      "redisUrl": "Redis URL",
+      "sentryAuthToken": "Sentry auth token",
+      "slackClientSecret": "Slack client secret",
+      "slackSigningSecret": "Slack signing secret",
+      "smtpHost": "SMTP host",
+      "smtpPass": "SMTP password",
+      "smtpPort": "SMTP port",
+      "smtpSecure": "SMTP secure",
+      "smtpUser": "SMTP user",
+      "trustProxyHeaders": "Trust proxy headers",
+      "uploadDir": "Upload directory",
+      "wsPort": "WebSocket port",
+      "wsPublicUrl": "WebSocket public URL",
+      "yjsPort": "Yjs port",
+      "yjsPublicUrl": "Yjs public URL"
+    },
+    "inheritedFrom": "Inherited from {source}",
+    "invite": {
+      "expiryDays": "Invite expiry (days)",
+      "maxPending": "Max pending invites"
+    },
+    "limits": {
+      "maxCustomFieldsPerOrg": "Max custom fields per workspace",
+      "maxCustomFieldsPerTeam": "Max custom fields per team",
+      "maxExportRows": "Max export rows",
+      "maxImportRows": "Max import rows",
+      "maxInitiativeDepth": "Max initiative nesting depth",
+      "maxLabelGroupChildren": "Max labels per group"
+    },
+    "loadError": "Could not load configuration",
+    "lockedByEnv": "Forced by {name}",
+    "log": {
+      "httpSampleRate": "HTTP access-log sample rate",
+      "level": "Log level"
+    },
+    "resetToast": "Reset to inherited",
+    "resetToInherited": "Reset to inherited",
+    "restartRequired": "Restart required",
+    "savedToast": "Setting saved",
+    "saveError": "Could not save setting",
+    "secretSet": "Set",
+    "secretUnset": "Not set",
+    "security": {
+      "allowPrivateWebhookUrls": "Allow private webhook URLs",
+      "authRateLimitFailClosed": "Fail auth rate limiting closed"
+    },
+    "setHere": "Set here",
+    "title": "Platform configuration",
+    "unsetEnv": "Set {name} to change this",
+    "webhook": {
+      "autoDisableAfter": "Auto-disable after consecutive failures",
+      "maxAttempts": "Webhook delivery attempts",
+      "requestTimeoutMs": "Webhook request timeout (ms)"
+    }
   },
   "customFields": {
     "addField": "Add field",

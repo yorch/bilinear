@@ -19,6 +19,13 @@ interface SimpleSelectProps {
    */
   ariaLabel?: string;
   className?: string;
+  /**
+   * Renders the trigger read-only. Used where a value exists but nothing may
+   * change it — an `override`-mode environment variable supplying a config
+   * knob, for instance, where accepting a change would appear to succeed and
+   * silently do nothing.
+   */
+  disabled?: boolean;
   id?: string;
   onChange: (value: string) => void;
   options: readonly SelectOption[];
@@ -35,6 +42,7 @@ export function SimpleSelect({
   onChange,
   placeholder,
   className,
+  disabled = false,
   id,
   variant = 'default',
   placement = 'bottom',
@@ -64,11 +72,13 @@ export function SimpleSelect({
         aria-label={ariaLabel}
         className={cn(
           'flex items-center gap-1.5 text-sm outline-none',
+          'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-input',
           variant === 'default' &&
             'w-full justify-between rounded-md border border-input bg-transparent px-3 py-1.5 text-foreground hover:border-ring',
           variant === 'ghost' &&
             'rounded px-1.5 py-0.5 font-medium text-foreground hover:bg-accent',
         )}
+        disabled={disabled}
         id={id}
         onClick={() => setOpen(o => !o)}
         ref={triggerRef}

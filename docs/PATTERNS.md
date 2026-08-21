@@ -472,6 +472,89 @@ function getSecret(key: string): Uint8Array {
 
 Required variables are documented in `.env.example`. Optional variables have sensible defaults (e.g., `REDIS_URL` defaults to `redis://localhost:6379`).
 
+### Most behaviour knobs are NOT environment variables
+
+Reach for `process.env` only for secrets, connection strings, and values read
+before a database connection exists. Everything else — caps, limits, retry
+policy, provider selection, log level — is a `defineSetting` entry in
+`src/lib/config/registry.ts`, resolved through `ConfigService`:
+
+```typescript
+// Declaration (src/lib/config/registry.ts)
+defineSetting({
+  key: 'webhook.maxAttempts',
+  scopes: ['platform', 'org'],   // ordered; a write to an undeclared scope is rejected
+  type: 'int',
+  default: 5,
+  bounds: { max: 20, min: 1 },
+  storage: 'db',                 // or 'env-only' — never stored, never editable
+  editableBy: 'platform-admin',  // two fields, not one: the plan limits are
+  visibleTo: 'org-admin',        // visible to org admins, editable by neither
+  env: { mode: 'default', name: 'WEBHOOK_MAX_ATTEMPTS' },
+  labelKey: 'config.webhook.maxAttempts',
+})
+
+// Consumption (a service)
+const maxAttempts = await this.config.getInt('webhook.maxAttempts', { orgId });
+```
+
+Precedence, lowest first: **code default → env → platform → org → team → user.**
+An `override`-mode env var sits above every layer and renders the knob locked in
+the UI.
+
+Seven rules that are easy to get wrong:
+
+- **A registered knob must have a consumer.** A declaration nothing enforces
+  reports a setting that does nothing — worse than no setting at all. Two knobs
+  were deleted during implementation for exactly this.
+- **Services take a `ConfigReader`, defaulting to `DEFAULTS_ONLY_CONFIG` — and
+  every production construction site must pass the real one.** The default
+  resolves code-default → env with no query, so unit tests against a mocked
+  Prisma behave exactly as they did when the value was a constant. That is a
+  test affordance, not a fallback: omitting the real reader in production is
+  silent, and a review found `GitHubService` building a `WebhookService` bare,
+  so the GitHub integration's webhook dispatches ignored every configured retry
+  and timeout while the identical service elsewhere honoured them. Pass the real
+  `ConfigService` from `context.ts`, from `loaders.ts`, from the route handlers
+  that construct services directly, and from the standalone WS/YJS entry points.
+- **`editableBy` does not decide which scopes a caller can reach.** It is a
+  property of the knob; scope reachability is a property of the caller and is
+  gated separately in the settings resolver — platform scope needs
+  `requirePlatformAdmin`, team scope needs membership (org admins excepted), and
+  org/user scope may never name someone else's id. Conflating the two let any
+  org admin write deployment-wide defaults for every tenant.
+- **Never identify a registry error with `instanceof` from server code.**
+  `src/lib/config` is importable from the browser *and* the server, so the
+  bundler emits it into the SSR chunk as well as the server chunk — two copies,
+  two class identities. `mapConfigError` compared a value thrown by one against
+  the constructor of the other, fell through, and Apollo masked every validation
+  failure as `INTERNAL_SERVER_ERROR`. Use `isInvalidSettingValueError`, which
+  keys on `name`. This applies to any error class declared in a module both
+  sides import; the server-only error classes in `src/server/config/` are single
+  instances and are safe. **Unit tests cannot catch this** — under Vitest there
+  is only ever one copy of a module — so it needs an e2e spec or a name-based
+  check by construction.
+- **The client never re-derives an authorization answer.** `locked` and
+  `writable` are both computed server-side in `toGraphQL` and travel in
+  `ResolvedSetting`. The console once inferred `writable` from `editableBy`,
+  which cannot work — `editableBy` is a floor, not an equality, and it says
+  nothing about whether the caller may reach the scope. That inference was also
+  the *only* runtime import of `src/lib/config` from client code, and therefore
+  the reason the registry was bundled twice; see the `instanceof` rule above.
+- **Listing a knob and permitting a write are different questions.** The
+  platform console shows *every* knob declared at the scope, including
+  `env-only` ones, which render locked and name their variable (redacted ones
+  show presence only). `assertWritable` is what refuses the write. Filtering the
+  listing instead hid exactly the values an operator needs when asking "why is
+  it behaving like that here".
+- **The database type-checks nothing** — `settings.value` is `Json`. The
+  registry validator is the only guard on a write, and a stored row that no
+  longer matches its declaration falls through to the layer below rather than
+  throwing.
+
+Full rationale, including what is deliberately env-only and why, is in
+[`CONFIG_ASSESSMENT.md`](CONFIG_ASSESSMENT.md).
+
 ---
 
 ## 11. Performance Patterns
@@ -2384,7 +2467,7 @@ The client's apply is a **whole-object replace**, and the same payload is persis
 
 - **Broadcast the full row, never a stub.** `{ completedAt, id }` truncates the cached entity to two fields — it drops out of `findByTeamId`, scrambles date sorts, and is persisted in that state (only a re-bootstrap repairs it, and the cached-data path takes `deltaSync()` instead). Re-fetch the entity after a mutation that only returns a partial result.
 - **Say nothing about a relation rather than saying "empty".** A payload with no label information is not an issue with no labels. `normalizeIssueRow(data, previousLabelIds)` (exported from `src/stores/issue-store.ts`) collapses the three label shapes the server can send — `labelAssignments`, `labels`, `labelIds` — and falls back to the previously-cached ids. **Both** the MobX pool and the Dexie write must use it; normalizing in only one made label loss survive reloads.
-- **Strip anything not meant for every client.** SyncActions fan out org-wide over WebSocket. `Organization` payloads omit `authSettings`/`securitySettings`; `getBootstrapData` omits those plus the credential columns on `User` (`passwordHash`, `googleId`, `githubId`, `calendarFeedToken`, `isPlatformAdmin`). The `DB*` interfaces in `src/lib/db.ts` declare none of them, so a leak is invisible to TypeScript while still landing in IndexedDB in plaintext.
+- **Strip anything not meant for every client.** SyncActions fan out org-wide over WebSocket, so anything scoped narrower than the org must not travel this way. `getBootstrapData` omits the credential columns on `User` (`passwordHash`, `googleId`, `githubId`, `calendarFeedToken`, `isPlatformAdmin`). The `Organization.authSettings`/`securitySettings` omissions that used to sit beside them are gone with the columns; the rule they encoded now governs configuration, which is why user-scope writes are not broadcast. The `DB*` interfaces in `src/lib/db.ts` declare none of them, so a leak is invisible to TypeScript while still landing in IndexedDB in plaintext.
 - **Per-recipient models need a client-side filter.** `Notification` rows belong to one user but broadcast to the whole org, so `SyncManager` drops actions whose `userId` isn't the current user (`NotificationStore` documents its pool as already user-scoped, and `markAllRead()` depends on that). Note there is deliberately no `'I'` SyncAction for notifications — live delivery would broadcast private notifications org-wide and needs a per-user channel first.
 - **A partial payload riding another model's stream must be discriminated.** `issueCustomFieldValuesSet` emits `{ customFieldValues }` on the `Issue` stream with no `id` and no issue columns. `SyncManager` checks for keys beyond `customFieldValues` before treating it as an issue row, and guards the `db.issues` put on `id` being present — a Dexie put that violates the inbound keyPath throws **inside the shared transaction**, rolling back every other entity in the batch including the `lastSyncId` cursor.
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createStubConfig } from '../../test/config-mock';
 import { TEST_ORG, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
@@ -46,6 +47,9 @@ describe('InitiativeService', () => {
   // `issue.groupBy` queries) since that batching logic has its own
   // dedicated coverage in project.service.test.ts.
   let getProgressBatch: ReturnType<typeof vi.fn>;
+  // Hoisted out of `beforeEach` so the depth-cap tests can rebuild the service
+  // with a stub config over the same project dependency.
+  let projectService: ProjectService;
 
   beforeEach(() => {
     prisma = createMockPrisma();
@@ -53,10 +57,10 @@ describe('InitiativeService', () => {
     // progress don't have to stub it — InitiativeService's own `?? {
     // progress: 0, scope: 0 }` fallback covers any id missing from the map.
     getProgressBatch = vi.fn().mockResolvedValue(new Map());
-    const projectService = { getProgressBatch } as unknown as ProjectService;
-    // assertParentAcceptsChild reads the org's plan-tier depth cap
-    // (Organization.maxInitiativeDepth) instead of the old hardcoded
-    // constant; the fixture default matches that constant.
+    projectService = { getProgressBatch } as unknown as ProjectService;
+    // assertParentAcceptsChild resolves the org's plan-tier depth cap through
+    // the config chain (`limits.maxInitiativeDepth`) instead of the old
+    // hardcoded constant; with no stub it gets the registry default of 5.
     prisma.organization.findUnique.mockResolvedValue(TEST_ORG);
     service = new InitiativeService(prisma as never, projectService);
   });
@@ -130,9 +134,13 @@ describe('InitiativeService', () => {
 
     it('rejects parenting that would exceed the org-configured max depth', async () => {
       // Org has a (hypothetical, admin-lowered) depth cap of 2 instead of
-      // the MAX_INITIATIVE_DEPTH=5 default — proves the cap is actually
-      // read from Organization.maxInitiativeDepth, not the constant.
-      prisma.organization.findUnique.mockResolvedValueOnce({ maxInitiativeDepth: 2 });
+      // the default 5 — proves the cap is actually resolved through the config
+      // chain, not read from the constant.
+      service = new InitiativeService(
+        prisma as never,
+        projectService,
+        createStubConfig({ 'limits.maxInitiativeDepth': 2 }),
+      );
       // Parent 'p1' itself has a parent 'p0' → depth would become 2, at cap.
       prisma.initiative.findFirst.mockResolvedValueOnce({ id: 'p1', parentId: 'p0' });
 
@@ -157,7 +165,11 @@ describe('InitiativeService', () => {
       // never runs for a root parent (parentId: null), so the baseline depth
       // check must reject here — otherwise a "no nesting" cap is silently
       // ignored for top-level parents.
-      prisma.organization.findUnique.mockResolvedValueOnce({ maxInitiativeDepth: 1 });
+      service = new InitiativeService(
+        prisma as never,
+        projectService,
+        createStubConfig({ 'limits.maxInitiativeDepth': 1 }),
+      );
       prisma.initiative.findFirst.mockResolvedValueOnce({ id: 'p1', parentId: null });
 
       await expect(

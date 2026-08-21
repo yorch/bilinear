@@ -1196,6 +1196,76 @@ post-state in the DB or store, not just visual presence).
 
 ---
 
+## 5b. Configuration system
+
+The system described in [`CONFIG_ASSESSMENT.md`](CONFIG_ASSESSMENT.md) is
+**built and its deferred work is closed** — registry, layered resolver,
+`settings` storage, GraphQL surface, `/admin/config` console, and an e2e spec
+over the whole loop. The four items originally filed here are done (the
+platform-admin audit/SyncAction gap, `themeSettings` syncing unstripped, the 15
+dead columns, the `psql`-only team knob), and so are the five filed after it
+shipped:
+
+- **5b.1 `branding.appName`** — shipped. The root layout resolves it per request
+  and hands it to `BrandingProvider`; metadata, the PWA manifest and
+  transactional email call `getAppName()`. Renaming the product no longer needs
+  a rebuild, and the auth screens are covered too because they sit inside the
+  root layout.
+- **5b.2 per-(user, org) preferences** — decided: **user scope stays global**,
+  matching `users.locale`/`users.accent`. Recorded in CONFIG_ASSESSMENT §7-D5.
+  Not pinned by a test, and cannot be until a knob declares `user` scope — see
+  5b.4.
+- **5b.3 team-hierarchy resolution** — decided: **team scope stays flat**. A
+  sub-team inherits from its org, not its parent team. CONFIG_ASSESSMENT §7-D6,
+  pinned by a test that a `parentId` walk would turn red.
+- **5b.4 per-user delivery over WebSocket** — **not built, deliberately.** See
+  below; it is the one item that came back with a different answer than the one
+  it was filed with.
+- **5b.5 platform-scope authorization in the primitive** — shipped.
+  `ConfigService.set`/`clear` take a `SettingWriter { actorId, role }` and
+  re-assert it in `assertWritable`, so the guarantee no longer rests on the one
+  resolver that remembers to call `requirePlatformAdmin`.
+
+### 5b.4 — `user` scope has no consumer, so per-user delivery has nothing to deliver
+
+**Status:** open, but not as filed. Do **not** build `broadcastToUser` until
+this is resolved.
+
+The item was written as "a user-scope config write is deliberately not
+broadcast, so other devices pick it up on next bootstrap". A survey of the
+codebase before building the delivery path found the premise is not yet true:
+**no knob in the registry declares `user` scope**, so a user-scope write is
+refused by `assertWritable` and the traffic the delivery path would carry cannot
+exist.
+
+Nor is there an obvious first knob. `locale`, `accent` and
+`emailNotificationsEnabled` each already have a column, a mutation and a UI —
+moving them into the registry is churn, not a win. The one genuinely
+unpersisted preference (board grouping, `use-issue-list-page.ts`) is client-only
+cosmetic state, and this repo's convention for that shape is `localStorage`, as
+sidebar-collapsed, visible columns and recent items all already do.
+
+**What a real candidate looks like**, so the next person can recognise one: a
+preference the **server** must resolve outside a request context — a digest
+cadence, a per-user AI setting read by a background job — i.e. the same shape as
+the org-scoped `ai.*` knobs, but per person. Nothing in the codebase is that
+shape today.
+
+**Why the scope stays anyway:** it costs one branch in `scopeIdFor` and one in
+`resolveScopeId`, and removing it would make the precedence chain three layers
+while the design, the storage and the docs all describe four. Revisit if it is
+still unused when something else forces a schema change.
+
+**First-touch when a candidate appears:** declare the knob, then give
+`ConnectionManager` a `broadcastToUser` — `ClientInfo` already carries `userId`,
+so it is `broadcastToOrgAll`'s loop with one extra `continue`, not new identity
+plumbing.
+
+**Acceptance signal:** a user-scope change reaches that user's other open tabs
+and no one else's.
+
+---
+
 ## 6. Already shipped (since 2026-04-22)
 
 A condensed history of what landed in main. See `git log` for full

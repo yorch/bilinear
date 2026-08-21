@@ -10,6 +10,7 @@ const NAV = [
   { href: '/admin/tenants', labelKey: 'admin.nav.tenants' },
   { href: '/admin/users', labelKey: 'admin.nav.users' },
   { href: '/admin/audit', labelKey: 'admin.nav.audit' },
+  { href: '/admin/config', labelKey: 'admin.nav.config' },
 ] as const;
 
 function isActive(pathname: string, href: string): boolean {

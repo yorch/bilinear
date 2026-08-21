@@ -1,9 +1,11 @@
+import { numericSettingDefault } from '@/lib/config';
 import type {
   Initiative,
   InitiativeProject,
   InitiativeUpdate,
   PrismaClient,
 } from '../../generated/prisma';
+import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { assertMaxLength, MAX_RICH_TEXT_LENGTH } from '../lib/limits';
 import {
   applyStatusTransitionTimestamps,
@@ -50,12 +52,13 @@ export interface InitiativeUpdateInput {
  * Default max nesting depth for sub-initiatives. Past this the breadcrumb in
  * the detail panel becomes unreadable and the recursive progress rollup
  * starts to dominate the project-update hot path. Matches Linear's
- * Enterprise plan cap. The enforced value is read per-org from
- * `Organization.maxInitiativeDepth` (see `assertParentAcceptsChild`) — this
- * constant only documents the default and backs the fallback / error message
- * when the org row can't be read.
+ * Enterprise plan cap. The enforced value is resolved through the config chain
+ * (`limits.maxInitiativeDepth`, see `assertParentAcceptsChild`) — this constant
+ * re-exports the registry's default so the error message can quote it without
+ * a second copy of the number.
  */
-export const MAX_INITIATIVE_DEPTH = 5;
+const MAX_INITIATIVE_DEPTH_KEY = 'limits.maxInitiativeDepth';
+export const MAX_INITIATIVE_DEPTH = numericSettingDefault(MAX_INITIATIVE_DEPTH_KEY);
 
 export type InitiativeStatus = 'planned' | 'active' | 'completed' | 'canceled';
 
@@ -106,6 +109,7 @@ export class InitiativeService {
     // helpers) — real wiring (src/server/graphql/context.ts) passes its own
     // already-constructed ProjectService instance explicitly.
     private project: ProjectService = new ProjectService(prisma),
+    private config: ConfigReader = DEFAULTS_ONLY_CONFIG,
   ) {}
 
   async create(
@@ -587,14 +591,10 @@ export class InitiativeService {
     if (childId && parentId === childId) {
       throw new InitiativeInvalidParentError();
     }
-    // Fetched once per call (not per recursion level below) — the org's
-    // plan-tier depth cap (Organization.maxInitiativeDepth) doesn't change
-    // mid-walk, so there's no reason to re-read it on every ancestor hop.
-    const org = await this.prisma.organization.findUnique({
-      select: { maxInitiativeDepth: true },
-      where: { id: orgId },
-    });
-    const maxDepth = org?.maxInitiativeDepth ?? MAX_INITIATIVE_DEPTH;
+    // Resolved once per call (not per recursion level below) — the org's
+    // plan-tier depth cap doesn't change mid-walk, so there's no reason to
+    // re-read it on every ancestor hop.
+    const maxDepth = await this.config.getInt(MAX_INITIATIVE_DEPTH_KEY, { orgId });
 
     const parent = await this.prisma.initiative.findFirst({
       select: { id: true, parentId: true },

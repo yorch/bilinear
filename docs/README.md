@@ -18,6 +18,7 @@ them in the same PR.
 | [`DATABASE_SCHEMA.md`](DATABASE_SCHEMA.md)       | Schema, the migration-consolidation policy, real-Postgres verification recipe  |
 | [`API_DESIGN.md`](API_DESIGN.md)                 | GraphQL contracts — types, queries, mutations, error codes                     |
 | [`REVIEW_BACKLOG.md`](REVIEW_BACKLOG.md)         | **The active work queue** — open findings, what shipped, what is deferred      |
+| [`CONFIG_ASSESSMENT.md`](CONFIG_ASSESSMENT.md)   | The configuration system: why it exists, how it resolves, what is deliberately env-only |
 | [`CHANGELOG.md`](CHANGELOG.md)                   | What shipped when, and the reasoning behind each decision                      |
 | [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) | Canonical per-sprint status; Sprint 15+ lives here rather than in `sprints/` |
 | [`PRD.md`](PRD.md)                               | Product requirements                                                          |

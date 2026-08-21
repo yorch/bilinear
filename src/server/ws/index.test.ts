@@ -19,16 +19,24 @@
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-vi.mock('ioredis', () => ({
-  default: vi.fn().mockImplementation(function MockRedis() {
+vi.mock('ioredis', () => {
+  // `duplicate()` matters: the WS server calls startConfigInvalidation() at
+  // boot, which needs its own connection because a client in subscriber mode
+  // can issue no other commands. Without it, importing this module throws.
+  // A function declaration, not an arrow: this stands in for a constructor
+  // (`new Redis(...)`) and an arrow cannot be `new`ed.
+  function makeClient(): Record<string, unknown> {
     return {
       disconnect: vi.fn(),
+      duplicate: vi.fn(() => makeClient()),
       on: vi.fn(),
+      publish: vi.fn().mockResolvedValue(1),
       subscribe: vi.fn().mockResolvedValue(undefined),
       unsubscribe: vi.fn().mockResolvedValue(undefined),
     };
-  }),
-}));
+  }
+  return { default: vi.fn().mockImplementation(makeClient) };
+});
 
 vi.mock('ws', () => ({
   WebSocketServer: vi.fn().mockImplementation(function MockWebSocketServer() {

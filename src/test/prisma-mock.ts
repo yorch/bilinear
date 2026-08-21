@@ -74,6 +74,7 @@ export type MockPrismaClient = {
     | 'projectUpdate'
     | 'publicRoadmap'
     | 'samlConfiguration'
+    | 'setting'
     | 'scimToken'
     | 'slackIntegration'
     | 'syncAction'
@@ -146,6 +147,13 @@ export function createMockPrisma(): MockPrismaClient {
     publicRoadmap: createMockModel(),
     samlConfiguration: createMockModel(),
     scimToken: createMockModel(),
+    // `findMany` defaults to `[]` for this model only. Every service now holds
+    // a ConfigService, which loads a whole scope with `setting.findMany` before
+    // resolving any knob — so an undefined result (the bare `vi.fn()` default)
+    // would crash on iteration in tests that never mention configuration at
+    // all. Narrowed to `setting` deliberately: giving every model this default
+    // changes what unrelated tests observe.
+    setting: { ...createMockModel(), findMany: vi.fn().mockResolvedValue([]) },
     slackIntegration: createMockModel(),
     syncAction: createMockModel(),
     team: createMockModel(),

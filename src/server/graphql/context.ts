@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import type { PrismaClient } from '../../generated/prisma';
+import { config, startConfigInvalidation } from '../config';
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { getClientIp } from '../lib/request-security';
@@ -46,6 +47,12 @@ import { createLoaders, type Loaders } from './loaders';
 export interface GraphQLContext extends AuthContext {
   /** Best-effort client IP for abuse tracking (X-Forwarded-For / X-Real-IP). */
   clientIp: string | null;
+  /**
+   * Layered configuration reader. The process-wide singleton, not a
+   * per-request instance — its snapshot and Redis invalidation are shared with
+   * the WS and YJS processes, neither of which has a GraphQL request at all.
+   */
+  config: typeof config;
   /** Per-request DataLoader bundle batching N+1 lookups. See ./loaders. */
   loaders: Loaders;
   prisma: PrismaClient;
@@ -90,6 +97,11 @@ export interface GraphQLContext extends AuthContext {
 }
 
 export async function createContext(req: NextRequest): Promise<GraphQLContext> {
+  // Idempotent. Subscribing here rather than at module load keeps the
+  // subscription off the `next build` path, which imports this module without
+  // a reachable Redis.
+  startConfigInvalidation();
+
   const authHeader = req.headers.get('authorization');
   const cookieToken = req.cookies.get('access_token')?.value ?? null;
 
@@ -100,37 +112,37 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const auditLogService = new AuditLogService(prisma);
   const authService = new AuthService(prisma, userService);
   const analyticsService = new AnalyticsService(prisma);
-  const githubService = new GitHubService(prisma);
+  const githubService = new GitHubService(prisma, config);
   const documentService = new DocumentService(prisma);
   const favoriteService = new FavoriteService(prisma);
   const fileService = new FileService(prisma);
   const commentService = new CommentService(prisma);
-  const customFieldService = new CustomFieldService(prisma);
+  const customFieldService = new CustomFieldService(prisma, config);
   const customViewService = new CustomViewService(prisma);
   const issueActivityService = new IssueActivityService(prisma);
   const notificationService = new NotificationService(prisma);
   const organizationService = new OrganizationService(prisma);
-  const organizationInviteService = new OrganizationInviteService(prisma);
-  const platformAdminService = new PlatformAdminService(prisma);
+  const organizationInviteService = new OrganizationInviteService(prisma, config);
+  const platformAdminService = new PlatformAdminService(prisma, config);
   const teamService = new TeamService(prisma);
   const workflowStateService = new WorkflowStateService(prisma);
-  const cycleService = new CycleService(prisma);
+  const cycleService = new CycleService(prisma, config);
   const issueService = new IssueService(prisma);
-  const importService = new ImportService(prisma, issueService);
+  const importService = new ImportService(prisma, issueService, config);
   const issueRelationService = new IssueRelationService(prisma);
   const issueTemplateService = new IssueTemplateService(prisma);
-  const labelService = new LabelService(prisma);
+  const labelService = new LabelService(prisma, config);
   const projectService = new ProjectService(prisma);
-  const initiativeService = new InitiativeService(prisma, projectService);
+  const initiativeService = new InitiativeService(prisma, projectService, config);
   const roadmapService = new RoadmapService(prisma);
   const syncService = new SyncService(prisma, redis);
   const searchService = new SearchService(prisma);
-  const aiService = new AiService(prisma, searchService);
+  const aiService = new AiService(prisma, searchService, config);
   const slackService = new SlackService(prisma, issueService);
   const samlService = new SamlService(prisma);
   const scimService = new ScimService(prisma);
   const triageService = new TriageService(prisma);
-  const webhookService = new WebhookService(prisma);
+  const webhookService = new WebhookService(prisma, config);
   // AutomationService wraps issueService.update + syncService.createSyncAction
   // for action side effects, so other clients see automation writes in real
   // time and lifecycle stamping happens identically to user-initiated updates.
@@ -143,6 +155,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   return {
     ...auth,
     clientIp,
+    config,
     loaders: createLoaders(prisma, auth.orgId),
     prisma,
     services: {

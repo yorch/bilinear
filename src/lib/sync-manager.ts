@@ -127,6 +127,13 @@ export const UNCACHED_MODELS = [
   'CommentReaction',
   'File',
   'InitiativeUpdate',
+  // Configuration. There is no settings store and no Dexie table: `/admin/config`
+  // and the workspace settings pages read resolved values over GraphQL, and the
+  // action's payload is `{scope, scopeId}` — a hint that something changed, not
+  // the values themselves, which are per-caller anyway (the same key resolves
+  // differently for a different team or user). The action exists because every
+  // mutation emits one; a client that wants live config would refetch on it.
+  'Setting',
   'TeamMembership',
 ] as const;
 
@@ -983,14 +990,7 @@ export class SyncManager {
           if (act === 'D') {
             dexieDeletes.push({ id: modelId, table: 'organizations' });
           } else if (data) {
-            // `getBootstrapData` omits these two settings blobs; the broadcast
-            // path must not put them back. Stripped server-side too — this is
-            // the belt to that braces, since anything already in a client's
-            // IndexedDB would otherwise persist.
-            const { authSettings, securitySettings, ...safe } = data as Record<string, unknown>;
-            void authSettings;
-            void securitySettings;
-            dexieUpserts.organizations.push(safe);
+            dexieUpserts.organizations.push(data as Record<string, unknown>);
           }
           break;
         case 'Issue': {

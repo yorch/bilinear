@@ -1,20 +1,20 @@
+import { numericSettingDefault } from '@/lib/config';
 import type { Issue, PrismaClient } from '../../generated/prisma';
+import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { MAX_PRIORITY, MIN_PRIORITY } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 import type { IssueService } from './issue.service';
 
 const log = childLogger({ module: 'import' });
 
-// Hard cap so a single synchronous import can't tie up the request path or
-// blow memory. Larger migrations should be chunked by the client.
-export const MAX_IMPORT_ROWS = 500;
+const MAX_IMPORT_ROWS_KEY = 'limits.maxImportRows';
+const MAX_EXPORT_ROWS_KEY = 'limits.maxExportRows';
 
-// Default hard cap on organizationExport's row count — a basic guard against
-// an unbounded response (a JSON export of every issue in a very large org).
-// Not real pagination; see exportData's doc comment. The enforced value is
-// read per-org from `Organization.maxExportRows`; this constant documents
-// the default and backs the fallback if the org row can't be read.
-export const MAX_EXPORT_ROWS = 10_000;
+// Defaults only — both caps are now resolved through the config chain. The
+// import cap was the sibling that never got a per-org column while the export
+// cap did; on the registry they are symmetric.
+export const MAX_IMPORT_ROWS = numericSettingDefault(MAX_IMPORT_ROWS_KEY);
+export const MAX_EXPORT_ROWS = numericSettingDefault(MAX_EXPORT_ROWS_KEY);
 
 /**
  * Parse CSV text into headers + rows. Handles quoted fields, escaped quotes
@@ -117,6 +117,7 @@ export class ImportService {
   constructor(
     private prisma: PrismaClient,
     private issueService: IssueService,
+    private config: ConfigReader = DEFAULTS_ONLY_CONFIG,
   ) {}
 
   /** Parse without writing — for the mapping UI. */
@@ -139,8 +140,9 @@ export class ImportService {
     mapping: ImportMapping,
   ): Promise<ImportResult> {
     const { headers, rows } = parseCsv(csv);
-    if (rows.length > MAX_IMPORT_ROWS) {
-      throw new Error(`Too many rows: ${rows.length}. Maximum is ${MAX_IMPORT_ROWS}.`);
+    const maxImportRows = await this.config.getInt(MAX_IMPORT_ROWS_KEY, { orgId });
+    if (rows.length > maxImportRows) {
+      throw new Error(`Too many rows: ${rows.length}. Maximum is ${maxImportRows}.`);
     }
     const col = (name: string | undefined): number => (name ? headers.indexOf(name) : -1);
     const titleIdx = col(mapping.title);
@@ -217,11 +219,7 @@ export class ImportService {
    * out of scope here (noting as a residual, not implementing).
    */
   async exportData(orgId: string, teamId?: string): Promise<object> {
-    const org = await this.prisma.organization.findUnique({
-      select: { maxExportRows: true },
-      where: { id: orgId },
-    });
-    const maxRows = org?.maxExportRows ?? MAX_EXPORT_ROWS;
+    const maxRows = await this.config.getInt(MAX_EXPORT_ROWS_KEY, { orgId });
 
     const issues = await this.prisma.issue.findMany({
       orderBy: { createdAt: 'asc' },

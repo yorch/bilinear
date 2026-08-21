@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { APP_NAME } from '@/lib/app-config';
+import { useAppName } from '@/providers/branding-provider';
 
 /**
  * Sets the browser tab title for the current route. Every workspace page is
@@ -11,14 +11,15 @@ import { APP_NAME } from '@/lib/app-config';
  * same static root title regardless of which issue/project/team was open.
  */
 export function useDocumentTitle(title: string | null | undefined) {
+  const appName = useAppName();
   useEffect(() => {
     if (!title) {
       return;
     }
     const previous = document.title;
-    document.title = `${title} · ${APP_NAME}`;
+    document.title = `${title} · ${appName}`;
     return () => {
       document.title = previous;
     };
-  }, [title]);
+  }, [title, appName]);
 }

@@ -5,6 +5,7 @@ import type {
   Issue,
   PrismaClient,
 } from '../../generated/prisma';
+import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { childLogger } from '../lib/logger';
 import { redis } from '../lib/redis';
 import { IssueService } from './issue.service';
@@ -22,13 +23,12 @@ const log = childLogger({ module: 'github' });
  * the DB with none of that.
  *
  * Optional + defaulted (not required) because `GitHubService` is
- * constructed directly (`new GitHubService(prisma)`, no DI container) from
- * two route handlers this fix must not touch:
+ * constructed directly (no DI container) from two route handlers —
  * `src/app/api/integrations/github/callback/route.ts` and
  * `src/app/api/integrations/github/webhook/route.ts`. When the caller
  * doesn't inject deps, real ones are built here from the same `prisma`
  * client (+ the redis singleton for SyncAction publish) so production
- * behaves correctly without any call-site changes. Unit tests inject fakes
+ * behaves correctly without every call site restating them. Unit tests inject fakes
  * instead (see github.service.test.ts) to avoid touching a real Redis
  * connection.
  */
@@ -76,14 +76,24 @@ interface GitHubUser {
 export class GitHubService {
   private readonly deps: GitHubServiceDeps;
 
+  /**
+   * `config` sits ahead of `deps` because every production call site needs it
+   * and none of them injects deps. The internally-built `WebhookService` reads
+   * `webhook.maxAttempts`, `webhook.requestTimeoutMs` and
+   * `webhook.autoDisableAfter`; constructing it bare left the GitHub
+   * integration's dispatches on the code defaults while the identical service
+   * built in `context.ts` honoured the configured values — one code path
+   * quietly ignoring configuration, with nothing logged to say so.
+   */
   constructor(
     private prisma: PrismaClient,
+    config: ConfigReader = DEFAULTS_ONLY_CONFIG,
     deps?: GitHubServiceDeps,
   ) {
     this.deps = deps ?? {
       issue: new IssueService(prisma),
       sync: new SyncService(prisma, redis),
-      webhook: new WebhookService(prisma),
+      webhook: new WebhookService(prisma, config),
     };
   }
 

@@ -1,3 +1,4 @@
+import { numericSettingDefault } from '@/lib/config';
 import type {
   CustomFieldDefinition,
   CustomFieldType,
@@ -5,13 +6,16 @@ import type {
   PrismaClient,
 } from '../../generated/prisma';
 import { Prisma } from '../../generated/prisma';
+import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 
-// Defaults only — the enforced cap is read per-org from
-// `Organization.maxCustomFieldsPerTeam`/`maxCustomFieldsPerOrg` (see
-// `createDefinition`). These constants document the default and back the
-// generic error message when the caller doesn't know which scope tripped.
-export const MAX_CUSTOM_FIELDS_PER_TEAM = 20;
-export const MAX_CUSTOM_FIELDS_PER_ORG = 30;
+const MAX_CUSTOM_FIELDS_PER_TEAM_KEY = 'limits.maxCustomFieldsPerTeam';
+const MAX_CUSTOM_FIELDS_PER_ORG_KEY = 'limits.maxCustomFieldsPerOrg';
+
+// Defaults only — the enforced cap is resolved through the config chain (see
+// `createDefinition`). Re-exported from the registry rather than re-declared,
+// so there is one number to change and no way for the two to drift.
+export const MAX_CUSTOM_FIELDS_PER_TEAM = numericSettingDefault(MAX_CUSTOM_FIELDS_PER_TEAM_KEY);
+export const MAX_CUSTOM_FIELDS_PER_ORG = numericSettingDefault(MAX_CUSTOM_FIELDS_PER_ORG_KEY);
 
 export interface CustomFieldOption {
   color?: string;
@@ -166,27 +170,32 @@ function validateOptionsForType(
 }
 
 export class CustomFieldService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    private config: ConfigReader = DEFAULTS_ONLY_CONFIG,
+  ) {}
 
   async createDefinition(input: CustomFieldDefinitionCreateInput): Promise<CustomFieldDefinition> {
     validateOptionsForType(input.type, input.options);
 
-    return this.prisma.$transaction(async tx => {
-      // Per-scope active-fields cap, read from the org's plan-tier settings
-      // (Organization.maxCustomFieldsPerTeam/maxCustomFieldsPerOrg — see
-      // schema.prisma) rather than a hardcoded constant, so an admin can
-      // raise/lower it without a deploy. Team-scoped honours the per-team
-      // limit; workspace-scoped uses a separate per-org cap because those
-      // fields apply to every team and dominate the picker UI density.
-      const org = await tx.organization.findUnique({
-        select: { maxCustomFieldsPerOrg: true, maxCustomFieldsPerTeam: true },
-        where: { id: input.organizationId },
-      });
-      const cap =
-        input.teamId === null
-          ? (org?.maxCustomFieldsPerOrg ?? MAX_CUSTOM_FIELDS_PER_ORG)
-          : (org?.maxCustomFieldsPerTeam ?? MAX_CUSTOM_FIELDS_PER_TEAM);
+    // Per-scope active-fields cap, read through the config registry rather than
+    // a hardcoded constant, so an admin can raise or lower it without a deploy.
+    // Team-scoped honours the per-team limit; workspace-scoped uses a separate
+    // per-org cap because those fields apply to every team and dominate the
+    // picker UI density.
+    //
+    // Resolved BEFORE the transaction opens. `this.config` reads on
+    // `this.prisma`, a different pool connection, so a cache miss inside the
+    // transaction would need a second connection while this one is held — with
+    // the pool's default of 10, enough concurrent creates deadlock until every
+    // transaction times out. The cap is not transactional data anyway; the
+    // TOCTOU guard is the sibling count below, which does stay inside.
+    const cap = await this.config.getInt(
+      input.teamId === null ? MAX_CUSTOM_FIELDS_PER_ORG_KEY : MAX_CUSTOM_FIELDS_PER_TEAM_KEY,
+      { orgId: input.organizationId },
+    );
 
+    return this.prisma.$transaction(async tx => {
       const activeCount = await tx.customFieldDefinition.count({
         where:
           input.teamId === null

@@ -5,8 +5,10 @@ import {
   Prisma,
   type PrismaClient,
 } from '../../generated/prisma';
+import { assertMaxLength, MAX_LOGO_URL_LENGTH, MAX_ORGANIZATION_NAME_LENGTH } from '../lib/limits';
 
 const URL_KEY_RE = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
+
 export const VALID_ROLES = ['owner', 'admin', 'member', 'guest'] as const;
 export type OrgRole = (typeof VALID_ROLES)[number];
 
@@ -19,6 +21,20 @@ export class InvalidUrlKeyError extends Error {
   constructor() {
     super('URL key must be 3-63 characters, lowercase alphanumeric and hyphens only');
     this.name = 'InvalidUrlKeyError';
+  }
+}
+
+export class InvalidOrganizationNameError extends Error {
+  constructor(message = 'Organization name must not be blank') {
+    super(message);
+    this.name = 'InvalidOrganizationNameError';
+  }
+}
+
+export class InvalidLogoUrlError extends Error {
+  constructor() {
+    super(`Logo URL must be an http(s) URL of at most ${MAX_LOGO_URL_LENGTH} characters`);
+    this.name = 'InvalidLogoUrlError';
   }
 }
 
@@ -66,6 +82,61 @@ export class CannotRemoveSelfError extends Error {
 
 export class OrganizationService {
   constructor(private prisma: PrismaClient) {}
+
+  /**
+   * Update a workspace's own identity: display name, logo, and URL key.
+   *
+   * There was no such mutation before — `logoUrl` was a column with a reader
+   * and no writer, and an owner could not rename their own workspace at all.
+   *
+   * `urlKey` is validated and its uniqueness violation remapped the same way
+   * `createWithOwner` does, because changing it is the same operation as
+   * choosing it. Note that changing it invalidates existing workspace URLs;
+   * that is the caller's decision to make, and the resolver gates it on
+   * owner/admin.
+   */
+  async update(
+    orgId: string,
+    input: { logoUrl?: string | null; name?: string; urlKey?: string },
+  ): Promise<Organization> {
+    if (input.urlKey !== undefined && !URL_KEY_RE.test(input.urlKey)) {
+      throw new InvalidUrlKeyError();
+    }
+    if (input.name !== undefined) {
+      if (input.name.trim().length === 0) {
+        throw new InvalidOrganizationNameError();
+      }
+      assertMaxLength(
+        input.name,
+        MAX_ORGANIZATION_NAME_LENGTH,
+        m => new InvalidOrganizationNameError(m),
+        'Organization name',
+      );
+    }
+    // `null` clears the logo and is valid; a string must be a bounded http(s)
+    // URL. `data:` and `javascript:` are refused outright — nothing renders
+    // this yet, and it should not become an XSS sink the day something does.
+    if (typeof input.logoUrl === 'string' && !isStorableLogoUrl(input.logoUrl)) {
+      throw new InvalidLogoUrlError();
+    }
+    try {
+      return await this.prisma.organization.update({
+        data: {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.urlKey !== undefined ? { urlKey: input.urlKey } : {}),
+          // `logoUrl` is nullable, so `null` is a meaningful value (clear it)
+          // and must be distinguished from `undefined` (leave it alone).
+          ...(input.logoUrl !== undefined ? { logoUrl: input.logoUrl } : {}),
+        },
+        where: { id: orgId },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new UrlKeyTakenError();
+      }
+      throw err;
+    }
+  }
 
   /**
    * Create an organization and the founding `owner` membership atomically.
@@ -290,5 +361,17 @@ export class OrganizationService {
       where: { organizationId_userId: { organizationId: orgId, userId } },
     });
     return row !== null;
+  }
+}
+
+function isStorableLogoUrl(value: string): boolean {
+  if (value.length > MAX_LOGO_URL_LENGTH) {
+    return false;
+  }
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
   }
 }

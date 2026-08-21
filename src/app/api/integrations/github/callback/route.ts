@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { config } from '@/server/config';
 import { env } from '@/server/lib/env';
 import { verifyGithubOAuthState } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
@@ -62,7 +63,7 @@ async function handleGet(req: NextRequest) {
     : `${fallbackUrl}/settings/integrations`;
 
   try {
-    const service = new GitHubService(prisma);
+    const service = new GitHubService(prisma, config);
     await service.connect(orgId, userId, { code, webhookSecret });
     log.info({ orgId }, 'GitHub integration connected');
   } catch (err) {

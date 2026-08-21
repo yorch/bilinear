@@ -4,6 +4,8 @@ import { TEST_ORG, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
   CannotRemoveSelfError,
+  InvalidLogoUrlError,
+  InvalidOrganizationNameError,
   InvalidRoleError,
   InvalidUrlKeyError,
   LastOwnerError,
@@ -265,5 +267,63 @@ describe('OrganizationService.removeMember', () => {
     await expect(
       svc.removeMember(TEST_ORG.id, TARGET, { role: 'owner', userId: TEST_USER.id }),
     ).rejects.toBeInstanceOf(LastOwnerError);
+  });
+});
+
+/**
+ * `organizationUpdate` is the first writer `logo_url` has ever had, and the
+ * whole organization row is broadcast as a SyncAction payload — so an
+ * unvalidated value lands in every member's IndexedDB and every subsequent
+ * bootstrap. `name` is `VarChar(255)`, and reaching Prisma with a longer one
+ * surfaced as INTERNAL_SERVER_ERROR rather than as bad input.
+ */
+describe('OrganizationService.update — input validation', () => {
+  let prisma: MockPrismaClient;
+  let svc: OrganizationService;
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    prisma.organization.update.mockResolvedValue(TEST_ORG);
+    svc = new OrganizationService(prisma as never);
+  });
+
+  it('rejects a name longer than the column', async () => {
+    await expect(svc.update(TEST_ORG.id, { name: 'x'.repeat(256) })).rejects.toBeInstanceOf(
+      InvalidOrganizationNameError,
+    );
+    expect(prisma.organization.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a blank name', async () => {
+    await expect(svc.update(TEST_ORG.id, { name: '   ' })).rejects.toBeInstanceOf(
+      InvalidOrganizationNameError,
+    );
+  });
+
+  it('rejects a data: logo URL', async () => {
+    // The write amplifier: megabytes of base64 fanned out to every client.
+    await expect(
+      svc.update(TEST_ORG.id, { logoUrl: 'data:image/png;base64,AAAA' }),
+    ).rejects.toBeInstanceOf(InvalidLogoUrlError);
+    expect(prisma.organization.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a javascript: logo URL', async () => {
+    await expect(
+      svc.update(TEST_ORG.id, { logoUrl: 'javascript:alert(1)' }),
+    ).rejects.toBeInstanceOf(InvalidLogoUrlError);
+  });
+
+  it('rejects an over-long logo URL', async () => {
+    await expect(
+      svc.update(TEST_ORG.id, { logoUrl: `https://x.test/${'a'.repeat(2100)}` }),
+    ).rejects.toBeInstanceOf(InvalidLogoUrlError);
+  });
+
+  it('accepts an https URL, and null to clear it', async () => {
+    await expect(
+      svc.update(TEST_ORG.id, { logoUrl: 'https://cdn.example.com/logo.png' }),
+    ).resolves.toBeDefined();
+    await expect(svc.update(TEST_ORG.id, { logoUrl: null })).resolves.toBeDefined();
   });
 });

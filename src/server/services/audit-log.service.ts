@@ -29,6 +29,7 @@ export type AuditAction =
   | 'scim.token_created'
   | 'scim.token_revoked'
   | 'settings.security_changed'
+  | 'settings.config_changed'
   | 'team.created'
   | 'team.deleted'
   | 'webhook.created'

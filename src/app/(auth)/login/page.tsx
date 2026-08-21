@@ -1,21 +1,19 @@
 import { AuthHeader } from '@/components/auth/auth-header';
 import { LoginForm } from '@/components/auth/login-form';
-import { APP_NAME } from '@/lib/app-config';
 import { getServerTranslations } from '@/lib/i18n/server';
+import { titleMetadata } from '@/lib/page-metadata';
+import { getAppName } from '@/server/lib/branding';
 
-export async function generateMetadata() {
-  const { t } = await getServerTranslations();
-  return { title: `${t('meta.signIn')} — ${APP_NAME}` };
-}
+export const generateMetadata = () => titleMetadata('meta.signIn');
 
 export default async function LoginPage() {
-  const { t } = await getServerTranslations();
+  const [{ t }, appName] = await Promise.all([getServerTranslations(), getAppName()]);
   return (
     <div className="flex flex-col gap-6">
       <AuthHeader
         brandMark
         subtitle={t('auth.signInSubtitle')}
-        title={t('auth.signInTitle', { appName: APP_NAME })}
+        title={t('auth.signInTitle', { appName })}
       />
       <LoginForm />
     </div>

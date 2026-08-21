@@ -1,4 +1,6 @@
+import { numericSettingDefault } from '@/lib/config';
 import type { IssueLabel, PrismaClient } from '../../generated/prisma';
+import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 
 export interface LabelCreateInput {
   color: string;
@@ -17,9 +19,12 @@ export interface LabelUpdateInput {
   parentId?: string | null;
 }
 
-// Default only — the enforced cap is read per-org from
-// `Organization.maxLabelGroupChildren` (see `create`/`update`).
-const MAX_GROUP_CHILDREN = 250;
+/**
+ * Registry key for the per-org label-group capacity. The numeric default (250)
+ * lives in `src/lib/config/registry.ts` — the constant that used to sit here is
+ * gone so there is exactly one place to change it.
+ */
+const MAX_GROUP_CHILDREN_KEY = 'limits.maxLabelGroupChildren';
 
 export class LabelGroupDepthError extends Error {
   constructor() {
@@ -29,7 +34,7 @@ export class LabelGroupDepthError extends Error {
 }
 
 export class LabelGroupCapacityError extends Error {
-  constructor(cap: number = MAX_GROUP_CHILDREN) {
+  constructor(cap: number = numericSettingDefault(MAX_GROUP_CHILDREN_KEY)) {
     super(`Label groups are capped at ${cap} children`);
     this.name = 'LabelGroupCapacityError';
   }
@@ -50,9 +55,14 @@ export class LabelNotFoundError extends Error {
 }
 
 export class LabelService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    private config: ConfigReader = DEFAULTS_ONLY_CONFIG,
+  ) {}
 
   async create(orgId: string, creatorId: string, input: LabelCreateInput): Promise<IssueLabel> {
+    const cap = await this.groupCapacityFor(orgId, input.parentId);
+
     return this.prisma.$transaction(async tx => {
       if (input.parentId) {
         // Scope the parent to the same org — otherwise a caller could nest a
@@ -70,13 +80,13 @@ export class LabelService {
           throw new LabelGroupDepthError();
         }
         // Capacity guard: each group may have at most the org's configured
-        // cap (Organization.maxLabelGroupChildren, default MAX_GROUP_CHILDREN)
-        // of children. Runs inside the transaction to close the TOCTOU window.
-        const cap = await this.getMaxGroupChildren(tx, orgId);
+        // cap (`limits.maxLabelGroupChildren`) of children. The count runs
+        // inside the transaction to close the TOCTOU window; the cap was
+        // resolved above it, for the reason given there.
         const siblingCount = await tx.issueLabel.count({
           where: { archivedAt: null, parentId: input.parentId },
         });
-        if (siblingCount >= cap) {
+        if (cap !== null && siblingCount >= cap) {
           throw new LabelGroupCapacityError(cap);
         }
       }
@@ -148,23 +158,50 @@ export class LabelService {
   }
 
   /**
-   * Reads the org's configured label-group capacity
-   * (`Organization.maxLabelGroupChildren`), falling back to the
-   * `MAX_GROUP_CHILDREN` default if the org row is somehow missing (should
-   * only happen under test doubles, never in production).
+   * The org's configured label-group capacity, resolved through the config
+   * chain (platform default → org override). Previously a per-call
+   * `organization.findUnique` — the resolver loads the whole scope once and
+   * memoises it, so this is no longer a round-trip per check.
+   *
+   * `tx` is no longer used and the parameter is gone; the transaction had only
+   * ever been threaded through to read a column that is no longer there.
    */
-  private async getMaxGroupChildren(
-    tx: Pick<PrismaClient, 'organization'>,
-    orgId: string,
-  ): Promise<number> {
-    const org = await tx.organization.findUnique({
-      select: { maxLabelGroupChildren: true },
-      where: { id: orgId },
-    });
-    return org?.maxLabelGroupChildren ?? MAX_GROUP_CHILDREN;
+  private async getMaxGroupChildren(orgId: string): Promise<number> {
+    return this.config.getInt(MAX_GROUP_CHILDREN_KEY, { orgId });
   }
 
-  async update(id: string, input: LabelUpdateInput): Promise<IssueLabel> {
+  /**
+   * The group-capacity cap, resolved **before** any transaction opens, and only
+   * when a parent is actually being set.
+   *
+   * `this.config` reads on `this.prisma` — a different pool connection — so a
+   * cache miss inside a transaction would hold one connection while asking for
+   * a second. At the pool's default of 10, enough concurrent label writes
+   * deadlock until every transaction times out. The cap is not transactional
+   * data; the TOCTOU guard is the sibling count, which stays inside.
+   *
+   * Returns `null` when no parent is being set, so a caller that reads it
+   * outside the `parentId` branch gets something that cannot be mistaken for a
+   * capacity of zero.
+   */
+  private async groupCapacityFor(
+    orgId: string,
+    parentId: string | null | undefined,
+  ): Promise<number | null> {
+    return parentId != null ? this.getMaxGroupChildren(orgId) : null;
+  }
+
+  /**
+   * `orgId` is passed in rather than read from the row for one reason: the cap
+   * has to be resolved BEFORE the transaction opens (see `groupCapacityFor`),
+   * and the row's org is not known until the transaction reads it. The caller
+   * has it already — `labelUpdate` loads the label and checks tenancy before
+   * calling — so taking it as a parameter avoids a second lookup, and matches
+   * how `requireTeamMember` takes an explicit org rather than inferring one.
+   */
+  async update(id: string, orgId: string, input: LabelUpdateInput): Promise<IssueLabel> {
+    const cap = await this.groupCapacityFor(orgId, input.parentId);
+
     return this.prisma.$transaction(async tx => {
       // Re-run depth + capacity guards whenever parentId is being set to a group.
       if (input.parentId != null) {
@@ -195,7 +232,6 @@ export class LabelService {
         }
         // Exclude self from the sibling count in case this label already belongs
         // to the same group (moving within the group doesn't increase capacity).
-        const cap = await this.getMaxGroupChildren(tx, current.organizationId);
         const siblingCount = await tx.issueLabel.count({
           where: {
             archivedAt: null,
@@ -203,7 +239,7 @@ export class LabelService {
             ...(current.parentId === input.parentId ? { id: { not: id } } : {}),
           },
         });
-        if (siblingCount >= cap) {
+        if (cap !== null && siblingCount >= cap) {
           throw new LabelGroupCapacityError(cap);
         }
       }

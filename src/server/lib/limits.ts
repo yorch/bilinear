@@ -27,6 +27,19 @@ export const MAX_PRIORITY = 4;
 /** Character-length cap for a webhook's display name. */
 export const MAX_WEBHOOK_NAME_LENGTH = 256;
 
+/** Character-length cap for an organization's display name (the column is VarChar(255)). */
+export const MAX_ORGANIZATION_NAME_LENGTH = 255;
+
+/**
+ * Character-length cap for a stored logo URL.
+ *
+ * `organizations.logo_url` is an unbounded TEXT column and the whole row is
+ * broadcast as a SyncAction payload, so an unchecked value is a write
+ * amplifier: it lands in every member's IndexedDB and in every subsequent
+ * bootstrap.
+ */
+export const MAX_LOGO_URL_LENGTH = 2048;
+
 /**
  * Character-length cap for a single emoji reaction. Emoji (including ZWJ
  * sequences/skin-tone modifiers) are at most a handful of codepoints —

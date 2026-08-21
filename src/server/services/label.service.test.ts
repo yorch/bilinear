@@ -132,7 +132,7 @@ describe('LabelService', () => {
       const updated = { ...TEST_LABEL, color: '#22c55e', name: 'Feature' };
       prisma.issueLabel.update.mockResolvedValue(updated);
 
-      const result = await service.update(TEST_LABEL.id, {
+      const result = await service.update(TEST_LABEL.id, TEST_ORG.id, {
         color: '#22c55e',
         name: 'Feature',
       });
@@ -158,9 +158,9 @@ describe('LabelService', () => {
       // Parent has a grandparent → depth = 2, forbidden
       prisma.issueLabel.findFirst.mockResolvedValueOnce({ parentId: 'grandparent-id' });
 
-      await expect(service.update(TEST_LABEL.id, { parentId: parentLabelId })).rejects.toThrow(
-        'Labels can only be nested one level deep inside a group',
-      );
+      await expect(
+        service.update(TEST_LABEL.id, TEST_ORG.id, { parentId: parentLabelId }),
+      ).rejects.toThrow('Labels can only be nested one level deep inside a group');
     });
 
     it('throws LabelGroupCapacityError when reparenting to a full group', async () => {
@@ -173,9 +173,9 @@ describe('LabelService', () => {
       prisma.issueLabel.findFirst.mockResolvedValueOnce({ parentId: null });
       prisma.issueLabel.count.mockResolvedValue(250);
 
-      await expect(service.update(TEST_LABEL.id, { parentId: parentLabelId })).rejects.toThrow(
-        'Label groups are capped at',
-      );
+      await expect(
+        service.update(TEST_LABEL.id, TEST_ORG.id, { parentId: parentLabelId }),
+      ).rejects.toThrow('Label groups are capped at');
     });
 
     it('rejects reparenting under a label from another org', async () => {
@@ -187,9 +187,9 @@ describe('LabelService', () => {
       // Parent is not visible within the label's org → scoped findFirst misses
       prisma.issueLabel.findFirst.mockResolvedValueOnce(null);
 
-      await expect(service.update(TEST_LABEL.id, { parentId: parentLabelId })).rejects.toThrow(
-        'Parent label not found',
-      );
+      await expect(
+        service.update(TEST_LABEL.id, TEST_ORG.id, { parentId: parentLabelId }),
+      ).rejects.toThrow('Parent label not found');
     });
 
     it('throws LabelNotFoundError (not parent-not-found) when the label being updated is gone', async () => {
@@ -197,9 +197,9 @@ describe('LabelService', () => {
       // The label being updated was deleted between the resolver check and the tx.
       prisma.issueLabel.findUnique.mockResolvedValueOnce(null);
 
-      await expect(service.update(TEST_LABEL.id, { parentId: parentLabelId })).rejects.toThrow(
-        'Label not found',
-      );
+      await expect(
+        service.update(TEST_LABEL.id, TEST_ORG.id, { parentId: parentLabelId }),
+      ).rejects.toThrow('Label not found');
     });
   });
 

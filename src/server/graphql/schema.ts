@@ -43,7 +43,6 @@ export const typeDefs = `
     urlKey: String!
     logoUrl: String
     dataRegion: String!
-    roadmapEnabled: Boolean!
     aiEnabled: Boolean!
     createdAt: DateTime!
     updatedAt: DateTime!
@@ -52,7 +51,10 @@ export const typeDefs = `
     planLimits: OrganizationPlanLimits!
   }
 
-  "Per-org plan-tier caps (the Organization.max* columns)."
+  """
+  Per-org plan-tier caps. Backed by registry-declared settings rather than
+  columns; the shape is unchanged so clients see no difference.
+  """
   type OrganizationPlanLimits {
     maxCustomFieldsPerTeam: Int!
     maxCustomFieldsPerOrg: Int!
@@ -67,6 +69,74 @@ export const typeDefs = `
     maxLabelGroupChildren: Int!
     maxInitiativeDepth: Int!
     maxExportRows: Int!
+  }
+
+  "Scope a configuration value can be stored at."
+  enum SettingScope {
+    platform
+    org
+    team
+    user
+  }
+
+  """
+  One resolved configuration knob: its declaration, its effective value, and
+  which layer supplied it.
+
+  The value is a JSON scalar because a knob may be an int, a boolean, a string
+  or an enum — the registry carries the type. It is null for a redacted knob;
+  those report only envVarName and envIsSet.
+  """
+  type ResolvedSetting {
+    key: String!
+    value: JSON
+    "Which layer supplied the value: code-default, env, platform, org, team or user."
+    source: String!
+    """
+    True when an override-mode environment variable supplied the value, so no
+    stored value can take effect. Clients MUST render such a knob read-only —
+    accepting a write that silently does nothing is the failure this prevents.
+    """
+    locked: Boolean!
+    """
+    True when THIS caller may change the knob at the scope they asked for.
+
+    Server-computed, because it is an authorization answer and the client cannot
+    reach the facts it needs — the caller's effective role, which folds in
+    platform-admin status. A client deriving it from editableBy alone gets it
+    wrong in both directions: editableBy is a floor, not an equality, and it
+    says nothing about whether the caller may reach the scope at all.
+    """
+    writable: Boolean!
+    type: String!
+    scopes: [SettingScope!]!
+    editableBy: String!
+    labelKey: String!
+    min: Float
+    max: Float
+    enumValues: [String!]
+    "Value is only read at process start; changing it needs a restart."
+    restartRequired: Boolean!
+    "Value is never returned. Secrets are always redacted."
+    redacted: Boolean!
+    "Name of the bound environment variable, when the knob has one."
+    envVarName: String
+    "Whether that environment variable is currently set. Safe for redacted knobs."
+    envIsSet: Boolean!
+  }
+
+  input SettingWriteInput {
+    key: String!
+    scope: SettingScope!
+    "Org or team id. Ignored for platform scope, which has no entity."
+    scopeId: ID
+    value: JSON!
+  }
+
+  type SettingPayload {
+    success: Boolean!
+    setting: ResolvedSetting!
+    lastSyncId: String
   }
 
   type Team {
@@ -372,6 +442,22 @@ export const typeDefs = `
   input OrganizationCreateInput {
     name: String!
     urlKey: String!
+  }
+
+  """
+  Workspace identity. Every field is optional; omitting one leaves it alone.
+  logoUrl accepts null to clear it, which is distinct from omitting it.
+  """
+  input OrganizationUpdateInput {
+    name: String
+    urlKey: String
+    logoUrl: String
+  }
+
+  type OrganizationPayload {
+    success: Boolean!
+    organization: Organization!
+    lastSyncId: String!
   }
 
   """
@@ -1620,6 +1706,17 @@ export const typeDefs = `
   }
 
   type Query {
+    """
+    Every configuration knob visible to the caller at a scope, with its
+    effective value and the layer that supplied it.
+
+    Filtered by each knob's visibleTo role, so an org admin sees the caps they
+    cannot edit while platform-only knobs stay hidden. scopeId defaults to the
+    caller's own org/team; platform scope needs none.
+    """
+    settings(scope: SettingScope!, scopeId: ID): [ResolvedSetting!]!
+    """One resolved knob, including where its value came from."""
+    setting(key: String!, scope: SettingScope!, scopeId: ID): ResolvedSetting!
     """True when AI is configured server-side AND enabled for this workspace."""
     aiAvailable: Boolean!
     """Parse CSV (no writes) to drive the import mapping UI."""
@@ -1781,6 +1878,20 @@ export const typeDefs = `
     aiFindDuplicateIssues(issueId: ID!): AiDuplicatesPayload!
     """Enable/disable AI features for the workspace (owner/admin only)."""
     aiSettingsUpdate(enabled: Boolean!): AiSettingsPayload!
+    """Rename the workspace, change its URL key, or set its logo (owner/admin)."""
+    organizationUpdate(input: OrganizationUpdateInput!): OrganizationPayload!
+    """
+    Store a configuration value at one scope. Validated against the knob's
+    registry declaration; rejects a write to a scope the knob does not declare,
+    to an env-only knob, or by a caller lacking its editableBy role.
+    """
+    settingSet(input: SettingWriteInput!): SettingPayload!
+    """
+    Remove a stored value so the knob falls back to the layer below —
+    "reset to inherited". Not the same as writing the default: a stored default
+    still shadows a later change to the platform value.
+    """
+    settingClear(key: String!, scope: SettingScope!, scopeId: ID): SettingPayload!
     """Import issues from CSV into a team (up to 500 rows)."""
     csvImportIssues(input: CsvImportInput!): CsvImportResult!
     """Disconnect the Slack workspace (owner/admin)."""

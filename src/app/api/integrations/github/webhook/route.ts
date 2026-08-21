@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { config } from '@/server/config';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
@@ -39,7 +40,7 @@ async function handlePost(req: NextRequest) {
   const rawBody = Buffer.from(await req.arrayBuffer());
   const signatureHeader = req.headers.get('x-hub-signature-256');
 
-  const service = new GitHubService(prisma);
+  const service = new GitHubService(prisma, config);
   const valid = await service.validateWebhookSignature(org.id, rawBody, signatureHeader);
   if (!valid) {
     log.warn({ orgKey }, 'GitHub webhook signature validation failed');

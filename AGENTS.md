@@ -44,6 +44,7 @@ current work queue are in [`docs/REVIEW_BACKLOG.md`](docs/REVIEW_BACKLOG.md).
 | Seed DB                         | `yarn db:seed`                                             |
 | Database browser                | `yarn db:studio`                                           |
 | Verify xid8 delta fence         | `yarn db:verify:fence` (needs a live Postgres)             |
+| Verify config layering          | `yarn db:verify:config` (needs a live Postgres)            |
 | Benchmark hot-path indexes      | `yarn db:verify:indexes` (needs a live Postgres)           |
 | Verify custom migration applied | `yarn db:verify:schema` (needs a live Postgres)            |
 | Grant platform admin            | `yarn admin:grant`                                         |
@@ -130,6 +131,13 @@ These are the ones that cause silent breakage when missed, so they stay here:
   non-vacuous by regressing what it guards.
 - **No `console.log` in server code** — use `logger`/`childLogger` from
   `@/server/lib/logger`.
+- **Configuration goes in the registry, and a registered knob must have a
+  consumer.** Anything that changes behaviour without changing user data is one
+  `defineSetting` entry in `src/lib/config/registry.ts`, read through
+  `ConfigService` — not a new column, and not a fresh `process.env` read. A knob
+  nothing enforces is worse than no knob: it reports a setting that does
+  nothing. Secrets, boot-time values and the security guards are deliberately
+  `storage: 'env-only'`. See `docs/CONFIG_ASSESSMENT.md`.
 
 ### Formatting
 

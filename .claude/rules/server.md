@@ -55,6 +55,41 @@ each service; resolvers catch and remap to `GraphQLError` with
   expected to emit exactly one `DROP INDEX` for the xid8 covering index, because
   Prisma cannot declare `@@index` on an `Unsupported` field.
 
+## Configuration
+
+Behaviour knobs are **registry entries, not env vars and not columns**. One
+`defineSetting` in `src/lib/config/registry.ts`, read through `ConfigService`
+(`config.getInt('webhook.maxAttempts', { orgId })`). Precedence is
+code default → env → platform → org → team → user.
+
+- `process.env` is for secrets, connection strings, and values read before a DB
+  connection exists. Those are declared `storage: 'env-only'`.
+- **A registered knob must have a consumer.** A declaration nothing enforces
+  reports a setting that does nothing.
+- Services take a `ConfigReader` defaulting to `DEFAULTS_ONLY_CONFIG`, so unit
+  tests against mocked Prisma still resolve the code default without a query.
+  That default is a test affordance: pass the real service from `context.ts`,
+  `loaders.ts`, the route handlers that build services directly, and the WS/YJS
+  entry points. Forgetting is silent — the service just ignores every configured
+  value.
+- `editableBy` gates *the knob*; reaching a scope gates *the caller*, and the
+  settings resolver checks that separately. Platform scope needs
+  `requirePlatformAdmin`, team scope needs `requireTeamMember` unless the caller
+  administers the org.
+- `settings.value` is `Json`, so the DB validates nothing — the registry
+  validator is the only guard on a write.
+- **Never `instanceof` a registry error class from server code.** If any client
+  code imports `src/lib/config` at *runtime*, the bundler emits a second copy,
+  the class gets two identities, and the check silently fails — every validation
+  error became `INTERNAL_SERVER_ERROR`. Use `isInvalidSettingValueError`, which
+  keys on `name`. The client currently imports the registry for types only
+  (derived answers like `locked` and `writable` are computed server-side and
+  travel in `ResolvedSettingDto`), so the boundary is clean today — but nothing
+  enforces that, and Vitest sees one copy, so no unit test would catch it
+  regressing.
+
+See PATTERNS.md §10 and docs/CONFIG_ASSESSMENT.md.
+
 ## Prisma 7 split config
 
 - **CLI** (`migrate`, `generate`) uses `prisma.config.ts` with

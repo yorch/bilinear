@@ -43,9 +43,11 @@ describe('CustomFieldService', () => {
   beforeEach(() => {
     prisma = createMockPrisma();
     service = new CustomFieldService(prisma as never);
-    // createDefinition reads the org's plan-tier caps
-    // (maxCustomFieldsPerTeam/maxCustomFieldsPerOrg) instead of the old
-    // hardcoded constants; default fixture values match those constants.
+    // `createDefinition` resolves its cap through `ConfigReader`
+    // (`limits.maxCustomFieldsPerTeam` / `…PerOrg`), not from a column — the
+    // `Organization.max*` fields those used to live in are gone. With no reader
+    // injected the service falls back to `DEFAULTS_ONLY_CONFIG`, so these tests
+    // exercise the registry defaults, which match the old constants.
     prisma.organization.findUnique.mockResolvedValue(TEST_ORG);
   });
 

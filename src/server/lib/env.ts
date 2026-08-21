@@ -19,6 +19,8 @@
  * of use (lazily), matching `jwt.ts`'s `getSecret()`.
  */
 
+import { ENV_DEFAULTS, isEnvFlagSet, parseSampleRate } from '@/lib/env-defaults';
+
 /**
  * Read a numeric env var, falling back to `default` when unset or empty.
  * Throws a clear error when the value is present but not a finite number,
@@ -51,29 +53,23 @@ export function numericEnv(
  * Read a boolean feature-flag env var. Each flag's truthiness test mirrors
  * its pre-existing convention exactly (verified against every call site
  * before consolidating here) — currently all of them use `=== '1'`.
+ *
+ * The predicate itself is shared with the config registry, which declares the
+ * same variables for the admin console. See `src/lib/env-defaults.ts`.
  */
 export function boolEnv(name: string): boolean {
-  return process.env[name] === '1';
+  return isEnvFlagSet(process.env[name]);
 }
 
-/** Default app URL used across dev/test when `APP_URL` is not configured. */
-const DEFAULT_APP_URL = 'http://localhost:3000';
-
 /**
- * Fraction of successful, fast HTTP requests to log (0..1). Preserves the
- * exact prior semantics from `src/app/api/graphql/route.ts`: unset/empty
- * means "log everything" (1), and a present-but-unparseable value falls back
- * to 1 rather than throwing (this one field intentionally does NOT use
- * `numericEnv`'s throw-on-invalid behavior, since its original call site
- * never threw either — only clamped).
+ * Fraction of successful, fast HTTP requests to log (0..1).
+ *
+ * Delegates to `parseSampleRate`, which the registry's `log.httpSampleRate`
+ * bounds also match. Two independent parsers of one variable is how the console
+ * came to report a sample rate the process was not using.
  */
 function sampleRateEnv(name: string): number {
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') {
-    return 1;
-  }
-  const n = Number(raw);
-  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 1;
+  return parseSampleRate(process.env[name]);
 }
 
 /**
@@ -107,7 +103,7 @@ export const env = Object.freeze({
   },
   /** Base app URL, e.g. for building absolute links in emails/redirects. */
   get APP_URL(): string {
-    return process.env.APP_URL ?? DEFAULT_APP_URL;
+    return process.env.APP_URL ?? ENV_DEFAULTS.APP_URL;
   },
 
   /** Fail-closed the auth-mutation rate limiter on a Redis outage. */
@@ -138,7 +134,7 @@ export const env = Object.freeze({
 
   /** SMTP transport port. */
   get SMTP_PORT(): number {
-    return numericEnv('SMTP_PORT', { default: 587, max: 65535, min: 1 });
+    return numericEnv('SMTP_PORT', { default: ENV_DEFAULTS.SMTP_PORT, max: 65535, min: 1 });
   },
 
   /** Trust `X-Forwarded-For`/`X-Real-IP` (only behind a proxy that strips client-supplied ones). */
@@ -148,7 +144,7 @@ export const env = Object.freeze({
 
   /** Standalone WebSocket server port (`yarn ws:server`). */
   get WS_PORT(): number {
-    return numericEnv('WS_PORT', { default: 3001, max: 65535, min: 1 });
+    return numericEnv('WS_PORT', { default: ENV_DEFAULTS.WS_PORT, max: 65535, min: 1 });
   },
 
   /**
@@ -170,7 +166,7 @@ export const env = Object.freeze({
 
   /** Standalone YJS collaborative-editing server port (`yarn yjs:server`). */
   get YJS_PORT(): number {
-    return numericEnv('YJS_PORT', { default: 1234, max: 65535, min: 1 });
+    return numericEnv('YJS_PORT', { default: ENV_DEFAULTS.YJS_PORT, max: 65535, min: 1 });
   },
 
   /**

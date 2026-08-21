@@ -10,7 +10,6 @@ export interface DBOrganization {
   id: string;
   logoUrl?: string | null;
   name: string;
-  roadmapEnabled: boolean;
   updatedAt: string;
   urlKey: string;
 }

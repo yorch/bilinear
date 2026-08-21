@@ -48,6 +48,7 @@
       "adminTitle": "Administración",
       "audit": "Registro de auditoría",
       "backToApp": "Volver a la app",
+      "config": "Configuración",
       "dashboard": "Panel",
       "metaTitle": "Administración de la plataforma",
       "platformBadge": "Plataforma",
@@ -334,6 +335,96 @@
     "signOut": "Cerrar sesión",
     "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo.",
     "undo": "Deshacer"
+  },
+  "config": {
+    "ai": {
+      "anthropicModel": "Modelo de Anthropic",
+      "openaiModel": "Modelo de OpenAI",
+      "provider": "Proveedor de IA"
+    },
+    "areas": {
+      "ai": "Asistente de IA",
+      "branding": "Marca",
+      "cycles": "Ciclos",
+      "env": "Entorno",
+      "invite": "Invitaciones",
+      "limits": "Límites del plan",
+      "log": "Registro",
+      "security": "Seguridad",
+      "webhook": "Webhooks"
+    },
+    "branding": {
+      "appName": "Nombre del producto"
+    },
+    "cycles": {
+      "upcomingCount": "Ciclos próximos preparados"
+    },
+    "description": "Todos los ajustes configurables, su valor efectivo y la capa que lo proporcionó. Los valores definidos aquí se aplican a todos los espacios de trabajo salvo que uno los sobrescriba.",
+    "env": {
+      "anthropicApiKey": "Clave de API de Anthropic",
+      "appUrl": "URL de la aplicación",
+      "collabEnabled": "Edición colaborativa activada",
+      "databaseUrl": "URL de base de datos",
+      "githubClientSecret": "Secreto de cliente de GitHub",
+      "googleClientSecret": "Secreto de cliente de Google",
+      "graphqlAllowedOrigins": "Orígenes permitidos de GraphQL",
+      "jwtRefreshSecret": "Secreto de refresco JWT",
+      "jwtSecret": "Secreto JWT",
+      "openaiApiKey": "Clave de API de OpenAI",
+      "redisUrl": "URL de Redis",
+      "sentryAuthToken": "Token de Sentry",
+      "slackClientSecret": "Secreto de cliente de Slack",
+      "slackSigningSecret": "Secreto de firma de Slack",
+      "smtpHost": "Host SMTP",
+      "smtpPass": "Contraseña SMTP",
+      "smtpPort": "Puerto SMTP",
+      "smtpSecure": "SMTP seguro",
+      "smtpUser": "Usuario SMTP",
+      "trustProxyHeaders": "Confiar en cabeceras de proxy",
+      "uploadDir": "Directorio de subidas",
+      "wsPort": "Puerto WebSocket",
+      "wsPublicUrl": "URL pública de WebSocket",
+      "yjsPort": "Puerto Yjs",
+      "yjsPublicUrl": "URL pública de Yjs"
+    },
+    "inheritedFrom": "Heredado de {source}",
+    "invite": {
+      "expiryDays": "Caducidad de invitación (días)",
+      "maxPending": "Máx. invitaciones pendientes"
+    },
+    "limits": {
+      "maxCustomFieldsPerOrg": "Máx. campos personalizados por espacio",
+      "maxCustomFieldsPerTeam": "Máx. campos personalizados por equipo",
+      "maxExportRows": "Máx. filas de exportación",
+      "maxImportRows": "Máx. filas de importación",
+      "maxInitiativeDepth": "Máx. profundidad de iniciativas",
+      "maxLabelGroupChildren": "Máx. etiquetas por grupo"
+    },
+    "loadError": "No se pudo cargar la configuración",
+    "lockedByEnv": "Forzado por {name}",
+    "log": {
+      "httpSampleRate": "Muestreo del registro HTTP",
+      "level": "Nivel de registro"
+    },
+    "resetToast": "Restablecido al heredado",
+    "resetToInherited": "Restablecer al heredado",
+    "restartRequired": "Requiere reinicio",
+    "savedToast": "Ajuste guardado",
+    "saveError": "No se pudo guardar el ajuste",
+    "secretSet": "Definido",
+    "secretUnset": "Sin definir",
+    "security": {
+      "allowPrivateWebhookUrls": "Permitir URLs de webhook privadas",
+      "authRateLimitFailClosed": "Limitar autenticación en modo cerrado"
+    },
+    "setHere": "Definido aquí",
+    "title": "Configuración de la plataforma",
+    "unsetEnv": "Define {name} para cambiarlo",
+    "webhook": {
+      "autoDisableAfter": "Desactivar tras fallos consecutivos",
+      "maxAttempts": "Intentos de entrega de webhook",
+      "requestTimeoutMs": "Tiempo de espera del webhook (ms)"
+    }
   },
   "customFields": {
     "addField": "Agregar campo",

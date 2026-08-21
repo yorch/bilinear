@@ -5,6 +5,8 @@ import { announceJoin, broadcastMembership } from '../../lib/membership-sync';
 import { clearOrgSession, requireAuth, requireOrgRole, requireUserId } from '../../middleware/auth';
 import {
   CannotRemoveSelfError,
+  InvalidLogoUrlError,
+  InvalidOrganizationNameError,
   InvalidRoleError,
   InvalidUrlKeyError,
   LastOwnerError,
@@ -435,18 +437,80 @@ export const organizationResolvers = {
 
       return enterOrganization(ctx, membership.organization);
     },
+
+    /**
+     * Rename the workspace, change its URL key, or set its logo.
+     *
+     * This did not exist: `logoUrl` was a column with a reader and no writer,
+     * and an owner could not rename their own workspace from the app at all.
+     */
+    organizationUpdate: async (
+      _parent: unknown,
+      { input }: { input: { logoUrl?: string | null; name?: string; urlKey?: string } },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      requireOrgRole(ctx, ['owner', 'admin']);
+      let organization: Organization;
+      try {
+        organization = await ctx.services.organization.update(ctx.orgId, input);
+      } catch (err) {
+        // Every shape failure here is caller input, so they all map to the
+        // same code. Without the name and logo cases a too-long name reached
+        // Prisma and surfaced as INTERNAL_SERVER_ERROR (P2000).
+        if (
+          err instanceof InvalidUrlKeyError ||
+          err instanceof UrlKeyTakenError ||
+          err instanceof InvalidOrganizationNameError ||
+          err instanceof InvalidLogoUrlError
+        ) {
+          throw new GraphQLError(err.message, { extensions: { code: 'BAD_USER_INPUT' } });
+        }
+        throw err;
+      }
+      // Organization is part of the synced dataset, so a rename reaches every
+      // open client without a refresh.
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'U',
+        'Organization',
+        organization.id,
+        organization,
+      );
+      return { lastSyncId: sync.id.toString(), organization, success: true };
+    },
   },
   Organization: {
-    // Surface the per-org plan-tier caps read-only to any org member. The
-    // parent is the Prisma org row (see `Query.organization` / bootstrap),
-    // which carries the `max*` columns directly.
-    planLimits: (org: Organization) => ({
-      maxCustomFieldsPerOrg: org.maxCustomFieldsPerOrg,
-      maxCustomFieldsPerTeam: org.maxCustomFieldsPerTeam,
-      maxExportRows: org.maxExportRows,
-      maxInitiativeDepth: org.maxInitiativeDepth,
-      maxLabelGroupChildren: org.maxLabelGroupChildren,
-    }),
+    // Surface the per-org plan-tier caps read-only to any org member.
+    //
+    // These were `max*` columns on the parent row; they are now registry knobs
+    // resolved through the config chain, so the SDL shape is unchanged but the
+    // value can come from the org's own row or fall through to the
+    // platform-wide default. `ConfigService` loads the whole scope once and
+    // memoises it, so the five reads here are one query at most.
+    planLimits: async (org: Organization, _args: unknown, ctx: GraphQLContext) => {
+      const ids = { orgId: org.id };
+      const [
+        maxCustomFieldsPerTeam,
+        maxCustomFieldsPerOrg,
+        maxLabelGroupChildren,
+        maxInitiativeDepth,
+        maxExportRows,
+      ] = await Promise.all([
+        ctx.config.getInt('limits.maxCustomFieldsPerTeam', ids),
+        ctx.config.getInt('limits.maxCustomFieldsPerOrg', ids),
+        ctx.config.getInt('limits.maxLabelGroupChildren', ids),
+        ctx.config.getInt('limits.maxInitiativeDepth', ids),
+        ctx.config.getInt('limits.maxExportRows', ids),
+      ]);
+      return {
+        maxCustomFieldsPerOrg,
+        maxCustomFieldsPerTeam,
+        maxExportRows,
+        maxInitiativeDepth,
+        maxLabelGroupChildren,
+      };
+    },
   },
 
   Query: {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from '@/hooks/use-translations';
-import { APP_NAME } from '@/lib/app-config';
+import { useAppName } from '@/providers/branding-provider';
 
 /**
  * The left half of the split sign-in layout.
@@ -16,6 +16,7 @@ import { APP_NAME } from '@/lib/app-config';
  */
 export function AuthCanvas() {
   const t = useTranslations();
+  const appName = useAppName();
 
   const stats = [
     { label: t('auth.canvas.statOfflineLabel'), value: t('auth.canvas.statOfflineValue') },
@@ -38,7 +39,7 @@ export function AuthCanvas() {
           className="h-6 w-6 rounded-lg ring-1 ring-brand-border"
           style={{ backgroundImage: 'var(--gradient-brand)' }}
         />
-        <span className="text-sm font-semibold tracking-tight text-foreground">{APP_NAME}</span>
+        <span className="text-sm font-semibold tracking-tight text-foreground">{appName}</span>
       </div>
 
       <div className="relative">

@@ -27,6 +27,7 @@ import { roadmapResolvers } from './roadmap';
 import { samlResolvers } from './saml';
 import { scimResolvers } from './scim';
 import { searchResolvers } from './search';
+import { settingResolvers } from './setting';
 import { slackResolvers } from './slack';
 import { teamResolvers } from './team';
 import { teamMembershipResolvers } from './team-membership';
@@ -151,6 +152,7 @@ export const resolvers = {
 
   Mutation: {
     ...aiResolvers.Mutation,
+    ...settingResolvers.Mutation,
     ...authResolvers.Mutation,
     ...automationResolvers.Mutation,
     ...commentResolvers.Mutation,
@@ -230,6 +232,7 @@ export const resolvers = {
     ...issueResolvers.Query,
     ...labelResolvers.Query,
     ...searchResolvers.Query,
+    ...settingResolvers.Query,
     ...cycleResolvers.Query,
     ...projectResolvers.Query,
     ...roadmapResolvers.Query,

@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
-import { APP_NAME } from '@/lib/app-config';
 import { getServerTranslations } from '@/lib/i18n/server';
 import { PWA_BACKGROUND_LIGHT } from '@/lib/pwa';
+import { getAppName } from '@/server/lib/branding';
 
 /**
  * Web app manifest — what makes the app installable from Chrome's omnibox
@@ -24,7 +24,7 @@ import { PWA_BACKGROUND_LIGHT } from '@/lib/pwa';
  * right answer for a value the OS caches at install time anyway.
  */
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
-  const { t } = await getServerTranslations();
+  const [{ t }, appName] = await Promise.all([getServerTranslations(), getAppName()]);
 
   return {
     background_color: PWA_BACKGROUND_LIGHT,
@@ -53,10 +53,10 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     // without it the browser derives the id from `start_url`, and changing
     // that later would register as a different app rather than an update.
     id: '/',
-    name: APP_NAME,
+    name: appName,
     orientation: 'any',
     scope: '/',
-    short_name: APP_NAME,
+    short_name: appName,
     // Not a workspace path: which workspace a session can enter is decided
     // server-side (and can change between launches), so the root route's
     // redirect is the only correct entry point.

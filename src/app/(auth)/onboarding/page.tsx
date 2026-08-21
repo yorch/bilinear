@@ -1,12 +1,9 @@
 import { AuthHeader } from '@/components/auth/auth-header';
 import { OnboardingForm } from '@/components/auth/onboarding-form';
-import { APP_NAME } from '@/lib/app-config';
 import { getServerTranslations } from '@/lib/i18n/server';
+import { titleMetadata } from '@/lib/page-metadata';
 
-export async function generateMetadata() {
-  const { t } = await getServerTranslations();
-  return { title: `${t('meta.createWorkspace')} — ${APP_NAME}` };
-}
+export const generateMetadata = () => titleMetadata('meta.createWorkspace');
 
 export default async function OnboardingPage() {
   const { t } = await getServerTranslations();
