@@ -61,13 +61,7 @@ export class LabelService {
   ) {}
 
   async create(orgId: string, creatorId: string, input: LabelCreateInput): Promise<IssueLabel> {
-    // Resolved before the transaction opens, and only when it is needed.
-    // `this.config` reads on `this.prisma` — a different pool connection — so a
-    // cache miss inside the transaction would hold one connection while asking
-    // for a second. At the pool's default of 10, enough concurrent creates
-    // deadlock until every transaction times out. The cap is not transactional
-    // data; the TOCTOU guard is the sibling count, which stays inside.
-    const cap = input.parentId ? await this.getMaxGroupChildren(orgId) : 0;
+    const cap = await this.groupCapacityFor(orgId, input.parentId);
 
     return this.prisma.$transaction(async tx => {
       if (input.parentId) {
@@ -92,7 +86,7 @@ export class LabelService {
         const siblingCount = await tx.issueLabel.count({
           where: { archivedAt: null, parentId: input.parentId },
         });
-        if (siblingCount >= cap) {
+        if (cap !== null && siblingCount >= cap) {
           throw new LabelGroupCapacityError(cap);
         }
       }
@@ -177,15 +171,36 @@ export class LabelService {
   }
 
   /**
+   * The group-capacity cap, resolved **before** any transaction opens, and only
+   * when a parent is actually being set.
+   *
+   * `this.config` reads on `this.prisma` — a different pool connection — so a
+   * cache miss inside a transaction would hold one connection while asking for
+   * a second. At the pool's default of 10, enough concurrent label writes
+   * deadlock until every transaction times out. The cap is not transactional
+   * data; the TOCTOU guard is the sibling count, which stays inside.
+   *
+   * Returns `null` when no parent is being set, so a caller that reads it
+   * outside the `parentId` branch gets something that cannot be mistaken for a
+   * capacity of zero.
+   */
+  private async groupCapacityFor(
+    orgId: string,
+    parentId: string | null | undefined,
+  ): Promise<number | null> {
+    return parentId != null ? this.getMaxGroupChildren(orgId) : null;
+  }
+
+  /**
    * `orgId` is passed in rather than read from the row for one reason: the cap
-   * has to be resolved BEFORE the transaction opens (see `create`), and the
-   * row's org is not known until the transaction reads it. The caller has it
-   * already — `labelUpdate` loads the label and checks tenancy before calling —
-   * so taking it as a parameter avoids a second lookup, and matches how
-   * `requireTeamMember` takes an explicit org rather than inferring one.
+   * has to be resolved BEFORE the transaction opens (see `groupCapacityFor`),
+   * and the row's org is not known until the transaction reads it. The caller
+   * has it already — `labelUpdate` loads the label and checks tenancy before
+   * calling — so taking it as a parameter avoids a second lookup, and matches
+   * how `requireTeamMember` takes an explicit org rather than inferring one.
    */
   async update(id: string, orgId: string, input: LabelUpdateInput): Promise<IssueLabel> {
-    const cap = input.parentId != null ? await this.getMaxGroupChildren(orgId) : 0;
+    const cap = await this.groupCapacityFor(orgId, input.parentId);
 
     return this.prisma.$transaction(async tx => {
       // Re-run depth + capacity guards whenever parentId is being set to a group.
@@ -224,7 +239,7 @@ export class LabelService {
             ...(current.parentId === input.parentId ? { id: { not: id } } : {}),
           },
         });
-        if (siblingCount >= cap) {
+        if (cap !== null && siblingCount >= cap) {
           throw new LabelGroupCapacityError(cap);
         }
       }

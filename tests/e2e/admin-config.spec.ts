@@ -79,7 +79,14 @@ test.describe('Configuration console — as a platform admin', () => {
   test.use({ storageState: ADMIN_STATE });
 
   test.afterEach(async ({ page }) => {
-    await openWorkspace(page);
+    // No `openWorkspace` here. `gqlInPage` only needs the page to be on the app
+    // origin so the auth cookies attach, and every test in this block ends
+    // there already — routing through a full workspace boot (goto, redirect
+    // chain, bootstrap wait) five times per run bought nothing. The guard
+    // covers a test that failed before it navigated anywhere.
+    if (!page.url().startsWith('http')) {
+      await openWorkspace(page);
+    }
     await clearKnob(page);
   });
 

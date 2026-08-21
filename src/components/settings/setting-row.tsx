@@ -15,6 +15,28 @@ function toDraft(value: ResolvedSettingDto['value']): string {
   return String(value ?? '');
 }
 
+/**
+ * Where this value came from, in one sentence.
+ *
+ * Four states, written as guard clauses rather than a nested ternary: an
+ * environment variable that is forcing the value, one that *would* force it but
+ * is unset (env-only knobs are locked either way, and claiming "forced by
+ * SMTP_HOST" when nothing set it is a lie), a row stored at this scope, and
+ * everything else — inherited from a layer above.
+ */
+function provenance(
+  t: (key: string, params?: Record<string, string>) => string,
+  setting: ResolvedSettingDto,
+  storedHere: boolean,
+): string {
+  if (setting.locked && setting.envVarName) {
+    return setting.envIsSet
+      ? t('config.lockedByEnv', { name: setting.envVarName })
+      : t('config.unsetEnv', { name: setting.envVarName });
+  }
+  return storedHere ? t('config.setHere') : t('config.inheritedFrom', { source: setting.source });
+}
+
 interface SettingControlProps {
   disabled: boolean;
   label: string;
@@ -192,13 +214,7 @@ export function SettingRow({ onChange, scope, setting, writable }: SettingRowPro
         </div>
         <p className="font-mono text-muted-foreground text-xs">{setting.key}</p>
         <p className="mt-0.5 text-muted-foreground text-xs">
-          {setting.locked && setting.envVarName && setting.envIsSet
-            ? t('config.lockedByEnv', { name: setting.envVarName })
-            : setting.locked && setting.envVarName
-              ? t('config.unsetEnv', { name: setting.envVarName })
-              : storedHere
-                ? t('config.setHere')
-                : t('config.inheritedFrom', { source: setting.source })}
+          {provenance(t, setting, storedHere)}
           {setting.restartRequired && ` · ${t('config.restartRequired')}`}
         </p>
       </div>

@@ -364,7 +364,15 @@ export function clearOrgSession(ctx: AuthContext): void {
   ctx.orgRole = null;
 }
 
-/** Like requireAuth but only checks userId — for mutations before org exists (e.g. onboarding). */
+/**
+ * Like `requireAuth` but only checks `userId`.
+ *
+ * Two callers need it: mutations that run before an org exists (onboarding),
+ * and the platform-admin surfaces. `extractAuthContext` nulls `orgId` when the
+ * caller's own organization is suspended or archived — deliberately, so a
+ * platform admin can still reach `/admin` — so asserting both ids there answers
+ * UNAUTHENTICATED to exactly the sessions the console exists for.
+ */
 export function requireUserId(ctx: AuthContext): asserts ctx is AuthContext & { userId: string } {
   if (!ctx.userId) {
     throw new GraphQLError('Not authenticated', {

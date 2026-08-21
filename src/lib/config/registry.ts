@@ -12,7 +12,7 @@
  */
 
 import { DEFAULT_APP_NAME } from '../app-config';
-import { DECIMAL_RE, ENV_DEFAULTS, isEnvFlagSet } from '../env-defaults';
+import { DECIMAL_RE, ENV_DEFAULTS, isEnvFlagSet, SAMPLE_RATE_BOUNDS } from '../env-defaults';
 import {
   SCOPE_ORDER,
   type SettingDefinition,
@@ -268,7 +268,10 @@ export const SETTINGS: readonly SettingDefinition[] = [
   // read in the logging path of every request to buy a knob whose whole
   // purpose is to reduce per-request work.
   defineSetting({
-    bounds: { max: 1, min: 0 },
+    // The bounds come from the shared module, not a second literal: this pair
+    // is the one that already drifted, and `parseSampleRate` enforcing one
+    // range while the console advertised another is the failure being closed.
+    bounds: SAMPLE_RATE_BOUNDS,
     default: 1,
     editableBy: 'platform-admin',
     env: { mode: 'override', name: 'LOG_HTTP_SAMPLE_RATE' },
@@ -425,11 +428,6 @@ export function getSetting(key: string): SettingDefinition | undefined {
   return BY_KEY.get(key);
 }
 
-/** Every declared key. */
-export function settingKeys(): string[] {
-  return [...BY_KEY.keys()];
-}
-
 /**
  * Knobs a UI should render for a scope: declared there and not retired.
  *
@@ -474,7 +472,7 @@ export function defaultForScope(definition: SettingDefinition, scope?: SettingSc
  * Throws on an unknown key, which makes a typo a module-load failure rather
  * than a silent `undefined` at the point of use.
  */
-export function settingDefault(key: string, scope?: SettingScope): SettingValue {
+function settingDefault(key: string, scope?: SettingScope): SettingValue {
   const definition = getSetting(key);
   if (!definition) {
     throw new Error(`Unknown setting: ${key}`);

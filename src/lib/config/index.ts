@@ -12,8 +12,6 @@ export {
   parseEnvValue,
   SETTINGS,
   satisfiesRole,
-  settingDefault,
-  settingKeys,
   settingsForScope,
   validateSettingValue,
 } from './registry';
