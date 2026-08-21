@@ -438,9 +438,21 @@ export function settingKeys(): string[] {
   return [...BY_KEY.keys()];
 }
 
-/** Knobs a UI should render for a scope — declared there, stored, not retired. */
+/**
+ * Knobs a UI should render for a scope: declared there and not retired.
+ *
+ * Includes `env-only` knobs deliberately. They cannot be *written* —
+ * `assertWritable` refuses, and they resolve `locked: true` so the control
+ * renders read-only and names the variable — but the console exists to answer
+ * "why is it behaving like that here", and the answer is frequently "an
+ * environment variable". Filtering them out here was what made the
+ * lock-and-redaction states in `SettingRow` unreachable, and left twenty-five
+ * `config.env.*` labels and an entire "Environment" section declared and never
+ * rendered. See CONFIG_ASSESSMENT §4.4: *every* knob, with redacted ones
+ * showing name and presence only.
+ */
 export function settingsForScope(scope: SettingScope): SettingDefinition[] {
-  return SETTINGS.filter(s => s.storage === 'db' && !s.deprecated && s.scopes.includes(scope));
+  return SETTINGS.filter(s => !s.deprecated && s.scopes.includes(scope));
 }
 
 /** The code default for a knob at a scope, honouring a per-scope default map. */
@@ -487,7 +499,39 @@ export function numericSettingDefault(key: string, scope?: SettingScope): number
   return value;
 }
 
-export class InvalidSettingValueError extends Error {}
+export class InvalidSettingValueError extends Error {
+  constructor(message: string) {
+    super(message);
+    // Set explicitly because `instanceof` is not reliable for this particular
+    // class — see `isInvalidSettingValueError`.
+    this.name = 'InvalidSettingValueError';
+  }
+}
+
+/**
+ * Recognise a validation failure **without** relying on `instanceof`.
+ *
+ * This module is deliberately importable from both the browser and the server,
+ * and the bundler takes that literally: `src/lib/config` is emitted into the
+ * SSR chunk (client components render forms from the registry) *and* reachable
+ * from the server chunk that holds the GraphQL resolvers. Two copies means two
+ * class identities, so the resolver's `instanceof` check compared a value
+ * thrown by one copy against the constructor of the other and quietly said no.
+ *
+ * The visible symptom was a platform admin typing an out-of-range number and
+ * getting "Internal server error" instead of the bounds message — the error was
+ * built correctly, mapped as unrecognised, and masked by Apollo. Unit tests
+ * cannot see it: under Vitest there is only ever one copy of the module.
+ *
+ * `name` is stable across copies, so it is what the check keys on. The
+ * `instanceof` arm stays first because it is exact when it does apply.
+ */
+export function isInvalidSettingValueError(err: unknown): err is InvalidSettingValueError {
+  return (
+    err instanceof InvalidSettingValueError ||
+    (err instanceof Error && err.name === 'InvalidSettingValueError')
+  );
+}
 
 /**
  * Coerce and validate a value against its declaration.

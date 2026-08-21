@@ -98,22 +98,23 @@ describe('registry invariants', () => {
     }
   });
 
-  it('excludes env-only and deprecated knobs from every scope listing', () => {
+  it('lists every knob declared at a scope, including the read-only ones', () => {
     // Asserted against SETTINGS, not against settingsForScope's own output.
     // The earlier version iterated the filtered result and re-asserted the
     // predicate that produced it — mathematically incapable of failing, since
     // no element of `filter(p)` can violate `p`.
     for (const scope of SCOPE_ORDER) {
       const listed = new Set(settingsForScope(scope).map(s => s.key));
-      const expected = SETTINGS.filter(
-        s => s.storage === 'db' && !s.deprecated && s.scopes.includes(scope),
-      ).map(s => s.key);
+      const expected = SETTINGS.filter(s => !s.deprecated && s.scopes.includes(scope)).map(
+        s => s.key,
+      );
       expect([...listed].sort()).toEqual(expected.sort());
-      // And the exclusions are real, not merely absent by construction: every
-      // env-only knob declaring this scope must be missing from the listing.
+      // env-only knobs are *listed* — the console's job is to say where a value
+      // came from, and "an environment variable" is one of the answers. They
+      // are kept unwritable by `assertWritable`, not by being hidden.
       for (const s of SETTINGS) {
         if (s.storage === 'env-only' && s.scopes.includes(scope)) {
-          expect(listed.has(s.key), s.key).toBe(false);
+          expect(listed.has(s.key), s.key).toBe(true);
         }
       }
     }

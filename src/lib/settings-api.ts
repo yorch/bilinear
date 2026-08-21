@@ -5,12 +5,19 @@
  * pages — both render the same knobs from the same declarations, differing
  * only in scope and in which knobs the caller's role lets through.
  */
-import type { SettingScope } from './config';
+import type { SettingRole, SettingScope, SettingSource, SettingType } from './config';
 import { gqlMutate, gqlQuery } from './graphql';
 
-/** A knob as the server resolved it, including where the value came from. */
+/**
+ * A knob as the server resolved it, including where the value came from.
+ *
+ * The three enum-shaped fields are typed against the registry rather than as
+ * bare strings: the SDL declares them from the same source, and typing them
+ * here is what lets a role or scope comparison be checked instead of being a
+ * string equality nobody can verify.
+ */
 export interface ResolvedSettingDto {
-  editableBy: string;
+  editableBy: SettingRole;
   enumValues: string[] | null;
   envIsSet: boolean;
   envVarName: string | null;
@@ -22,8 +29,8 @@ export interface ResolvedSettingDto {
   redacted: boolean;
   restartRequired: boolean;
   scopes: SettingScope[];
-  source: string;
-  type: string;
+  source: SettingSource;
+  type: SettingType;
   value: boolean | number | string | null;
 }
 

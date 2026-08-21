@@ -181,6 +181,34 @@ describe('settingResolvers', () => {
     });
   });
 
+  describe('error mapping', () => {
+    it('maps a validation failure to BAD_USER_INPUT', async () => {
+      asPlatformAdmin();
+      await expect(
+        set({ key: 'cycles.upcomingCount', scope: 'platform', value: 10_000 }),
+      ).rejects.toMatchObject({ extensions: { code: 'BAD_USER_INPUT' } });
+    });
+
+    it('maps a validation failure thrown by a *different copy* of the class', async () => {
+      // Not hypothetical, and not visible to any other test here. The registry
+      // is importable from the browser, so the bundler emits it into the SSR
+      // chunk as well as the server one — two copies, two class identities. An
+      // `instanceof` check compared the thrown value against the wrong
+      // constructor and fell through to `throw err`, which Apollo masked: a
+      // platform admin typing an out-of-range number saw "Internal server
+      // error" instead of the bounds message. Recognition keys on `name`,
+      // which survives the duplication; this fakes the foreign copy.
+      asPlatformAdmin();
+      const foreign = new Error('cycles.upcomingCount must be between 1 and 100');
+      foreign.name = 'InvalidSettingValueError';
+      ctx.config.set = vi.fn().mockRejectedValue(foreign);
+
+      await expect(
+        set({ key: 'cycles.upcomingCount', scope: 'platform', value: 10_000 }),
+      ).rejects.toMatchObject({ extensions: { code: 'BAD_USER_INPUT' } });
+    });
+  });
+
   describe('redaction', () => {
     it('never returns a secret’s value through the single-setting query', async () => {
       asPlatformAdmin();

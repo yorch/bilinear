@@ -22,7 +22,7 @@
 import type Redis from 'ioredis';
 import {
   getSetting,
-  InvalidSettingValueError,
+  isInvalidSettingValueError,
   PLATFORM_SCOPE_ID,
   type ResolvedSetting,
   SCOPE_ORDER,
@@ -490,7 +490,7 @@ export class ConfigService {
           // through to the layer below and log, never throw.
           values.set(row.key, validateSettingValue(definition, row.value));
         } catch (err) {
-          if (err instanceof InvalidSettingValueError) {
+          if (isInvalidSettingValueError(err)) {
             log.warn(
               { err, key: row.key, scopeId, scopeType },
               'Stored setting does not match its declaration — ignoring row',

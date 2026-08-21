@@ -6,6 +6,7 @@ import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
+import { satisfiesRole } from '@/lib/config';
 import {
   clearSetting,
   fetchSettings,
@@ -100,7 +101,14 @@ export default function AdminConfigPage() {
                 onChange={value => handleChange(setting, value)}
                 scope="platform"
                 setting={setting}
-                writable={setting.editableBy === 'platform-admin'}
+                // Every knob listed here is writable: this route is
+                // platform-admin only (the (admin) layout redirects everyone
+                // else), and `editableBy` is a floor, not an equality — a
+                // platform admin satisfies an org-admin knob too. Comparing
+                // with `===` rendered every org-admin-editable knob read-only
+                // at platform scope, i.e. exactly the knobs a tenant is
+                // expected to override *below* a platform default.
+                writable={satisfiesRole('platform-admin', setting.editableBy)}
               />
             ))}
           </div>

@@ -7,6 +7,7 @@ export {
   defineSetting,
   getSetting,
   InvalidSettingValueError,
+  isInvalidSettingValueError,
   numericSettingDefault,
   parseEnvValue,
   SETTINGS,

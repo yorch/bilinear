@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
 import {
-  InvalidSettingValueError,
+  isInvalidSettingValueError,
   PLATFORM_SCOPE_ID,
   type ResolvedSetting,
   type SettingDefinition,
@@ -193,7 +193,7 @@ function mapConfigError(err: unknown): never {
   if (err instanceof UnknownSettingError) {
     throw new GraphQLError((err as Error).message, { extensions: { code: 'NOT_FOUND' } });
   }
-  if (err instanceof InvalidSettingValueError || err instanceof InvalidScopeError) {
+  if (isInvalidSettingValueError(err) || err instanceof InvalidScopeError) {
     throw new GraphQLError((err as Error).message, {
       extensions: { code: 'BAD_USER_INPUT' },
     });
