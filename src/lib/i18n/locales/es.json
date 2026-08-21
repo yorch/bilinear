@@ -344,6 +344,7 @@
     },
     "areas": {
       "ai": "Asistente de IA",
+      "branding": "Marca",
       "cycles": "Ciclos",
       "env": "Entorno",
       "invite": "Invitaciones",
@@ -351,6 +352,9 @@
       "log": "Registro",
       "security": "Seguridad",
       "webhook": "Webhooks"
+    },
+    "branding": {
+      "appName": "Nombre del producto"
     },
     "cycles": {
       "upcomingCount": "Ciclos próximos preparados"

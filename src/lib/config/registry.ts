@@ -11,8 +11,15 @@
  * (settings UIs) and the server (`src/server/config/`).
  */
 
+import { DEFAULT_APP_NAME } from '../app-config';
 import { ENV_DEFAULTS, isEnvFlagSet } from '../env-defaults';
-import { SCOPE_ORDER, type SettingDefinition, type SettingScope, type SettingValue } from './types';
+import {
+  SCOPE_ORDER,
+  type SettingDefinition,
+  type SettingRole,
+  type SettingScope,
+  type SettingValue,
+} from './types';
 
 /**
  * Identity helper. Exists to get the declaration checked against
@@ -100,6 +107,33 @@ export const SETTINGS: readonly SettingDefinition[] = [
     storage: 'db',
     type: 'int',
     visibleTo: 'org-admin',
+  }),
+
+  // ── Branding ──────────────────────────────────────────────────────────────
+  // The knob this whole system was built for: renaming the product used to
+  // need a rebuild, because `NEXT_PUBLIC_APP_NAME` is inlined by `next build`.
+  //
+  // Declared and then *removed* on the first pass, because wiring only the
+  // server-rendered surfaces would have renamed transactional emails and the
+  // PWA manifest while the sidebar still said Bilinear — a knob that renames
+  // some of the product is worse than one that renames none of it. It is back
+  // now that every consumer reads one resolved value: the root layout resolves
+  // it once per request and hands it to `BrandingProvider`, and the surfaces
+  // outside React (metadata, manifest, email) call `getAppName()` directly.
+  //
+  // `visibleTo: 'member'` because every member sees the name on every screen;
+  // only a platform admin may change it, since it is the deployment's identity
+  // rather than one tenant's.
+  defineSetting({
+    default: DEFAULT_APP_NAME,
+    editableBy: 'platform-admin',
+    env: { mode: 'default', name: 'NEXT_PUBLIC_APP_NAME' },
+    key: 'branding.appName',
+    labelKey: 'config.branding.appName',
+    scopes: ['platform'],
+    storage: 'db',
+    type: 'string',
+    visibleTo: 'member',
   }),
 
   // ── Cycles (was Team.upcomingCycleCount) ──────────────────────────────────
@@ -369,6 +403,27 @@ export const SETTINGS: readonly SettingDefinition[] = [
     }),
   ),
 ];
+
+/**
+ * Role authority, lowest first. The three levels are ordinal — an org admin can
+ * do anything a member can — so comparisons are rank comparisons, not equality.
+ */
+const ROLE_RANK: Record<SettingRole, number> = {
+  member: 0,
+  'org-admin': 1,
+  'platform-admin': 2,
+};
+
+/**
+ * Does `actual` meet or exceed the authority `required` demands?
+ *
+ * Lives here rather than in the settings resolver because `ConfigService` needs
+ * the same predicate for its own write guard, and two copies of an ordinal
+ * comparison is exactly how a privilege check drifts.
+ */
+export function satisfiesRole(actual: SettingRole, required: SettingRole): boolean {
+  return ROLE_RANK[actual] >= ROLE_RANK[required];
+}
 
 /** Registry indexed by key. Built once at module load. */
 const BY_KEY = new Map<string, SettingDefinition>(SETTINGS.map(s => [s.key, s]));

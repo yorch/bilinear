@@ -1,12 +1,12 @@
 import { Suspense } from 'react';
 import { AuthHeader } from '@/components/auth/auth-header';
 import { VerifyCodeForm } from '@/components/auth/verify-code-form';
-import { APP_NAME } from '@/lib/app-config';
 import { getServerTranslations } from '@/lib/i18n/server';
+import { getAppName } from '@/server/lib/branding';
 
 export async function generateMetadata() {
-  const { t } = await getServerTranslations();
-  return { title: `${t('meta.verify')} — ${APP_NAME}` };
+  const [{ t }, appName] = await Promise.all([getServerTranslations(), getAppName()]);
+  return { title: `${t('meta.verify')} — ${appName}` };
 }
 
 export default async function VerifyPage() {

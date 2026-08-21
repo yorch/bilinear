@@ -3,14 +3,15 @@ import localFont from 'next/font/local';
 import { ThemeProvider } from 'next-themes';
 import { ServiceWorkerRegistrar } from '@/components/pwa/service-worker-registrar';
 import { getServerAccent } from '@/lib/accent-server';
-import { APP_NAME } from '@/lib/app-config';
 import { getServerCollabConfig } from '@/lib/collab-server';
 import { getServerTranslations } from '@/lib/i18n/server';
 import { PWA_BACKGROUND_DARK, PWA_BACKGROUND_LIGHT } from '@/lib/pwa';
 import { Toaster } from '@/lib/toast';
 import { AccentProvider } from '@/providers/accent-provider';
+import { BrandingProvider } from '@/providers/branding-provider';
 import { CollabProvider } from '@/providers/collab-provider';
 import { LocaleProvider } from '@/providers/locale-provider';
+import { getAppName } from '@/server/lib/branding';
 import './globals.css';
 
 /**
@@ -54,22 +55,22 @@ export const viewport: Viewport = {
 };
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { t } = await getServerTranslations();
+  const [{ t }, appName] = await Promise.all([getServerTranslations(), getAppName()]);
   return {
     // `manifest` is injected automatically from src/app/manifest.ts.
     appleWebApp: {
       capable: true,
       statusBarStyle: 'default',
-      title: APP_NAME,
+      title: appName,
     },
-    applicationName: APP_NAME,
+    applicationName: appName,
     description: t('meta.description'),
     icons: {
       // iOS has no maskable-icon concept and composites transparency onto
       // black, so it gets its own full-bleed icon.
       apple: '/icons/apple-touch-icon-180.png',
     },
-    title: APP_NAME,
+    title: appName,
   };
 }
 
@@ -78,9 +79,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [{ locale: initialLocale }, initialAccent] = await Promise.all([
+  const [{ locale: initialLocale }, initialAccent, appName] = await Promise.all([
     getServerTranslations(),
     getServerAccent(),
+    getAppName(),
   ]);
   // Read from the environment at request time (no I/O), so collab can be
   // enabled or repointed by restarting the container rather than rebuilding.
@@ -105,11 +107,13 @@ export default async function RootLayout({
         >
           <AccentProvider initialAccent={initialAccent}>
             <LocaleProvider initialLocale={initialLocale}>
-              <CollabProvider config={collabConfig}>
-                {children}
-                <ServiceWorkerRegistrar />
-                <Toaster closeButton position="bottom-right" richColors />
-              </CollabProvider>
+              <BrandingProvider appName={appName}>
+                <CollabProvider config={collabConfig}>
+                  {children}
+                  <ServiceWorkerRegistrar />
+                  <Toaster closeButton position="bottom-right" richColors />
+                </CollabProvider>
+              </BrandingProvider>
             </LocaleProvider>
           </AccentProvider>
         </ThemeProvider>

@@ -34,12 +34,12 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/hooks/use-auth';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
-import { APP_NAME } from '@/lib/app-config';
 import { gql, gqlQuery } from '@/lib/graphql';
 import { FAVORITE_DELETE_MUTATION, FAVORITES_QUERY } from '@/lib/graphql-queries';
 import { isPathWithin } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
+import { useAppName } from '@/providers/branding-provider';
 import { useStore } from '@/providers/store-provider';
 
 interface FavoriteMeta {
@@ -550,6 +550,7 @@ export const Sidebar = observer(function Sidebar({
   const { syncStore } = useStore();
   const pathname = usePathname();
   const t = useTranslations();
+  const appName = useAppName();
   const base = workspaceKey ? `/${workspaceKey}` : '';
   // The mobile drawer always shows full content — the desktop collapse
   // preference (a persistent-rail concept) doesn't apply to a transient overlay.
@@ -602,7 +603,7 @@ export const Sidebar = observer(function Sidebar({
         </button>
         <WorkspaceSwitcher
           collapsed={effectiveCollapsed}
-          fallbackLabel={syncStore.organizationName ?? workspaceKey ?? APP_NAME}
+          fallbackLabel={syncStore.organizationName ?? workspaceKey ?? appName}
         />
         <button
           aria-label={t('nav.closeMenu')}

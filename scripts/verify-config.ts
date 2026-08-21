@@ -29,6 +29,14 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
+/**
+ * Direct-database operator authority. Stated explicitly rather than defaulted:
+ * `ConfigService` requires every writer to name its role, so a script with raw
+ * database access declares the bypass it already has instead of inheriting it
+ * silently. See `SettingWriter`.
+ */
+const OPERATOR = { actorId: null, role: 'platform-admin' } as const;
+
 async function main() {
   const config = new ConfigService(prisma);
   const orgId = '11111111-1111-1111-1111-111111111111';
@@ -52,7 +60,7 @@ async function main() {
   );
 
   // 2. Platform layer overrides the code default.
-  await config.set('limits.maxInitiativeDepth', 'platform', PLATFORM_SCOPE_ID, 7, null);
+  await config.set('limits.maxInitiativeDepth', 'platform', PLATFORM_SCOPE_ID, 7, OPERATOR);
   const p = await config.explain('limits.maxInitiativeDepth', { orgId });
   check(
     'platform layer wins over code default',
@@ -61,7 +69,7 @@ async function main() {
   );
 
   // 3. Org layer overrides platform.
-  await config.set('limits.maxInitiativeDepth', 'org', orgId, 3, null);
+  await config.set('limits.maxInitiativeDepth', 'org', orgId, 3, OPERATOR);
   const o = await config.explain('limits.maxInitiativeDepth', { orgId });
   check(
     'org layer wins over platform',
@@ -76,15 +84,15 @@ async function main() {
   check('other org unaffected by first org row', other.value === 7, String(other.value));
 
   // 5. Team layer wins over org for a team-scoped knob.
-  await config.set('cycles.upcomingCount', 'org', orgId, 9, null);
-  await config.set('cycles.upcomingCount', 'team', teamId, 4, null);
+  await config.set('cycles.upcomingCount', 'org', orgId, 9, OPERATOR);
+  await config.set('cycles.upcomingCount', 'team', teamId, 4, OPERATOR);
   const t = await config.explain('cycles.upcomingCount', { orgId, teamId });
   check('team layer wins over org', t.value === 4 && t.source === 'team', `${t.value}/${t.source}`);
   const noTeam = await config.explain('cycles.upcomingCount', { orgId });
   check('falls back to org without a team id', noTeam.value === 9, String(noTeam.value));
 
   // 6. clear() falls back to the layer below.
-  await config.clear('limits.maxInitiativeDepth', 'org', orgId);
+  await config.clear('limits.maxInitiativeDepth', 'org', orgId, OPERATOR);
   const cleared = await config.explain('limits.maxInitiativeDepth', { orgId });
   check(
     'clear falls back to platform',
@@ -93,8 +101,8 @@ async function main() {
   );
 
   // 7. Upsert, not duplicate: the unique index holds.
-  await config.set('limits.maxExportRows', 'org', orgId, 100, null);
-  await config.set('limits.maxExportRows', 'org', orgId, 200, null);
+  await config.set('limits.maxExportRows', 'org', orgId, 100, OPERATOR);
+  await config.set('limits.maxExportRows', 'org', orgId, 200, OPERATOR);
   const rows = await prisma.setting.count({
     where: { key: 'limits.maxExportRows', scopeId: orgId },
   });
@@ -102,8 +110,8 @@ async function main() {
 
   // 8. The platform sentinel is constrained by the same unique index — the
   //    reason scope_id is NOT NULL rather than nullable.
-  await config.set('limits.maxExportRows', 'platform', PLATFORM_SCOPE_ID, 50, null);
-  await config.set('limits.maxExportRows', 'platform', PLATFORM_SCOPE_ID, 60, null);
+  await config.set('limits.maxExportRows', 'platform', PLATFORM_SCOPE_ID, 50, OPERATOR);
+  await config.set('limits.maxExportRows', 'platform', PLATFORM_SCOPE_ID, 60, OPERATOR);
   const platRows = await prisma.setting.count({
     where: { key: 'limits.maxExportRows', scopeType: 'platform' },
   });
@@ -112,7 +120,7 @@ async function main() {
   // 9. Validation rejects out-of-bounds and wrong types.
   let rejected = false;
   try {
-    await config.set('limits.maxInitiativeDepth', 'org', orgId, 999, null);
+    await config.set('limits.maxInitiativeDepth', 'org', orgId, 999, OPERATOR);
   } catch {
     rejected = true;
   }
@@ -120,7 +128,7 @@ async function main() {
 
   rejected = false;
   try {
-    await config.set('limits.maxInitiativeDepth', 'org', orgId, 'abc', null);
+    await config.set('limits.maxInitiativeDepth', 'org', orgId, 'abc', OPERATOR);
   } catch {
     rejected = true;
   }
@@ -129,7 +137,7 @@ async function main() {
   // 10. Writing at a scope the knob does not declare is rejected.
   rejected = false;
   try {
-    await config.set('limits.maxInitiativeDepth', 'team', teamId, 3, null);
+    await config.set('limits.maxInitiativeDepth', 'team', teamId, 3, OPERATOR);
   } catch {
     rejected = true;
   }
@@ -138,7 +146,7 @@ async function main() {
   // 11. env-only knobs are never writable.
   rejected = false;
   try {
-    await config.set('env.JWT_SECRET', 'platform', PLATFORM_SCOPE_ID, 'x', null);
+    await config.set('env.JWT_SECRET', 'platform', PLATFORM_SCOPE_ID, 'x', OPERATOR);
   } catch {
     rejected = true;
   }
@@ -159,7 +167,13 @@ async function main() {
   //     write must be refused outright rather than silently overridden.
   rejected = false;
   try {
-    await config.set('security.allowPrivateWebhookUrls', 'platform', PLATFORM_SCOPE_ID, true, null);
+    await config.set(
+      'security.allowPrivateWebhookUrls',
+      'platform',
+      PLATFORM_SCOPE_ID,
+      true,
+      OPERATOR,
+    );
   } catch {
     rejected = true;
   }
@@ -186,7 +200,7 @@ async function main() {
     envDefault.value === 9 && envDefault.source === 'env',
     `${envDefault.value}/${envDefault.source}`,
   );
-  await config.set('webhook.maxAttempts', 'org', orgId, 2, null);
+  await config.set('webhook.maxAttempts', 'org', orgId, 2, OPERATOR);
   const stored = await config.explain('webhook.maxAttempts', { orgId });
   check(
     'stored value beats default-mode env',

@@ -10,6 +10,7 @@ export {
   numericSettingDefault,
   parseEnvValue,
   SETTINGS,
+  satisfiesRole,
   settingDefault,
   settingKeys,
   settingsForScope,

@@ -85,6 +85,27 @@ describe('ConfigService', () => {
       expect(r.value).toBe(9);
     });
 
+    it('does not walk Team.parentId — team scope is flat', async () => {
+      // A settled decision, not an accident: a sub-team inherits from its ORG,
+      // not from its parent team (CONFIG_ASSESSMENT §7-D6). Encoded as a test
+      // rather than only a comment, because a comment cannot fail. Adding a
+      // parent walk without revisiting the decision turns this red.
+      const PARENT_TEAM = '44444444-4444-4444-4444-444444444444';
+      withRows({
+        [`org:${ORG}`]: [{ key: 'cycles.upcomingCount', value: 9 }],
+        [`team:${PARENT_TEAM}`]: [{ key: 'cycles.upcomingCount', value: 4 }],
+      });
+      const r = await config.explain('cycles.upcomingCount', { orgId: ORG, teamId: TEAM });
+      expect(r.value).toBe(9);
+      expect(r.source).toBe('org');
+      // And it never even asked about the parent: resolution issues one team
+      // query, for the team it was given.
+      const teamReads = prisma.setting.findMany.mock.calls.filter(
+        call => (call[0] as { where: { scopeType: string } }).where.scopeType === 'team',
+      );
+      expect(teamReads).toHaveLength(1);
+    });
+
     it('skips a scope the knob does not declare', async () => {
       // maxInitiativeDepth is platform+org only. A team row for it must not be
       // consulted even when a team id is present, or a knob's declared scope
@@ -141,29 +162,68 @@ describe('ConfigService', () => {
   });
 
   describe('write guards', () => {
+    /** A platform admin, i.e. the writer that clears every role check. */
+    const ADMIN = { actorId: 'user1', role: 'platform-admin' } as const;
+
     it('rejects an unknown key', async () => {
-      await expect(config.set('nope.missing', 'org', ORG, 1, null)).rejects.toBeInstanceOf(
+      await expect(config.set('nope.missing', 'org', ORG, 1, ADMIN)).rejects.toBeInstanceOf(
         UnknownSettingError,
       );
     });
 
     it('rejects a scope the knob does not declare', async () => {
       await expect(
-        config.set('limits.maxInitiativeDepth', 'team', TEAM, 3, null),
+        config.set('limits.maxInitiativeDepth', 'team', TEAM, 3, ADMIN),
       ).rejects.toBeInstanceOf(InvalidScopeError);
     });
 
     it('refuses to store an env-only knob', async () => {
       await expect(
-        config.set('env.JWT_SECRET', 'platform', PLATFORM_SCOPE_ID, 'x', null),
+        config.set('env.JWT_SECRET', 'platform', PLATFORM_SCOPE_ID, 'x', ADMIN),
       ).rejects.toBeInstanceOf(SettingNotWritableError);
       expect(prisma.setting.upsert).not.toHaveBeenCalled();
+    });
+
+    it('refuses a platform-scope write from anyone but a platform admin', async () => {
+      // The primitive's own guard, not the resolver's. `cycles.upcomingCount`
+      // is org-admin editable AND platform-scoped — the exact shape that let an
+      // org admin write every tenant's default when the only check lived at one
+      // call site.
+      await expect(
+        config.set('cycles.upcomingCount', 'platform', PLATFORM_SCOPE_ID, 20, {
+          actorId: 'user1',
+          role: 'org-admin',
+        }),
+      ).rejects.toBeInstanceOf(SettingNotWritableError);
+      expect(prisma.setting.upsert).not.toHaveBeenCalled();
+    });
+
+    it('refuses a clear the caller could not have performed as a write', async () => {
+      // Clearing is a write: it changes the effective value for every tenant
+      // below. Guarding `set` alone would leave the same escalation reachable
+      // through "reset to inherited".
+      await expect(
+        config.clear('cycles.upcomingCount', 'platform', PLATFORM_SCOPE_ID, {
+          actorId: 'user1',
+          role: 'org-admin',
+        }),
+      ).rejects.toBeInstanceOf(SettingNotWritableError);
+      expect(prisma.setting.delete).not.toHaveBeenCalled();
+    });
+
+    it('refuses a knob the caller’s role may not edit', async () => {
+      await expect(
+        config.set('limits.maxExportRows', 'org', ORG, 50, {
+          actorId: 'user1',
+          role: 'org-admin',
+        }),
+      ).rejects.toBeInstanceOf(SettingNotWritableError);
     });
 
     it('returns the previous value so the caller can audit both sides', async () => {
       withRows({});
       prisma.setting.findUnique.mockResolvedValue({ value: 4 });
-      const result = await config.set('limits.maxInitiativeDepth', 'org', ORG, 6, 'user1');
+      const result = await config.set('limits.maxInitiativeDepth', 'org', ORG, 6, ADMIN);
       expect(result.previousValue).toBe(4);
       expect(result.value).toBe(6);
     });

@@ -28,9 +28,11 @@ import {
   SCOPE_ORDER,
   SETTINGS,
   type SettingDefinition,
+  type SettingRole,
   type SettingScope,
   type SettingSource,
   type SettingValue,
+  satisfiesRole,
   settingsForScope,
   validateSettingValue,
 } from '@/lib/config';
@@ -61,6 +63,26 @@ export interface ConfigScopeIds {
   orgId?: string | null;
   teamId?: string | null;
   userId?: string | null;
+}
+
+/**
+ * Who is performing a write, and with what authority.
+ *
+ * `role` is not decoration — `assertWritable` re-checks it, so platform-scope
+ * protection lives in the primitive every writer funnels through rather than
+ * only in the one resolver that remembers to call `requirePlatformAdmin`. That
+ * mattered here: the escalation this guards against shipped precisely because
+ * the check lived at one call site and the shared write path trusted it.
+ *
+ * Required rather than defaulted. A default would be a permissive value a new
+ * caller inherits by saying nothing, which is the failure mode being closed;
+ * making it required forces every writer — including operator scripts with
+ * direct database access — to state its authority out loud.
+ */
+export interface SettingWriter {
+  /** User id for the audit trail, or `null` for a system or operator write. */
+  actorId: string | null;
+  role: SettingRole;
 }
 
 export class UnknownSettingError extends Error {}
@@ -217,9 +239,9 @@ export class ConfigService {
     scope: SettingScope,
     scopeId: string,
     rawValue: unknown,
-    actorId: string | null,
+    writer: SettingWriter,
   ): Promise<{ previousValue: SettingValue | null; value: SettingValue }> {
-    const definition = this.assertWritable(key, scope);
+    const definition = this.assertWritable(key, scope, writer.role);
     const value = validateSettingValue(definition, rawValue);
 
     const existing = await this.prisma.setting.findUnique({
@@ -228,8 +250,8 @@ export class ConfigService {
     });
 
     await this.prisma.setting.upsert({
-      create: { key, scopeId, scopeType: scope, updatedBy: actorId, value },
-      update: { updatedBy: actorId, value },
+      create: { key, scopeId, scopeType: scope, updatedBy: writer.actorId, value },
+      update: { updatedBy: writer.actorId, value },
       where: { scopeType_scopeId_key: { key, scopeId, scopeType: scope } },
     });
 
@@ -245,8 +267,13 @@ export class ConfigService {
    * "reset to inherited", and it is why the generic table earns its keep — the
    * same operation against a column would need a sentinel for "unset".
    */
-  async clear(key: string, scope: SettingScope, scopeId: string): Promise<SettingValue | null> {
-    this.assertWritable(key, scope);
+  async clear(
+    key: string,
+    scope: SettingScope,
+    scopeId: string,
+    writer: SettingWriter,
+  ): Promise<SettingValue | null> {
+    this.assertWritable(key, scope, writer.role);
     const existing = await this.prisma.setting.findUnique({
       select: { value: true },
       where: { scopeType_scopeId_key: { key, scopeId, scopeType: scope } },
@@ -381,8 +408,25 @@ export class ConfigService {
     }
   }
 
-  private assertWritable(key: string, scope: SettingScope): SettingDefinition {
+  /**
+   * Every guard a write must clear, in the one place every write goes through.
+   *
+   * The role checks duplicate the settings resolver deliberately. The resolver
+   * has to run them anyway — it needs `ctx` for the impersonation rule that
+   * `requirePlatformAdmin` enforces, and it produces the user-facing error —
+   * but a duplicate check in the shared primitive is what makes the guarantee
+   * hold for callers that are not that resolver.
+   */
+  private assertWritable(key: string, scope: SettingScope, role: SettingRole): SettingDefinition {
     const definition = requireDefinition(key);
+    if (scope === 'platform' && role !== 'platform-admin') {
+      throw new SettingNotWritableError(
+        'Platform-scope settings may only be written by a platform administrator',
+      );
+    }
+    if (!satisfiesRole(role, definition.editableBy)) {
+      throw new SettingNotWritableError(`${key} requires ${definition.editableBy} to change`);
+    }
     if (definition.storage === 'env-only') {
       throw new SettingNotWritableError(`${key} is env-only and cannot be stored`);
     }

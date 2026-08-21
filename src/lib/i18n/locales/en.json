@@ -344,6 +344,7 @@
     },
     "areas": {
       "ai": "AI assistant",
+      "branding": "Branding",
       "cycles": "Cycles",
       "env": "Environment",
       "invite": "Invitations",
@@ -351,6 +352,9 @@
       "log": "Logging",
       "security": "Security",
       "webhook": "Webhooks"
+    },
+    "branding": {
+      "appName": "Product name"
     },
     "cycles": {
       "upcomingCount": "Upcoming cycles kept ready"

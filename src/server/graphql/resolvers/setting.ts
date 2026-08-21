@@ -6,6 +6,7 @@ import {
   type SettingDefinition,
   type SettingRole,
   type SettingScope,
+  satisfiesRole,
 } from '@/lib/config';
 import { InvalidScopeError, SettingNotWritableError, UnknownSettingError } from '../../config';
 import { requireDefinition } from '../../config/reader';
@@ -37,16 +38,6 @@ async function callerRole(ctx: GraphQLContext): Promise<SettingRole> {
     // Not a platform admin (or impersonating) — fall through to org roles.
   }
   return ctx.orgRole === 'owner' || ctx.orgRole === 'admin' ? 'org-admin' : 'member';
-}
-
-const ROLE_RANK: Record<SettingRole, number> = {
-  member: 0,
-  'org-admin': 1,
-  'platform-admin': 2,
-};
-
-function satisfies(actual: SettingRole, required: SettingRole): boolean {
-  return ROLE_RANK[actual] >= ROLE_RANK[required];
 }
 
 /**
@@ -239,7 +230,7 @@ export const settingResolvers = {
       requireAuth(ctx);
       const definition = requireKnob(key);
       const role = await callerRole(ctx);
-      if (!satisfies(role, definition.editableBy)) {
+      if (!satisfiesRole(role, definition.editableBy)) {
         throw new GraphQLError('Insufficient permissions to change this setting', {
           extensions: { code: 'FORBIDDEN' },
         });
@@ -248,7 +239,10 @@ export const settingResolvers = {
 
       let previous: unknown;
       try {
-        previous = await ctx.config.clear(key, scope, resolvedScopeId);
+        previous = await ctx.config.clear(key, scope, resolvedScopeId, {
+          actorId: ctx.userId ?? null,
+          role,
+        });
       } catch (err) {
         mapConfigError(err);
       }
@@ -271,7 +265,7 @@ export const settingResolvers = {
       requireAuth(ctx);
       const definition = requireKnob(input.key);
       const role = await callerRole(ctx);
-      if (!satisfies(role, definition.editableBy)) {
+      if (!satisfiesRole(role, definition.editableBy)) {
         throw new GraphQLError('Insufficient permissions to change this setting', {
           extensions: { code: 'FORBIDDEN' },
         });
@@ -281,13 +275,10 @@ export const settingResolvers = {
       let previousValue: unknown;
       let value: unknown;
       try {
-        const result = await ctx.config.set(
-          input.key,
-          input.scope,
-          resolvedScopeId,
-          input.value,
-          ctx.userId ?? null,
-        );
+        const result = await ctx.config.set(input.key, input.scope, resolvedScopeId, input.value, {
+          actorId: ctx.userId ?? null,
+          role,
+        });
         previousValue = result.previousValue;
         value = result.value;
       } catch (err) {
@@ -313,7 +304,7 @@ export const settingResolvers = {
       requireAuth(ctx);
       const definition = requireKnob(key);
       const role = await callerRole(ctx);
-      if (!satisfies(role, definition.visibleTo)) {
+      if (!satisfiesRole(role, definition.visibleTo)) {
         throw new GraphQLError('Insufficient permissions to read this setting', {
           extensions: { code: 'FORBIDDEN' },
         });
@@ -333,7 +324,9 @@ export const settingResolvers = {
       const resolvedScopeId = await resolveScopeId(ctx, scope, scopeId, role);
       const ids = idsFor(ctx, scope, resolvedScopeId);
 
-      const resolved = await ctx.config.explainAll(scope, ids, d => satisfies(role, d.visibleTo));
+      const resolved = await ctx.config.explainAll(scope, ids, d =>
+        satisfiesRole(role, d.visibleTo),
+      );
       return resolved.map(toGraphQL);
     },
   },

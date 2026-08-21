@@ -293,7 +293,13 @@ export class PlatformAdminService {
     // exists to make cheap.
     await Promise.all(
       fields.map(field =>
-        this.config.set(TENANT_LIMIT_KEYS[field], 'org', id, limits[field], actorId),
+        this.config.set(TENANT_LIMIT_KEYS[field], 'org', id, limits[field], {
+          actorId,
+          // Every caller of this method is gated by `requirePlatformAdmin` in
+          // the resolver above it; the plan-limit knobs are platform-admin
+          // editable, so a lesser role would be refused by `assertWritable`.
+          role: 'platform-admin',
+        }),
       ),
     );
     return { limits: await this.readLimits(id), previous };

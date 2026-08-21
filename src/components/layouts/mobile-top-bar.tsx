@@ -3,7 +3,7 @@
 import { Menu } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useTranslations } from '@/hooks/use-translations';
-import { APP_NAME } from '@/lib/app-config';
+import { useAppName } from '@/providers/branding-provider';
 import { useStore } from '@/providers/store-provider';
 
 interface MobileTopBarProps {
@@ -22,6 +22,7 @@ export const MobileTopBar = observer(function MobileTopBar({
 }: MobileTopBarProps) {
   const { syncStore } = useStore();
   const t = useTranslations();
+  const appName = useAppName();
 
   return (
     <div className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-border px-2 md:hidden">
@@ -35,7 +36,7 @@ export const MobileTopBar = observer(function MobileTopBar({
         <Menu className="h-5 w-5" />
       </button>
       <span className="truncate text-sm font-semibold text-foreground">
-        {syncStore.organizationName ?? workspaceKey ?? APP_NAME}
+        {syncStore.organizationName ?? workspaceKey ?? appName}
       </span>
     </div>
   );
