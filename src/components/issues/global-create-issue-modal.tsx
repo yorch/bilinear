@@ -1,7 +1,7 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
 import { useIssueCreate } from '@/hooks/use-issue-create';
@@ -30,6 +30,7 @@ export const GlobalCreateIssueModal = observer(function GlobalCreateIssueModal()
 const GlobalCreateIssueModalInner = observer(function GlobalCreateIssueModalInner() {
   const { uiStore, teamStore, workflowStateStore, userStore, labelStore } = useStore();
   const params = useParams<{ workspace?: string; key?: string }>();
+  const pathname = usePathname();
 
   const routeTeam = params.key ? teamStore.findByKey(params.key) : null;
   // Deterministic fallback off team routes: alphabetical, not pool order.
@@ -46,8 +47,18 @@ const GlobalCreateIssueModalInner = observer(function GlobalCreateIssueModalInne
   const team = (selectedTeamId ? teamStore.findById(selectedTeamId) : null) ?? defaultTeam;
 
   const states = team ? workflowStateStore.findByTeamId(team.id) : [];
-  // Same default the team page's create path used: backlog state first.
-  const defaultStateId = states.find(s => s.type === 'backlog')?.id ?? states[0]?.id;
+  // When the modal is opened from the triage page, default the new issue to
+  // the triage state so it surfaces in the queue the user is looking at.
+  // Otherwise default to the backlog state (the historical behaviour).
+  // The triage default is snapshotted at open and only applies while the
+  // selected team is still the route team — switching teams in the modal
+  // falls back to backlog so we don't create a triage issue for the wrong team.
+  const routeTeamId = routeTeam?.id;
+  const onTriagePage = useState(() => pathname?.includes(`/team/${params.key}/triage`) ?? false)[0];
+  const useTriageDefault = onTriagePage && team?.id === routeTeamId;
+  const defaultStateId = useTriageDefault
+    ? (states.find(s => s.type === 'triage')?.id ?? states[0]?.id)
+    : (states.find(s => s.type === 'backlog')?.id ?? states[0]?.id);
 
   const handleCreate = useIssueCreate(team, states);
 
