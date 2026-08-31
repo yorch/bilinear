@@ -67,14 +67,6 @@ export const CreateProjectModal = observer(function CreateProjectModal({
     setTimeout(() => nameRef.current?.focus(), 50);
   }, [open]);
 
-  // Default-select the first team when the modal opens or when teams arrive
-  // after the initial open. Don't clobber an explicit user selection.
-  useEffect(() => {
-    if (open && teams.length > 0) {
-      setSelectedTeamIds(prev => (prev.length === 0 ? [teams[0].id] : prev));
-    }
-  }, [open, teams]);
-
   const toggleTeam = (teamId: string) => {
     setSelectedTeamIds(prev =>
       prev.includes(teamId) ? prev.filter(id => id !== teamId) : [...prev, teamId],
@@ -83,7 +75,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || selectedTeamIds.length === 0 || submitting) {
+    if (!name.trim() || submitting) {
       return;
     }
 
@@ -106,7 +98,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
     }
   };
 
-  const canSubmit = name.trim().length > 0 && selectedTeamIds.length > 0 && !submitting;
+  const canSubmit = name.trim().length > 0 && !submitting;
 
   return (
     <ModalDialog aria-label={t('projects.createProject')} onClose={onClose} open={open}>
@@ -159,7 +151,10 @@ export const CreateProjectModal = observer(function CreateProjectModal({
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">{t('projects.teams')}</span>
+            <span className="text-xs font-medium text-muted-foreground">
+              {t('projects.teams')}{' '}
+              <span className="font-normal text-muted-foreground">({t('projects.optional')})</span>
+            </span>
             <div className="flex flex-wrap gap-2">
               {teams.map(team => (
                 <button

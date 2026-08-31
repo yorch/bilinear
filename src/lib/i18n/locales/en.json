@@ -1193,7 +1193,7 @@
     "noIssuesAssigned": "No issues assigned to this project yet. Use Shift+P on any issue to assign it.",
     "noMilestonesYet": "No milestones yet. Add one to track key checkpoints.",
     "noProjectsYet": "No projects yet",
-    "noTeamsAvailable": "No teams available. Create a team first.",
+    "noTeamsAvailable": "No teams available. You can still create this project without a team.",
     "notEnoughHistory": "Not enough history yet — check back tomorrow.",
     "noUpdatesYet": "No updates yet. Add one to share project health and progress.",
     "optional": "optional",
