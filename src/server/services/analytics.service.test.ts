@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Prisma } from '../../generated/prisma';
 import { TEST_ORG, TEST_TEAM } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import { AnalyticsService } from './analytics.service';
@@ -336,6 +337,87 @@ describe('AnalyticsService', () => {
       const result = await service.timeInStateApprox({ orgId: ORG_ID });
 
       expect(result).toEqual([]);
+    });
+  });
+
+  // Regression: $queryRaw template literals that interpolated Prisma.empty
+  // produced phantom $N placeholders (strings.length - 1 > values.length),
+  // causing PostgreSQL syntax error 42601 ("syntax error at or near $N").
+  // The fix replaces Prisma.empty interpolation with Prisma.join over a
+  // conditions array, so every string fragment has a matching value.
+  describe('raw SQL placeholder parity', () => {
+    function assertPlaceholderParity(sql: Prisma.Sql, label: string) {
+      const placeholderCount = sql.strings.length - 1;
+      const valueCount = sql.values.length;
+      expect(placeholderCount, `${label}: placeholder/value count mismatch`).toBe(valueCount);
+    }
+
+    it('leadTimeHistogram produces balanced placeholders with teamId + range', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      await service.leadTimeHistogram({
+        orgId: ORG_ID,
+        range: { from: '2026-01-01', to: '2026-06-01' },
+        teamId: TEAM_ID,
+      });
+      const sql = prisma.$queryRaw.mock.calls[0][0] as Prisma.Sql;
+      assertPlaceholderParity(sql, 'leadTimeHistogram');
+    });
+
+    it('leadTimeHistogram produces balanced placeholders without teamId or range', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      await service.leadTimeHistogram({ orgId: ORG_ID });
+      const sql = prisma.$queryRaw.mock.calls[0][0] as Prisma.Sql;
+      assertPlaceholderParity(sql, 'leadTimeHistogram (no optional filters)');
+    });
+
+    it('cycleTimeHistogram produces balanced placeholders with all filters', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      await service.cycleTimeHistogram({
+        orgId: ORG_ID,
+        range: { from: '2026-01-01', to: '2026-06-01' },
+        teamId: TEAM_ID,
+      });
+      const sql = prisma.$queryRaw.mock.calls[0][0] as Prisma.Sql;
+      assertPlaceholderParity(sql, 'cycleTimeHistogram');
+    });
+
+    it('throughputByWeek produces balanced placeholders with teamId + range', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      await service.throughputByWeek({
+        orgId: ORG_ID,
+        range: { from: '2026-01-01', to: '2026-06-01' },
+        teamId: TEAM_ID,
+      });
+      const sql = prisma.$queryRaw.mock.calls[0][0] as Prisma.Sql;
+      assertPlaceholderParity(sql, 'throughputByWeek');
+    });
+
+    it('teamHealth produces balanced placeholders with teamId', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      await service.teamHealth({ orgId: ORG_ID, teamId: TEAM_ID });
+      const sql = prisma.$queryRaw.mock.calls[0][0] as Prisma.Sql;
+      assertPlaceholderParity(sql, 'teamHealth');
+    });
+
+    it('teamHealth produces balanced placeholders without teamId', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      await service.teamHealth({ orgId: ORG_ID });
+      const sql = prisma.$queryRaw.mock.calls[0][0] as Prisma.Sql;
+      assertPlaceholderParity(sql, 'teamHealth (no teamId)');
+    });
+
+    it('timeInStateApprox produces balanced placeholders with teamId', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      await service.timeInStateApprox({ orgId: ORG_ID, teamId: TEAM_ID });
+      const sql = prisma.$queryRaw.mock.calls[0][0] as Prisma.Sql;
+      assertPlaceholderParity(sql, 'timeInStateApprox');
+    });
+
+    it('timeInStateApprox produces balanced placeholders without teamId', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      await service.timeInStateApprox({ orgId: ORG_ID });
+      const sql = prisma.$queryRaw.mock.calls[0][0] as Prisma.Sql;
+      assertPlaceholderParity(sql, 'timeInStateApprox (no teamId)');
     });
   });
 });

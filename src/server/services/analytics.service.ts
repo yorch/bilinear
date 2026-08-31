@@ -115,17 +115,24 @@ export class AnalyticsService {
   async leadTimeHistogram(filter: AnalyticsFilter): Promise<HistogramBucket[]> {
     const from = toDateOrNull(filter.range?.from);
     const to = toDateOrNull(filter.range?.to);
-    const rows = await this.prisma.$queryRaw<Array<{ days: number }>>`
-      SELECT EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400.0 AS days
-      FROM issues
-      WHERE organization_id = ${filter.orgId}::uuid
-        AND completed_at IS NOT NULL
-        AND archived_at IS NULL
-        AND trashed = false
-        ${filter.teamId ? Prisma.sql`AND team_id = ${filter.teamId}::uuid` : Prisma.empty}
-        ${from ? Prisma.sql`AND completed_at >= ${from}` : Prisma.empty}
-        ${to ? Prisma.sql`AND completed_at < ${to}` : Prisma.empty}
-    `;
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`organization_id = ${filter.orgId}::uuid`,
+      Prisma.sql`completed_at IS NOT NULL`,
+      Prisma.sql`archived_at IS NULL`,
+      Prisma.sql`trashed = false`,
+    ];
+    if (filter.teamId) {
+      conditions.push(Prisma.sql`team_id = ${filter.teamId}::uuid`);
+    }
+    if (from) {
+      conditions.push(Prisma.sql`completed_at >= ${from}`);
+    }
+    if (to) {
+      conditions.push(Prisma.sql`completed_at < ${to}`);
+    }
+    const rows = await this.prisma.$queryRaw<Array<{ days: number }>>(
+      Prisma.sql`SELECT EXTRACT(EPOCH FROM (completed_at - created_at)) / 86400.0 AS days FROM issues WHERE ${Prisma.join(conditions, ' AND ')}`,
+    );
     return bucketize(rows.map(r => Number(r.days)));
   }
 
@@ -136,18 +143,25 @@ export class AnalyticsService {
   async cycleTimeHistogram(filter: AnalyticsFilter): Promise<HistogramBucket[]> {
     const from = toDateOrNull(filter.range?.from);
     const to = toDateOrNull(filter.range?.to);
-    const rows = await this.prisma.$queryRaw<Array<{ days: number }>>`
-      SELECT EXTRACT(EPOCH FROM (completed_at - started_at)) / 86400.0 AS days
-      FROM issues
-      WHERE organization_id = ${filter.orgId}::uuid
-        AND completed_at IS NOT NULL
-        AND started_at IS NOT NULL
-        AND archived_at IS NULL
-        AND trashed = false
-        ${filter.teamId ? Prisma.sql`AND team_id = ${filter.teamId}::uuid` : Prisma.empty}
-        ${from ? Prisma.sql`AND completed_at >= ${from}` : Prisma.empty}
-        ${to ? Prisma.sql`AND completed_at < ${to}` : Prisma.empty}
-    `;
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`organization_id = ${filter.orgId}::uuid`,
+      Prisma.sql`completed_at IS NOT NULL`,
+      Prisma.sql`started_at IS NOT NULL`,
+      Prisma.sql`archived_at IS NULL`,
+      Prisma.sql`trashed = false`,
+    ];
+    if (filter.teamId) {
+      conditions.push(Prisma.sql`team_id = ${filter.teamId}::uuid`);
+    }
+    if (from) {
+      conditions.push(Prisma.sql`completed_at >= ${from}`);
+    }
+    if (to) {
+      conditions.push(Prisma.sql`completed_at < ${to}`);
+    }
+    const rows = await this.prisma.$queryRaw<Array<{ days: number }>>(
+      Prisma.sql`SELECT EXTRACT(EPOCH FROM (completed_at - started_at)) / 86400.0 AS days FROM issues WHERE ${Prisma.join(conditions, ' AND ')}`,
+    );
     return bucketize(rows.map(r => Number(r.days)));
   }
 
@@ -159,19 +173,24 @@ export class AnalyticsService {
   async throughputByWeek(filter: AnalyticsFilter): Promise<ThroughputPoint[]> {
     const from = toDateOrNull(filter.range?.from);
     const to = toDateOrNull(filter.range?.to);
-    const rows = await this.prisma.$queryRaw<Array<{ week_start: Date; count: bigint }>>`
-      SELECT date_trunc('week', completed_at) AS week_start, COUNT(*)::bigint AS count
-      FROM issues
-      WHERE organization_id = ${filter.orgId}::uuid
-        AND completed_at IS NOT NULL
-        AND archived_at IS NULL
-        AND trashed = false
-        ${filter.teamId ? Prisma.sql`AND team_id = ${filter.teamId}::uuid` : Prisma.empty}
-        ${from ? Prisma.sql`AND completed_at >= ${from}` : Prisma.empty}
-        ${to ? Prisma.sql`AND completed_at < ${to}` : Prisma.empty}
-      GROUP BY week_start
-      ORDER BY week_start ASC
-    `;
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`organization_id = ${filter.orgId}::uuid`,
+      Prisma.sql`completed_at IS NOT NULL`,
+      Prisma.sql`archived_at IS NULL`,
+      Prisma.sql`trashed = false`,
+    ];
+    if (filter.teamId) {
+      conditions.push(Prisma.sql`team_id = ${filter.teamId}::uuid`);
+    }
+    if (from) {
+      conditions.push(Prisma.sql`completed_at >= ${from}`);
+    }
+    if (to) {
+      conditions.push(Prisma.sql`completed_at < ${to}`);
+    }
+    const rows = await this.prisma.$queryRaw<Array<{ week_start: Date; count: bigint }>>(
+      Prisma.sql`SELECT date_trunc('week', completed_at) AS week_start, COUNT(*)::bigint AS count FROM issues WHERE ${Prisma.join(conditions, ' AND ')} GROUP BY week_start ORDER BY week_start ASC`,
+    );
     return rows.map(r => ({
       count: Number(r.count),
       weekStart: r.week_start.toISOString().split('T')[0],
@@ -187,22 +206,20 @@ export class AnalyticsService {
     const now = new Date();
 
     // Fetch all open issues for the team to compute age percentiles.
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`i.organization_id = ${filter.orgId}::uuid`,
+      Prisma.sql`i.archived_at IS NULL`,
+      Prisma.sql`i.trashed = false`,
+      Prisma.sql`ws.type NOT IN ('completed', 'canceled')`,
+    ];
+    if (filter.teamId) {
+      conditions.push(Prisma.sql`i.team_id = ${filter.teamId}::uuid`);
+    }
     const rows = await this.prisma.$queryRaw<
       Array<{ age_days: number; is_overdue: boolean; estimate: number | null }>
-    >`
-      SELECT
-        EXTRACT(EPOCH FROM (NOW() - i.created_at)) / 86400.0 AS age_days,
-        (i.due_date IS NOT NULL AND i.due_date < ${now}) AS is_overdue,
-        i.estimate
-      FROM issues i
-      JOIN workflow_states ws ON ws.id = i.state_id
-      WHERE i.organization_id = ${filter.orgId}::uuid
-        AND i.archived_at IS NULL
-        AND i.trashed = false
-        AND ws.type NOT IN ('completed', 'canceled')
-        ${filter.teamId ? Prisma.sql`AND i.team_id = ${filter.teamId}::uuid` : Prisma.empty}
-      ORDER BY age_days DESC
-    `;
+    >(
+      Prisma.sql`SELECT EXTRACT(EPOCH FROM (NOW() - i.created_at)) / 86400.0 AS age_days, (i.due_date IS NOT NULL AND i.due_date < ${now}) AS is_overdue, i.estimate FROM issues i JOIN workflow_states ws ON ws.id = i.state_id WHERE ${Prisma.join(conditions, ' AND ')} ORDER BY age_days DESC`,
+    );
 
     const openCount = rows.length;
     const overdueCount = rows.filter(r => r.is_overdue).length;
@@ -448,29 +465,20 @@ export class AnalyticsService {
    * service swaps to the higher-fidelity computation.
    */
   async timeInStateApprox(filter: AnalyticsFilter): Promise<TimeInStateRow[]> {
-    const teamFilter = filter.teamId
-      ? Prisma.sql`AND i.team_id = ${filter.teamId}::uuid`
-      : Prisma.empty;
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`i.organization_id = ${filter.orgId}::uuid`,
+      Prisma.sql`i.started_at IS NOT NULL`,
+      Prisma.sql`i.archived_at IS NULL`,
+      Prisma.sql`i.trashed = false`,
+    ];
+    if (filter.teamId) {
+      conditions.push(Prisma.sql`i.team_id = ${filter.teamId}::uuid`);
+    }
     const rows = await this.prisma.$queryRaw<
       Array<{ state_id: string; avg_hours: number | null; sample: bigint }>
-    >`
-      SELECT
-        i.state_id,
-        AVG(
-          EXTRACT(EPOCH FROM (
-            COALESCE(i.completed_at, i.canceled_at, NOW()) - i.started_at
-          )) / 3600.0
-        ) AS avg_hours,
-        COUNT(*)::bigint AS sample
-      FROM issues i
-      WHERE i.organization_id = ${filter.orgId}::uuid
-        AND i.started_at IS NOT NULL
-        AND i.archived_at IS NULL
-        AND i.trashed = false
-        ${teamFilter}
-      GROUP BY i.state_id
-      HAVING COUNT(*) > 0
-    `;
+    >(
+      Prisma.sql`SELECT i.state_id, AVG(EXTRACT(EPOCH FROM (COALESCE(i.completed_at, i.canceled_at, NOW()) - i.started_at)) / 3600.0) AS avg_hours, COUNT(*)::bigint AS sample FROM issues i WHERE ${Prisma.join(conditions, ' AND ')} GROUP BY i.state_id HAVING COUNT(*) > 0`,
+    );
     return rows.map(r => ({
       avgHours: r.avg_hours == null ? 0 : Number(r.avg_hours),
       sampleSize: Number(r.sample),

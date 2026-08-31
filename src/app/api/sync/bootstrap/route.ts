@@ -38,6 +38,9 @@ async function handleGet(req: NextRequest) {
     for (const org of data.organizations) {
       lines.push(`Organization=${JSON.stringify(org)}`);
     }
+    for (const member of data.organizationMembers) {
+      lines.push(`OrganizationMember=${JSON.stringify(member)}`);
+    }
     for (const team of data.teams) {
       lines.push(`Team=${JSON.stringify(team)}`);
     }
