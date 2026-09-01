@@ -822,7 +822,7 @@
       "discardConfirmBody": "Tienes cambios sin guardar que se perderán si cierras esto.",
       "discardConfirmTitle": "¿Descartar esta tarea?",
       "issueCreated": "Tarea creada",
-      "noTeamsDescription": "Los issues pertenecen a equipos. Crea un equipo para empezar a rastrear el trabajo.",
+      "noTeamsDescription": "Las tareas pertenecen a equipos. Crea un equipo para empezar a rastrear el trabajo.",
       "noTeamsTitle": "Crea un equipo primero",
       "suggest": "Sugerir",
       "suggestTitleFromDescription": "Sugerir un título a partir de la descripción",
