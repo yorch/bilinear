@@ -822,6 +822,8 @@
       "discardConfirmBody": "Tienes cambios sin guardar que se perderán si cierras esto.",
       "discardConfirmTitle": "¿Descartar esta tarea?",
       "issueCreated": "Tarea creada",
+      "noTeamsDescription": "Los issues pertenecen a equipos. Crea un equipo para empezar a rastrear el trabajo.",
+      "noTeamsTitle": "Crea un equipo primero",
       "suggest": "Sugerir",
       "suggestTitleFromDescription": "Sugerir un título a partir de la descripción",
       "team": "Equipo",
@@ -1090,7 +1092,8 @@
       "title": "No se pudo cargar esta vista del espacio de trabajo"
     },
     "workspacePage": {
-      "noTeams": "Todavía no hay equipos. Crea un equipo para empezar."
+      "noTeams": "Todavía no hay equipos. Crea un equipo para empezar.",
+      "noTeamsTitle": "Aún no hay equipos"
     }
   },
   "meta": {
@@ -1708,7 +1711,7 @@
       "neverUsed": "Nunca usado",
       "noApiTokensYet": "Aún no hay tokens de API.",
       "noMembersFound": "No se encontraron miembros.",
-      "noTeamsYet": "Aún no hay equipos. Crea uno desde la barra lateral.",
+      "noTeamsYet": "Aún no hay equipos.",
       "notificationPrefsError": "Error al actualizar las preferencias de notificaciones",
       "organization": "Organización",
       "orgLoadError": "No se pudieron cargar los detalles de la organización.",

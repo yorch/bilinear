@@ -822,6 +822,8 @@
       "discardConfirmBody": "You have unsaved changes that will be lost if you close this.",
       "discardConfirmTitle": "Discard this issue?",
       "issueCreated": "Issue created",
+      "noTeamsDescription": "Issues belong to teams. Create a team to start tracking work.",
+      "noTeamsTitle": "Create a team first",
       "suggest": "Suggest",
       "suggestTitleFromDescription": "Suggest a title from the description",
       "team": "Team",
@@ -1090,7 +1092,8 @@
       "title": "Couldn't load this workspace view"
     },
     "workspacePage": {
-      "noTeams": "No teams yet. Create a team to get started."
+      "noTeams": "No teams yet. Create a team to get started.",
+      "noTeamsTitle": "No teams yet"
     }
   },
   "meta": {
@@ -1708,7 +1711,7 @@
       "neverUsed": "Never used",
       "noApiTokensYet": "No API tokens yet.",
       "noMembersFound": "No members found.",
-      "noTeamsYet": "No teams yet. Create one from the sidebar.",
+      "noTeamsYet": "No teams yet.",
       "notificationPrefsError": "Failed to update notification preferences",
       "organization": "Organization",
       "orgLoadError": "Could not load organization details.",
