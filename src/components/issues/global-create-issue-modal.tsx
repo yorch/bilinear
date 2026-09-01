@@ -1,10 +1,14 @@
 'use client';
 
+import { Users } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams, usePathname } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { CreateIssueModal } from '@/components/issues/create-issue-modal';
+import { Button } from '@/components/ui/button';
+import { ModalDialog, ModalHeader } from '@/components/ui/modal-dialog';
 import { useIssueCreate } from '@/hooks/use-issue-create';
+import { useTranslations } from '@/hooks/use-translations';
 import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { useStore } from '@/providers/store-provider';
 
@@ -29,6 +33,7 @@ export const GlobalCreateIssueModal = observer(function GlobalCreateIssueModal()
 
 const GlobalCreateIssueModalInner = observer(function GlobalCreateIssueModalInner() {
   const { uiStore, teamStore, workflowStateStore, userStore, labelStore } = useStore();
+  const t = useTranslations();
   const params = useParams<{ workspace?: string; key?: string }>();
   const pathname = usePathname();
 
@@ -63,7 +68,41 @@ const GlobalCreateIssueModalInner = observer(function GlobalCreateIssueModalInne
   const handleCreate = useIssueCreate(team, states);
 
   if (!team) {
-    return null;
+    return (
+      <ModalDialog
+        aria-label={t('issueDetail.createModal.noTeamsTitle')}
+        onClose={() => uiStore.closeCreateIssueModal()}
+        open
+      >
+        <ModalHeader title={t('issueDetail.createModal.noTeamsTitle')} />
+        <div className="flex items-start gap-3 px-5 py-4">
+          <Users className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            {t('issueDetail.createModal.noTeamsDescription')}
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+          <Button
+            onClick={() => uiStore.closeCreateIssueModal()}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {t('common.cancel')}
+          </Button>
+          <Button
+            onClick={() => {
+              uiStore.closeCreateIssueModal();
+              uiStore.openCreateTeamModal();
+            }}
+            size="sm"
+            type="button"
+          >
+            {t('teams.createTeam')}
+          </Button>
+        </div>
+      </ModalDialog>
+    );
   }
 
   return (

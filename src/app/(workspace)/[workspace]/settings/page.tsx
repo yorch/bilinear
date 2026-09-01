@@ -11,6 +11,7 @@ import { MembersSection } from '@/components/settings/members-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
+import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -145,7 +146,7 @@ interface Viewer {
 
 const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const { workspace } = useParams<{ workspace: string }>();
-  const { teamStore } = useStore();
+  const { teamStore, uiStore } = useStore();
   const t = useTranslations();
   useDocumentTitle(t('settings.workspace.title'));
   const { formatDate, intlLocale } = useFormatters();
@@ -438,9 +439,14 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
           </h2>
           <div className="rounded-lg border border-border bg-card overflow-hidden">
             {teams.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-muted-foreground">
-                {t('settings.workspace.noTeamsYet')}
-              </p>
+              <div className="flex items-center justify-between px-5 py-4">
+                <p className="text-sm text-muted-foreground">
+                  {t('settings.workspace.noTeamsYet')}
+                </p>
+                <Button onClick={() => uiStore.openCreateTeamModal()} size="sm" type="button">
+                  {t('teams.createTeam')}
+                </Button>
+              </div>
             ) : (
               <ul className="divide-y divide-border">
                 {teams.map(team => {
