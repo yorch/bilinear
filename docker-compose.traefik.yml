@@ -79,11 +79,24 @@ services:
       - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-yjs.service=${TRAEFIK_NAME:-bilinear}-yjs"
       - "traefik.http.routers.${TRAEFIK_NAME:-bilinear}-yjs.priority=100"
 
+  # Behind Traefik, the backing services must NOT be published to the host —
+  # they are reachable only from the `default` network by the app/ws/yjs
+  # containers. Leaving their infra.yml ports (`5432`, `6379`) published would
+  # expose an unauthenticated Redis and a Postgres with a weak default
+  # password directly to the internet. `ports: !reset []` clears the
+  # inherited mappings the same way app/ws/yjs above do.
   postgres:
+    ports: !reset []
     networks:
       - default
 
   redis:
+    ports: !reset []
+    networks:
+      - default
+
+  mailpit:
+    ports: !reset []
     networks:
       - default
 
