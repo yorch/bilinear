@@ -4,6 +4,11 @@ services:
     pull_policy: always
     restart: unless-stopped
     init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - ${APP_PORT:-3000}:3000
     env_file:
@@ -38,6 +43,11 @@ services:
     pull_policy: always
     restart: unless-stopped
     init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     # The app container owns `prisma migrate deploy` (docker-entrypoint.sh);
     # override it here so the two containers can't race migrations on boot.
     entrypoint: ["node", "./node_modules/tsx/dist/cli.mjs", "src/server/ws/index.ts"]
@@ -62,6 +72,11 @@ services:
     restart: unless-stopped
     init: true
     profiles: ["collab"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     # As with `ws`: the app container owns `prisma migrate deploy`.
     entrypoint: ["node", "./node_modules/tsx/dist/cli.mjs", "src/server/yjs/index.ts"]
     ports:
