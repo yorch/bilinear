@@ -4,6 +4,11 @@ services:
     pull_policy: always
     restart: unless-stopped
     init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - ${APP_PORT:-3000}:3000
     env_file:
@@ -38,9 +43,29 @@ services:
     pull_policy: always
     restart: unless-stopped
     init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     # The app container owns `prisma migrate deploy` (docker-entrypoint.sh);
     # override it here so the two containers can't race migrations on boot.
     entrypoint: ["node", "./node_modules/tsx/dist/cli.mjs", "src/server/ws/index.ts"]
+    # The image's baked-in HEALTHCHECK probes :3000/health (the app's port),
+    # but ws listens on :3001. The ws HTTP handler returns 200 for any path,
+    # so probe :3001 directly.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3001/',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
     ports:
       - ${WS_PORT_PUBLISHED:-3001}:3001
     env_file:
@@ -62,8 +87,29 @@ services:
     restart: unless-stopped
     init: true
     profiles: ["collab"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     # As with `ws`: the app container owns `prisma migrate deploy`.
     entrypoint: ["node", "./node_modules/tsx/dist/cli.mjs", "src/server/yjs/index.ts"]
+    # The image's baked-in HEALTHCHECK probes :3000/health (the app's port),
+    # but yjs listens on :1234 and is a WebSocket-only server (Hocuspocus)
+    # with no HTTP endpoint, so an HTTP probe will always fail. Use a TCP
+    # connect check instead — it verifies the server is listening.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const s=require('net').connect(1234,'127.0.0.1');s.on('connect',()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>{s.destroy();process.exit(1)},2000)",
+        ]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
     ports:
       - ${YJS_PORT_PUBLISHED:-1234}:1234
     env_file:
