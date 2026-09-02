@@ -21,25 +21,12 @@ services:
 
   redis:
     image: redis:8-alpine
-    # Honor REDIS_PASSWORD from .env so clients whose REDIS_URL carries a
-    # password (redis://:password@redis:6379) can authenticate. An empty
-    # value (the .env.example default) disables AUTH, matching the old
-    # behaviour, so local dev without a password is unaffected.
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-}"]
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     ports:
       - "6379:6379"
     volumes:
       - ./data/redis:/data
     healthcheck:
-      # redis-cli ping fails with NOAUTH when requirepass is set, so pass
-      # the password when configured; fall back to a bare ping otherwise.
-      test:
-        [
-          "CMD-SHELL",
-          "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a \"$$REDIS_PASSWORD\" ping; else redis-cli ping; fi",
-        ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
