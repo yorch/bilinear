@@ -1633,6 +1633,7 @@
       "enableSamlSsoDescription": "Permitir que los miembros se autentiquen mediante SSO",
       "enforceSso": "Forzar SSO",
       "enforceSsoDescription": "Requerir que todos los miembros inicien sesión mediante SSO",
+      "forbidden": "Solo los propietarios y administradores del espacio pueden ver y gestionar el inicio de sesión único y el aprovisionamiento.",
       "idpCertificate": "Certificado del IDP (PEM)",
       "idpCertRequired": "El certificado del IDP es obligatorio",
       "idpEntityId": "ID de entidad del IDP",

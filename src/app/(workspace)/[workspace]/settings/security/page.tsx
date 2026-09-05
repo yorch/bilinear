@@ -376,6 +376,7 @@ export default function SecuritySettingsPage() {
               <LoadError
                 cause={scimCause}
                 fallback={t('common.somethingWentWrong')}
+                forbiddenMessage={t('settings.security.forbidden')}
                 onRetry={() => void reloadScim()}
               />
             ) : (
@@ -496,6 +497,7 @@ export default function SecuritySettingsPage() {
             <LoadError
               cause={samlCause}
               fallback={t('common.somethingWentWrong')}
+              forbiddenMessage={t('settings.security.forbidden')}
               onRetry={() => void reloadSaml()}
             />
           ) : (

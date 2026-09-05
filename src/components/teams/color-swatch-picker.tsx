@@ -73,7 +73,14 @@ export function ColorSwatchPicker({
         className="h-5 w-7 cursor-pointer rounded border border-input bg-transparent p-0"
         onChange={e => onChange(e.target.value)}
         type="color"
-        value={/^#[0-9a-f]{6}$/i.test(value) ? value : ''}
+        // A native colour input refuses '' with a console warning, so an
+        // entity with no colour yet shows the first palette swatch instead
+        // of an invalid value. Resolved from the stylesheet like the swatches.
+        value={
+          /^#[0-9a-f]{6}$/i.test(value)
+            ? value
+            : (resolveCssVar(ENTITY_SWATCH_VARS[0] ?? '') ?? value)
+        }
       />
     </fieldset>
   );

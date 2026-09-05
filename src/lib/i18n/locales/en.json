@@ -1633,6 +1633,7 @@
       "enableSamlSsoDescription": "Allow members to authenticate via SSO",
       "enforceSso": "Enforce SSO",
       "enforceSsoDescription": "Require all members to sign in via SSO",
+      "forbidden": "Only workspace owners and admins can view and manage single sign-on and provisioning.",
       "idpCertificate": "IDP Certificate (PEM)",
       "idpCertRequired": "IDP Certificate is required",
       "idpEntityId": "IDP Entity ID",
