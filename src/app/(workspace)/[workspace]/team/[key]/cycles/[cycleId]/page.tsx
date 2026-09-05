@@ -4,7 +4,6 @@ import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { CycleDetailView } from '@/components/cycles/cycle-detail-view';
 import { PageSkeleton } from '@/components/ui/skeleton';
-import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
@@ -21,8 +20,8 @@ const CycleDetailPage = observer(function CycleDetailPage() {
   }>();
   const { teamStore, cycleStore, syncStore } = useStore();
 
-  // Read before the early returns below — hooks cannot run conditionally.
-  useDocumentTitle(cycleStore.findById(cycleId)?.name);
+  // The document title is owned by CycleDetailView, which also knows the
+  // "Cycle N" fallback for an unnamed cycle.
 
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
   if (isLoading) {

@@ -3,8 +3,11 @@
 import { Crown, UserMinus, UserPlus, X } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { RoleSelect } from '@/components/shared/role-select';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useTranslations } from '@/hooks/use-translations';
+import { roleTone } from '@/lib/role-badges';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 
@@ -40,12 +43,6 @@ interface TeamMemberManagementProps {
   onUpdateRole?: (membershipId: string, role: TeamRole) => Promise<void>;
   orgUsers: OrgUser[];
 }
-
-const ROLE_COLORS: Record<TeamRole, string> = {
-  admin: 'bg-info-subtle text-info-subtle-foreground',
-  guest: 'bg-muted text-muted-foreground',
-  member: 'bg-muted text-muted-foreground',
-};
 
 function Avatar({
   user,
@@ -207,32 +204,18 @@ export function TeamMemberManagement({
               {member.role && (
                 <div className="shrink-0">
                   {canManageMembers && onUpdateRole ? (
-                    <select
-                      className={cn(
-                        'appearance-none rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer border border-transparent focus:outline-none focus:ring-1 focus:ring-brand disabled:opacity-50',
-                        ROLE_COLORS[member.role],
-                      )}
+                    <RoleSelect
+                      ariaLabel={t('teams.memberRole')}
                       disabled={isLoading}
-                      onChange={e =>
-                        handleUpdateRole(member.membershipId, e.target.value as TeamRole)
-                      }
+                      onChange={role => handleUpdateRole(member.membershipId, role as TeamRole)}
+                      options={(Object.keys(ROLE_LABELS) as TeamRole[]).map(r => ({
+                        label: ROLE_LABELS[r],
+                        value: r,
+                      }))}
                       value={member.role}
-                    >
-                      {(Object.keys(ROLE_LABELS) as TeamRole[]).map(r => (
-                        <option key={r} value={r}>
-                          {ROLE_LABELS[r]}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   ) : (
-                    <span
-                      className={cn(
-                        'rounded-full px-2 py-0.5 text-xs font-medium',
-                        ROLE_COLORS[member.role],
-                      )}
-                    >
-                      {ROLE_LABELS[member.role]}
-                    </span>
+                    <Badge tone={roleTone(member.role)}>{ROLE_LABELS[member.role]}</Badge>
                   )}
                 </div>
               )}

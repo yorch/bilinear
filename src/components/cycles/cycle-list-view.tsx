@@ -1,10 +1,14 @@
 'use client';
 
-import { Calendar, RefreshCw } from 'lucide-react';
+import { Calendar, Plus, RefreshCw } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { CreateCycleModal } from '@/components/cycles/create-cycle-modal';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { readTeamExtras } from '@/components/teams/team-settings-helpers';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -13,6 +17,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBCycle } from '@/lib/db';
 import { gqlQuery } from '@/lib/graphql';
 import { CYCLES_PROGRESS_QUERY } from '@/lib/graphql-queries';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -61,8 +66,37 @@ export const CycleListView = observer(function CycleListView({
   workspaceKey,
   teamKey,
 }: CycleListViewProps) {
-  const { cycleStore } = useStore();
+  const { cycleStore, teamStore } = useStore();
   const t = useTranslations();
+  const router = useRouter();
+  const [creating, setCreating] = useState(false);
+
+  const team = teamStore.findById(teamId);
+  const cyclesEnabled = team?.cyclesEnabled ?? false;
+  const settingsHref = `/${workspaceKey}/team/${teamKey}/settings`;
+
+  const newCycleButton = (
+    <Button
+      disabled={!cyclesEnabled}
+      onClick={() => setCreating(true)}
+      size="sm"
+      title={cyclesEnabled ? undefined : t('cycles.create.disabledHint')}
+      type="button"
+      variant="outline"
+    >
+      <Plus className="h-3.5 w-3.5" />
+      {t('cycles.create.button')}
+    </Button>
+  );
+
+  const disabledHint = !cyclesEnabled && (
+    <p className="text-xs text-muted-foreground">
+      {t('cycles.create.disabledHint')}{' '}
+      <Link className="text-brand-subtle-foreground hover:underline" href={settingsHref}>
+        {t('cycles.create.openTeamSettings')}
+      </Link>
+    </p>
+  );
 
   const activeCycle = cycleStore.getActiveCycle(teamId);
   const upcomingCycles = cycleStore.getUpcomingCycles(teamId);
@@ -102,11 +136,33 @@ export const CycleListView = observer(function CycleListView({
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex h-12 items-center justify-between border-b border-border px-4">
         <h1 className="text-sm font-semibold text-foreground">{t('cycles.list.title')}</h1>
+        <div className="flex items-center gap-3">
+          {!hasNoCycles && disabledHint}
+          {newCycleButton}
+        </div>
       </div>
+
+      <CreateCycleModal
+        defaultDurationWeeks={readTeamExtras(team).cycleDuration ?? 2}
+        onClose={() => setCreating(false)}
+        onCreated={cycle => {
+          cycleStore.applySyncAction('I', cycle.id, cycle);
+          toast.success(t('cycles.create.created'));
+          router.push(`/${workspaceKey}/team/${teamKey}/cycles/${cycle.id}`);
+        }}
+        open={creating}
+        teamId={teamId}
+      />
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {hasNoCycles ? (
           <EmptyState
+            action={
+              <div className="flex flex-col items-center gap-2">
+                {newCycleButton}
+                {disabledHint}
+              </div>
+            }
             description={t('cycles.list.emptyDescription')}
             icon={<RefreshCw className="h-5 w-5" />}
             title={t('cycles.list.emptyTitle')}

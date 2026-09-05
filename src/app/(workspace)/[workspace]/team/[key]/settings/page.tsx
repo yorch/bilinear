@@ -9,11 +9,28 @@ import { CustomFieldsSection } from '@/components/custom-fields/custom-fields-se
 import { IssueTemplatesSection } from '@/components/issues/issue-templates-section';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
+import { TeamLabelsSection } from '@/components/teams/team-labels-section';
 import {
   type TeamMember,
   TeamMemberManagement,
   type TeamRole,
 } from '@/components/teams/team-member-management';
+import {
+  AutoCloseCard,
+  CyclesCard,
+  DefaultStateField,
+  EstimationCard,
+  TeamIdentityFields,
+} from '@/components/teams/team-settings-cards';
+import {
+  AUTO_PERIOD_RANGE,
+  CYCLE_COOLDOWN_RANGE,
+  CYCLE_DURATION_RANGE,
+  type EstimationType,
+  parseIntInRange,
+  readTeamExtras,
+} from '@/components/teams/team-settings-helpers';
+import { TeamWorkflowSection } from '@/components/teams/team-workflow-section';
 import { PageHeader } from '@/components/ui/page-header';
 import { SimpleSelect } from '@/components/ui/select';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -51,7 +68,9 @@ const TEAM_UPDATE_MUTATION = `
       team {
         id organizationId parentId
         key name displayName description icon color private timezone
-        cyclesEnabled issueEstimationType triageEnabled issueCount
+        cyclesEnabled cycleDuration cycleStartDay cycleCooldownTime
+        autoClosePeriod autoArchivePeriod autoCloseChildIssues autoCloseParentIssues
+        defaultIssueStateId issueEstimationType triageEnabled issueCount
         createdAt updatedAt archivedAt
       }
     }
@@ -147,7 +166,7 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     key: string;
   }>();
   const router = useRouter();
-  const { teamStore, userStore } = useStore();
+  const { teamStore, userStore, workflowStateStore } = useStore();
   const t = useTranslations();
 
   const team = teamStore.findByKey(teamKey);
@@ -162,6 +181,21 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
   const [isPrivate, setIsPrivate] = useState(team?.private ?? false);
   const [parentId, setParentId] = useState(team?.parentId ?? '');
   const [triageEnabled, setTriageEnabled] = useState(team?.triageEnabled ?? false);
+  const [icon, setIcon] = useState(team?.icon ?? '');
+  const [color, setColor] = useState(team?.color ?? '');
+  const [timezone, setTimezone] = useState(team?.timezone ?? 'UTC');
+  const [estimationType, setEstimationType] = useState<EstimationType>(
+    (team?.issueEstimationType as EstimationType | undefined) ?? 'notUsed',
+  );
+  const [cyclesEnabled, setCyclesEnabled] = useState(team?.cyclesEnabled ?? false);
+  const [cycleDuration, setCycleDuration] = useState('2');
+  const [cycleStartDay, setCycleStartDay] = useState(1);
+  const [cycleCooldownTime, setCycleCooldownTime] = useState('0');
+  const [autoClosePeriod, setAutoClosePeriod] = useState('');
+  const [autoArchivePeriod, setAutoArchivePeriod] = useState('');
+  const [autoCloseChildIssues, setAutoCloseChildIssues] = useState(false);
+  const [autoCloseParentIssues, setAutoCloseParentIssues] = useState(false);
+  const [defaultIssueStateId, setDefaultIssueStateId] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
@@ -200,6 +234,22 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
       setIsPrivate(team.private ?? false);
       setParentId(team.parentId ?? '');
       setTriageEnabled(team.triageEnabled);
+      setIcon(team.icon ?? '');
+      setColor(team.color ?? '');
+      setTimezone(team.timezone || 'UTC');
+      setEstimationType((team.issueEstimationType as EstimationType) || 'notUsed');
+      setCyclesEnabled(team.cyclesEnabled);
+      const extras = readTeamExtras(team);
+      setCycleDuration(String(extras.cycleDuration));
+      setCycleStartDay(extras.cycleStartDay);
+      setCycleCooldownTime(String(extras.cycleCooldownTime));
+      setAutoClosePeriod(extras.autoClosePeriod === null ? '' : String(extras.autoClosePeriod));
+      setAutoArchivePeriod(
+        extras.autoArchivePeriod === null ? '' : String(extras.autoArchivePeriod),
+      );
+      setAutoCloseChildIssues(extras.autoCloseChildIssues);
+      setAutoCloseParentIssues(extras.autoCloseParentIssues);
+      setDefaultIssueStateId(extras.defaultIssueStateId ?? '');
     }
   }, [team]);
 
@@ -244,21 +294,54 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
     if (!team || saving) {
       return;
     }
+    const duration = parseIntInRange(cycleDuration, CYCLE_DURATION_RANGE);
+    const cooldown = parseIntInRange(cycleCooldownTime, CYCLE_COOLDOWN_RANGE);
+    const closePeriod = parseIntInRange(autoClosePeriod, AUTO_PERIOD_RANGE);
+    const archivePeriod = parseIntInRange(autoArchivePeriod, AUTO_PERIOD_RANGE);
+    if (
+      (cyclesEnabled && (!duration || cooldown === undefined)) ||
+      closePeriod === undefined ||
+      archivePeriod === undefined
+    ) {
+      setSaveError(t('settings.team.invalidNumber'));
+      return;
+    }
+    const enablingCycles = cyclesEnabled && !team.cyclesEnabled;
     setSaving(true);
     setSaveError('');
     try {
       const result = await gql(TEAM_UPDATE_MUTATION, {
         id: team.id,
         input: {
+          autoArchivePeriod: archivePeriod,
+          autoCloseChildIssues,
+          autoCloseParentIssues,
+          autoClosePeriod: closePeriod,
+          color: color || null,
+          cycleCooldownTime: cyclesEnabled ? (cooldown ?? 0) : undefined,
+          cycleDuration: cyclesEnabled ? duration : undefined,
+          cycleStartDay: cyclesEnabled ? cycleStartDay : undefined,
+          cyclesEnabled,
+          defaultIssueStateId: defaultIssueStateId || null,
           description: description.trim() || null,
+          icon: icon.trim() || null,
+          issueEstimationType: estimationType,
           name: name.trim(),
           parentId: parentId || null,
           private: isPrivate,
+          timezone,
           triageEnabled,
         },
       });
       if (result.errors?.length) {
-        setSaveError(gqlError(result, t('settings.team.saveError')));
+        const message = gqlError(result, t('settings.team.saveError'));
+        setSaveError(message);
+        // A validation refusal carries the server's own explanation (which
+        // knob, which range) — surface it where the user is looking.
+        const code = (result.errors[0] as { extensions?: { code?: string } })?.extensions?.code;
+        if (code === 'BAD_USER_INPUT') {
+          toast.error(message);
+        }
         return;
       }
       const updated = (result.data?.teamUpdate as { team?: typeof team })?.team;
@@ -266,12 +349,38 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
         teamStore.applySyncAction('U', updated.id, updated);
       }
       toast.success(t('settings.team.settingsSaved'));
+      if (enablingCycles) {
+        toast.info(t('settings.team.cycles.enabledToast'));
+      }
     } catch {
       setSaveError(t('settings.team.saveErrorRetry'));
     } finally {
       setSaving(false);
     }
-  }, [team, name, description, isPrivate, parentId, triageEnabled, saving, teamStore, t]);
+  }, [
+    team,
+    name,
+    description,
+    isPrivate,
+    parentId,
+    triageEnabled,
+    icon,
+    color,
+    timezone,
+    estimationType,
+    cyclesEnabled,
+    cycleDuration,
+    cycleStartDay,
+    cycleCooldownTime,
+    autoClosePeriod,
+    autoArchivePeriod,
+    autoCloseChildIssues,
+    autoCloseParentIssues,
+    defaultIssueStateId,
+    saving,
+    teamStore,
+    t,
+  ]);
 
   const handleAddMember = useCallback(
     async (userId: string) => {
@@ -478,8 +587,41 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
               </select>
               <p className="text-xs text-muted-foreground">{t('settings.team.parentTeamHint')}</p>
             </div>
+
+            <TeamIdentityFields
+              color={color}
+              icon={icon}
+              onColorChange={setColor}
+              onIconChange={setIcon}
+              onTimezoneChange={setTimezone}
+              timezone={timezone}
+            />
           </div>
         </section>
+
+        <EstimationCard onChange={setEstimationType} value={estimationType} />
+
+        <CyclesCard
+          cycleCooldownTime={cycleCooldownTime}
+          cycleDuration={cycleDuration}
+          cycleStartDay={cycleStartDay}
+          cyclesEnabled={cyclesEnabled}
+          onCycleCooldownTimeChange={setCycleCooldownTime}
+          onCycleDurationChange={setCycleDuration}
+          onCycleStartDayChange={setCycleStartDay}
+          onCyclesEnabledChange={setCyclesEnabled}
+        />
+
+        <AutoCloseCard
+          autoArchivePeriod={autoArchivePeriod}
+          autoCloseChildIssues={autoCloseChildIssues}
+          autoCloseParentIssues={autoCloseParentIssues}
+          autoClosePeriod={autoClosePeriod}
+          onAutoArchivePeriodChange={setAutoArchivePeriod}
+          onAutoCloseChildIssuesChange={setAutoCloseChildIssues}
+          onAutoCloseParentIssuesChange={setAutoCloseParentIssues}
+          onAutoClosePeriodChange={setAutoClosePeriod}
+        />
 
         <section>
           <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -500,6 +642,12 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
               description={t('settings.team.triageDescription')}
               label={t('settings.team.triage')}
               onCheckedChange={setTriageEnabled}
+            />
+
+            <DefaultStateField
+              onChange={setDefaultIssueStateId}
+              states={workflowStateStore.findByTeamId(team.id)}
+              value={defaultIssueStateId}
             />
           </div>
         </section>
@@ -547,6 +695,10 @@ const TeamSettingsPage = observer(function TeamSettingsPage() {
             )}
           </div>
         </section>
+
+        <TeamWorkflowSection defaultStateId={defaultIssueStateId || null} teamId={team.id} />
+
+        <TeamLabelsSection teamId={team.id} />
 
         <CustomFieldsSection teamId={team.id} />
 

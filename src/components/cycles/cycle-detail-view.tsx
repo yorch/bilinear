@@ -1,19 +1,28 @@
 'use client';
 
-import { ArrowLeft, Calendar, RefreshCw, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Calendar, MoreHorizontal, RefreshCw, RotateCcw } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BurndownChart } from '@/components/cycles/burndown-chart';
 import { BurnupChart } from '@/components/cycles/burnup-chart';
+import { CYCLE_FIELDS, isValidCycleRange } from '@/components/cycles/create-cycle-modal';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { fromDateInputValue, toDateInputValue } from '@/components/teams/team-settings-helpers';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ProgressBar } from '@/components/ui/progress-bar';
+import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { isActiveCycle } from '@/lib/cycle-utils';
-import { gql, gqlQuery } from '@/lib/graphql';
+import { gql, gqlMutate, gqlQuery } from '@/lib/graphql';
 import {
   CYCLE_BURNDOWN_QUERY,
   CYCLE_PROGRESS_QUERY,
@@ -23,8 +32,26 @@ import {
 } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
-import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
+
+const CYCLE_UPDATE_MUTATION = `
+  mutation CycleUpdate($id: ID!, $input: CycleUpdateInput!) {
+    cycleUpdate(id: $id, input: $input) { success lastSyncId cycle { ${CYCLE_FIELDS} } }
+  }
+`;
+
+const CYCLE_ARCHIVE_MUTATION = `
+  mutation CycleArchive($id: ID!) {
+    cycleArchive(id: $id) { success lastSyncId cycle { ${CYCLE_FIELDS} } }
+  }
+`;
+
+const CYCLE_DELETE_MUTATION = `
+  mutation CycleDelete($id: ID!) {
+    cycleDelete(id: $id) { success lastSyncId }
+  }
+`;
 
 interface CycleDetailViewProps {
   cycleId: string;
@@ -130,14 +157,25 @@ export const CycleDetailView = observer(function CycleDetailView({
   const { cycleStore, issueStore, teamStore, workflowStateStore } = useStore();
   const t = useTranslations();
   const { formatDate } = useFormatters();
+  const router = useRouter();
 
   const txQueue = useMemo(() => new TransactionQueue(), []);
 
   const cycle = cycleStore.findById(cycleId);
 
+  useDocumentTitle(cycle ? cycle.name || t('cycles.defaultName', { number: cycle.number }) : null);
+
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [descriptionValue, setDescriptionValue] = useState('');
+  const [editingDates, setEditingDates] = useState(false);
+  const [startValue, setStartValue] = useState('');
+  const [endValue, setEndValue] = useState('');
+  const [confirmAction, setConfirmAction] = useState<'archive' | 'delete' | null>(null);
+  const [acting, setActing] = useState(false);
 
   // Rollover state
   const [rollingOver, setRollingOver] = useState(false);
@@ -304,6 +342,23 @@ export const CycleDetailView = observer(function CycleDetailView({
       : 'bg-muted text-muted-foreground';
 
   const displayName = cycle.name || t('cycles.defaultName', { number: cycle.number });
+  const listHref = `/${workspaceKey}/team/${teamKey}/cycles`;
+
+  /** Optimistic patch + queued mutation, rolled back with a toast on failure. */
+  const patchCycle = (patch: Partial<typeof cycle>, errorKey: string) => {
+    const snapshot = { ...cycle };
+    cycleStore.optimisticUpdate(cycle.id, patch);
+    txQueue.enqueue(
+      CYCLE_UPDATE_MUTATION,
+      { id: cycle.id, input: patch },
+      {
+        onError: () => {
+          cycleStore.optimisticUpdate(cycle.id, snapshot);
+          toast.error(t(errorKey));
+        },
+      },
+    );
+  };
 
   const handleSaveName = () => {
     const trimmed = nameValue.trim();
@@ -311,20 +366,68 @@ export const CycleDetailView = observer(function CycleDetailView({
     if (!trimmed || trimmed === (cycle.name ?? '')) {
       return;
     }
-    const snapshot = { ...cycle };
-    cycleStore.optimisticUpdate(cycle.id, { name: trimmed });
-    txQueue.enqueue(
-      `mutation CycleUpdate($id: ID!, $input: CycleUpdateInput!) {
-        cycleUpdate(id: $id, input: $input) { success lastSyncId cycle { id number name description startsAt endsAt progress scope teamId organizationId createdAt updatedAt } }
-      }`,
-      { id: cycle.id, input: { name: trimmed } },
-      {
-        onError: () => {
-          cycleStore.optimisticUpdate(cycle.id, snapshot);
-          toast.error(t('cycles.detail.updateNameError'));
-        },
-      },
-    );
+    patchCycle({ name: trimmed }, 'cycles.detail.updateNameError');
+  };
+
+  const handleSaveDescription = () => {
+    const trimmed = descriptionValue.trim();
+    setEditingDescription(false);
+    if (trimmed === (cycle.description ?? '')) {
+      return;
+    }
+    patchCycle({ description: trimmed || null }, 'cycles.detail.updateDescriptionError');
+    toast.success(t('cycles.detail.descriptionSaved'));
+  };
+
+  const datesValid = isValidCycleRange(startValue, endValue);
+
+  const handleSaveDates = () => {
+    if (!datesValid) {
+      return;
+    }
+    const startsAt = fromDateInputValue(startValue);
+    const endsAt = fromDateInputValue(endValue, true);
+    setEditingDates(false);
+    if (!startsAt || !endsAt || (startsAt === cycle.startsAt && endsAt === cycle.endsAt)) {
+      return;
+    }
+    patchCycle({ endsAt, startsAt }, 'cycles.detail.updateDatesError');
+    toast.success(t('cycles.detail.datesSaved'));
+  };
+
+  const handleArchive = async () => {
+    setConfirmAction(null);
+    setActing(true);
+    try {
+      const data = await gqlMutate(CYCLE_ARCHIVE_MUTATION, { id: cycle.id });
+      const archived = (data.cycleArchive as { cycle?: typeof cycle } | undefined)?.cycle;
+      cycleStore.applySyncAction(
+        'A',
+        cycle.id,
+        archived ?? { ...cycle, archivedAt: new Date().toISOString() },
+      );
+      toast.success(t('cycles.detail.archived'));
+      router.push(listHref);
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('cycles.detail.archiveError')));
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setConfirmAction(null);
+    setActing(true);
+    try {
+      await gqlMutate(CYCLE_DELETE_MUTATION, { id: cycle.id });
+      cycleStore.applySyncAction('D', cycle.id, null);
+      toast.success(t('cycles.detail.deleted'));
+      router.push(listHref);
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('cycles.detail.deleteError')));
+    } finally {
+      setActing(false);
+    }
   };
 
   return (
@@ -371,19 +474,74 @@ export const CycleDetailView = observer(function CycleDetailView({
           </button>
         )}
 
-        {/* Roll over button — only for active / past cycles */}
-        {showRollover && (
-          <button
-            className="ml-auto flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
-            disabled={rollingOver}
-            onClick={handleRollover}
-            type="button"
+        <div className="ml-auto flex items-center gap-2">
+          {/* Roll over button — only for active / past cycles */}
+          {showRollover && (
+            <button
+              className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
+              disabled={rollingOver}
+              onClick={handleRollover}
+              type="button"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              {rollingOver ? t('cycles.detail.rollingOver') : t('cycles.detail.rollOver')}
+            </button>
+          )}
+          <SelectPopover
+            align="right"
+            disabled={acting}
+            panelClassName="min-w-[160px] py-1"
+            triggerChildren={<MoreHorizontal className="h-4 w-4" />}
+            triggerClassName={cn(
+              'rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+              TOUCH_TARGET,
+            )}
+            triggerTitle={t('cycles.detail.moreActions')}
           >
-            <RotateCcw className="h-3.5 w-3.5" />
-            {rollingOver ? t('cycles.detail.rollingOver') : t('cycles.detail.rollOver')}
-          </button>
-        )}
+            {close => (
+              <>
+                <button
+                  className={POPOVER_ITEM_CLASS}
+                  onClick={() => {
+                    setConfirmAction('archive');
+                    close();
+                  }}
+                  type="button"
+                >
+                  {t('cycles.detail.archive')}
+                </button>
+                <button
+                  className={cn(POPOVER_ITEM_CLASS, 'text-danger-subtle-foreground')}
+                  onClick={() => {
+                    setConfirmAction('delete');
+                    close();
+                  }}
+                  type="button"
+                >
+                  {t('cycles.detail.delete')}
+                </button>
+              </>
+            )}
+          </SelectPopover>
+        </div>
       </div>
+
+      <ConfirmDialog
+        confirmLabel={t('cycles.detail.archive')}
+        message={t('cycles.detail.archiveConfirm', { name: displayName })}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => void handleArchive()}
+        open={confirmAction === 'archive'}
+        title={t('cycles.detail.archiveTitle')}
+      />
+      <ConfirmDialog
+        confirmLabel={t('cycles.detail.delete')}
+        message={t('cycles.detail.deleteConfirm', { name: displayName })}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => void handleDelete()}
+        open={confirmAction === 'delete'}
+        title={t('cycles.detail.deleteTitle')}
+      />
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-4xl px-6 py-6">
@@ -392,18 +550,90 @@ export const CycleDetailView = observer(function CycleDetailView({
             <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', statusColor)}>
               {statusLabel}
             </span>
-            <div className="flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">
-                {formatDate(cycle.startsAt, { day: 'numeric', month: 'short', year: 'numeric' })}{' '}
-                &rarr;{' '}
-                {formatDate(cycle.endsAt, { day: 'numeric', month: 'short', year: 'numeric' })}
-              </span>
-            </div>
+            {editingDates ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  aria-label={t('cycles.create.startDate')}
+                  className="w-auto"
+                  onChange={e => setStartValue(e.target.value)}
+                  type="date"
+                  value={startValue}
+                />
+                <span className="text-xs text-muted-foreground">&rarr;</span>
+                <Input
+                  aria-label={t('cycles.create.endDate')}
+                  className="w-auto"
+                  onChange={e => setEndValue(e.target.value)}
+                  type="date"
+                  value={endValue}
+                />
+                <Button
+                  onClick={() => setEditingDates(false)}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button disabled={!datesValid} onClick={handleSaveDates} size="sm" type="button">
+                  {t('common.save')}
+                </Button>
+              </div>
+            ) : (
+              <button
+                className="flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-muted"
+                onClick={() => {
+                  setStartValue(toDateInputValue(cycle.startsAt));
+                  setEndValue(toDateInputValue(cycle.endsAt));
+                  setEditingDates(true);
+                }}
+                title={t('cycles.detail.clickToEditDates')}
+                type="button"
+              >
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">
+                  {formatDate(cycle.startsAt, { day: 'numeric', month: 'short', year: 'numeric' })}{' '}
+                  &rarr;{' '}
+                  {formatDate(cycle.endsAt, { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              </button>
+            )}
           </div>
 
-          {cycle.description && (
-            <p className="mt-4 text-sm text-muted-foreground">{cycle.description}</p>
+          {editingDescription ? (
+            <Textarea
+              aria-label={t('cycles.create.description')}
+              autoFocus
+              className="mt-4 resize-none"
+              onBlur={handleSaveDescription}
+              onChange={e => setDescriptionValue(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') {
+                  setEditingDescription(false);
+                }
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  handleSaveDescription();
+                }
+              }}
+              placeholder={t('cycles.create.descriptionPlaceholder')}
+              rows={3}
+              value={descriptionValue}
+            />
+          ) : (
+            <button
+              className={cn(
+                'mt-4 block w-full rounded px-1 py-0.5 text-left text-sm hover:bg-muted',
+                cycle.description ? 'text-muted-foreground' : 'text-foreground-faint',
+              )}
+              onClick={() => {
+                setDescriptionValue(cycle.description ?? '');
+                setEditingDescription(true);
+              }}
+              title={t('cycles.detail.clickToEditDescription')}
+              type="button"
+            >
+              {cycle.description || t('cycles.detail.addDescription')}
+            </button>
           )}
 
           {/* Progress */}

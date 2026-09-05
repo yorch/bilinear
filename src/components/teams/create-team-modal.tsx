@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { Input } from '@/components/ui/input';
 import { ModalDialog, ModalFooter, ModalHeader } from '@/components/ui/modal-dialog';
+
 import { Textarea } from '@/components/ui/textarea';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn, getErrorMessage } from '@/lib/utils';
@@ -44,7 +46,6 @@ const KEY_PATTERN = /^[A-Z]{1,10}$/;
 
 export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProps) {
   const t = useTranslations();
-  const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
   const [keyTouched, setKeyTouched] = useState(false);
@@ -65,7 +66,6 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
       setSubmitting(false);
       setKeyError('');
       setSubmitError('');
-      setTimeout(() => nameRef.current?.focus(), 50);
     }
   }, [open]);
 
@@ -129,10 +129,10 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
               {t('teams.name')}
             </label>
             <Input
+              data-autofocus
               id="team-name"
               onChange={e => setName(e.target.value)}
               placeholder={t('teams.namePlaceholder')}
-              ref={nameRef}
               required
               value={name}
             />
@@ -179,20 +179,12 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
             />
           </div>
 
-          <label className="flex cursor-pointer items-center gap-3">
-            <input
-              checked={isPrivate}
-              className="h-4 w-4 rounded border-border text-brand focus:ring-brand"
-              onChange={e => setIsPrivate(e.target.checked)}
-              type="checkbox"
-            />
-            <div>
-              <p className="text-sm font-medium text-foreground-secondary">
-                {t('teams.privateTeam')}
-              </p>
-              <p className="text-xs text-muted-foreground">{t('teams.privateTeamHint')}</p>
-            </div>
-          </label>
+          <SettingToggleRow
+            checked={isPrivate}
+            description={t('teams.privateTeamHint')}
+            label={t('teams.privateTeam')}
+            onCheckedChange={setIsPrivate}
+          />
         </div>
 
         <ModalFooter

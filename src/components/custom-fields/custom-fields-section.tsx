@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Trash2, X } from 'lucide-react';
+import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -33,6 +33,16 @@ const DEF_FIELDS = `
 const CUSTOM_FIELD_CREATE_MUTATION = `
   mutation CustomFieldDefinitionCreate($input: CustomFieldDefinitionCreateInput!) {
     customFieldDefinitionCreate(input: $input) {
+      success
+      lastSyncId
+      customFieldDefinition { ${DEF_FIELDS} }
+    }
+  }
+`;
+
+const CUSTOM_FIELD_UPDATE_MUTATION = `
+  mutation CustomFieldDefinitionUpdate($id: ID!, $input: CustomFieldDefinitionUpdateInput!) {
+    customFieldDefinitionUpdate(id: $id, input: $input) {
       success
       lastSyncId
       customFieldDefinition { ${DEF_FIELDS} }
@@ -84,22 +94,40 @@ function getTypeOptions(
 
 const MAX_FIELDS = 20;
 
+interface FieldFormInput {
+  description: string;
+  name: string;
+  options: Option[];
+  required: boolean;
+  type: CustomFieldType;
+}
+
+/** Normalise a stored `options` JSON blob (unknown shape) into form options. */
+export function readStoredOptions(raw: unknown): Option[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .filter((o): o is Record<string, unknown> => typeof o === 'object' && o !== null)
+    .map(o => ({
+      color: typeof o.color === 'string' ? o.color : undefined,
+      label: typeof o.label === 'string' ? o.label : String(o.value ?? ''),
+      value: String(o.value ?? ''),
+    }))
+    .filter(o => o.value !== '');
+}
+
 export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => {
   const t = useTranslations();
   const { customFieldStore } = useStore();
   const definitions = customFieldStore.findDefinitionsByTeamId(teamId);
   const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmingArchive, setConfirmingArchive] = useState<{ id: string; name: string } | null>(
     null,
   );
 
-  const handleCreate = async (input: {
-    name: string;
-    type: CustomFieldType;
-    description: string;
-    required: boolean;
-    options: Option[];
-  }) => {
+  const handleCreate = async (input: FieldFormInput) => {
     try {
       // Must throw on rejection: `setIsAdding(false)` unmounts the form and
       // discards everything the user typed, so a BAD_USER_INPUT cap breach or a
@@ -118,6 +146,24 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
       setIsAdding(false);
     } catch (err) {
       toast.error(getErrorMessage(err, t('customFields.createFailed')));
+    }
+  };
+
+  const handleUpdate = async (id: string, input: FieldFormInput) => {
+    try {
+      await gqlMutate(CUSTOM_FIELD_UPDATE_MUTATION, {
+        id,
+        input: {
+          description: input.description || null,
+          name: input.name,
+          options: input.type === 'select' || input.type === 'multi_select' ? input.options : null,
+          required: input.required,
+        },
+      });
+      toast.success(t('customFields.updateSuccess'));
+      setEditingId(null);
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('customFields.saveFailed')));
     }
   };
 
@@ -158,7 +204,12 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
 
         {isAdding && (
           <div className="border-b border-border p-4">
-            <CustomFieldForm onCancel={() => setIsAdding(false)} onSubmit={handleCreate} />
+            <CustomFieldForm
+              onCancel={() => setIsAdding(false)}
+              onSubmit={handleCreate}
+              submitLabel={t('customFields.addField')}
+              submittingLabel={t('customFields.adding')}
+            />
           </div>
         )}
 
@@ -166,37 +217,70 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
           {definitions.length === 0 && !isAdding && (
             <li className="p-4 text-sm text-muted-foreground">{t('customFields.emptyState')}</li>
           )}
-          {definitions.map(def => (
-            <li className="flex items-center justify-between gap-3 p-4" key={def.id}>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">{def.name}</span>
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                    {t(FIELD_TYPE_LABEL_KEYS[def.type as CustomFieldType] ?? def.type)}
-                  </span>
-                  {def.required && (
-                    <span className="text-xs text-warning-subtle-foreground">
-                      {t('customFields.required')}
+          {definitions.map(def =>
+            editingId === def.id ? (
+              <li className="p-4" key={def.id}>
+                <CustomFieldForm
+                  initial={{
+                    description: def.description ?? '',
+                    name: def.name,
+                    options: readStoredOptions(def.options),
+                    required: def.required,
+                    type: def.type as CustomFieldType,
+                  }}
+                  lockType
+                  onCancel={() => setEditingId(null)}
+                  onSubmit={input => handleUpdate(def.id, input)}
+                  submitLabel={t('common.save')}
+                  submittingLabel={t('common.saving')}
+                />
+              </li>
+            ) : (
+              <li className="flex items-center justify-between gap-3 p-4" key={def.id}>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-foreground">{def.name}</span>
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                      {t(FIELD_TYPE_LABEL_KEYS[def.type as CustomFieldType] ?? def.type)}
                     </span>
+                    {def.required && (
+                      <span className="text-xs text-warning-subtle-foreground">
+                        {t('customFields.required')}
+                      </span>
+                    )}
+                  </div>
+                  {def.description && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">{def.description}</p>
                   )}
                 </div>
-                {def.description && (
-                  <p className="mt-0.5 text-xs text-muted-foreground">{def.description}</p>
-                )}
-              </div>
-              <button
-                aria-label={t('customFields.archive')}
-                className={cn(
-                  'rounded p-1 text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground',
-                  TOUCH_TARGET,
-                )}
-                onClick={() => setConfirmingArchive({ id: def.id, name: def.name })}
-                type="button"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </li>
-          ))}
+                <button
+                  aria-label={t('customFields.editAria', { name: def.name })}
+                  className={cn(
+                    'rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary',
+                    TOUCH_TARGET,
+                  )}
+                  onClick={() => {
+                    setIsAdding(false);
+                    setEditingId(def.id);
+                  }}
+                  type="button"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  aria-label={t('customFields.archiveAria', { name: def.name })}
+                  className={cn(
+                    'rounded p-1 text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground',
+                    TOUCH_TARGET,
+                  )}
+                  onClick={() => setConfirmingArchive({ id: def.id, name: def.name })}
+                  type="button"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </li>
+            ),
+          )}
         </ul>
       </div>
       <ConfirmDialog
@@ -216,28 +300,34 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
 });
 
 // ---------------------------------------------------------------------------
-// New-field form
+// Create / edit form
 // ---------------------------------------------------------------------------
 
 function CustomFieldForm({
+  initial,
+  lockType = false,
   onCancel,
   onSubmit,
+  submitLabel,
+  submittingLabel,
 }: {
+  /** Seed values when editing an existing definition. */
+  initial?: FieldFormInput;
+  /** The server has no `type` in its update input — a field's type is fixed at creation. */
+  lockType?: boolean;
   onCancel: () => void;
-  onSubmit: (input: {
-    name: string;
-    type: CustomFieldType;
-    description: string;
-    required: boolean;
-    options: Option[];
-  }) => Promise<void>;
+  onSubmit: (input: FieldFormInput) => Promise<void>;
+  submitLabel: string;
+  submittingLabel: string;
 }) {
   const t = useTranslations();
-  const [name, setName] = useState('');
-  const [type, setType] = useState<CustomFieldType>('text');
-  const [description, setDescription] = useState('');
-  const [required, setRequired] = useState(false);
-  const [options, setOptions] = useState<DraftOption[]>([]);
+  const [name, setName] = useState(initial?.name ?? '');
+  const [type, setType] = useState<CustomFieldType>(initial?.type ?? 'text');
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [required, setRequired] = useState(initial?.required ?? false);
+  const [options, setOptions] = useState<DraftOption[]>(() =>
+    (initial?.options ?? []).map(o => ({ ...o, key: crypto.randomUUID() })),
+  );
   const [submitting, setSubmitting] = useState(false);
 
   const needsOptions = type === 'select' || type === 'multi_select';
@@ -294,6 +384,8 @@ function CustomFieldForm({
             {t('customFields.type')}
           </label>
           <SimpleSelect
+            disabled={lockType}
+            id="cf-type"
             onChange={v => setType(v as CustomFieldType)}
             options={getTypeOptions(t)}
             value={type}
@@ -372,7 +464,7 @@ function CustomFieldForm({
           onClick={handleSubmit}
           type="button"
         >
-          {submitting ? t('customFields.adding') : t('customFields.addField')}
+          {submitting ? submittingLabel : submitLabel}
         </button>
       </div>
     </div>
