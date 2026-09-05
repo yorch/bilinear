@@ -112,6 +112,7 @@ export interface DBIssue {
   priority: number;
   prioritySortOrder: number;
   projectId?: string | null;
+  projectMilestoneId?: string | null;
   snoozedById?: string | null;
   snoozedUntilAt?: string | null;
   sortOrder: number;

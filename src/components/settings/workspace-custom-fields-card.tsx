@@ -25,7 +25,7 @@ const WORKSPACE_CUSTOM_FIELD_CREATE_MUTATION = `
     customFieldDefinitionCreate(input: $input) {
       success
       lastSyncId
-      definition { id teamId name type description required options sortOrder }
+      customFieldDefinition { id teamId name type description required options sortOrder }
     }
   }
 `;

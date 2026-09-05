@@ -92,6 +92,7 @@ const OPTIONAL_STRING_KEYS = [
   'dueDate',
   'parentId',
   'projectId',
+  'projectMilestoneId',
   'snoozedById',
   'snoozedUntilAt',
   'startDate',

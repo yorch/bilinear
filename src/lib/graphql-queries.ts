@@ -239,6 +239,16 @@ export const FAVORITES_QUERY = `
   }
 `;
 
+export const FAVORITE_CREATE_MUTATION = `
+  mutation FavoriteCreate($input: FavoriteCreateInput!) {
+    favoriteCreate(input: $input) {
+      success
+      lastSyncId
+      favorite { id userId organizationId entityType entityId sortOrder createdAt }
+    }
+  }
+`;
+
 export const FAVORITE_DELETE_MUTATION = `
   mutation FavoriteDelete($id: ID!) {
     favoriteDelete(id: $id) {
@@ -319,7 +329,7 @@ const ISSUE_FIELDS = `
   id identifier number title description priority estimate dueDate startDate
   sortOrder prioritySortOrder trashed
   teamId organizationId stateId assigneeId creatorId parentId
-  projectId cycleId branchName
+  projectId cycleId projectMilestoneId branchName
   startedAt completedAt canceledAt archivedAt createdAt updatedAt
   snoozedById snoozedUntilAt triagedAt
   labels { id name color }
@@ -488,6 +498,39 @@ export const ISSUE_REACTION_REMOVE_MUTATION = `
 `;
 
 // ── Cycles ────────────────────────────────────────────────────────────────────
+
+/** Every scalar column of a cycle — what the cycle store caches. */
+export const CYCLE_FIELDS = `
+  id number name description startsAt endsAt completedAt teamId organizationId
+  createdAt updatedAt archivedAt
+`;
+
+export const CYCLE_CREATE_MUTATION = `
+  mutation CycleCreate($input: CycleCreateInput!) {
+    cycleCreate(input: $input) {
+      success lastSyncId
+      cycle { ${CYCLE_FIELDS} }
+    }
+  }
+`;
+
+export const CYCLE_UPDATE_MUTATION = `
+  mutation CycleUpdate($id: ID!, $input: CycleUpdateInput!) {
+    cycleUpdate(id: $id, input: $input) { success lastSyncId cycle { ${CYCLE_FIELDS} } }
+  }
+`;
+
+export const CYCLE_ARCHIVE_MUTATION = `
+  mutation CycleArchive($id: ID!) {
+    cycleArchive(id: $id) { success lastSyncId cycle { ${CYCLE_FIELDS} } }
+  }
+`;
+
+export const CYCLE_DELETE_MUTATION = `
+  mutation CycleDelete($id: ID!) {
+    cycleDelete(id: $id) { success lastSyncId }
+  }
+`;
 
 export const CYCLE_ROLLOVER_MUTATION = `
   mutation CycleRollover($cycleId: ID!) {

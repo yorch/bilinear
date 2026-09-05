@@ -8,21 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBCycle } from '@/lib/db';
 import { gqlMutate } from '@/lib/graphql';
+import { CYCLE_CREATE_MUTATION } from '@/lib/graphql-queries';
 import { getErrorMessage } from '@/lib/utils';
-
-export const CYCLE_FIELDS = `
-  id number name description startsAt endsAt completedAt teamId organizationId
-  createdAt updatedAt archivedAt
-`;
-
-const CYCLE_CREATE_MUTATION = `
-  mutation CycleCreate($input: CycleCreateInput!) {
-    cycleCreate(input: $input) {
-      success lastSyncId
-      cycle { ${CYCLE_FIELDS} }
-    }
-  }
-`;
 
 interface CreateCycleModalProps {
   /** Suggested duration for the default end date, in weeks. */

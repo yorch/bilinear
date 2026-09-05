@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BurndownChart } from '@/components/cycles/burndown-chart';
 import { BurnupChart } from '@/components/cycles/burnup-chart';
-import { CYCLE_FIELDS, isValidCycleRange } from '@/components/cycles/create-cycle-modal';
+import { isValidCycleRange } from '@/components/cycles/create-cycle-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { fromDateInputValue, toDateInputValue } from '@/components/teams/team-settings-helpers';
@@ -24,34 +24,19 @@ import { useTranslations } from '@/hooks/use-translations';
 import { isActiveCycle } from '@/lib/cycle-utils';
 import { gql, gqlMutate, gqlQuery } from '@/lib/graphql';
 import {
+  CYCLE_ARCHIVE_MUTATION,
   CYCLE_BURNDOWN_QUERY,
+  CYCLE_DELETE_MUTATION,
   CYCLE_PROGRESS_QUERY,
   CYCLE_ROLLOVER_MUTATION,
   CYCLE_SCOPE_METRICS_QUERY,
+  CYCLE_UPDATE_MUTATION,
   CYCLE_VELOCITY_QUERY,
 } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn, getErrorMessage, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
-
-const CYCLE_UPDATE_MUTATION = `
-  mutation CycleUpdate($id: ID!, $input: CycleUpdateInput!) {
-    cycleUpdate(id: $id, input: $input) { success lastSyncId cycle { ${CYCLE_FIELDS} } }
-  }
-`;
-
-const CYCLE_ARCHIVE_MUTATION = `
-  mutation CycleArchive($id: ID!) {
-    cycleArchive(id: $id) { success lastSyncId cycle { ${CYCLE_FIELDS} } }
-  }
-`;
-
-const CYCLE_DELETE_MUTATION = `
-  mutation CycleDelete($id: ID!) {
-    cycleDelete(id: $id) { success lastSyncId }
-  }
-`;
 
 interface CycleDetailViewProps {
   cycleId: string;
