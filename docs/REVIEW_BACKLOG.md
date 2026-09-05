@@ -949,7 +949,13 @@ a failing test rather than a silent cache hole.
 > verbatim, and nothing scopes it to the admin console. `errorMessage ??
 > t('common.somethingWentWrong')` should stay the only sanctioned use.
 
-### 4.8 A refused webhooks page reads as an empty one (2026-08-19)
+### 4.8 A refused webhooks page reads as an empty one — ✅ shipped (2026-09-05)
+
+> One `LoadError` component (`src/components/shared/load-error.tsx`) renders
+> the forbidden-vs-failed decision for every settings page; webhooks,
+> audit-log and security use it with a dedicated forbidden message.
+
+### (original entry)
 
 **Found during** the review of the `cause` migration; **pre-existing**, not
 introduced by it.
@@ -1480,3 +1486,100 @@ When picking the next thing up:
 4. Sub-agent code review (`code-reviewer`) per commit, per the
    established session pattern.
 5. Move the entry from §1-§5 into §6 once the work lands.
+
+---
+
+## 8. Open findings from the 2026-09-05 six-angle review
+
+Everything below was verified by a reviewer and deliberately not done in
+that pass. Ordered by risk. See `CHANGELOG.md` (2026-09-05) for what did ship.
+
+### 8.1 Retried mutations carry no idempotency key (sync)
+
+`TransactionQueue` retries a fetch rejection / non-2xx up to three times with
+identical variables, and `hydrate()` re-sends rows persisted before a reload.
+A `issueCreate` that committed server-side behind a 504 creates a second
+issue on retry; same for comments, favorites, reactions.
+
+**First-touch:** stamp `tx.id` as `clientTxId` on every mutation input; a
+small `client_tx (user_id, client_tx_id, result)` table returns the stored
+result on replay. Dovetails with §1.3/§1.4.
+**Effort:** Medium. **Risk:** Medium (schema + every enqueue site).
+
+### 8.2 Delta order is commit order, not payload freshness (sync)
+
+Several emits re-read the row *after* commit in a separate transaction
+(`resolvers/cycle.ts` cycleDelete, `team.ts` teamDelete, the label path in
+`issue.ts`), so an older payload can carry a higher `xact_id` than a
+concurrent update. The WS path applies in publish order and gets it right;
+a client that was offline can end on stale content.
+
+**First-touch:** cheap client guard — skip a `'U'` whose `updatedAt` is older
+than the pooled row's (verify optimistic writes do not bump `updatedAt`
+locally first); thorough server fix — emit from inside the mutating
+transaction (`recordSyncAction(tx, …)`) instead of re-reading.
+
+### 8.3 A team flipped private leaves non-members' cached issues behind (sync)
+
+`filterVisibleActions` rewrites the `Team` row to a delete for non-members,
+but the issues they cached before the flip stay until their next bootstrap.
+
+**First-touch:** on a `Team 'D'` for a team the client holds, drop that
+team's issues/cycles/states from the pools and Dexie (the same cascade the
+`Issue 'D'` arm now does), or emit a per-user re-bootstrap hint.
+
+### 8.4 "Find X in org or throw NOT_FOUND" is copied 82 times (server)
+
+`organizationId !== ctx.orgId` + `new GraphQLError('X not found')` in
+project.ts (15), issue.ts (12), cycle.ts (10), triage.ts (6), … A
+`requireInOrg(row, ctx, label)` in `graphql/types/errors.ts` (or a
+`findInOrgOrThrow` per service) removes them mechanically. Same family: the
+guest-visibility `OR` clause is spelled six ways although
+`buildGuestVisibilityWhere` exists; the audit-log `.catch(warn)` wrapper is
+redundant 19 times because `AuditLogService.log` already swallows.
+
+### 8.5 Thirty-six services are constructed per GraphQL request (server)
+
+`context.ts` builds every service per request; they are stateless wrappers
+over the singleton `prisma`/`config`. Build once at module scope (as
+`ws/index.ts` does) and create only the loaders per request. Verify no
+service holds per-request state first.
+
+### 8.6 Unbounded `findMany` on user-facing paths (server)
+
+Of ~140 `findMany` calls, 15 carry `take`. The ones that scale with tenant
+data and feed a response: `issue.service.ts` (findMany variants at ~445, 819,
+919, 935, 970, 989, 1048), `cycle.service.ts` (~191, 293, 421),
+`comment.service.ts` (~150), `search.service.ts` (~121), `triage.service.ts`
+(~43). Add a `limits.maxListRows` knob and `clampLimit` on the query-facing
+ones; "all issues in a cycle" may be intentional and should say so.
+
+### 8.7 Test coverage (tests)
+
+- `src/app/api/**` route handlers: only `auth/session` has a test now.
+  Bootstrap, delta, upload, impersonation, SCIM and SAML callback are the
+  auth/session and file boundaries and are untested at the HTTP layer.
+- 23 of 36 resolver modules have no test; `platform-admin`, `scim`, `saml`,
+  `webhook` first (the `testAuthGuard` helper makes the guard sweep cheap).
+- Five resolver suites are error-path only (comment, custom-field, label,
+  notification, project): one happy-path `it` per mutation asserting the
+  service spy args and `lastSyncId`.
+- Coverage is configured but has no thresholds and CI never runs it.
+- `prosemirror-model`/`prosemirror-view` are installed twice
+  (`@tiptap/pm` 3.28 vs `y-prosemirror`); `yarn dedupe` plus a
+  `yarn dedupe --check` CI step before collab is enabled by default.
+
+### 8.8 Smaller UI items (frontend)
+
+- `isPermissionError` still folds `UNAUTHENTICATED` into "forbidden" (§4.9).
+- `DeleteUpdateButton` uses its own inline yes/no rather than `ConfirmDialog`.
+- `issue-templates-section.tsx` still has three native `<select>`s; the
+  API-token and SCIM-token blocks (`settings/page.tsx`, `settings/security`)
+  are the same create/copy-once/revoke UI twice and want a shared
+  `TokenListSection`; `settings/page.tsx` is ~900 lines and splits cleanly
+  by its four commented sections.
+- No `userUpdateProfile` mutation exists: name, avatar and timezone are
+  read-only in Settings (a backend gap, not only a UI one).
+- Not built: SLA fields (§8.4 of LINEAR_FEATURE_GAPS), a trash view /
+  restore, `webhookArchive`, custom-view icon/colour, the public roadmap URL
+  on `/projects`, gating `/design` out of production.

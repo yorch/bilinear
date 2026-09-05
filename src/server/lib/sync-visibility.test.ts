@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createMockPrisma } from '../../test/prisma-mock';
-import { getSyncVisibility, getSyncVisibilityBatch, isUnrestricted } from './sync-visibility';
+import {
+  getSyncVisibility,
+  getSyncVisibilityBatch,
+  isUnrestricted,
+  type SyncVisibility,
+} from './sync-visibility';
 
 describe('getSyncVisibilityBatch', () => {
   it('derives hidden private teams and guest teams per (org, user) pair from two queries', async () => {
@@ -13,15 +18,16 @@ describe('getSyncVisibilityBatch', () => {
       { team: { organizationId: 'org-1' }, teamId: 't-guest', userId: 'bob' },
     ]);
 
-    const [alice, bob] = await getSyncVisibilityBatch(prisma as never, [
+    const scopes = await getSyncVisibilityBatch(prisma as never, [
       { orgId: 'org-1', userId: 'alice' },
       { orgId: 'org-1', userId: 'bob' },
     ]);
+    const [alice, bob] = scopes as [SyncVisibility, SyncVisibility];
 
     expect(alice).toEqual({ guestTeamIds: [], hiddenTeamIds: [], userId: 'alice' });
     expect(bob).toEqual({ guestTeamIds: ['t-guest'], hiddenTeamIds: ['t-secret'], userId: 'bob' });
-    expect(isUnrestricted(alice!)).toBe(true);
-    expect(isUnrestricted(bob!)).toBe(false);
+    expect(isUnrestricted(alice)).toBe(true);
+    expect(isUnrestricted(bob)).toBe(false);
     expect(prisma.team.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.teamMemberRole.findMany).toHaveBeenCalledTimes(1);
     // Only private, live teams are consulted — public teams never hide anything.

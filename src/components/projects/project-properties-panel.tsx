@@ -270,6 +270,7 @@ export const ProjectPropertiesPanel = observer(function ProjectPropertiesPanel({
         <span className={labelClass}>{t('projects.startDate')}</span>
         <div className="col-span-2">
           <DueDatePicker
+            label={t('properties.dueDate.setDate')}
             onChange={startDate => void update({ startDate })}
             value={project.startDate}
           />
@@ -279,6 +280,7 @@ export const ProjectPropertiesPanel = observer(function ProjectPropertiesPanel({
         <span className={labelClass}>{t('projects.targetDate')}</span>
         <div className="col-span-2">
           <DueDatePicker
+            label={t('properties.dueDate.setDate')}
             onChange={targetDate => void update({ targetDate })}
             value={project.targetDate}
           />
