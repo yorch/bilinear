@@ -3,6 +3,7 @@
 import { Edit2, Plus, Star, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -97,6 +98,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
   const handleCreate = async (form: TemplateFormData) => {
     const result = await gql(ISSUE_TEMPLATE_CREATE_MUTATION, {
@@ -304,7 +306,7 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
                           isDeleting && 'cursor-not-allowed opacity-50',
                         )}
                         disabled={isDeleting}
-                        onClick={() => handleDelete(tmpl.id)}
+                        onClick={() => setPendingDelete({ id: tmpl.id, name: tmpl.name })}
                         type="button"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -317,6 +319,19 @@ export const IssueTemplatesSection = observer(({ teamId }: { teamId: string }) =
           })}
         </ul>
       </div>
+      <ConfirmDialog
+        message={t('issueDetail.templates.deleteConfirmBody', { name: pendingDelete?.name ?? '' })}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          const target = pendingDelete;
+          setPendingDelete(null);
+          if (target) {
+            void handleDelete(target.id);
+          }
+        }}
+        open={pendingDelete !== null}
+        title={t('issueDetail.templates.deleteConfirmTitle')}
+      />
     </section>
   );
 });

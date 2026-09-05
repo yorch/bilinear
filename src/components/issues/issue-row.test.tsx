@@ -11,6 +11,10 @@ vi.mock('@/hooks/use-translations', () => ({
   useTranslations: () => (key: string) => key,
 }));
 
+vi.mock('@/hooks/use-formatters', () => ({
+  useFormatters: () => ({ formatDate: (v: string) => v }),
+}));
+
 const pending = vi.hoisted(() => ({ value: false }));
 vi.mock('@/hooks/use-pending-ids', () => ({
   usePending: () => pending.value,

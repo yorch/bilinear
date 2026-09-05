@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { Input } from '@/components/ui/input';
 import { ModalDialog, ModalFooter, ModalHeader } from '@/components/ui/modal-dialog';
+
 import { Textarea } from '@/components/ui/textarea';
 import { useTranslations } from '@/hooks/use-translations';
 import type { FilterSet, SortField } from '@/lib/filter-engine';
@@ -43,7 +45,6 @@ export function SaveViewModal({
   initialLayout,
 }: SaveViewModalProps) {
   const t = useTranslations();
-  const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [shared, setShared] = useState(false);
@@ -58,7 +59,6 @@ export function SaveViewModal({
       setShared(false);
       setSubmitting(false);
       setSubmitError('');
-      setTimeout(() => nameRef.current?.focus(), 50);
     }
   }, [open]);
 
@@ -102,10 +102,10 @@ export function SaveViewModal({
               {t('properties.saveView.name')}
             </label>
             <Input
+              data-autofocus
               id="view-name"
               onChange={e => setName(e.target.value)}
               placeholder={t('properties.saveView.namePlaceholder')}
-              ref={nameRef}
               required
               value={name}
             />
@@ -128,22 +128,12 @@ export function SaveViewModal({
             />
           </div>
 
-          <label className="flex cursor-pointer items-center gap-3">
-            <input
-              checked={shared}
-              className="h-4 w-4 rounded border-border text-brand focus:ring-brand"
-              onChange={e => setShared(e.target.checked)}
-              type="checkbox"
-            />
-            <div>
-              <p className="text-sm font-medium text-foreground-secondary">
-                {t('properties.saveView.shareWithTeam')}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {t('properties.saveView.shareDescription')}
-              </p>
-            </div>
-          </label>
+          <SettingToggleRow
+            checked={shared}
+            description={t('properties.saveView.shareDescription')}
+            label={t('properties.saveView.shareWithTeam')}
+            onCheckedChange={setShared}
+          />
         </div>
 
         <ModalFooter

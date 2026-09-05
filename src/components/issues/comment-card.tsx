@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { MentionItem } from '@/components/editor/mention-list';
 import { TipTapEditor } from '@/components/editor/tiptap-editor.lazy';
 import { ReactionEmojiOptions } from '@/components/issues/reaction-emoji-options';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
@@ -91,6 +92,7 @@ export function CommentCard({
   const [editBody, setEditBody] = useState(comment.body);
   const [replyBody, setReplyBody] = useState('');
   const [replySubmitting, setReplySubmitting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const isOwn = comment.author.id === currentUserId;
   const isResolved = !!comment.resolvedAt;
@@ -288,7 +290,7 @@ export function CommentCard({
                     <button
                       className="w-full px-3 py-1.5 text-left text-xs text-danger-subtle-foreground hover:bg-danger-subtle"
                       onClick={() => {
-                        onDelete(comment.id);
+                        setConfirmingDelete(true);
                         close();
                       }}
                       type="button"
@@ -416,6 +418,16 @@ export function CommentCard({
           />
         </div>
       )}
+      <ConfirmDialog
+        message={t('issueDetail.comments.deleteConfirmBody')}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={() => {
+          setConfirmingDelete(false);
+          onDelete(comment.id);
+        }}
+        open={confirmingDelete}
+        title={t('issueDetail.comments.deleteConfirmTitle')}
+      />
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { observer } from 'mobx-react-lite';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { GlobalCreateIssueModal } from '@/components/issues/global-create-issue-modal';
 import { ConnectionToasts } from '@/components/layouts/connection-toasts';
 import { ShortcutHelpModal } from '@/components/layouts/shortcut-help-modal';
@@ -14,6 +14,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBTeam, DBWorkflowState } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { TEAM_CREATE_MUTATION } from '@/lib/graphql-queries';
+import { toast } from '@/lib/toast';
 import { gqlError } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -41,13 +42,12 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   const workspaceKey = params.workspace;
   const { items: recentItems } = useRecentItems(workspaceKey);
   const router = useRouter();
-  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
 
   useHotkeys(['meta+k', 'ctrl+k'], () => uiStore.toggleCommandPalette(), { allowInInput: true }, [
     uiStore,
   ]);
   useHotkeys(['meta+b', 'ctrl+b'], () => uiStore.toggleSidebarCollapsed(), {}, [uiStore]);
-  useHotkeys('?', () => setShortcutHelpOpen(open => !open), {}, []);
+  useHotkeys('?', () => uiStore.toggleShortcutHelp(), {}, [uiStore]);
 
   // Global shortcuts advertised in the shortcut-help modal — registered here
   // so they work on every workspace page, not just the team issues page.
@@ -73,6 +73,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
             workflowStateStore.applySyncAction('I', state.id, state);
           }
         }
+        toast.success(t('teams.createdToast', { name: team.name }));
         if (workspaceKey) {
           router.push(`/${workspaceKey}/team/${team.key}`);
         }
@@ -92,7 +93,10 @@ export const WorkspaceClient = observer(function WorkspaceClient({
         onSubmit={handleCreateTeam}
         open={uiStore.createTeamModalOpen}
       />
-      <ShortcutHelpModal onClose={() => setShortcutHelpOpen(false)} open={shortcutHelpOpen} />
+      <ShortcutHelpModal
+        onClose={() => uiStore.closeShortcutHelp()}
+        open={uiStore.shortcutHelpOpen}
+      />
     </>
   );
 });

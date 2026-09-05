@@ -9,6 +9,7 @@ import {
   FileText,
   Flag,
   Inbox,
+  Keyboard,
   Layers,
   LogOut,
   PanelLeft,
@@ -573,6 +574,11 @@ export const Sidebar = observer(function Sidebar({
       label: t('nav.projects'),
     },
     {
+      href: `${base}/initiatives`,
+      icon: <Flag className="h-4 w-4" />,
+      label: t('nav.initiatives'),
+    },
+    {
       href: `${base}/analytics`,
       icon: <BarChart2 className="h-4 w-4" />,
       label: t('nav.analytics'),
@@ -683,12 +689,22 @@ function SidebarFooter({
   pathname: string;
 }) {
   const { logout, user } = useAuth();
+  const { uiStore } = useStore();
   const t = useTranslations();
   return (
     <div className="border-t border-border p-1.5">
       {collapsed ? (
         <div className="flex flex-col items-center gap-1">
           <ConnectionStatus compact />
+          <button
+            aria-label={t('nav.keyboardShortcuts')}
+            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => uiStore.openShortcutHelp()}
+            title={t('nav.keyboardShortcuts')}
+            type="button"
+          >
+            <Keyboard className="h-4 w-4" />
+          </button>
           <Link
             className={cn(
               'flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
@@ -739,6 +755,18 @@ function SidebarFooter({
               <ThemeToggle />
             </div>
           </div>
+          <button
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => uiStore.openShortcutHelp()}
+            title={t('nav.keyboardShortcuts')}
+            type="button"
+          >
+            <Keyboard className="h-4 w-4 shrink-0" />
+            <span className="truncate">{t('nav.keyboardShortcuts')}</span>
+            <kbd className="ml-auto rounded border border-border bg-surface-sunken px-1 font-mono text-[10px]">
+              ?
+            </kbd>
+          </button>
           {user && (
             <div className="flex items-center justify-between gap-2 px-2 py-1 text-xs text-muted-foreground">
               <span className="min-w-0 flex-1 truncate" title={user.email}>

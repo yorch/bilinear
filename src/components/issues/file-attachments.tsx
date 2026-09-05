@@ -2,6 +2,7 @@
 
 import { FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
@@ -47,6 +48,7 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
   const t = useTranslations();
   const { formatFileSize } = useFormatters();
   const [uploading, setUploading] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Attachment | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -150,7 +152,7 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
                   'text-muted-foreground hover:text-danger-subtle-foreground',
                   TOUCH_TARGET,
                 )}
-                onClick={() => handleDelete(att)}
+                onClick={() => setPendingDelete(att)}
                 type="button"
               >
                 <Trash2 className="h-3 w-3" />
@@ -167,6 +169,22 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
       ) : (
         <p className="text-xs italic text-muted-foreground">{t('issueDetail.attachments.empty')}</p>
       )}
+      <ConfirmDialog
+        confirmLabel={t('issueDetail.attachments.removeAttachment')}
+        message={t('issueDetail.attachments.removeConfirmBody', {
+          name: pendingDelete?.name ?? '',
+        })}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          const att = pendingDelete;
+          setPendingDelete(null);
+          if (att) {
+            void handleDelete(att);
+          }
+        }}
+        open={pendingDelete !== null}
+        title={t('issueDetail.attachments.removeConfirmTitle')}
+      />
     </div>
   );
 }

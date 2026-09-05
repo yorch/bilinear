@@ -4,7 +4,7 @@ import { Archive, ArrowLeft, CircleDot, MoreHorizontal, Trash2 } from 'lucide-re
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { ProgressSparkline } from '@/components/projects/progress-sparkline';
 import { ProjectMilestonesSection } from '@/components/projects/project-milestones-section';
 import { ProjectPropertiesPanel } from '@/components/projects/project-properties-panel';
@@ -44,6 +44,8 @@ const PROJECT_ARCHIVE_MUTATION = `mutation ($id: ID!) { projectArchive(id: $id) 
 const PROJECT_DELETE_MUTATION = `mutation ($id: ID!) { projectDelete(id: $id) { success } }`;
 
 interface ProjectDetailViewProps {
+  /** Extra header actions rendered before the view's own menu (e.g. the favorite star). */
+  actions?: ReactNode;
   projectSlugId: string;
   workspaceKey: string;
 }
@@ -55,6 +57,7 @@ interface ServerProgress {
 }
 
 export const ProjectDetailView = observer(function ProjectDetailView({
+  actions,
   projectSlugId,
   workspaceKey,
 }: ProjectDetailViewProps) {
@@ -167,43 +170,46 @@ export const ProjectDetailView = observer(function ProjectDetailView({
     <div className="flex flex-1 flex-col overflow-hidden">
       <PageHeader
         actions={
-          <SelectPopover
-            align="right"
-            panelClassName="min-w-[160px] py-1"
-            triggerChildren={<MoreHorizontal className="h-4 w-4" />}
-            triggerClassName={cn(
-              'flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
-              TOUCH_TARGET_SQUARE,
-            )}
-            triggerTitle={t('projects.moreActions')}
-          >
-            {close => (
-              <>
-                <button
-                  className={cn(POPOVER_ITEM_CLASS, 'text-foreground-secondary')}
-                  onClick={() => {
-                    close();
-                    setPendingAction('archive');
-                  }}
-                  type="button"
-                >
-                  <Archive className="h-3.5 w-3.5" />
-                  {t('projects.archive')}
-                </button>
-                <button
-                  className={cn(POPOVER_ITEM_CLASS, 'text-danger-subtle-foreground')}
-                  onClick={() => {
-                    close();
-                    setPendingAction('delete');
-                  }}
-                  type="button"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {t('common.delete')}
-                </button>
-              </>
-            )}
-          </SelectPopover>
+          <>
+            {actions}
+            <SelectPopover
+              align="right"
+              panelClassName="min-w-[160px] py-1"
+              triggerChildren={<MoreHorizontal className="h-4 w-4" />}
+              triggerClassName={cn(
+                'flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+                TOUCH_TARGET_SQUARE,
+              )}
+              triggerTitle={t('projects.moreActions')}
+            >
+              {close => (
+                <>
+                  <button
+                    className={cn(POPOVER_ITEM_CLASS, 'text-foreground-secondary')}
+                    onClick={() => {
+                      close();
+                      setPendingAction('archive');
+                    }}
+                    type="button"
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    {t('projects.archive')}
+                  </button>
+                  <button
+                    className={cn(POPOVER_ITEM_CLASS, 'text-danger-subtle-foreground')}
+                    onClick={() => {
+                      close();
+                      setPendingAction('delete');
+                    }}
+                    type="button"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {t('common.delete')}
+                  </button>
+                </>
+              )}
+            </SelectPopover>
+          </>
         }
         leading={
           <>

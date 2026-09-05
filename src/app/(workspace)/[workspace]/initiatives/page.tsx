@@ -4,6 +4,7 @@ import { Archive, Flag, MoreHorizontal, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
+import { FavoriteToggle } from '@/components/layouts/favorite-toggle';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -209,6 +210,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
           </span>
           <span className="w-20 text-xs text-muted-foreground">{initiative.targetDate ?? ''}</span>
         </button>
+        <FavoriteToggle className="h-7 w-7" entityId={initiative.id} entityType="Initiative" />
         <SelectPopover
           align="right"
           panelClassName="min-w-[160px] py-1"

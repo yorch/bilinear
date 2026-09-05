@@ -18,6 +18,7 @@ export class UIStore {
   createTeamModalOpen = false;
   createProjectModalOpen = false;
   commandPaletteOpen = false;
+  shortcutHelpOpen = false;
 
   constructor() {
     makeObservable(this, {
@@ -26,6 +27,7 @@ export class UIStore {
       closeCreateIssueModal: action,
       closeCreateProjectModal: action,
       closeCreateTeamModal: action,
+      closeShortcutHelp: action,
       commandPaletteOpen: observable,
       createIssueModalOpen: observable,
       createProjectModalOpen: observable,
@@ -35,13 +37,16 @@ export class UIStore {
       openCreateIssueModal: action,
       openCreateProjectModal: action,
       openCreateTeamModal: action,
+      openShortcutHelp: action,
       selectedIssueId: observable,
       setActiveTeamId: action,
       setDetailIssueId: action,
       setSelectedIssueId: action,
       setSidebarCollapsed: action,
+      shortcutHelpOpen: observable,
       sidebarCollapsed: observable,
       toggleCommandPalette: action,
+      toggleShortcutHelp: action,
       toggleSidebarCollapsed: action,
     });
   }
@@ -101,5 +106,17 @@ export class UIStore {
 
   toggleCommandPalette() {
     this.commandPaletteOpen = !this.commandPaletteOpen;
+  }
+
+  openShortcutHelp() {
+    this.shortcutHelpOpen = true;
+  }
+
+  closeShortcutHelp() {
+    this.shortcutHelpOpen = false;
+  }
+
+  toggleShortcutHelp() {
+    this.shortcutHelpOpen = !this.shortcutHelpOpen;
   }
 }

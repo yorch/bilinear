@@ -10,6 +10,7 @@ import { IssueListView } from '@/components/issues/issue-list-view';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
@@ -81,9 +82,12 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   const {
     boardGroupBy,
     closeDetail,
+    deleteDialogProps,
     detailIssue,
+    handleArchive,
     handleOpen,
     openProperty,
+    requestDelete,
     selectedId,
     setBoardGroupBy,
     setOpenProperty,
@@ -148,7 +152,9 @@ const MyIssuesPage = observer(function MyIssuesPage() {
           <IssueListView
             issues={issues}
             labels={labels}
+            onArchive={handleArchive}
             onBulkUpdate={handleBulkUpdate}
+            onDelete={requestDelete}
             onOpen={handleOpen}
             onPropertyClosed={() => setOpenProperty(null)}
             onSelect={setSelectedId}
@@ -199,6 +205,9 @@ const MyIssuesPage = observer(function MyIssuesPage() {
         states={states}
         users={users}
       />
+
+      {/* Delete confirmation (context menu) */}
+      <ConfirmDialog {...deleteDialogProps} />
     </div>
   );
 });

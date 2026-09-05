@@ -191,6 +191,65 @@ const ResultsList = observer(function ResultsList({
         'commandPalette.actions.goToSettings',
         '/settings',
       ),
+      goTo(
+        'go-settings-members',
+        ['members', 'people', 'invite', 'settings'],
+        'commandPalette.actions.goToMembers',
+        '/settings',
+      ),
+      goTo(
+        'go-settings-integrations',
+        ['integrations', 'github', 'slack', 'settings'],
+        'commandPalette.actions.goToIntegrations',
+        '/settings/integrations',
+      ),
+      goTo(
+        'go-settings-security',
+        ['security', 'sso', 'saml', 'settings'],
+        'commandPalette.actions.goToSecurity',
+        '/settings/security',
+      ),
+      goTo(
+        'go-settings-webhooks',
+        ['webhooks', 'settings'],
+        'commandPalette.actions.goToWebhooks',
+        '/settings/webhooks',
+      ),
+      goTo(
+        'go-settings-import',
+        ['import', 'export', 'csv', 'settings'],
+        'commandPalette.actions.goToImportExport',
+        '/settings/import',
+      ),
+      goTo(
+        'go-settings-roadmap',
+        ['roadmap', 'settings'],
+        'commandPalette.actions.goToRoadmap',
+        '/settings/roadmap',
+      ),
+      goTo(
+        'go-settings-automations',
+        ['automations', 'rules', 'settings'],
+        'commandPalette.actions.goToAutomations',
+        '/settings/automations',
+      ),
+      goTo(
+        'go-settings-audit-log',
+        ['audit', 'log', 'history', 'settings'],
+        'commandPalette.actions.goToAuditLog',
+        '/settings/audit-log',
+      ),
+      {
+        id: 'keyboard-shortcuts',
+        keywords: ['keyboard', 'shortcuts', 'hotkeys', 'help'],
+        kind: 'action',
+        label: t('commandPalette.actions.keyboardShortcuts'),
+        onSelect: () => {
+          uiStore.closeCommandPalette();
+          uiStore.openShortcutHelp();
+        },
+        shortcut: '?',
+      },
       switchTheme('theme-light', 'light', 'theme.light'),
       switchTheme('theme-dark', 'dark', 'theme.dark'),
       switchTheme('theme-system', 'system', 'theme.system'),

@@ -1,11 +1,10 @@
 'use client';
 
 import { Bookmark, Settings } from 'lucide-react';
-import { runInAction } from 'mobx';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { BoardControls } from '@/components/issues/board-controls';
 import { BoardView } from '@/components/issues/board-view';
 import { ColumnPicker } from '@/components/issues/column-picker';
@@ -31,12 +30,10 @@ import { useTranslations } from '@/hooks/use-translations';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { gql } from '@/lib/graphql';
-import { ISSUE_ARCHIVE_MUTATION, ISSUE_UNARCHIVE_MUTATION } from '@/lib/graphql-queries';
 import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildIssueHref } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
-import { TransactionQueue } from '@/lib/transaction-queue';
-import { cn, getErrorMessage, TOUCH_TARGET_SQUARE } from '@/lib/utils';
+import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
@@ -50,15 +47,6 @@ const CUSTOM_VIEW_CREATE_MUTATION = `
       success
       lastSyncId
       customView { id name }
-    }
-  }
-`;
-
-const ISSUE_DELETE_MUTATION = `
-  mutation IssueDelete($id: ID!) {
-    issueDelete(id: $id) {
-      success
-      lastSyncId
     }
   }
 `;
@@ -85,9 +73,6 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     syncStore,
     uiStore,
   } = useStore();
-
-  // One queue per component mount — unmounting the page cleans up the reference
-  const txQueue = useMemo(() => new TransactionQueue(), []);
 
   // UI state (local to this page)
   const [saveViewOpen, setSaveViewOpen] = useState(false);
@@ -158,10 +143,12 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const {
     boardGroupBy,
     closeDetail,
+    deleteDialogProps,
     detailIssue,
+    handleArchive,
     handleOpen,
-    hasSelection,
     openProperty,
+    requestDelete,
     selectedId,
     setBoardGroupBy,
     setOpenProperty,
@@ -197,91 +184,6 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   const handleUpdate = useIssueUpdate();
   const handleBulkUpdate = useIssuesBulkUpdate();
 
-  const handleUnarchive = useCallback(
-    (id: string) => {
-      issueStore.optimisticUpdate(id, { archivedAt: null });
-      txQueue.enqueue(
-        ISSUE_UNARCHIVE_MUTATION,
-        { id },
-        {
-          onError: err => {
-            toast.error(getErrorMessage(err, t('issues.restoreFailed')));
-            issueStore.optimisticUpdate(id, { archivedAt: new Date().toISOString() });
-          },
-        },
-      );
-    },
-    [issueStore, txQueue, t],
-  );
-
-  const handleArchive = useCallback(
-    (id: string) => {
-      issueStore.optimisticUpdate(id, { archivedAt: new Date().toISOString() });
-      const undoToastId = toast.undo(t('issues.archivedToast'), t('common.undo'), () =>
-        handleUnarchive(id),
-      );
-      txQueue.enqueue(
-        ISSUE_ARCHIVE_MUTATION,
-        { id },
-        {
-          onError: err => {
-            // The archive never happened server-side: retire the stale Undo
-            // affordance before surfacing the failure and rolling back.
-            toast.dismiss(undoToastId);
-            toast.error(getErrorMessage(err, t('issues.archiveFailed')));
-            issueStore.optimisticUpdate(id, { archivedAt: null });
-          },
-          onSuccess: () => {
-            // Server delta sync will confirm the archive
-          },
-        },
-      );
-      if (selectedId === id) {
-        setSelectedId(null);
-      }
-    },
-    [issueStore, txQueue, selectedId, t, handleUnarchive, setSelectedId],
-  );
-
-  const handleDelete = useCallback(
-    (id: string) => {
-      const snapshot = issueStore.findById(id);
-      runInAction(() => {
-        issueStore.pool.delete(id);
-      });
-      txQueue.enqueue(
-        ISSUE_DELETE_MUTATION,
-        { id },
-        {
-          onError: err => {
-            toast.error(getErrorMessage(err, t('issues.deleteFailed')));
-            // Restore the issue optimistically if the server rejects the delete
-            if (snapshot) {
-              issueStore.applySyncAction('I', id, snapshot);
-            }
-          },
-        },
-      );
-      if (selectedId === id) {
-        setSelectedId(null);
-      }
-    },
-    [issueStore, txQueue, selectedId, t, setSelectedId],
-  );
-
-  // Delete is irreversible (no restore mutation), so it goes through a
-  // confirmation dialog instead of firing straight from the context menu.
-  const [pendingDelete, setPendingDelete] = useState<{ id: string; identifier: string } | null>(
-    null,
-  );
-  const requestDelete = useCallback(
-    (id: string) => {
-      const issue = issueStore.findById(id);
-      setPendingDelete({ id, identifier: issue?.identifier ?? '' });
-    },
-    [issueStore],
-  );
-
   // ── Team-specific keyboard shortcuts ─────────────────────────────────────
   // (j/k/enter/escape, common property pickers, and view-mode switches are
   // registered by useIssueListPage above)
@@ -301,33 +203,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     [selectedId],
   );
 
-  // Project / cycle pickers — team issues only (my-issues spans teams)
-  useHotkeys('shift+p', () => setOpenProperty('project'), { enabled: hasSelection }, [
-    hasSelection,
-  ]);
-  useHotkeys('q', () => setOpenProperty('cycle'), { enabled: hasSelection }, [hasSelection]);
-
-  // Backspace / Delete — archive selected issue
-  useHotkeys(
-    'backspace',
-    () => {
-      if (selectedId) {
-        handleArchive(selectedId);
-      }
-    },
-    { enabled: hasSelection },
-    [selectedId, handleArchive, hasSelection],
-  );
-  useHotkeys(
-    'delete',
-    () => {
-      if (selectedId) {
-        handleArchive(selectedId);
-      }
-    },
-    { enabled: hasSelection },
-    [selectedId, handleArchive, hasSelection],
-  );
+  // Shift+P / Q project & cycle pickers and Backspace/Delete archive are
+  // registered by useIssueListPage.
 
   // G→I / G→N navigation chords are registered globally in WorkspaceClient.
 
@@ -502,18 +379,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       />
 
       {/* Delete confirmation */}
-      <ConfirmDialog
-        message={t('issues.deleteConfirmBody', { identifier: pendingDelete?.identifier ?? '' })}
-        onCancel={() => setPendingDelete(null)}
-        onConfirm={() => {
-          if (pendingDelete) {
-            handleDelete(pendingDelete.id);
-          }
-          setPendingDelete(null);
-        }}
-        open={pendingDelete !== null}
-        title={t('issues.deleteConfirmTitle')}
-      />
+      <ConfirmDialog {...deleteDialogProps} />
 
       {/* Save current filters as a custom view */}
       <SaveViewModal

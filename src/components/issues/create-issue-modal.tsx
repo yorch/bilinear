@@ -1,10 +1,13 @@
 'use client';
 
 import { Users } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TipTapEditor } from '@/components/editor/tiptap-editor.lazy';
 import { AssigneeSelect } from '@/components/properties/assignee-select';
+import { CycleSelect } from '@/components/properties/cycle-select';
 import { DueDatePicker } from '@/components/properties/due-date-picker';
+import { EstimatePicker } from '@/components/properties/estimate-picker';
 import { LabelSelect } from '@/components/properties/label-select';
 import { PrioritySelect } from '@/components/properties/priority-select';
 import { ProjectSelect } from '@/components/properties/project-select';
@@ -19,6 +22,7 @@ import { gql, gqlQuery } from '@/lib/graphql';
 import { ISSUE_TEMPLATES_QUERY } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
+import { useStore } from '@/providers/store-provider';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { TemplateSelector } from './template-selector';
 
@@ -40,8 +44,10 @@ function loadCreateMore(): boolean {
 
 interface FormState {
   assigneeId: string | null;
+  cycleId: string | null;
   description: string;
   dueDate: string | null;
+  estimate: number | null;
   labelIds: string[];
   priority: number;
   projectId: string | null;
@@ -52,8 +58,10 @@ interface FormState {
 function initialForm(defaultStateId?: string, firstStateId?: string): FormState {
   return {
     assigneeId: null,
+    cycleId: null,
     description: '',
     dueDate: null,
+    estimate: null,
     labelIds: [],
     priority: 0,
     projectId: null,
@@ -64,8 +72,10 @@ function initialForm(defaultStateId?: string, firstStateId?: string): FormState 
 
 export interface CreateIssueInput {
   assigneeId?: string;
+  cycleId?: string;
   description?: string;
   dueDate?: string | null;
+  estimate?: number;
   labelIds: string[];
   priority: number;
   projectId?: string;
@@ -88,7 +98,7 @@ interface CreateIssueModalProps {
   users: IssueUser[];
 }
 
-export function CreateIssueModal({
+export const CreateIssueModal = observer(function CreateIssueModal({
   open,
   onClose,
   onSubmit,
@@ -101,6 +111,10 @@ export function CreateIssueModal({
   onTeamChange,
 }: CreateIssueModalProps) {
   const t = useTranslations();
+  const { teamStore } = useStore();
+  // Estimation is a per-team setting; the picker only appears when it is on.
+  const estimationType =
+    (teamId ? teamStore.findById(teamId) : null)?.issueEstimationType ?? 'notUsed';
   const titleRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<FormState>(() => initialForm(defaultStateId, states[0]?.id));
   const [submitting, setSubmitting] = useState(false);
@@ -271,8 +285,10 @@ export function CreateIssueModal({
     try {
       await onSubmit({
         assigneeId: form.assigneeId ?? undefined,
+        cycleId: form.cycleId ?? undefined,
         description: form.description.trim() || undefined,
         dueDate: form.dueDate,
+        estimate: form.estimate ?? undefined,
         labelIds: form.labelIds,
         priority: form.priority,
         projectId: form.projectId ?? undefined,
@@ -303,7 +319,9 @@ export function CreateIssueModal({
     form.dueDate !== null ||
     form.labelIds.length > 0 ||
     form.priority !== 0 ||
-    form.projectId !== null;
+    form.projectId !== null ||
+    form.cycleId !== null ||
+    form.estimate !== null;
 
   const requestClose = () => {
     if (isDirty) {
@@ -425,6 +443,20 @@ export function CreateIssueModal({
           <DueDatePicker onChange={v => patchForm({ dueDate: v })} value={form.dueDate} />
           <ProjectSelect onChange={v => patchForm({ projectId: v })} value={form.projectId} />
           {teamId && (
+            <CycleSelect
+              onChange={v => patchForm({ cycleId: v })}
+              teamId={teamId}
+              value={form.cycleId}
+            />
+          )}
+          {estimationType !== 'notUsed' && (
+            <EstimatePicker
+              estimationType={estimationType}
+              onChange={v => patchForm({ estimate: v })}
+              value={form.estimate}
+            />
+          )}
+          {teamId && (
             <TemplateSelector
               forceOpen={templateOpen}
               onClose={() => setTemplateOpen(false)}
@@ -469,4 +501,4 @@ export function CreateIssueModal({
       />
     </ModalDialog>
   );
-}
+});

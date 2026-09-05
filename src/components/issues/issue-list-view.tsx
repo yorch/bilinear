@@ -229,9 +229,9 @@ export function IssueListView({
               identifier={ctxMenu.identifier}
               issueId={ctxMenu.issueId}
               labels={labels}
-              onArchive={() => onArchive?.(ctxMenu.issueId)}
+              onArchive={onArchive ? () => onArchive(ctxMenu.issueId) : undefined}
               onClose={() => setCtxMenu(null)}
-              onDelete={() => onDelete?.(ctxMenu.issueId)}
+              onDelete={onDelete ? () => onDelete(ctxMenu.issueId) : undefined}
               onOpen={() => onOpen(ctxMenu.issueId)}
               onUpdate={patch => onUpdate(ctxMenu.issueId, patch)}
               states={states}

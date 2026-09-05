@@ -21,15 +21,16 @@ describe('ShortcutHelpModal', () => {
     expect(dialog).toHaveAttribute('open');
   });
 
-  // Every listed key must have a live handler. These three were advertised for
-  // months with nothing bound to them.
-  it('does not advertise shortcuts that have no handler', () => {
+  // Every listed key must have a live handler. Shift+P, Q and Backspace were
+  // advertised for months with nothing bound to them; `useIssueListPage` binds
+  // all three now, so they are listed again. The pairing is what this pins:
+  // an entry here without a `useHotkeys` for it is the regression to catch.
+  it('advertises exactly the list-page shortcuts that have a handler', () => {
     render(<ShortcutHelpModal onClose={() => {}} open />);
-    for (const key of ['setProject', 'setCycle', 'archiveIssue']) {
-      expect(screen.queryByText(`layout.shortcutHelp.${key}`)).not.toBeInTheDocument();
+    for (const key of ['setProject', 'setCycle', 'archiveIssue', 'setEstimate']) {
+      expect(screen.getByText(`layout.shortcutHelp.${key}`)).toBeInTheDocument();
     }
-    expect(screen.queryByText('Backspace')).not.toBeInTheDocument();
-    expect(screen.getByText('layout.shortcutHelp.setEstimate')).toBeInTheDocument();
+    expect(screen.getByText('⌫')).toBeInTheDocument();
   });
 
   it('renders nothing while closed', () => {
