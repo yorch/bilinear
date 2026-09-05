@@ -42,6 +42,15 @@ services:
       WS_PORT: "3001"
       DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-bilinear}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    # The image's baked-in HEALTHCHECK probes :3000/health (the app's port),
+    # but ws listens on :3001. The ws HTTP handler returns 200 for any path,
+    # so probe :3001 directly. Matches docker-compose.prod.yml.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,6 +73,22 @@ services:
       YJS_PORT: "1234"
       DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-bilinear}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    # The image's HEALTHCHECK probes :3000/health (the app's port), but yjs
+    # listens on :1234 and is a WebSocket-only server (Hocuspocus) with no
+    # HTTP endpoint, so an HTTP probe never succeeds. Use a TCP connect check,
+    # matching docker-compose.prod.yml.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const s=require('net').connect(1234,'127.0.0.1');s.on('connect',()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>{s.destroy();process.exit(1)},2000)",
+        ]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
     depends_on:
       postgres:
         condition: service_healthy

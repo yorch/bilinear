@@ -91,7 +91,94 @@ async function findStaleIssues(page: Parameters<typeof openWorkspace>[0]): Promi
   return stale;
 }
 
+/** The seed creates exactly one team; everything else a run made is disposable. */
+const SEEDED_TEAM_KEYS = new Set(['ENG']);
+
+interface NamedNode {
+  id: string;
+  name: string;
+}
+
+/**
+ * Teams, projects and initiatives a run created. Specs make these with
+ * fixed names and no cleanup, so a second run against the same database
+ * collided on the unique team key and the sidebar accumulated a team per
+ * run. Projects and initiatives are archived (the app's soft delete);
+ * teams are deleted with their issues, which are throwaway by construction
+ * — every seeded issue lives on the seeded team.
+ */
+async function findStaleContainers(page: Parameters<typeof openWorkspace>[0]) {
+  const res = await gqlInPage<{
+    initiatives: NamedNode[];
+    projects: { nodes: NamedNode[] };
+    teams: Array<NamedNode & { key: string }>;
+  }>(
+    page,
+    `query {
+      teams { id key name }
+      projects(first: 200) { nodes { id name } }
+      initiatives { id name }
+    }`,
+  );
+  expect(res.errors, 'container queries should succeed').toBeUndefined();
+  return {
+    initiatives: res.data?.initiatives ?? [],
+    projects: res.data?.projects.nodes ?? [],
+    teams: (res.data?.teams ?? []).filter(t => !SEEDED_TEAM_KEYS.has(t.key)),
+  };
+}
+
 teardown.use({ storageState: ADMIN_STATE });
+
+teardown('remove teams, projects and initiatives created by this run', async ({ page }) => {
+  await openWorkspace(page);
+
+  const stale = await findStaleContainers(page);
+  for (const project of stale.projects) {
+    const res = await gqlInPage(
+      page,
+      `mutation($id: ID!) { projectArchive(id: $id) { success } }`,
+      {
+        id: project.id,
+      },
+    );
+    expect(res.errors, `archiving project ${project.name}`).toBeUndefined();
+  }
+  for (const initiative of stale.initiatives) {
+    const res = await gqlInPage(
+      page,
+      `mutation($id: ID!) { initiativeArchive(id: $id) { success } }`,
+      { id: initiative.id },
+    );
+    expect(res.errors, `archiving initiative ${initiative.name}`).toBeUndefined();
+  }
+  for (const team of stale.teams) {
+    const res = await gqlInPage(
+      page,
+      `mutation($id: ID!) { teamDelete(id: $id, input: { issueAction: DELETE }) { success } }`,
+      { id: team.id },
+    );
+    expect(res.errors, `deleting team ${team.key}`).toBeUndefined();
+  }
+
+  const remaining = await findStaleContainers(page);
+  expect(
+    remaining.teams.map(t => t.key),
+    'every team this run created should be gone',
+  ).toEqual([]);
+  expect(
+    remaining.projects.map(p => p.name),
+    'every project should be archived',
+  ).toEqual([]);
+  expect(
+    remaining.initiatives.map(i => i.name),
+    'every initiative should be archived',
+  ).toEqual([]);
+
+  console.log(
+    `[teardown] removed ${stale.teams.length} team(s), archived ${stale.projects.length} project(s) and ${stale.initiatives.length} initiative(s)`,
+  );
+});
 
 teardown('archive issues created by this run', async ({ page }) => {
   await openWorkspace(page);

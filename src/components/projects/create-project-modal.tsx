@@ -7,6 +7,7 @@ import { ModalDialog, ModalFooter, ModalHeader } from '@/components/ui/modal-dia
 import { SimpleSelect } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useTranslations } from '@/hooks/use-translations';
+import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -88,6 +89,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
         targetDate: targetDate || undefined,
         teamIds: selectedTeamIds,
       });
+      toast.success(t('projects.projectCreated'));
       onClose();
     } catch (err) {
       setSubmitError(getErrorMessage(err, t('projects.failedToCreate')));

@@ -6,6 +6,7 @@ import { Suspense, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { PromptDialog } from '@/components/shared/prompt-dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -150,9 +151,7 @@ function TenantsInner() {
           onRetry={() => load()}
         />
       ) : tenants.length === 0 ? (
-        <p className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-          {t('admin.tenants.empty')}
-        </p>
+        <EmptyState size="compact" title={t('admin.tenants.empty')} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">

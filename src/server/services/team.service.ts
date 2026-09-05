@@ -48,11 +48,16 @@ export interface TeamCreateInput {
 }
 
 export interface TeamUpdateInput {
-  autoArchivePeriod?: number;
-  autoClosePeriod?: number;
+  autoArchivePeriod?: number | null;
+  autoCloseChildIssues?: boolean;
+  autoCloseParentIssues?: boolean;
+  autoClosePeriod?: number | null;
   color?: string;
+  cycleCooldownTime?: number;
   cycleDuration?: number;
+  cycleStartDay?: number;
   cyclesEnabled?: boolean;
+  defaultIssueStateId?: string | null;
   description?: string;
   icon?: string;
   issueEstimationType?: IssueEstimationType;
@@ -62,6 +67,13 @@ export interface TeamUpdateInput {
   timezone?: string;
   triageEnabled?: boolean;
 }
+
+/** Cycle length in weeks; Linear allows 1–8. */
+const CYCLE_DURATION_RANGE = { max: 8, min: 1 };
+/** Cooldown between cycles in weeks. */
+const CYCLE_COOLDOWN_RANGE = { max: 4, min: 0 };
+/** Auto-close / auto-archive windows, in months. */
+const AUTO_PERIOD_RANGE = { max: 24, min: 1 };
 
 export interface TeamDeleteInput {
   issueAction: 'DELETE' | 'MOVE';
@@ -125,13 +137,33 @@ export class TeamService {
   }
 
   async update(id: string, input: TeamUpdateInput): Promise<Team> {
+    this.validateUpdate(input);
+    if (input.defaultIssueStateId) {
+      // The default state drives every new issue on the team; a state from
+      // another team (or a stale id) would make issueCreate fail for
+      // everyone. Verify it before writing rather than trusting the id.
+      const state = await this.prisma.workflowState.findFirst({
+        select: { id: true },
+        where: { archivedAt: null, id: input.defaultIssueStateId, teamId: id },
+      });
+      if (!state) {
+        throw new TeamInvalidSettingError(
+          'defaultIssueStateId must be a workflow state of this team',
+        );
+      }
+    }
     return this.prisma.team.update({
       data: {
         autoArchivePeriod: input.autoArchivePeriod,
+        autoCloseChildIssues: input.autoCloseChildIssues,
+        autoCloseParentIssues: input.autoCloseParentIssues,
         autoClosePeriod: input.autoClosePeriod,
         color: input.color,
+        cycleCooldownTime: input.cycleCooldownTime,
         cycleDuration: input.cycleDuration,
+        cycleStartDay: input.cycleStartDay,
         cyclesEnabled: input.cyclesEnabled,
+        defaultIssueStateId: input.defaultIssueStateId,
         description: input.description,
         // Also update displayName when name changes
         displayName: input.name,
@@ -145,6 +177,47 @@ export class TeamService {
       },
       where: { id },
     });
+  }
+
+  /**
+   * Bounds on the numeric knobs. `settings.value` style JSON is not in play
+   * here — these are real columns — but nothing else rejects a 400-week
+   * cycle or a start day of 9, and the cycle scheduler would happily act on
+   * either.
+   */
+  private validateUpdate(input: TeamUpdateInput): void {
+    const inRange = (value: number | null | undefined, range: { max: number; min: number }) =>
+      value === undefined ||
+      value === null ||
+      (Number.isInteger(value) && value >= range.min && value <= range.max);
+    if (!inRange(input.cycleDuration, CYCLE_DURATION_RANGE)) {
+      throw new TeamInvalidSettingError(
+        `cycleDuration must be between ${CYCLE_DURATION_RANGE.min} and ${CYCLE_DURATION_RANGE.max} weeks`,
+      );
+    }
+    if (!inRange(input.cycleCooldownTime, CYCLE_COOLDOWN_RANGE)) {
+      throw new TeamInvalidSettingError(
+        `cycleCooldownTime must be between ${CYCLE_COOLDOWN_RANGE.min} and ${CYCLE_COOLDOWN_RANGE.max} weeks`,
+      );
+    }
+    if (!inRange(input.cycleStartDay, { max: 6, min: 0 })) {
+      throw new TeamInvalidSettingError(
+        'cycleStartDay must be a weekday index from 0 (Sunday) to 6',
+      );
+    }
+    if (!inRange(input.autoClosePeriod, AUTO_PERIOD_RANGE)) {
+      throw new TeamInvalidSettingError(
+        `autoClosePeriod must be between ${AUTO_PERIOD_RANGE.min} and ${AUTO_PERIOD_RANGE.max} months`,
+      );
+    }
+    if (!inRange(input.autoArchivePeriod, AUTO_PERIOD_RANGE)) {
+      throw new TeamInvalidSettingError(
+        `autoArchivePeriod must be between ${AUTO_PERIOD_RANGE.min} and ${AUTO_PERIOD_RANGE.max} months`,
+      );
+    }
+    if (input.timezone !== undefined && !isValidTimeZone(input.timezone)) {
+      throw new TeamInvalidSettingError('timezone must be a valid IANA time zone');
+    }
   }
 
   async delete(id: string, input: TeamDeleteInput): Promise<{ movedIssues: Issue[]; team: Team }> {
@@ -416,6 +489,22 @@ export class TeamService {
     }
 
     return created;
+  }
+}
+
+function isValidTimeZone(tz: string): boolean {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export class TeamInvalidSettingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TeamInvalidSettingError';
   }
 }
 

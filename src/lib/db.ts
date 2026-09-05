@@ -51,9 +51,17 @@ export interface DBUser {
 
 export interface DBTeam {
   archivedAt?: string | null;
+  autoArchivePeriod?: number | null;
+  autoCloseChildIssues?: boolean;
+  autoCloseParentIssues?: boolean;
+  autoClosePeriod?: number | null;
   color?: string | null;
   createdAt: string;
+  cycleCooldownTime?: number | null;
+  cycleDuration?: number | null;
+  cycleStartDay?: number | null;
   cyclesEnabled: boolean;
+  defaultIssueStateId?: string | null;
   description?: string | null;
   displayName: string;
   icon?: string | null;

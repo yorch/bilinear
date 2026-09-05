@@ -168,14 +168,28 @@ export const teamResolvers = {
         await requireTeamMemberNotGuest(ctx.prisma, id, ctx.userId, ctx.orgId);
       }
 
-      const team = await ctx.services.team.update(id, input);
+      let team: Awaited<ReturnType<typeof ctx.services.team.update>>;
+      try {
+        team = await ctx.services.team.update(id, input);
+      } catch (err) {
+        if ((err as Error).name === 'TeamInvalidSettingError') {
+          throw new GraphQLError((err as Error).message, {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+        throw err;
+      }
       let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Team', id, team);
 
       // Turning cycles on (or re-tuning their length while they're on) is
       // what makes upcoming cycles exist at all — nothing else ever calls
       // autoCreateUpcomingCycles. It is idempotent (fills up to the
       // configured count), so a redundant `cyclesEnabled: true` is harmless.
-      const cycleConfigChanged = input.cycleDuration !== undefined && team.cyclesEnabled;
+      const cycleConfigChanged =
+        team.cyclesEnabled &&
+        (input.cycleDuration !== undefined ||
+          input.cycleStartDay !== undefined ||
+          input.cycleCooldownTime !== undefined);
       if (input.cyclesEnabled === true || cycleConfigChanged) {
         const created = await ctx.services.cycle.autoCreateUpcomingCycles(ctx.orgId, id);
         for (const cycle of created) {

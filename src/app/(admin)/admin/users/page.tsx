@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ModalDialog } from '@/components/ui/modal-dialog';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -141,9 +143,7 @@ export default function AdminUsersPage() {
           onRetry={() => load()}
         />
       ) : users.length === 0 ? (
-        <p className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-          {t('admin.users.empty')}
-        </p>
+        <EmptyState size="compact" title={t('admin.users.empty')} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
@@ -162,9 +162,13 @@ export default function AdminUsersPage() {
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-foreground">{u.displayName}</p>
                       {u.isPlatformAdmin && (
-                        <span className="rounded bg-brand-subtle px-1.5 py-0.5 text-[10px] font-semibold uppercase text-brand-subtle-foreground dark:text-brand">
+                        <Badge
+                          className="text-[10px] font-semibold uppercase"
+                          tone="brand"
+                          variant="square"
+                        >
                           {t('admin.users.adminBadge')}
-                        </span>
+                        </Badge>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">{u.email}</p>
@@ -175,28 +179,22 @@ export default function AdminUsersPage() {
                     ) : (
                       <div className="flex flex-wrap gap-1">
                         {u.organizations.map(o => (
-                          <span
-                            className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                          <Badge
                             key={o.id}
                             title={`${o.role} · ${o.urlKey}`}
+                            tone="muted"
+                            variant="square"
                           >
                             {o.name}
-                          </span>
+                          </Badge>
                         ))}
                       </div>
                     )}
                   </td>
                   <td className="px-4 py-2">
-                    <span
-                      className={cn(
-                        'rounded px-1.5 py-0.5 text-xs font-medium',
-                        u.active
-                          ? 'bg-success-subtle text-success-subtle-foreground'
-                          : 'bg-danger-subtle text-danger-subtle-foreground',
-                      )}
-                    >
+                    <Badge tone={u.active ? 'success' : 'danger'} variant="square">
                       {u.active ? t('admin.users.statusActive') : t('admin.users.statusSuspended')}
-                    </span>
+                    </Badge>
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex flex-wrap justify-end gap-1.5">

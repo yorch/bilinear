@@ -4,6 +4,7 @@ import { Bell, Check, CheckCheck, Clock, MessageSquare, RefreshCw, User } from '
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { SectionHeader } from '@/components/shared/section-header';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -369,9 +370,12 @@ export const NotificationInbox = observer(function NotificationInbox() {
       {/* Unread section */}
       {!loading && unread.length > 0 && (
         <section className="mb-6">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('notifications.unreadCount', { count: unread.length })}
-          </h2>
+          <div className="mb-2">
+            <SectionHeader
+              as="h2"
+              title={t('notifications.unreadCount', { count: unread.length })}
+            />
+          </div>
           <div className="flex flex-col gap-2">
             {unread.map(notification => (
               <NotificationItem
@@ -390,9 +394,12 @@ export const NotificationInbox = observer(function NotificationInbox() {
       {/* Read section */}
       {!loading && read.length > 0 && (
         <section>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {hasUnread ? t('notifications.read') : t('notifications.allNotifications')}
-          </h2>
+          <div className="mb-2">
+            <SectionHeader
+              as="h2"
+              title={hasUnread ? t('notifications.read') : t('notifications.allNotifications')}
+            />
+          </div>
           <div className="flex flex-col gap-2">
             {read.map(notification => (
               <NotificationItem

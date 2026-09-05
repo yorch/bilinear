@@ -7,6 +7,7 @@ import { CycleVelocitySection } from '@/components/analytics/cycle-velocity-sect
 import { InsightsSection } from '@/components/analytics/insights-section';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { ColorDot } from '@/components/ui/color-dot';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -72,11 +73,7 @@ function BarChart({ data, maxValue, unit = '', emptyMessage }: BarChartProps) {
   const max = maxValue ?? Math.max(...data.map(d => d.value), 1);
 
   if (data.length === 0 || data.every(d => d.value === 0)) {
-    return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        {emptyMessage ?? t('analytics.team.noData')}
-      </p>
-    );
+    return <EmptyState size="compact" title={emptyMessage ?? t('analytics.team.noData')} />;
   }
 
   return (
@@ -129,11 +126,7 @@ function HBarChart({ data, maxValue, emptyMessage }: HBarChartProps) {
   const max = maxValue ?? Math.max(...data.map(d => d.value), 1);
 
   if (data.length === 0) {
-    return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        {emptyMessage ?? t('analytics.team.noData')}
-      </p>
-    );
+    return <EmptyState size="compact" title={emptyMessage ?? t('analytics.team.noData')} />;
   }
 
   return (

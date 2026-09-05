@@ -332,6 +332,22 @@
   --priority-medium: #eab308;
   --priority-low: #6b7280;
 
+  /* Fixed entity-colour palette offered by ColorSwatchPicker (team colour,
+     labels, workflow states). The chosen value is persisted on the entity as
+     a plain hex string, so the picker resolves these at runtime via
+     getComputedStyle rather than referencing the var() from TSX. Same value
+     in both themes and under every accent — it is entity data, not chrome. */
+  --entity-swatch-1: #6366f1;
+  --entity-swatch-2: #8b5cf6;
+  --entity-swatch-3: #ec4899;
+  --entity-swatch-4: #ef4444;
+  --entity-swatch-5: #f97316;
+  --entity-swatch-6: #eab308;
+  --entity-swatch-7: #22c55e;
+  --entity-swatch-8: #14b8a6;
+  --entity-swatch-9: #3b82f6;
+  --entity-swatch-10: #6b7280;
+
   /* Deterministic-but-varied per-session collaboration cursor palette (see
      tiptap-editor.tsx's CURSOR_COLORS). Synced to peers via the Yjs
      awareness protocol as a plain CSS colour string — safe as a var()

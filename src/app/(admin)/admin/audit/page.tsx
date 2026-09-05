@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { EmptyState } from '@/components/ui/empty-state';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -85,9 +86,7 @@ export default function AdminAuditPage() {
           onRetry={() => reload()}
         />
       ) : entries.length === 0 ? (
-        <p className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-          {t('admin.audit.empty')}
-        </p>
+        <EmptyState size="compact" title={t('admin.audit.empty')} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">

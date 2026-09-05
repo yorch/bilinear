@@ -1,18 +1,32 @@
 'use client';
 
-import { Calendar, ChevronRight, Copy, Key, Lock, RefreshCw, Trash2, Users } from 'lucide-react';
+import {
+  Calendar,
+  ChevronRight,
+  Copy,
+  ImagePlus,
+  Key,
+  Lock,
+  RefreshCw,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { AccentToggle } from '@/components/accent-toggle';
 import { LanguageToggle } from '@/components/language-toggle';
 import { MembersSection } from '@/components/settings/members-section';
+import { WorkspaceCustomFieldsCard } from '@/components/settings/workspace-custom-fields-card';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
+import { SimpleSelect } from '@/components/ui/select';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -34,6 +48,7 @@ const ORGANIZATION_QUERY = `
       id
       name
       urlKey
+      logoUrl
       dataRegion
       aiEnabled
       createdAt
@@ -44,6 +59,15 @@ const ORGANIZATION_QUERY = `
         maxInitiativeDepth
         maxExportRows
       }
+    }
+  }
+`;
+
+const ORGANIZATION_UPDATE_MUTATION = `
+  mutation OrganizationUpdate($input: OrganizationUpdateInput!) {
+    organizationUpdate(input: $input) {
+      success
+      organization { id name logoUrl }
     }
   }
 `;
@@ -112,6 +136,7 @@ interface OrgInfo {
   createdAt: string;
   dataRegion: string;
   id: string;
+  logoUrl?: string | null;
   name: string;
   planLimits: OrganizationPlanLimits;
   urlKey: string;
@@ -146,10 +171,22 @@ interface Viewer {
 
 const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const { workspace } = useParams<{ workspace: string }>();
-  const { teamStore, uiStore } = useStore();
+  const { organizationMemberStore, teamStore, uiStore, userStore } = useStore();
   const t = useTranslations();
   useDocumentTitle(t('settings.workspace.title'));
   const { formatDate, intlLocale } = useFormatters();
+
+  // `organizationUpdate` is owner/admin-only; mirror the guard so the form is
+  // read-only for everyone the server would refuse.
+  const viewerRole = userStore.currentUser
+    ? organizationMemberStore.rolesByUserId[userStore.currentUser.id]
+    : undefined;
+  const canManageOrg = viewerRole === 'owner' || viewerRole === 'admin';
+
+  const [orgName, setOrgName] = useState('');
+  const [savingOrg, setSavingOrg] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [calendarFeedUrl, setCalendarFeedUrl] = useState<string | null>(null);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
@@ -194,8 +231,69 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     null,
     // The members roster used to ride this same document and no longer does —
     // MembersSection fetches and retries it independently.
-    { onError: err => toast.error(getErrorMessage(err, t('settings.workspace.orgLoadError'))) },
+    {
+      onData: data => setOrgName(data?.name ?? ''),
+      onError: err => toast.error(getErrorMessage(err, t('settings.workspace.orgLoadError'))),
+    },
   );
+
+  async function saveOrgName() {
+    const trimmed = orgName.trim();
+    if (!orgData || !trimmed || trimmed === orgData.name) {
+      return;
+    }
+    setSavingOrg(true);
+    try {
+      await gqlMutate(ORGANIZATION_UPDATE_MUTATION, { input: { name: trimmed } });
+      setOrg(prev => (prev ? { ...prev, name: trimmed } : prev));
+      toast.success(t('settings.workspace.orgUpdated'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('settings.workspace.orgUpdateError')));
+    } finally {
+      setSavingOrg(false);
+    }
+  }
+
+  async function updateLogo(logoUrl: string | null) {
+    await gqlMutate(ORGANIZATION_UPDATE_MUTATION, { input: { logoUrl } });
+    setOrg(prev => (prev ? { ...prev, logoUrl } : prev));
+    toast.success(t('settings.workspace.orgUpdated'));
+  }
+
+  async function uploadLogo(file: File) {
+    setUploadingLogo(true);
+    try {
+      // Same endpoint the issue attachments use; without an `issueId` the file
+      // is stored against the org and only the URL comes back.
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/upload', { body: form, method: 'POST' });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? t('settings.workspace.logoUploadError'));
+      }
+      const data = (await res.json()) as { url?: string };
+      if (!data.url) {
+        throw new Error(t('settings.workspace.logoUploadError'));
+      }
+      await updateLogo(data.url);
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('settings.workspace.logoUploadError')));
+    } finally {
+      setUploadingLogo(false);
+      if (logoInputRef.current) {
+        logoInputRef.current.value = '';
+      }
+    }
+  }
+
+  async function removeLogo() {
+    try {
+      await updateLogo(null);
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('settings.workspace.orgUpdateError')));
+    }
+  }
 
   useRetryableFetch<Viewer | null>(
     async () => (await gqlQuery<{ viewer?: Viewer }>(VIEWER_QUERY))?.viewer ?? null,
@@ -332,9 +430,95 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               <dl className="flex flex-col gap-4">
                 <div className="grid grid-cols-3 gap-4">
                   <dt className="text-xs font-medium text-muted-foreground pt-0.5">
+                    {t('settings.workspace.logo')}
+                  </dt>
+                  <dd className="col-span-2 flex items-center gap-3">
+                    {org.logoUrl ? (
+                      <Image
+                        alt={org.name}
+                        className="h-10 w-10 rounded-md object-cover"
+                        height={40}
+                        src={org.logoUrl}
+                        unoptimized
+                        width={40}
+                      />
+                    ) : (
+                      <span className="flex h-10 w-10 items-center justify-center rounded-md bg-muted text-sm font-semibold text-muted-foreground">
+                        {org.name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    {canManageOrg && (
+                      <>
+                        <input
+                          accept="image/*"
+                          className="hidden"
+                          onChange={e => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              void uploadLogo(file);
+                            }
+                          }}
+                          ref={logoInputRef}
+                          type="file"
+                        />
+                        <Button
+                          disabled={uploadingLogo}
+                          onClick={() => logoInputRef.current?.click()}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          <ImagePlus className="h-3.5 w-3.5" />
+                          {uploadingLogo
+                            ? t('settings.workspace.logoUploading')
+                            : t('settings.workspace.logoUpload')}
+                        </Button>
+                        {org.logoUrl && (
+                          <Button
+                            disabled={uploadingLogo}
+                            onClick={() => void removeLogo()}
+                            size="sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            {t('settings.workspace.logoRemove')}
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </dd>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <dt className="text-xs font-medium text-muted-foreground pt-0.5">
                     {t('settings.workspace.name')}
                   </dt>
-                  <dd className="col-span-2 text-sm text-foreground">{org.name}</dd>
+                  <dd className="col-span-2">
+                    {canManageOrg ? (
+                      <form
+                        className="flex items-center gap-2"
+                        onSubmit={e => {
+                          e.preventDefault();
+                          void saveOrgName();
+                        }}
+                      >
+                        <Input
+                          aria-label={t('settings.workspace.name')}
+                          disabled={savingOrg}
+                          onChange={e => setOrgName(e.target.value)}
+                          value={orgName}
+                        />
+                        <Button
+                          disabled={savingOrg || !orgName.trim() || orgName.trim() === org.name}
+                          size="sm"
+                          type="submit"
+                        >
+                          {savingOrg ? t('common.saving') : t('common.save')}
+                        </Button>
+                      </form>
+                    ) : (
+                      <span className="text-sm text-foreground">{org.name}</span>
+                    )}
+                  </dd>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <dt className="text-xs font-medium text-muted-foreground pt-0.5">
@@ -373,6 +557,13 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               />
             )}
           </div>
+        </section>
+
+        <section>
+          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('customFields.title')}
+          </h2>
+          <WorkspaceCustomFieldsCard canManage={canManageOrg} />
         </section>
 
         <section>
@@ -669,18 +860,16 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   type="text"
                   value={newTokenLabel}
                 />
-                <button
-                  className={cn(
-                    'shrink-0 rounded-md border border-border',
-                    'px-3 py-1.5 text-xs font-medium text-foreground-secondary',
-                    'hover:bg-accent disabled:opacity-50',
-                  )}
+                <Button
+                  className="shrink-0"
                   disabled={creatingToken || !newTokenLabel.trim()}
                   onClick={() => void createApiToken()}
+                  size="sm"
                   type="button"
+                  variant="outline"
                 >
                   {creatingToken ? t('settings.workspace.creatingEllipsis') : t('common.create')}
-                </button>
+                </Button>
               </div>
               {/* Scope + expiry controls */}
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
@@ -694,25 +883,20 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   />
                   {t('settings.workspace.allowWrite')}
                 </label>
-                <label className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1.5">
                   {t('settings.workspace.expiresIn')}
-                  <select
-                    className={cn(
-                      'rounded-md border border-border bg-transparent',
-                      'px-1.5 py-0.5 text-xs text-foreground-secondary',
-                      'focus:outline-none focus:ring-1 focus:ring-brand',
-                    )}
+                  <SimpleSelect
+                    ariaLabel={t('settings.workspace.expiresIn')}
+                    className="w-32"
                     disabled={creatingToken}
-                    onChange={e => setNewTokenExpiryDays(Number(e.target.value))}
-                    value={newTokenExpiryDays}
-                  >
-                    {TOKEN_EXPIRY_OPTIONS.map(opt => (
-                      <option key={opt.days} value={opt.days}>
-                        {t(opt.labelKey)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    onChange={v => setNewTokenExpiryDays(Number(v))}
+                    options={TOKEN_EXPIRY_OPTIONS.map(opt => ({
+                      label: t(opt.labelKey),
+                      value: String(opt.days),
+                    }))}
+                    value={String(newTokenExpiryDays)}
+                  />
+                </span>
                 {!newTokenWritable && (
                   <span className="text-warning-subtle-foreground">
                     {t('settings.workspace.readOnlyKey')}

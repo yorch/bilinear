@@ -55,7 +55,12 @@ export function EmptyState({
           {icon}
         </span>
       )}
-      <p className={cn('text-sm', compact ? 'font-medium text-muted-foreground' : 'font-semibold text-foreground')}>
+      <p
+        className={cn(
+          'text-sm',
+          compact ? 'font-medium text-muted-foreground' : 'font-semibold text-foreground',
+        )}
+      >
         {title}
       </p>
       {description && (

@@ -297,6 +297,42 @@ describe('teamResolvers', () => {
       expect(autoCreate).toHaveBeenCalledWith(TEST_ORG.id, TEST_TEAM.id);
     });
 
+    it('re-fills upcoming cycles when the start day changes on a cycles-enabled team', async () => {
+      ctx.prisma.team.findUnique.mockResolvedValue({ ...TEST_TEAM, cyclesEnabled: true });
+      ctx.orgRole = 'admin';
+      ctx.prisma.team.update.mockResolvedValue({
+        ...TEST_TEAM,
+        cycleStartDay: 3,
+        cyclesEnabled: true,
+      });
+      const autoCreate = vi.fn().mockResolvedValue([]);
+      (ctx.services as unknown as Record<string, unknown>).cycle = {
+        autoCreateUpcomingCycles: autoCreate,
+      };
+
+      await teamResolvers.Mutation.teamUpdate(
+        null,
+        { id: TEST_TEAM.id, input: { cycleStartDay: 3 } },
+        ctx as never,
+      );
+
+      expect(autoCreate).toHaveBeenCalledWith(TEST_ORG.id, TEST_TEAM.id);
+    });
+
+    it('maps an out-of-range setting to BAD_USER_INPUT', async () => {
+      ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
+      ctx.orgRole = 'admin';
+
+      await expect(
+        teamResolvers.Mutation.teamUpdate(
+          null,
+          { id: TEST_TEAM.id, input: { cycleDuration: 99 } },
+          ctx as never,
+        ),
+      ).rejects.toMatchObject({ extensions: { code: 'BAD_USER_INPUT' } });
+      expect(ctx.prisma.team.update).not.toHaveBeenCalled();
+    });
+
     it('does not touch cycles for an update that leaves cycle settings alone', async () => {
       ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
       ctx.orgRole = 'admin';

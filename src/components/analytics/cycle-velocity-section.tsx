@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { EmptyState } from '@/components/ui/empty-state';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -70,11 +71,7 @@ function VelocityBarChart({ data }: VelocityBarChartProps) {
   const max = Math.max(...data.map(d => d.value), 1);
 
   if (data.length === 0 || data.every(d => d.value === 0)) {
-    return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        {t('analytics.velocity.noCompletedCycles')}
-      </p>
-    );
+    return <EmptyState size="compact" title={t('analytics.velocity.noCompletedCycles')} />;
   }
 
   return (
