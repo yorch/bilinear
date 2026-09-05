@@ -1041,6 +1041,7 @@
     "add": "Add",
     "and": "AND",
     "archive": "Archive",
+    "archivedManyToast": "{count} issues archived",
     "archivedToast": "Issue archived",
     "archiveFailed": "Failed to archive issue",
     "assignee": "Assignee",

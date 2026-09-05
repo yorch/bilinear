@@ -21,6 +21,8 @@ interface IssueListViewProps {
   issues: IssueRowData[];
   labels: IssueLabel[];
   onArchive?: (id: string) => void;
+  /** Bulk archive for the checked set; falls back to `onArchive` per id. */
+  onArchiveMany?: (ids: string[]) => void;
   onBulkUpdate?: (ids: string[], patch: Record<string, unknown>) => void;
   onDelete?: (id: string) => void;
   onOpen: (id: string) => void;
@@ -59,6 +61,7 @@ export function IssueListView({
   onOpen,
   onUpdate,
   onArchive,
+  onArchiveMany,
   onDelete,
   onBulkUpdate,
   openProperty,
@@ -247,6 +250,21 @@ export function IssueListView({
         <BulkActionBar
           count={checkedIds.size}
           labels={labels}
+          onArchive={
+            onArchiveMany || onArchive
+              ? () => {
+                  const ids = [...checkedIds];
+                  if (onArchiveMany) {
+                    onArchiveMany(ids);
+                  } else {
+                    for (const id of ids) {
+                      onArchive?.(id);
+                    }
+                  }
+                  setCheckedIds(new Set());
+                }
+              : undefined
+          }
           onClear={() => setCheckedIds(new Set())}
           onSelectAll={selectAll}
           onUpdate={patch => {

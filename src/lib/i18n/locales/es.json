@@ -1041,6 +1041,7 @@
     "add": "Agregar",
     "and": "Y",
     "archive": "Archivar",
+    "archivedManyToast": "{count} incidencias archivadas",
     "archivedToast": "Tarea archivada",
     "archiveFailed": "Error al archivar la tarea",
     "assignee": "Responsable",

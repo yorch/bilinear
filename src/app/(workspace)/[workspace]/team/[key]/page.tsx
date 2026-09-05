@@ -146,6 +146,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     deleteDialogProps,
     detailIssue,
     handleArchive,
+    handleArchiveMany,
     handleOpen,
     openProperty,
     requestDelete,
@@ -324,6 +325,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             issues={issues}
             labels={labels}
             onArchive={handleArchive}
+            onArchiveMany={handleArchiveMany}
             onBulkUpdate={handleBulkUpdate}
             onDelete={requestDelete}
             onOpen={handleOpen}

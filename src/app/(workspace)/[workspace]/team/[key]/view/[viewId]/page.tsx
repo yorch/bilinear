@@ -148,6 +148,7 @@ const CustomViewPage = observer(function CustomViewPage() {
     deleteDialogProps,
     detailIssue,
     handleArchive,
+    handleArchiveMany,
     handleOpen,
     openProperty,
     requestDelete,
@@ -344,6 +345,7 @@ const CustomViewPage = observer(function CustomViewPage() {
             issues={issues}
             labels={labels}
             onArchive={handleArchive}
+            onArchiveMany={handleArchiveMany}
             onBulkUpdate={handleBulkUpdate}
             onDelete={requestDelete}
             onOpen={handleOpen}

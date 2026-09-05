@@ -116,6 +116,7 @@ const BacklogPage = observer(function BacklogPage() {
     deleteDialogProps,
     detailIssue,
     handleArchive,
+    handleArchiveMany,
     handleOpen,
     openProperty,
     requestDelete,
@@ -231,6 +232,7 @@ const BacklogPage = observer(function BacklogPage() {
             issues={issues}
             labels={labels}
             onArchive={handleArchive}
+            onArchiveMany={handleArchiveMany}
             onBulkUpdate={handleBulkUpdate}
             onDelete={requestDelete}
             onOpen={handleOpen}

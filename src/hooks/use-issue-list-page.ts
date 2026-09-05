@@ -121,6 +121,43 @@ export function useIssueListPage({
     [issueStore, txQueue, t, handleUnarchive],
   );
 
+  /** Archive several issues with ONE undo toast instead of one per row. */
+  const handleArchiveMany = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) {
+        return;
+      }
+      const archivedAt = new Date().toISOString();
+      for (const id of ids) {
+        issueStore.optimisticUpdate(id, { archivedAt });
+      }
+      const undoToastId = toast.undo(
+        t('issues.archivedManyToast', { count: ids.length }),
+        t('common.undo'),
+        () => {
+          for (const id of ids) {
+            handleUnarchive(id);
+          }
+        },
+      );
+      for (const id of ids) {
+        txQueue.enqueue(
+          ISSUE_ARCHIVE_MUTATION,
+          { id },
+          {
+            onError: err => {
+              toast.dismiss(undoToastId);
+              toast.error(getErrorMessage(err, t('issues.archiveFailed')));
+              issueStore.optimisticUpdate(id, { archivedAt: null });
+            },
+          },
+        );
+      }
+      setSelectedId(prev => (prev && ids.includes(prev) ? null : prev));
+    },
+    [issueStore, txQueue, t, handleUnarchive],
+  );
+
   const handleDelete = useCallback(
     (id: string) => {
       const snapshot = issueStore.findById(id);
@@ -272,6 +309,7 @@ export function useIssueListPage({
     detailIssue,
     detailIssueId,
     handleArchive,
+    handleArchiveMany,
     handleOpen,
     hasSelection,
     openProperty,

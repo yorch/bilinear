@@ -168,7 +168,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
 
   const indentPx = depth * 20;
   return (
-    <div className="border-b border-border">
+    <div className="border-b border-border" data-testid="initiative-row">
       <div
         className="flex w-full items-center gap-3 px-4 py-3 hover:bg-accent/50"
         style={{ paddingLeft: `${16 + indentPx}px` }}
@@ -272,7 +272,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
         title={pendingAction === 'archive' ? t('initiatives.row.archive') : t('common.delete')}
       />
       {expanded ? (
-        <div className="px-12 pb-3">
+        <div className="px-12 pb-3" data-testid="initiative-projects">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-medium text-foreground-secondary">
               {t('initiatives.row.projects', { count: projects.length })}
