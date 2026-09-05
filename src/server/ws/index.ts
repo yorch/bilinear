@@ -32,6 +32,7 @@ import { env } from '@/server/lib/env';
 import { verifyWsTicket } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
+import { getSyncVisibility, getSyncVisibilityBatch } from '@/server/lib/sync-visibility';
 import {
   checkSessionValidity,
   type SessionMembershipRow,
@@ -39,9 +40,9 @@ import {
   type SessionUserRow,
 } from '@/server/middleware/auth';
 import { CycleService } from '@/server/services/cycle.service';
-import { SyncService } from '@/server/services/sync.service';
+import { type SyncActionRow, SyncService } from '@/server/services/sync.service';
 import { WebhookService } from '@/server/services/webhook.service';
-import { ConnectionManager } from './connection-manager';
+import { ConnectionManager, MAX_SOCKETS_PER_USER } from './connection-manager';
 import { SyncBroadcastBatcher } from './sync-batcher';
 
 const log = childLogger({ module: 'ws' });
@@ -140,8 +141,19 @@ async function maybeReleaseOrgSubscription(orgId: string) {
 
 // Coalesce per-org SyncAction broadcasts over a short window (§3.2) so a busy
 // org sends one batched `sync` frame per window instead of one per action.
-const broadcastBatcher = new SyncBroadcastBatcher<unknown>((orgId, actions) => {
-  connectionManager.broadcastToOrgAll(orgId, JSON.stringify({ cmd: 'sync', sync: actions }));
+// Each socket receives only what its scope allows (private teams, guest
+// roles) — the same `filterVisibleActions` delta sync applies, so the live
+// stream and the catch-up path cannot disagree. Serialised actions over Redis
+// carry the same field names as `SyncActionRow` (see `serializeSyncAction`);
+// the filter only reads `modelName`, `action` and `data`.
+const broadcastBatcher = new SyncBroadcastBatcher<SyncActionRow>((orgId, actions) => {
+  connectionManager
+    .broadcastActions(orgId, actions, (visibility, batch) =>
+      syncService.filterVisibleActions(batch, visibility),
+    )
+    .catch((err: unknown) => {
+      log.error({ err, orgId }, 'Failed to broadcast filtered sync batch');
+    });
 }, WS_BROADCAST_COALESCE_MS);
 
 redisSubscriber.on('message', (channel: string, message: string) => {
@@ -266,9 +278,23 @@ async function sweepRevokedConnections(): Promise<void> {
     memberships.map(m => [`${m.organizationId}:${m.userId}`, m] as const),
   );
 
+  // Refresh each live socket's replication scope in the same pass: a team
+  // flipped private, or a membership dropped, must stop the stream within one
+  // sweep — the same guarantee the sweep already gives a revoked session.
+  const pairs = [...new Set(conns.map(c => `${c.orgId}:${c.userId}`))].map(key => {
+    const [orgId, userId] = key.split(':') as [string, string];
+    return { orgId, userId };
+  });
+  const scopes = await getSyncVisibilityBatch(prisma, pairs);
+  const scopeByPair = new Map(pairs.map((pair, i) => [`${pair.orgId}:${pair.userId}`, scopes[i]]));
+
   for (const conn of conns) {
     if (conn.ws.readyState !== 1 /* OPEN */) {
       continue;
+    }
+    const scope = scopeByPair.get(`${conn.orgId}:${conn.userId}`);
+    if (scope) {
+      connectionManager.setVisibility(conn, scope);
     }
     if (
       shouldTerminateConnection(
@@ -293,7 +319,11 @@ const httpServer = createServer((_req, res) => {
   res.end('WebSocket server');
 });
 
-const wss = new WebSocketServer({ server: httpServer });
+// The only legitimate inbound frame is `{cmd:'pong'}`; everything else the
+// client sends is ignored. The `ws` default of 100 MiB per frame would let one
+// socket make the server buffer and JSON.parse a hundred megabytes for nothing.
+const MAX_INBOUND_PAYLOAD_BYTES = 16 * 1024;
+const wss = new WebSocketServer({ maxPayload: MAX_INBOUND_PAYLOAD_BYTES, server: httpServer });
 
 wss.on('connection', async (ws: WebSocket, req) => {
   // Extract ws_ticket from query string: ws://host:3001/?token=<ticket>
@@ -318,8 +348,27 @@ wss.on('connection', async (ws: WebSocket, req) => {
     return;
   }
 
+  if (connectionManager.countForUser(orgId, userId) >= MAX_SOCKETS_PER_USER) {
+    ws.close(4004, 'Too many connections');
+    return;
+  }
+
+  // Resolve what this socket may receive BEFORE it is registered, so no
+  // batch can reach it unfiltered in the gap.
+  let visibility: Awaited<ReturnType<typeof getSyncVisibility>>;
+  try {
+    visibility = await getSyncVisibility(prisma, userId, orgId);
+  } catch (err) {
+    log.error({ err, orgId, userId }, 'Failed to resolve sync visibility — refusing socket');
+    ws.close(1011, 'Visibility lookup failed');
+    return;
+  }
+  if (ws.readyState !== 1 /* OPEN */) {
+    return;
+  }
+
   // Register client
-  const clientInfo = connectionManager.add(orgId, userId, ws);
+  const clientInfo = connectionManager.add(orgId, userId, ws, visibility);
   await ensureOrgSubscription(orgId);
 
   log.info({ orgId, total: connectionManager.clientCount(), userId }, 'Client connected');
@@ -421,6 +470,8 @@ const webhookTimer = setInterval(() => {
 // roll them over automatically — same logic as the manual cycleRollover
 // mutation, but triggered by time rather than user action.
 const redisPublisher = new Redis(REDIS_URL, { lazyConnect: false });
+// Shared by the sync-action prune, the cycle rollover and the per-socket
+// visibility filter in the broadcast batcher above.
 const syncService = new SyncService(prisma, redisPublisher);
 
 // Subscribe to config invalidations unconditionally at boot. This process

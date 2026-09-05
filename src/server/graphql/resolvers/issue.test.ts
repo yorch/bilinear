@@ -384,8 +384,33 @@ describe('issueResolvers', () => {
       );
     });
 
+    it('resolves a human identifier (ENG-1) through the org-scoped identifier lookup', async () => {
+      ctx.prisma.issue.findFirst.mockResolvedValue(TEST_ISSUE);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        isOwner: false,
+        team: { organizationId: TEST_ORG.id },
+        teamId: TEST_ISSUE.teamId,
+        userId: TEST_USER.id,
+      });
+
+      const result = await issueResolvers.Query.issue(null, { id: 'ENG-1' }, ctx as never);
+
+      expect(result).toEqual(TEST_ISSUE);
+      // Never reaches `findUnique`, whose uuid column cast rejects the identifier.
+      expect(ctx.prisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(ctx.prisma.issue.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ identifier: 'ENG-1' }, { previousIdentifiers: { has: 'ENG-1' } }],
+            organizationId: TEST_ORG.id,
+          }),
+        }),
+      );
+    });
+
     it('throws NOT_FOUND when issue does not exist', async () => {
       ctx.prisma.issue.findUnique.mockResolvedValue(null);
+      ctx.prisma.issue.findFirst.mockResolvedValue(null);
 
       await expect(
         issueResolvers.Mutation.issueUpdate(
@@ -493,8 +518,33 @@ describe('issueResolvers', () => {
       expect(result).toEqual(TEST_ISSUE);
     });
 
+    it('resolves a human identifier (ENG-1) through the org-scoped identifier lookup', async () => {
+      ctx.prisma.issue.findFirst.mockResolvedValue(TEST_ISSUE);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        isOwner: false,
+        team: { organizationId: TEST_ORG.id },
+        teamId: TEST_ISSUE.teamId,
+        userId: TEST_USER.id,
+      });
+
+      const result = await issueResolvers.Query.issue(null, { id: 'ENG-1' }, ctx as never);
+
+      expect(result).toEqual(TEST_ISSUE);
+      // Never reaches `findUnique`, whose uuid column cast rejects the identifier.
+      expect(ctx.prisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(ctx.prisma.issue.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ identifier: 'ENG-1' }, { previousIdentifiers: { has: 'ENG-1' } }],
+            organizationId: TEST_ORG.id,
+          }),
+        }),
+      );
+    });
+
     it('throws NOT_FOUND when issue does not exist', async () => {
       ctx.prisma.issue.findUnique.mockResolvedValue(null);
+      ctx.prisma.issue.findFirst.mockResolvedValue(null);
 
       await expect(
         issueResolvers.Query.issue(null, { id: 'missing' }, ctx as never),

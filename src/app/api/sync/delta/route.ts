@@ -4,7 +4,8 @@ import { logger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
-import { getGuestTeamIds, requireAuthContext } from '@/server/middleware/auth';
+import { getSyncVisibility } from '@/server/lib/sync-visibility';
+import { requireAuthContext } from '@/server/middleware/auth';
 import { parseCursor, SyncService, serializeSyncAction } from '@/server/services/sync.service';
 
 /**
@@ -41,18 +42,18 @@ async function handleGet(req: NextRequest) {
   const toCursor = toSyncIdParam ? parseCursor(toSyncIdParam) : undefined;
 
   const syncService = new SyncService(prisma, redis);
-  const guestTeamIds = await getGuestTeamIds(prisma, userId, orgId);
+  const visibility = await getSyncVisibility(prisma, userId, orgId);
 
   try {
-    const { actions, hasMore, staleCursor } = await syncService.getDeltaSyncActions(
+    const { actions, hasMore, nextCursor, staleCursor } = await syncService.getDeltaSyncActions(
       orgId,
       fromCursor,
       toCursor,
       undefined,
-      guestTeamIds.length > 0 ? { guestTeamIds, userId } : undefined,
+      visibility,
     );
     return NextResponse.json(
-      { actions: actions.map(serializeSyncAction), hasMore, staleCursor },
+      { actions: actions.map(serializeSyncAction), hasMore, nextCursor, staleCursor },
       { headers: { 'Cache-Control': 'no-store' } },
     );
   } catch (err) {

@@ -63,11 +63,15 @@ export class NotificationService {
     });
   }
 
-  async markRead(id: string, userId: string): Promise<Notification> {
+  async markRead(id: string, userId: string, orgId?: string): Promise<Notification> {
     const notification = await this.prisma.notification.findUnique({
       where: { id },
     });
-    if (!notification || notification.userId !== userId) {
+    if (
+      !notification ||
+      notification.userId !== userId ||
+      (orgId !== undefined && notification.organizationId !== orgId)
+    ) {
       throw new NotificationNotFoundError();
     }
     return this.prisma.notification.update({
@@ -84,11 +88,15 @@ export class NotificationService {
     return { count: result.count };
   }
 
-  async snooze(id: string, userId: string, until: Date): Promise<Notification> {
+  async snooze(id: string, userId: string, until: Date, orgId?: string): Promise<Notification> {
     const notification = await this.prisma.notification.findUnique({
       where: { id },
     });
-    if (!notification || notification.userId !== userId) {
+    if (
+      !notification ||
+      notification.userId !== userId ||
+      (orgId !== undefined && notification.organizationId !== orgId)
+    ) {
       throw new NotificationNotFoundError();
     }
     return this.prisma.notification.update({

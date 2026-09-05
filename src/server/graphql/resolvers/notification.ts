@@ -23,7 +23,7 @@ export const notificationResolvers = {
       requireAuth(ctx);
 
       try {
-        const notification = await ctx.services.notification.markRead(id, ctx.userId);
+        const notification = await ctx.services.notification.markRead(id, ctx.userId, ctx.orgId);
 
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
@@ -61,6 +61,7 @@ export const notificationResolvers = {
           id,
           ctx.userId,
           new Date(until),
+          ctx.orgId,
         );
 
         const sync = await ctx.services.sync.createSyncAction(

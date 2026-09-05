@@ -33,6 +33,18 @@ services:
       # COMPOSE_PROFILES=collab in .env) so the `yjs` service below runs too.
       COLLAB_ENABLED: ${COLLAB_ENABLED:-false}
       YJS_PUBLIC_URL: ${YJS_PUBLIC_URL:-/collab}
+    # The entrypoint gives `prisma migrate deploy` 120s; on a cold host the
+    # database can take longer than that to accept connections, and the
+    # container would then exit and rely on the restart policy. Wait for the
+    # services this overlay is expected to be combined with (see the README's
+    # `just prod-up`, which layers docker-compose.infra.yml underneath).
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
 
   # Real-time sync fan-out (Redis Pub/Sub -> connected browsers), the webhook
   # retry sweep (every 30s) and cycle auto-rollover all live in this process,
@@ -74,6 +86,15 @@ services:
       WS_PORT: "3001"
       DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-bilinear}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    # The image's HEALTHCHECK probes :3000, which only the app serves. Left
+    # inherited, this container reports `unhealthy` forever and Traefik and
+    # Watchtower act on that.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
 
   # Multi-cursor collaborative editing (Hocuspocus/YJS). Optional and OFF by
   # default — it only runs under the `collab` profile:
@@ -118,3 +139,11 @@ services:
       YJS_PORT: "1234"
       DATABASE_URL: ${DATABASE_URL_OVERRIDE:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@postgres:5432/${POSTGRES_DB:-bilinear}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    # See `ws`: the inherited :3000 probe never succeeds here. Hocuspocus
+    # answers plain HTTP on its port, which is enough to prove liveness.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:1234/',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3

@@ -20,6 +20,8 @@ import {
 import type { IssueActivityCreateInput } from '../../services/issue-activity.service';
 import type { GraphQLContext } from '../context';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const log = childLogger({ module: 'resolver/issue' });
 
 // Fields tracked in the activity timeline on every issue update
@@ -809,7 +811,15 @@ export const issueResolvers = {
     issue: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
-      const issue = await ctx.services.issue.findById(id);
+      // The argument is a UUID from in-app links, but notification emails and
+      // typed-in URLs carry the human identifier (`ENG-1`). Passing an
+      // identifier to `findUnique` used to reach Postgres as a uuid cast
+      // error, which surfaced as "Internal server error" on the issue page.
+      // Identifier lookups are org-scoped and cover the previous-identifier
+      // history, so a link minted before a team was re-keyed still resolves.
+      const issue = UUID_RE.test(id)
+        ? await ctx.services.issue.findById(id)
+        : await ctx.services.issue.findByIdentifier(ctx.orgId, id);
       if (!issue || issue.organizationId !== ctx.orgId) {
         throw new GraphQLError('Issue not found', {
           extensions: { code: 'NOT_FOUND' },

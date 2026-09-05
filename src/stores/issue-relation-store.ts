@@ -11,6 +11,7 @@ export class IssueRelationStore {
       applySyncAction: action,
       optimisticUpdate: action,
       pool: observable,
+      removeForIssue: action,
       upsertMany: action,
     });
   }
@@ -27,6 +28,15 @@ export class IssueRelationStore {
 
   findByIssueId(issueId: string): DBIssueRelation[] {
     return this.all.filter(r => r.issueId === issueId || r.relatedIssueId === issueId);
+  }
+
+  /** Drop every edge touching `issueId` — mirrors Postgres' cascade on a hard delete. */
+  removeForIssue(issueId: string) {
+    for (const [id, r] of this.pool) {
+      if (r.issueId === issueId || r.relatedIssueId === issueId) {
+        this.pool.delete(id);
+      }
+    }
   }
 
   upsertMany(relations: DBIssueRelation[]) {

@@ -1,12 +1,14 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
+import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useOrigin } from '@/hooks/use-origin';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
@@ -79,8 +81,8 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [pendingDisconnect, setPendingDisconnect] = useState<'github' | 'slack' | null>(null);
 
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const orgKey = typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '';
+  const { workspace: orgKey } = useParams<{ workspace: string }>();
+  const appUrl = useOrigin();
 
   const {
     data: githubData,

@@ -1,6 +1,7 @@
 'use client';
 
 import { Copy, ExternalLink } from 'lucide-react';
+import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
@@ -8,6 +9,7 @@ import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useOrigin } from '@/hooks/use-origin';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery, isPermissionError } from '@/lib/graphql';
@@ -169,8 +171,8 @@ export default function SecuritySettingsPage() {
   const [scimNewLabel, setScimNewLabel] = useState('');
   const [scimNewPlaintext, setScimNewPlaintext] = useState<string | null>(null);
 
-  const orgKey = typeof window !== 'undefined' ? window.location.pathname.split('/')[1] : '';
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const { workspace: orgKey } = useParams<{ workspace: string }>();
+  const appUrl = useOrigin();
 
   const spEntityId = `${appUrl}/api/auth/saml/metadata?org=${orgKey}`;
   const acsUrl = `${appUrl}/api/auth/saml/callback`;

@@ -16,8 +16,21 @@ import {
 // JIT provisioning announces the new membership over a real SyncService bound
 // to the redis singleton, so the roster reaches clients already connected to
 // the workspace. Mock the module so that publish is a no-op here.
+// The replay guard claims each assertion ID in Redis with SET NX; the fake
+// honours NX so a second claim on the same key answers `null` like the real
+// thing. `redisClaims` is cleared with the in-memory cache in beforeEach.
+const redisClaims = new Set<string>();
 vi.mock('../lib/redis', () => ({
-  redis: { publish: vi.fn().mockResolvedValue(1) },
+  redis: {
+    publish: vi.fn().mockResolvedValue(1),
+    set: vi.fn(async (key: string) => {
+      if (redisClaims.has(key)) {
+        return null;
+      }
+      redisClaims.add(key);
+      return 'OK';
+    }),
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -172,8 +185,13 @@ function buildSignedResponse(opts: SignedResponseOptions = {}): string {
           new Date(nowMs + 5 * 60_000).toISOString()
         }"/></saml:SubjectConfirmation>`;
 
+  // SAML 2.0 core §2.3.3 makes Issuer REQUIRED on the Assertion itself, and
+  // that is the copy the service reads — the Response-level one sits outside
+  // an assertion-only signature. Real IdPs emit both.
+  const assertionIssuerXml = issuer === '' ? '' : `<saml:Issuer>${issuer}</saml:Issuer>`;
   const assertion =
     `<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="${assertionId}">` +
+    assertionIssuerXml +
     `<saml:Subject><saml:NameID>${nameId}</saml:NameID>${subjectConfirmationXml}</saml:Subject>` +
     conditionsXml +
     `<saml:AttributeStatement>${attrLines.join('')}</saml:AttributeStatement>` +
@@ -224,6 +242,7 @@ describe('SamlService', () => {
     // tests reuse the same default assertion ID, so it must be reset between
     // tests to avoid cross-test contamination.
     resetSamlReplayCacheForTests();
+    redisClaims.clear();
   });
 
   // -------------------------------------------------------------------------
@@ -493,12 +512,35 @@ describe('SamlService', () => {
       );
     });
 
-    it('throws when the response has no Issuer', async () => {
-      const xml = '<samlp:Response><saml:Assertion ID="_a"/></samlp:Response>';
-      const encoded = Buffer.from(xml, 'utf8').toString('base64');
-      await expect(service.parseAndValidateResponse(makeConfig(), encoded)).rejects.toThrow(
+    it('throws when the signed assertion has no Issuer', async () => {
+      // Validly signed, so the check under test is the one that fires — an
+      // unsigned document is refused by signature verification first.
+      const samlResponse = buildSignedResponse({ issuer: '' });
+      await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
         /missing Issuer/,
       );
+    });
+
+    it('reads the Issuer from the signed fragment, not from unsigned surrounding XML', async () => {
+      // The Response-level Issuer is outside an assertion-only signature. Swap
+      // it for the configured IdP after signing: the unsigned copy must not
+      // be what satisfies the check.
+      const forged = Buffer.from(
+        buildSignedResponse({ issuer: 'https://rogue.example.com' }),
+        'base64',
+      )
+        .toString('utf8')
+        .replace(
+          '<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"><saml:Issuer>https://rogue.example.com</saml:Issuer>',
+          `<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"><saml:Issuer>${IDP_ENTITY_ID}</saml:Issuer>`,
+        );
+      expect(forged).toContain(`<saml:Issuer>${IDP_ENTITY_ID}</saml:Issuer>`);
+      await expect(
+        service.parseAndValidateResponse(
+          makeConfig(),
+          Buffer.from(forged, 'utf8').toString('base64'),
+        ),
+      ).rejects.toThrow(/Issuer mismatch/);
     });
 
     it('throws when the response is unsigned', async () => {
@@ -708,6 +750,32 @@ describe('SamlService', () => {
       const claims = await service.parseAndValidateResponse(makeConfig(), samlResponse);
       expect(claims.email).toBe('user@example.com');
 
+      await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
+        /replay/,
+      );
+    });
+
+    it('refuses an assertion another instance already consumed (Redis claim lost)', async () => {
+      // Simulates a horizontally-scaled deployment: this process has never
+      // seen the ID (its in-memory cache is empty) but Redis has.
+      const samlResponse = buildSignedResponse({ assertionId: '_seen-elsewhere' });
+      redisClaims.add('saml:assertion:_seen-elsewhere');
+
+      await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
+        /replay/,
+      );
+    });
+
+    it('still catches a same-process replay when Redis is unavailable', async () => {
+      const { redis } = await import('../lib/redis');
+      const set = redis.set as unknown as ReturnType<typeof vi.fn>;
+      set
+        .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+        .mockRejectedValueOnce(new Error('ECONNREFUSED'));
+      const samlResponse = buildSignedResponse({ assertionId: '_redis-down' });
+
+      const claims = await service.parseAndValidateResponse(makeConfig(), samlResponse);
+      expect(claims.email).toBe('user@example.com');
       await expect(service.parseAndValidateResponse(makeConfig(), samlResponse)).rejects.toThrow(
         /replay/,
       );

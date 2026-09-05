@@ -47,3 +47,69 @@ describe('ConnectionManager.broadcastToOrgAll', () => {
     expect(healthy.send).toHaveBeenCalledWith('hello');
   });
 });
+
+describe('ConnectionManager.broadcastActions', () => {
+  const restricted = { guestTeamIds: [], hiddenTeamIds: ['t-hidden'], userId: 'guest' };
+
+  it('sends the full frame to unrestricted sockets and a filtered one to restricted sockets', async () => {
+    const cm = new ConnectionManager();
+    const open = fakeWs();
+    const locked = fakeWs();
+    cm.add('org-1', 'member', open);
+    cm.add('org-1', 'guest', locked, restricted);
+    const actions = [{ teamId: 't-hidden' }, { teamId: 't-open' }];
+    const filter = vi.fn(async (_v: unknown, batch: typeof actions) =>
+      batch.filter(a => a.teamId !== 't-hidden'),
+    );
+
+    await cm.broadcastActions('org-1', actions, filter);
+
+    expect(open.send).toHaveBeenCalledWith(JSON.stringify({ cmd: 'sync', sync: actions }));
+    expect(locked.send).toHaveBeenCalledWith(
+      JSON.stringify({ cmd: 'sync', sync: [{ teamId: 't-open' }] }),
+    );
+    expect(filter).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs the filter once per restricted user, not once per socket', async () => {
+    const cm = new ConnectionManager();
+    const a = fakeWs();
+    const b = fakeWs();
+    cm.add('org-1', 'guest', a, restricted);
+    cm.add('org-1', 'guest', b, restricted);
+    const filter = vi.fn(async (_v: unknown, batch: unknown[]) => batch);
+
+    await cm.broadcastActions('org-1', [{ id: 1 }], filter);
+
+    expect(filter).toHaveBeenCalledTimes(1);
+    expect(a.send).toHaveBeenCalledTimes(1);
+    expect(b.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends nothing to a restricted socket when the batch filters to empty', async () => {
+    const cm = new ConnectionManager();
+    const locked = fakeWs();
+    cm.add('org-1', 'guest', locked, restricted);
+
+    await cm.broadcastActions('org-1', [{ id: 1 }], async () => []);
+
+    expect(locked.send).not.toHaveBeenCalled();
+  });
+
+  it('treats an unrestricted scope as null and tracks sockets per user', () => {
+    const cm = new ConnectionManager();
+    const info = cm.add('org-1', 'u', fakeWs(), {
+      guestTeamIds: [],
+      hiddenTeamIds: [],
+      userId: 'u',
+    });
+    expect(info.visibility).toBeNull();
+    cm.add('org-1', 'u', fakeWs());
+    cm.add('org-1', 'other', fakeWs());
+    expect(cm.countForUser('org-1', 'u')).toBe(2);
+    cm.setVisibility(info, restricted);
+    expect(info.visibility).toEqual(restricted);
+    cm.setVisibility(info, { guestTeamIds: [], hiddenTeamIds: [], userId: 'u' });
+    expect(info.visibility).toBeNull();
+  });
+});

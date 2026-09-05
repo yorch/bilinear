@@ -152,6 +152,8 @@ function createFakeStores() {
       // Real stores expose an entity pool; SyncManager reads `issueStore.pool`
       // to carry a previously-cached label set onto a bare issue payload.
       pool: new Map<string, unknown>(),
+      removeForIssue: vi.fn(),
+      removeValuesForIssue: vi.fn(),
       replaceAll: vi.fn(),
       upsertDefinitions: vi.fn(),
       upsertMany: vi.fn(),
@@ -495,6 +497,134 @@ describe('SyncManager', () => {
         'mem-1',
         row,
       );
+    });
+  });
+
+  describe('visibility-aware delta paging', () => {
+    it('advances the cursor from nextCursor when a page filters down to nothing', async () => {
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+      const visible = makeAction({ id: '9', xactId: '1600' });
+      const fetchMock = vi
+        .fn()
+        // Everything in this page belonged to a private team the caller is
+        // not on; the server sends the page end so the client can move past it.
+        .mockResolvedValueOnce(jsonResponse({ actions: [], hasMore: true, nextCursor: '1500-7' }))
+        .mockResolvedValueOnce(
+          jsonResponse({ actions: [visible], hasMore: false, nextCursor: '1600-9' }),
+        );
+      vi.stubGlobal('fetch', fetchMock);
+
+      await (manager as Instance).deltaSync();
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(cursorParam(fetchMock.mock.calls[1][0])).toBe('1500-7');
+      expect(stores.syncStore.lastSyncId).toBe('1600-9');
+      expect(stores.issueStore.applySyncAction).toHaveBeenCalledTimes(1);
+    });
+
+    it('still stops on an empty page from a server that sends no nextCursor', async () => {
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ actions: [], hasMore: true }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await (manager as Instance).deltaSync();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('schedules the follow-up delta after a stale-cursor re-bootstrap', async () => {
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+      (manager as Instance).fullBootstrap = vi.fn().mockResolvedValue(undefined);
+      (manager as Instance).scheduleFollowUpDelta = vi.fn();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(jsonResponse({ actions: [], hasMore: false, staleCursor: true })),
+      );
+
+      await (manager as Instance).deltaSync();
+
+      expect((manager as Instance).fullBootstrap).toHaveBeenCalledTimes(1);
+      expect((manager as Instance).scheduleFollowUpDelta).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('per-user and cascade semantics in applyActions', () => {
+    it("drops another user's favorite and keeps the current user's", async () => {
+      const stores = createFakeStores();
+      (stores.userStore as unknown as { currentUserId: string }).currentUserId = 'me';
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      await (manager as Instance).applyActions([
+        makeAction({
+          data: { entityId: 'p1', id: 'f-other', userId: 'colleague' },
+          id: '1',
+          modelId: 'f-other',
+          modelName: 'Favorite',
+        }),
+        makeAction({
+          data: { entityId: 'p2', id: 'f-mine', userId: 'me' },
+          id: '2',
+          modelId: 'f-mine',
+          modelName: 'Favorite',
+        }),
+      ]);
+
+      expect(stores.favoriteStore.applySyncAction).toHaveBeenCalledTimes(1);
+      expect(stores.favoriteStore.applySyncAction).toHaveBeenCalledWith(
+        'U',
+        'f-mine',
+        expect.objectContaining({ id: 'f-mine' }),
+      );
+      // Skipping the row must not stall the cursor.
+      expect(stores.syncStore.lastSyncId).toBe(expectedCursor('1000', '2'));
+    });
+
+    it('cascades a hard-deleted issue to its custom-field values and relation edges', async () => {
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+
+      await (manager as Instance).applyActions([
+        makeAction({ action: 'D', data: null, modelId: 'i-gone', modelName: 'Issue' }),
+      ]);
+
+      expect(stores.customFieldStore.removeValuesForIssue).toHaveBeenCalledWith('i-gone');
+      expect(stores.issueRelationStore.removeForIssue).toHaveBeenCalledWith('i-gone');
+      expect(fakeDb.customFieldValues.where).toHaveBeenCalledWith('issueId');
+      expect(fakeDb.issueRelations.where).toHaveBeenCalledWith('issueId');
+      expect(fakeDb.issueRelations.where).toHaveBeenCalledWith('relatedIssueId');
+    });
+
+    it("re-bootstraps when the current user's own team membership changes", async () => {
+      const stores = createFakeStores();
+      (stores.userStore as unknown as { currentUserId: string }).currentUserId = 'me';
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+      const bootstrap = vi.fn().mockResolvedValue(undefined);
+      (manager as Instance).fullBootstrap = bootstrap;
+      (manager as Instance).scheduleFollowUpDelta = vi.fn();
+
+      await (manager as Instance).applyActions([
+        makeAction({
+          data: { id: 'tm-1', teamId: 't-private', userId: 'someone-else' },
+          modelName: 'TeamMembership',
+        }),
+      ]);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(bootstrap).not.toHaveBeenCalled();
+
+      await (manager as Instance).applyActions([
+        makeAction({
+          data: { id: 'tm-2', teamId: 't-private', userId: 'me' },
+          id: '2',
+          modelName: 'TeamMembership',
+        }),
+      ]);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await Promise.resolve();
+      expect(bootstrap).toHaveBeenCalledTimes(1);
+      expect((manager as Instance).scheduleFollowUpDelta).toHaveBeenCalledTimes(1);
     });
   });
 

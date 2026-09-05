@@ -202,9 +202,11 @@ export async function checkAuthMutationLimit(
   // login cap (5/hour) within the first batch. The TEST_AUTH_CODE
   // bypass already short-circuits verifyMagicLink, so skipping the
   // cap here is consistent with that contract. We gate on TEST_AUTH_CODE
-  // (only set by playwright.config.ts) rather than NODE_ENV, since
-  // unit tests run with NODE_ENV=test and assert on the real limiter.
-  if (process.env.TEST_AUTH_CODE) {
+  // (only set by playwright.config.ts) rather than NODE_ENV alone, since
+  // unit tests run with NODE_ENV=test and assert on the real limiter. The
+  // production guard mirrors `verifyMagicLink`'s: a stray TEST_AUTH_CODE in
+  // a production environment must not switch off brute-force protection.
+  if (process.env.TEST_AUTH_CODE && process.env.NODE_ENV !== 'production') {
     return { exceeded: false };
   }
 

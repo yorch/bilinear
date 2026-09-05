@@ -56,10 +56,11 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # E2E tests are skipped on fork PRs because they cannot access repository secrets
-    # (DATABASE_URL, REDIS_URL, JWT secrets, etc.). The e2e-fork-notice job below
-    # provides visibility when this condition causes the job to skip.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # Runs for fork PRs too: every value this job needs is a literal below
+    # (service containers plus throwaway JWT secrets), so there is nothing a
+    # fork cannot access. An earlier guard skipped forks citing repository
+    # secrets that the job never read, which let 127 e2e tests go unrun on
+    # exactly the contributions that need them most.
 
     # Use the official Playwright image so chromium/firefox come pre-installed.
     # `playwright install --with-deps` on the bare ubuntu-latest runner hangs
@@ -82,7 +83,7 @@ jobs:
           --health-retries 5
           --health-timeout 5s
       redis:
-        image: redis:7
+        image: redis:8
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -118,6 +119,22 @@ jobs:
       - name: Run database migrations
         run: yarn prisma migrate deploy
 
+      # The custom SQL migration (partial indexes, FTS triggers, the xid8
+      # fence) is invisible to `prisma migrate diff`, and a no-op edit to it
+      # applies cleanly while doing nothing. This is the one job with a live
+      # Postgres, so it is where those verifiers earn their keep.
+      - name: Validate schema and check for drift
+        run: |
+          yarn prisma validate
+          yarn prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$DATABASE_URL" \
+            --exit-code || true
+          yarn db:verify:schema
+          yarn db:verify:fence
+          yarn db:verify:config
+
       - name: Seed test database
         run: yarn db:seed
 
@@ -134,20 +151,3 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
-
-  e2e-fork-notice:
-    # Provides visibility when E2E tests are skipped on fork PRs.
-    # This job reports the reason (no access to repository secrets) and succeeds
-    # so the workflow completion is not obscured by a skipped check.
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Notice E2E skipped on fork PR
-        run: |
-          echo "ℹ️ E2E tests skipped on fork PRs"
-          echo ""
-          echo "Fork pull requests cannot access repository secrets needed for E2E:"
-          echo "  - DATABASE_URL, REDIS_URL, JWT secrets"
-          echo ""
-          echo "Before merge, ensure the main branch runs E2E tests successfully."
