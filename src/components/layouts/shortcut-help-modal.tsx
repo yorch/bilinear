@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { ModalDialog, ModalHeader } from '@/components/ui/modal-dialog';
 import { useTranslations } from '@/hooks/use-translations';
-import { cn, TOUCH_TARGET } from '@/lib/utils';
 
 interface ShortcutEntry {
   descriptionKey: string;
@@ -14,6 +13,11 @@ interface ShortcutSection {
   titleKey: string;
 }
 
+/**
+ * Every entry here must have a live handler (`useHotkeys` in
+ * `use-issue-list-page.ts` / `workspace-client.tsx`). The modal is not a
+ * roadmap — an advertised key that does nothing reads as a broken app.
+ */
 const SECTIONS: ShortcutSection[] = [
   {
     shortcuts: [
@@ -48,9 +52,6 @@ const SECTIONS: ShortcutSection[] = [
       { descriptionKey: 'layout.shortcutHelp.setLabel', keys: ['L'] },
       { descriptionKey: 'layout.shortcutHelp.setDueDate', keys: ['D'] },
       { descriptionKey: 'layout.shortcutHelp.setEstimate', keys: ['Shift', 'E'] },
-      { descriptionKey: 'layout.shortcutHelp.setProject', keys: ['Shift', 'P'] },
-      { descriptionKey: 'layout.shortcutHelp.setCycle', keys: ['Q'] },
-      { descriptionKey: 'layout.shortcutHelp.archiveIssue', keys: ['Backspace'] },
     ],
     titleKey: 'layout.shortcutHelp.sections.issueActions',
   },
@@ -88,119 +89,54 @@ function KbdGroup({ keys }: { keys: string[] }) {
 export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
   const t = useTranslations();
 
-  // Close on Escape
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [open, onClose]);
-
-  if (!open) {
-    return null;
-  }
-
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
-  const handleBackdropKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Escape') {
-      onClose();
-    }
-  };
-
+  // `ModalDialog` owns the focus trap, backdrop click and the Escape → `cancel`
+  // contract; the previous hand-rolled dialog listened on `window` and let
+  // focus wander behind the overlay.
   return (
-    // Backdrop
-    <div
+    <ModalDialog
       aria-label={t('layout.shortcutHelp.title')}
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={handleBackdropClick}
-      onKeyDown={handleBackdropKeyDown}
-      role="dialog"
+      maxWidth="xl"
+      onClose={onClose}
+      open={open}
     >
-      {/* Card */}
-      <div className="w-full max-w-xl overflow-hidden rounded-xl border border-border bg-card shadow-e3">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h2 className="text-sm font-semibold text-foreground">
-            {t('layout.shortcutHelp.title')}
-          </h2>
-          <button
-            aria-label={t('layout.shortcutHelp.closeAriaLabel')}
-            className={cn(
-              'rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
-              TOUCH_TARGET,
-            )}
-            onClick={onClose}
-            type="button"
-          >
-            <svg
-              aria-hidden="true"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                d="M6 18L18 6M6 6l12 12"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-              />
-            </svg>
-          </button>
-        </div>
+      <ModalHeader title={t('layout.shortcutHelp.title')} />
 
-        {/* Body — two-column grid of sections */}
-        <div className="max-h-[70vh] overflow-y-auto p-6">
-          <div className="grid grid-cols-2 gap-x-8 gap-y-6">
-            {SECTIONS.map(section => (
-              <div key={section.titleKey}>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {t(section.titleKey)}
-                </p>
-                <div className="space-y-1.5">
-                  {section.shortcuts.map(shortcut => (
-                    <div
-                      className="flex items-center justify-between gap-4"
-                      key={shortcut.descriptionKey}
-                    >
-                      <span className="text-sm text-foreground-secondary">
-                        {t(shortcut.descriptionKey)}
-                      </span>
-                      <KbdGroup keys={shortcut.keys} />
-                    </div>
-                  ))}
-                </div>
+      {/* Body — two-column grid of sections */}
+      <div className="max-h-[70vh] overflow-y-auto p-6">
+        <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+          {SECTIONS.map(section => (
+            <div key={section.titleKey}>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {t(section.titleKey)}
+              </p>
+              <div className="space-y-1.5">
+                {section.shortcuts.map(shortcut => (
+                  <div
+                    className="flex items-center justify-between gap-4"
+                    key={shortcut.descriptionKey}
+                  >
+                    <span className="text-sm text-foreground-secondary">
+                      {t(shortcut.descriptionKey)}
+                    </span>
+                    <KbdGroup keys={shortcut.keys} />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end border-t border-border px-6 py-3">
-          <span className="text-xs text-muted-foreground">
-            {t('layout.shortcutHelp.pressPrefix')}{' '}
-            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-xs font-mono">
-              Esc
-            </kbd>{' '}
-            {t('layout.shortcutHelp.pressSuffix')}
-          </span>
+            </div>
+          ))}
         </div>
       </div>
-    </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-end border-t border-border px-6 py-3">
+        <span className="text-xs text-muted-foreground">
+          {t('layout.shortcutHelp.pressPrefix')}{' '}
+          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-xs font-mono">
+            Esc
+          </kbd>{' '}
+          {t('layout.shortcutHelp.pressSuffix')}
+        </span>
+      </div>
+    </ModalDialog>
   );
 }

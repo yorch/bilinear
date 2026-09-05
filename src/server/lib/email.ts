@@ -7,6 +7,9 @@ import { childLogger } from './logger';
 
 const log = childLogger({ module: 'email' });
 
+/** Outside production, mails are also logged (and may use the JSON transport). */
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
 /**
  * Resolve the recipient's persisted locale to a supported one, then translate.
  * Recipients with no stored preference (or an unsupported value) fall back to
@@ -32,7 +35,7 @@ function createTransport() {
   // console rather than attempting a real SMTP connection. This prevents
   // test suites from failing when Mailpit is not running.
   if (!host || process.env.TEST_AUTH_CODE) {
-    if (process.env.NODE_ENV !== 'production') {
+    if (!IS_PRODUCTION) {
       return nodemailer.createTransport({ jsonTransport: true });
     }
     throw new Error('SMTP configuration is missing');
@@ -146,7 +149,7 @@ export async function sendMagicLinkEmail(
     to: email,
   });
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (!IS_PRODUCTION) {
     log.info({ code, email, verifyUrl }, 'Magic link (dev)');
     if ((info as { message?: string }).message) {
       log.info('Magic link (dev mode — not actually sent)');
@@ -212,7 +215,7 @@ export async function sendOrganizationInviteEmail(params: {
     to: params.to,
   });
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (!IS_PRODUCTION) {
     log.info({ email: params.to, inviteUrl: params.inviteUrl }, 'Organization invite (dev)');
     if ((info as { message?: string }).message) {
       log.info('Organization invite (dev mode — not actually sent)');
@@ -265,7 +268,7 @@ async function sendNotificationEmail(params: {
     to,
   });
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (!IS_PRODUCTION) {
     log.info({ info, issueIdentifier, to }, logLabel);
   }
 }

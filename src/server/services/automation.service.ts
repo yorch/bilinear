@@ -258,7 +258,10 @@ export class AutomationService {
         if (!this.matchesTriggerConfig(rule, event)) {
           continue;
         }
-        await this.executeActions(orgId, rule, event, actorUserId);
+        const executed = await this.executeActions(orgId, rule, event, actorUserId);
+        if (!executed) {
+          continue;
+        }
         await this.prisma.automationRule.update({
           data: { lastRunAt: new Date(), runCount: { increment: 1 } },
           where: { id: rule.id },
@@ -315,13 +318,23 @@ export class AutomationService {
     return true;
   }
 
+  /** Returns false when the rule was skipped without running anything. */
   private async executeActions(
     orgId: string,
     rule: AutomationRule,
     event: TriggerEvent,
     actorUserId: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
+    // `actions` is a Json column, so nothing below the write path has
+    // checked its shape. Validate at the read boundary and skip a rule that
+    // fails rather than executing (or throwing on) a malformed one.
     const actions = (rule.actions ?? []) as unknown as AutomationAction[];
+    try {
+      validateActions(actions);
+    } catch (err) {
+      logger.warn({ err, ruleId: rule.id }, 'Skipping automation rule with invalid actions');
+      return false;
+    }
     for (const action of actions) {
       try {
         await this.executeAction(orgId, rule, action, event, actorUserId);
@@ -329,6 +342,7 @@ export class AutomationService {
         logger.error({ actionType: action.type, err, ruleId: rule.id }, 'Automation action failed');
       }
     }
+    return true;
   }
 
   /**

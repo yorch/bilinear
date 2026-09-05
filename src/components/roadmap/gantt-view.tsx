@@ -67,6 +67,34 @@ function fmtIso(date: Date): string {
   return format(date, 'yyyy-MM-dd');
 }
 
+/**
+ * Apply a whole-day delta to a bar for the given interaction. `move` shifts
+ * both ends; a resize moves one end and never lets it cross the other. Shared
+ * by mouse drag (delta from pixels) and the keyboard nudge (±1 day).
+ */
+export function shiftRange(
+  mode: DragMode,
+  start: Date | null,
+  end: Date | null,
+  days: number,
+): { end: Date | null; start: Date | null } {
+  if (mode === 'move') {
+    return { end: end ? addDays(end, days) : null, start: start ? addDays(start, days) : null };
+  }
+  if (mode === 'resize-start') {
+    let newStart = start ? addDays(start, days) : null;
+    if (newStart && end && newStart > end) {
+      newStart = end;
+    }
+    return { end, start: newStart };
+  }
+  let newEnd = end ? addDays(end, days) : null;
+  if (newEnd && start && newEnd < start) {
+    newEnd = start;
+  }
+  return { end: newEnd, start };
+}
+
 export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage }: GanttViewProps) {
   const t = useTranslations();
   const { dateFnsLocale } = useFormatters();
@@ -236,25 +264,33 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
     if (days === 0 || !onChange) {
       return;
     }
-    let newStart = drag.startDateInitial;
-    let newEnd = drag.endDateInitial;
-    if (drag.mode === 'move') {
-      newStart = drag.startDateInitial ? addDays(drag.startDateInitial, days) : null;
-      newEnd = drag.endDateInitial ? addDays(drag.endDateInitial, days) : null;
-    } else if (drag.mode === 'resize-start') {
-      newStart = drag.startDateInitial ? addDays(drag.startDateInitial, days) : null;
-      // Don't allow start to cross past end
-      if (newStart && drag.endDateInitial && newStart > drag.endDateInitial) {
-        newStart = drag.endDateInitial;
-      }
-    } else if (drag.mode === 'resize-end') {
-      newEnd = drag.endDateInitial ? addDays(drag.endDateInitial, days) : null;
-      if (newEnd && drag.startDateInitial && newEnd < drag.startDateInitial) {
-        newEnd = drag.startDateInitial;
-      }
-    }
+    const { end: newEnd, start: newStart } = shiftRange(
+      drag.mode,
+      drag.startDateInitial,
+      drag.endDateInitial,
+      days,
+    );
     onChange(drag.id, newStart ? fmtIso(newStart) : null, newEnd ? fmtIso(newEnd) : null);
   }, [drag, dragDelta, onChange]);
+
+  // Keyboard counterpart of a `move` drag: the bar is focusable (`tabIndex=0`),
+  // so Left/Right must actually do what the mouse does or the focus stop is a
+  // dead end for keyboard users.
+  const nudge = (
+    item: GanttItem & { _effectiveEnd: Date; _effectiveStart: Date },
+    days: number,
+  ) => {
+    if (!onChange) {
+      return;
+    }
+    const { end, start } = shiftRange(
+      'move',
+      parseDate(item.startDate) ?? item._effectiveStart,
+      parseDate(item.endDate) ?? item._effectiveEnd,
+      days,
+    );
+    onChange(item.id, start ? fmtIso(start) : null, end ? fmtIso(end) : null);
+  };
 
   useEffect(() => {
     if (!drag) {
@@ -449,6 +485,12 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                       !isDragging && 'cursor-grab',
                       isDragging && 'cursor-grabbing shadow-e2',
                     )}
+                    onKeyDown={e => {
+                      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        nudge(item, e.key === 'ArrowRight' ? 1 : -1);
+                      }
+                    }}
                     onMouseDown={e => startDrag(item, 'move', e)}
                     role="button"
                     style={{

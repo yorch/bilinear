@@ -6,7 +6,7 @@ import type { BoardGroupBy, BoardSwimlaneBy } from '@/components/issues/board-vi
 import type { OpenProperty } from '@/components/issues/issue-row';
 import type { ViewMode } from '@/components/issues/view-toggle';
 import { useHotkeys } from '@/hooks/use-hotkeys';
-import type { DBIssueLabel } from '@/lib/db';
+import { toIssueDetail } from '@/lib/issue-mappers';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail } from '@/types/issues';
 
@@ -116,11 +116,7 @@ export function useIssueListPage({ issues, basePath, buildHref, onOpen }: UseIss
     if (!raw) {
       return null;
     }
-    const issueLabels = (raw.labelIds ?? [])
-      .map(id => labelStore.findById(id))
-      .filter((l): l is DBIssueLabel => l !== null)
-      .map(l => ({ color: l.color, id: l.id, name: l.name }));
-    return { ...raw, dueDate: raw.dueDate ?? null, labels: issueLabels };
+    return toIssueDetail(raw, labelStore);
   })();
 
   return {

@@ -19,7 +19,6 @@ const INVITE_EXPIRY_DAYS_KEY = 'invite.expiryDays';
 const MAX_PENDING_INVITES_KEY = 'invite.maxPending';
 
 /** How long an invitation link stays usable. Registry default; see config. */
-export const INVITE_EXPIRY_DAYS = numericSettingDefault(INVITE_EXPIRY_DAYS_KEY);
 
 /**
  * Cap on outstanding invitations per organization. Not a plan limit — a

@@ -1,5 +1,5 @@
 import { GraphQLError } from 'graphql';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
 import {
   DEFAULT_WORKFLOW_STATES,
@@ -70,11 +70,7 @@ describe('teamResolvers', () => {
     it('returns teams for the organization', async () => {
       ctx.prisma.team.findMany.mockResolvedValue([TEST_TEAM]);
       // Org admin sees all teams (no private filtering needed)
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
-        organizationId: TEST_ORG.id,
-        role: 'admin',
-        userId: TEST_USER.id,
-      });
+      ctx.orgRole = 'admin';
 
       const result = await teamResolvers.Query.teams(null, {}, ctx as never);
       expect(result).toEqual([TEST_TEAM]);
@@ -84,11 +80,7 @@ describe('teamResolvers', () => {
       const privateTeam = { ...TEST_TEAM, id: 'private-1', private: true };
       ctx.prisma.team.findMany.mockResolvedValue([TEST_TEAM, privateTeam]);
       // Non-admin user
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
-        organizationId: TEST_ORG.id,
-        role: 'member',
-        userId: TEST_USER.id,
-      });
+      ctx.orgRole = 'member';
       // User is only a member of TEST_TEAM, not the private team
       ctx.prisma.teamMembership.findMany.mockResolvedValue([{ teamId: TEST_TEAM.id }]);
 
@@ -99,11 +91,7 @@ describe('teamResolvers', () => {
     it('shows private teams to their members', async () => {
       const privateTeam = { ...TEST_TEAM, id: 'private-1', private: true };
       ctx.prisma.team.findMany.mockResolvedValue([TEST_TEAM, privateTeam]);
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
-        organizationId: TEST_ORG.id,
-        role: 'member',
-        userId: TEST_USER.id,
-      });
+      ctx.orgRole = 'member';
       // User is member of both teams
       ctx.prisma.teamMembership.findMany.mockResolvedValue([
         { teamId: TEST_TEAM.id },
@@ -117,12 +105,7 @@ describe('teamResolvers', () => {
 
   describe('Mutation.teamCreate', () => {
     it('creates a team when user is admin', async () => {
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
-        id: 'mem-1',
-        organizationId: TEST_ORG.id,
-        role: 'admin',
-        userId: TEST_USER.id,
-      });
+      ctx.orgRole = 'admin';
       ctx.prisma.team.create.mockResolvedValue(TEST_TEAM);
       ctx.prisma.teamMembership.create.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
       for (const state of DEFAULT_WORKFLOW_STATES) {
@@ -162,12 +145,7 @@ describe('teamResolvers', () => {
     });
 
     it('throws BAD_USER_INPUT for invalid key', async () => {
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
-        id: 'mem-1',
-        organizationId: TEST_ORG.id,
-        role: 'admin',
-        userId: TEST_USER.id,
-      });
+      ctx.orgRole = 'admin';
 
       try {
         await teamResolvers.Mutation.teamCreate(
@@ -187,12 +165,7 @@ describe('teamResolvers', () => {
     const deleteInput = { issueAction: 'DELETE' as const };
 
     it('soft-deletes a team when user is admin and team belongs to org', async () => {
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
-        id: 'mem-1',
-        organizationId: TEST_ORG.id,
-        role: 'admin',
-        userId: TEST_USER.id,
-      });
+      ctx.orgRole = 'admin';
       // findById to verify org ownership
       ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
       // delete transaction: archive issues, then archive team
@@ -212,12 +185,7 @@ describe('teamResolvers', () => {
     });
 
     it('throws NOT_FOUND when team belongs to different org', async () => {
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
-        id: 'mem-1',
-        organizationId: TEST_ORG.id,
-        role: 'admin',
-        userId: TEST_USER.id,
-      });
+      ctx.orgRole = 'admin';
       ctx.prisma.team.findUnique.mockResolvedValue({
         ...TEST_TEAM,
         organizationId: 'different-org-id',
@@ -242,7 +210,7 @@ describe('teamResolvers', () => {
       // org-scope check via findById
       ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
       // not an org admin — falls through to the team-owner check
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue(undefined);
+      ctx.orgRole = 'member';
       // requireTeamOwner / requireTeamMemberNotGuest checks
       ctx.prisma.teamMembership.findUnique.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
       const updated = { ...TEST_TEAM, name: 'New Name' };
@@ -260,11 +228,7 @@ describe('teamResolvers', () => {
 
     it('updates a team when the user is an org admin but not a team member', async () => {
       ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue({
-        organizationId: TEST_ORG.id,
-        role: 'admin',
-        userId: TEST_USER.id,
-      });
+      ctx.orgRole = 'admin';
       const updated = { ...TEST_TEAM, name: 'New Name' };
       ctx.prisma.team.update.mockResolvedValue(updated);
 
@@ -280,9 +244,80 @@ describe('teamResolvers', () => {
       expect(ctx.prisma.teamMembership.findUnique).not.toHaveBeenCalled();
     });
 
+    it('pre-populates upcoming cycles when cyclesEnabled flips on', async () => {
+      ctx.prisma.team.findUnique.mockResolvedValue({ ...TEST_TEAM, cyclesEnabled: false });
+      ctx.orgRole = 'admin';
+      const updated = { ...TEST_TEAM, cyclesEnabled: true };
+      ctx.prisma.team.update.mockResolvedValue(updated);
+      const created = [{ id: 'cycle-new', number: 1, teamId: TEST_TEAM.id }];
+      const autoCreate = vi.fn().mockResolvedValue(created);
+      (ctx.services as unknown as Record<string, unknown>).cycle = {
+        autoCreateUpcomingCycles: autoCreate,
+      };
+      const createSyncAction = vi.spyOn(ctx.services.sync, 'createSyncAction');
+
+      const result = await teamResolvers.Mutation.teamUpdate(
+        null,
+        { id: TEST_TEAM.id, input: { cyclesEnabled: true } },
+        ctx as never,
+      );
+
+      expect(autoCreate).toHaveBeenCalledWith(TEST_ORG.id, TEST_TEAM.id);
+      // Every created cycle is broadcast — a row without a SyncAction is
+      // invisible to other clients.
+      expect(createSyncAction).toHaveBeenCalledWith(
+        TEST_ORG.id,
+        'I',
+        'Cycle',
+        'cycle-new',
+        created[0],
+      );
+      expect(result.success).toBe(true);
+    });
+
+    it('re-fills upcoming cycles when cycleDuration changes on a cycles-enabled team', async () => {
+      ctx.prisma.team.findUnique.mockResolvedValue({ ...TEST_TEAM, cyclesEnabled: true });
+      ctx.orgRole = 'admin';
+      ctx.prisma.team.update.mockResolvedValue({
+        ...TEST_TEAM,
+        cycleDuration: 3,
+        cyclesEnabled: true,
+      });
+      const autoCreate = vi.fn().mockResolvedValue([]);
+      (ctx.services as unknown as Record<string, unknown>).cycle = {
+        autoCreateUpcomingCycles: autoCreate,
+      };
+
+      await teamResolvers.Mutation.teamUpdate(
+        null,
+        { id: TEST_TEAM.id, input: { cycleDuration: 3 } },
+        ctx as never,
+      );
+
+      expect(autoCreate).toHaveBeenCalledWith(TEST_ORG.id, TEST_TEAM.id);
+    });
+
+    it('does not touch cycles for an update that leaves cycle settings alone', async () => {
+      ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
+      ctx.orgRole = 'admin';
+      ctx.prisma.team.update.mockResolvedValue({ ...TEST_TEAM, name: 'Renamed' });
+      const autoCreate = vi.fn().mockResolvedValue([]);
+      (ctx.services as unknown as Record<string, unknown>).cycle = {
+        autoCreateUpcomingCycles: autoCreate,
+      };
+
+      await teamResolvers.Mutation.teamUpdate(
+        null,
+        { id: TEST_TEAM.id, input: { cycleDuration: 3, cyclesEnabled: false, name: 'Renamed' } },
+        ctx as never,
+      );
+
+      expect(autoCreate).not.toHaveBeenCalled();
+    });
+
     it('throws FORBIDDEN when a non-owner, non-admin team member tries to update', async () => {
       ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue(undefined);
+      ctx.orgRole = 'member';
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
         ...TEST_TEAM_MEMBERSHIP,
         isOwner: false,
@@ -299,7 +334,7 @@ describe('teamResolvers', () => {
 
     it('throws FORBIDDEN when a guest team owner tries to update', async () => {
       ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
-      ctx.prisma.organizationMember.findUnique.mockResolvedValue(undefined);
+      ctx.orgRole = 'member';
       ctx.prisma.teamMembership.findUnique.mockResolvedValue(TEST_TEAM_MEMBERSHIP);
       ctx.prisma.teamMemberRole.findUnique.mockResolvedValue({ role: 'guest' });
 

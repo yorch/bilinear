@@ -393,13 +393,18 @@ export class TeamService {
         ]
       : DEFAULT_WORKFLOW_STATES;
 
-    const created = await Promise.all(
-      states.map(state =>
-        tx.workflowState.create({
+    // Sequential on purpose: Prisma's interactive transaction client
+    // serialises commands over one connection, so Promise.all here can
+    // throw "Transaction already closed" or apply writes out of order
+    // under load (same reasoning as IssueService.bulkUpdate).
+    const created: WorkflowState[] = [];
+    for (const state of states) {
+      created.push(
+        await tx.workflowState.create({
           data: { ...state, teamId },
         }),
-      ),
-    );
+      );
+    }
 
     // Set the first "backlog" state as the team's default issue state
     const backlogState = created.find(s => s.type === 'backlog');

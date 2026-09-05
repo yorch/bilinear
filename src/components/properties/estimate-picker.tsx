@@ -50,7 +50,7 @@ interface EstimatePickerProps {
 }
 
 /** Render a compact estimate badge/button showing the current value. */
-export function EstimateBadge({
+function EstimateBadge({
   value,
   estimationType,
 }: {

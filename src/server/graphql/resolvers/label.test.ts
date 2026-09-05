@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testAuthGuard } from '../../../test/auth-guard-helper';
 import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
 import { TEST_LABEL, TEST_TEAM } from '../../../test/fixtures';
@@ -14,6 +14,24 @@ describe('labelResolvers', () => {
 
   beforeEach(() => {
     ctx = createMockContext();
+  });
+
+  describe('IssueLabel.children', () => {
+    it('batches child lookups across labels into one findMany', async () => {
+      ctx.prisma.issueLabel.findMany.mockResolvedValue([
+        { ...TEST_LABEL, id: 'child-1', parentId: 'p-1' },
+        { ...TEST_LABEL, id: 'child-2', parentId: 'p-2' },
+      ]);
+
+      const [c1, c2] = await Promise.all([
+        labelResolvers.IssueLabel.children({ ...TEST_LABEL, id: 'p-1' } as never, {}, ctx as never),
+        labelResolvers.IssueLabel.children({ ...TEST_LABEL, id: 'p-2' } as never, {}, ctx as never),
+      ]);
+
+      expect(ctx.prisma.issueLabel.findMany).toHaveBeenCalledTimes(1);
+      expect(c1.map(l => l.id)).toEqual(['child-1']);
+      expect(c2.map(l => l.id)).toEqual(['child-2']);
+    });
   });
 
   describe('Mutation.issueLabelArchive', () => {

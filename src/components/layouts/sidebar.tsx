@@ -607,7 +607,10 @@ export const Sidebar = observer(function Sidebar({
         />
         <button
           aria-label={t('nav.closeMenu')}
-          className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
+          className={cn(
+            'ml-auto flex shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground md:hidden',
+            TOUCH_TARGET_SQUARE,
+          )}
           onClick={onMobileClose}
           title={t('nav.closeMenu')}
           type="button"

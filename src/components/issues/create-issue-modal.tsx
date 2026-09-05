@@ -173,7 +173,6 @@ export function CreateIssueModal({
       // Freshly opened — full reset.
       setForm(initialForm(defaultStateId, states[0]?.id));
       setTemplateOpen(false);
-      setTimeout(() => titleRef.current?.focus(), 50);
 
       // Probe AI availability once per open so the "Suggest" affordance only
       // shows when the workspace has AI enabled and a key is configured.
@@ -331,6 +330,7 @@ export function CreateIssueModal({
         <div className="flex items-center gap-2 px-5 pt-5">
           <input
             className="w-full bg-transparent text-lg font-medium text-foreground placeholder:text-muted-foreground outline-none"
+            data-autofocus
             onChange={e => patchForm({ title: e.target.value })}
             placeholder={t('issueDetail.createModal.titlePlaceholder')}
             ref={titleRef}

@@ -2,7 +2,7 @@ import { GraphQLError } from 'graphql';
 import type { Webhook } from '../../../generated/prisma';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../../lib/limits';
 import { clampLimit } from '../../lib/pagination';
-import { requireAuth, requireOrgRole } from '../../middleware/auth';
+import { isOrgAdmin, requireAuth, requireOrgRole } from '../../middleware/auth';
 import {
   WEBHOOK_EVENTS,
   type WebhookCreateInput,
@@ -157,11 +157,7 @@ export const webhookResolvers = {
       if (!ctx.userId || !ctx.orgId || webhook.organizationId !== ctx.orgId) {
         return null;
       }
-      const member = await ctx.prisma.organizationMember.findUnique({
-        select: { role: true },
-        where: { organizationId_userId: { organizationId: ctx.orgId, userId: ctx.userId } },
-      });
-      if (!member || (member.role !== 'owner' && member.role !== 'admin')) {
+      if (!isOrgAdmin(ctx)) {
         return null;
       }
       return webhook.signingSecret;

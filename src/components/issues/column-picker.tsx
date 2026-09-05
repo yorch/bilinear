@@ -1,6 +1,8 @@
 'use client';
 
 import { Settings2 } from 'lucide-react';
+import { useId } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import type { BuiltInColumn, ColumnKey } from '@/hooks/use-visible-columns';
@@ -84,9 +86,13 @@ function CheckRow({
   checked: boolean;
   onToggle: () => void;
 }) {
+  const id = useId();
   return (
-    <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-foreground-secondary hover:bg-muted">
-      <input checked={checked} onChange={onToggle} type="checkbox" />
+    <label
+      className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-foreground-secondary hover:bg-muted"
+      htmlFor={id}
+    >
+      <Checkbox checked={checked} id={id} onChange={onToggle} />
       {label}
     </label>
   );

@@ -6,7 +6,8 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
-import { type BoardGroupBy, type BoardSwimlaneBy, BoardView } from '@/components/issues/board-view';
+import { BoardControls } from '@/components/issues/board-controls';
+import { BoardView } from '@/components/issues/board-view';
 import { ColumnPicker } from '@/components/issues/column-picker';
 import { CsvExportButton } from '@/components/issues/csv-export-button';
 import { FilterBuilder } from '@/components/issues/filter-builder';
@@ -28,11 +29,10 @@ import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import { useTranslations } from '@/hooks/use-translations';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
-import type { DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { gql } from '@/lib/graphql';
 import { ISSUE_ARCHIVE_MUTATION, ISSUE_UNARCHIVE_MUTATION } from '@/lib/graphql-queries';
-import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
+import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildIssueHref } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
@@ -114,14 +114,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
     const statePositionMap = new Map(rawStates.map(s => [s.id, s.position]));
     return issueStore
       .findByTeamId(teamId)
-      .map(i => ({
-        ...i,
-        dueDate: i.dueDate ?? null,
-        labels: (i.labelIds ?? [])
-          .map(id => labelStore.findById(id))
-          .filter((l): l is DBIssueLabel => l !== null)
-          .map(l => ({ color: l.color, id: l.id, name: l.name })),
-      }))
+      .map(i => toIssueDetail(i, labelStore))
       .sort((a, b) => {
         const posA = statePositionMap.get(a.stateId) ?? 0;
         const posB = statePositionMap.get(b.stateId) ?? 0;
@@ -365,26 +358,12 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         actions={
           <>
             {viewMode === 'board' && (
-              <>
-                <select
-                  className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
-                  onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
-                  value={boardGroupBy}
-                >
-                  <option value="status">{t('issues.groupByStatus')}</option>
-                  <option value="assignee">{t('issues.groupByAssignee')}</option>
-                  <option value="priority">{t('issues.groupByPriority')}</option>
-                </select>
-                <select
-                  className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
-                  onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
-                  value={swimlaneBy}
-                >
-                  <option value="none">{t('issues.noSwimlanes')}</option>
-                  <option value="assignee">{t('issues.swimlaneByAssignee')}</option>
-                  <option value="priority">{t('issues.swimlaneByPriority')}</option>
-                </select>
-              </>
+              <BoardControls
+                groupBy={boardGroupBy}
+                onGroupBy={setBoardGroupBy}
+                onSwimlaneBy={setSwimlaneBy}
+                swimlaneBy={swimlaneBy}
+              />
             )}
             <ViewToggle mode={viewMode} onChange={setViewMode} />
             <Link

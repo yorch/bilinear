@@ -23,6 +23,47 @@ export function toIssueLabels(labels: DBIssueLabel[]): IssueLabel[] {
   }));
 }
 
+/** The one store method label resolution needs — structural so `lib/` stays free of `stores/`. */
+export interface LabelLookup {
+  findById(id: string): DBIssueLabel | null;
+}
+
+/**
+ * Resolve an issue's `labelIds` against the label pool. An id the pool no
+ * longer holds (a label deleted while its assignment row is still in flight)
+ * is dropped rather than rendered as a blank chip.
+ */
+export function resolveIssueLabels(
+  labelIds: readonly string[] | null | undefined,
+  labelStore: LabelLookup,
+): IssueLabel[] {
+  const found: DBIssueLabel[] = [];
+  for (const id of labelIds ?? []) {
+    const label = labelStore.findById(id);
+    if (label) {
+      found.push(label);
+    }
+  }
+  return toIssueLabels(found);
+}
+
+/**
+ * Store row → the `IssueDetail` shape the issue components consume: labels
+ * resolved to `{ color, id, name }` and `dueDate` normalised to `null` so the
+ * date fields never carry `undefined` into a component prop. Used by every
+ * list page and the detail panel (it lived in seven copies before).
+ */
+export function toIssueDetail<T extends { dueDate?: string | null; labelIds?: readonly string[] }>(
+  raw: T,
+  labelStore: LabelLookup,
+): T & { dueDate: string | null; labels: IssueLabel[] } {
+  return {
+    ...raw,
+    dueDate: raw.dueDate ?? null,
+    labels: resolveIssueLabels(raw.labelIds, labelStore),
+  };
+}
+
 /** Every optional `string | null` field on `IssueSyncRow`, derived from the type. */
 type OptionalStringKey = {
   [K in keyof IssueSyncRow]-?: undefined extends IssueSyncRow[K]

@@ -99,6 +99,82 @@ describe('createLoaders', () => {
     });
   });
 
+  describe('childrenByLabelParentId', () => {
+    it('batches parent ids into one findMany and groups by parentId', async () => {
+      const prisma = createMockPrisma();
+      prisma.issueLabel.findMany.mockResolvedValue([
+        { id: 'l-1', name: 'a', parentId: 'p-1' },
+        { id: 'l-2', name: 'b', parentId: 'p-2' },
+        { id: 'l-3', name: 'c', parentId: 'p-1' },
+      ]);
+      const loaders = createLoaders(prisma as never, 'org-1');
+
+      const [c1, c2, c3] = await Promise.all([
+        loaders.childrenByLabelParentId.load('p-1'),
+        loaders.childrenByLabelParentId.load('p-2'),
+        loaders.childrenByLabelParentId.load('p-none'),
+      ]);
+
+      expect(prisma.issueLabel.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.issueLabel.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { archivedAt: null, parentId: { in: ['p-1', 'p-2', 'p-none'] } },
+        }),
+      );
+      expect(c1.map(l => l.id)).toEqual(['l-1', 'l-3']);
+      expect(c2.map(l => l.id)).toEqual(['l-2']);
+      expect(c3).toEqual([]);
+    });
+  });
+
+  describe('guestByTeamUser', () => {
+    it('batches pairs into one membership + one role query with isTeamGuest semantics', async () => {
+      const prisma = createMockPrisma();
+      prisma.teamMembership.findMany.mockResolvedValue([
+        { team: { organizationId: 'org-1' }, teamId: 'team-1', userId: 'user-1' },
+        { team: { organizationId: 'org-1' }, teamId: 'team-2', userId: 'user-1' },
+        { team: { organizationId: 'org-1' }, teamId: 'team-3', userId: 'user-1' },
+        // Member of a team in ANOTHER org — never a guest here.
+        { team: { organizationId: 'org-2' }, teamId: 'team-4', userId: 'user-1' },
+      ]);
+      prisma.teamMemberRole.findMany.mockResolvedValue([
+        { role: 'guest', teamId: 'team-1', userId: 'user-1' },
+        { role: 'bogus', teamId: 'team-3', userId: 'user-1' },
+        { role: 'guest', teamId: 'team-4', userId: 'user-1' },
+        // Same team as the guest row above, different user — must not cross-match.
+        { role: 'guest', teamId: 'team-1', userId: 'user-2' },
+      ]);
+      const loaders = createLoaders(prisma as never, 'org-1');
+
+      const [guest, noRoleRow, unknownRole, otherOrg, notMember] = await Promise.all([
+        loaders.guestByTeamUser.load('team-1::user-1'),
+        loaders.guestByTeamUser.load('team-2::user-1'),
+        loaders.guestByTeamUser.load('team-3::user-1'),
+        loaders.guestByTeamUser.load('team-4::user-1'),
+        loaders.guestByTeamUser.load('team-5::user-1'),
+      ]);
+
+      expect(prisma.teamMembership.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.teamMemberRole.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.teamMembership.findUnique).not.toHaveBeenCalled();
+      expect(guest).toBe(true);
+      // No role row → 'member' (getTeamRole's default).
+      expect(noRoleRow).toBe(false);
+      // Unrecognised role value → least privilege, i.e. guest.
+      expect(unknownRole).toBe(true);
+      expect(otherOrg).toBe(false);
+      expect(notMember).toBe(false);
+    });
+
+    it('is never a guest without an org in context', async () => {
+      const prisma = createMockPrisma();
+      const loaders = createLoaders(prisma as never, null);
+
+      expect(await loaders.guestByTeamUser.load('team-1::user-1')).toBe(false);
+      expect(prisma.teamMembership.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('roleByTeamUser', () => {
     it('batches (teamId, userId) pairs into one findMany, matching exact pairs only', async () => {
       const prisma = createMockPrisma();

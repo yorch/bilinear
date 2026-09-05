@@ -1,16 +1,13 @@
 import { GraphQLError } from 'graphql';
 import type { CustomFieldDefinition, CustomFieldValue } from '../../../generated/prisma';
 import { requireAuth, requireOrgRole, requireTeamMember } from '../../middleware/auth';
-import {
-  type CustomFieldDefinitionCreateInput,
-  CustomFieldDefinitionNotFoundError,
-  type CustomFieldDefinitionUpdateInput,
-  CustomFieldInvalidOptionsError,
-  CustomFieldInvalidValueError,
-  CustomFieldLimitExceededError,
-  type CustomFieldValueInput,
+import type {
+  CustomFieldDefinitionCreateInput,
+  CustomFieldDefinitionUpdateInput,
+  CustomFieldValueInput,
 } from '../../services/custom-field.service';
 import type { GraphQLContext } from '../context';
+import { mapServiceError } from '../types/errors';
 
 /** GraphQL input — `teamId` may be null for workspace-scoped definitions. */
 interface CustomFieldDefinitionCreateGqlInput {
@@ -23,23 +20,14 @@ interface CustomFieldDefinitionCreateGqlInput {
   type: CustomFieldDefinitionCreateInput['type'];
 }
 
-function mapServiceError(err: unknown): GraphQLError {
-  if (err instanceof CustomFieldDefinitionNotFoundError) {
-    return new GraphQLError(err.message, {
-      extensions: { code: 'NOT_FOUND' },
-    });
-  }
-  if (
-    err instanceof CustomFieldInvalidOptionsError ||
-    err instanceof CustomFieldInvalidValueError ||
-    err instanceof CustomFieldLimitExceededError
-  ) {
-    return new GraphQLError(err.message, {
-      extensions: { code: 'BAD_USER_INPUT' },
-    });
-  }
-  throw err;
-}
+const CUSTOM_FIELD_ERRORS = {
+  BAD_USER_INPUT: [
+    'CustomFieldInvalidOptionsError',
+    'CustomFieldInvalidValueError',
+    'CustomFieldLimitExceededError',
+  ],
+  NOT_FOUND: ['CustomFieldDefinitionNotFoundError'],
+} as const;
 
 async function loadDefinitionForMutation(
   id: string,
@@ -97,7 +85,7 @@ export const customFieldResolvers = {
           success: true,
         };
       } catch (err) {
-        throw mapServiceError(err);
+        mapServiceError(err, CUSTOM_FIELD_ERRORS);
       }
     },
     customFieldDefinitionCreate: async (
@@ -151,7 +139,7 @@ export const customFieldResolvers = {
           success: true,
         };
       } catch (err) {
-        throw mapServiceError(err);
+        mapServiceError(err, CUSTOM_FIELD_ERRORS);
       }
     },
     customFieldDefinitionDelete: async (
@@ -172,7 +160,7 @@ export const customFieldResolvers = {
         );
         return { lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        throw mapServiceError(err);
+        mapServiceError(err, CUSTOM_FIELD_ERRORS);
       }
     },
     customFieldDefinitionUpdate: async (
@@ -197,7 +185,7 @@ export const customFieldResolvers = {
           success: true,
         };
       } catch (err) {
-        throw mapServiceError(err);
+        mapServiceError(err, CUSTOM_FIELD_ERRORS);
       }
     },
     customFieldValuesSet: async (
@@ -219,7 +207,7 @@ export const customFieldResolvers = {
           values,
         );
       } catch (err) {
-        throw mapServiceError(err);
+        mapServiceError(err, CUSTOM_FIELD_ERRORS);
       }
       const allValues = await ctx.services.customField.findValuesByIssueIds([issueId]);
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Issue', issueId, {

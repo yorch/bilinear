@@ -13,10 +13,9 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
-import type { DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { ISSUE_ARCHIVE_MUTATION } from '@/lib/graphql-queries';
-import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
+import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn, getErrorMessage } from '@/lib/utils';
@@ -231,14 +230,7 @@ const BacklogPage = observer(function BacklogPage() {
     return issueStore
       .findByTeamId(teamId)
       .filter(i => backlogStateIds.has(i.stateId))
-      .map(i => ({
-        ...i,
-        dueDate: i.dueDate ?? null,
-        labels: (i.labelIds ?? [])
-          .map(id => labelStore.findById(id))
-          .filter((l): l is DBIssueLabel => l !== null)
-          .map(l => ({ color: l.color, id: l.id, name: l.name })),
-      }));
+      .map(i => toIssueDetail(i, labelStore));
   }, [teamId, issueStore, labelStore, backlogStateIds]);
 
   // Plain selectors — see team/[key]/page.tsx for rationale. Memo deps

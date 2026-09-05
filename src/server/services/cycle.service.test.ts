@@ -363,6 +363,62 @@ describe('CycleService', () => {
     });
   });
 
+  describe('processDueRollovers', () => {
+    const DUE = { id: TEST_CYCLE.id, organizationId: TEST_ORG.id };
+    const ISSUE_ID = '00000000-0000-0000-0000-000000000400';
+
+    it('rolls over every due cycle and emits Cycle + Issue SyncActions itself', async () => {
+      const sync = { createSyncAction: vi.fn().mockResolvedValue({ id: BigInt(1) }) };
+      service = new CycleService(prisma as never, undefined, { sync });
+      const rollover = vi
+        .spyOn(service, 'rollover')
+        .mockResolvedValue({ movedCount: 1, movedIssueIds: [ISSUE_ID], nextCycleId: 'next' });
+      prisma.cycle.findMany.mockResolvedValue([DUE]);
+      prisma.cycle.findUnique.mockResolvedValue(TEST_CYCLE);
+      prisma.issue.findMany.mockResolvedValue([{ id: ISSUE_ID, title: 'moved' }]);
+
+      const results = await service.processDueRollovers();
+
+      expect(rollover).toHaveBeenCalledWith(TEST_ORG.id, TEST_CYCLE.id);
+      expect(results).toEqual([
+        { cycleId: TEST_CYCLE.id, movedIssueIds: [ISSUE_ID], orgId: TEST_ORG.id },
+      ]);
+      // Full records, not the 2-field select, so clients replace their cache.
+      expect(sync.createSyncAction).toHaveBeenCalledWith(
+        TEST_ORG.id,
+        'U',
+        'Cycle',
+        TEST_CYCLE.id,
+        TEST_CYCLE,
+      );
+      expect(sync.createSyncAction).toHaveBeenCalledWith(TEST_ORG.id, 'U', 'Issue', ISSUE_ID, {
+        id: ISSUE_ID,
+        title: 'moved',
+      });
+      expect(sync.createSyncAction).toHaveBeenCalledTimes(2);
+    });
+
+    it('skips a cycle whose rollover fails and still processes the rest', async () => {
+      const sync = { createSyncAction: vi.fn().mockResolvedValue({ id: BigInt(1) }) };
+      service = new CycleService(prisma as never, undefined, { sync });
+      vi.spyOn(service, 'rollover')
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValueOnce({ movedCount: 0, movedIssueIds: [], nextCycleId: null });
+      prisma.cycle.findMany.mockResolvedValue([DUE, { ...DUE, id: 'c-2' }]);
+      prisma.cycle.findUnique.mockResolvedValue({ ...TEST_CYCLE, id: 'c-2' });
+
+      const results = await service.processDueRollovers();
+
+      expect(results.map(r => r.cycleId)).toEqual(['c-2']);
+      expect(sync.createSyncAction).toHaveBeenCalledTimes(1);
+      expect(sync.createSyncAction).toHaveBeenCalledWith(TEST_ORG.id, 'U', 'Cycle', 'c-2', {
+        ...TEST_CYCLE,
+        id: 'c-2',
+      });
+      expect(prisma.issue.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getProgressBatch', () => {
     // `groupBy` isn't part of the shared mock model (see
     // src/test/prisma-mock.ts) — added ad hoc here, matching the pattern in
@@ -442,31 +498,40 @@ describe('CycleService', () => {
     it('returns average and per-cycle completed issue counts', async () => {
       const cycle1 = { ...TEST_CYCLE, id: 'c1', number: 1 };
       const cycle2 = { ...TEST_CYCLE, id: 'c2', number: 2 };
-      prisma.cycle.findMany.mockResolvedValue([cycle1, cycle2]);
-      // getVelocity now calls issue.findMany (for story points), not issue.count
-      prisma.issue.findMany
-        .mockResolvedValueOnce([
-          { estimate: 2 },
-          { estimate: null },
-          { estimate: 1 },
-          { estimate: 1 },
-        ]) // 4 issues, 4 pts
-        .mockResolvedValueOnce([
-          { estimate: 3 },
-          { estimate: 2 },
-          { estimate: null },
-          { estimate: 1 },
-          { estimate: 0 },
-          { estimate: 2 },
-        ]); // 6 issues, 8 pts
+      const cycle3 = { ...TEST_CYCLE, id: 'c3', number: 3 };
+      prisma.cycle.findMany.mockResolvedValue([cycle1, cycle2, cycle3]);
+      // One aggregate over all cycles in the window, not a findMany per
+      // cycle. c3 has no completed issues so it gets no group at all.
+      prisma.issue.groupBy.mockResolvedValue([
+        { _count: { _all: 4 }, _sum: { estimate: 4 }, cycleId: 'c1' },
+        { _count: { _all: 6 }, _sum: { estimate: 8 }, cycleId: 'c2' },
+      ]);
 
       const result = await service.getVelocity(TEST_TEAM.id, 8);
 
-      expect(result.averageIssues).toBe(5);
+      expect(prisma.issue.groupBy).toHaveBeenCalledTimes(1);
+      expect(prisma.issue.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          by: ['cycleId'],
+          where: expect.objectContaining({ cycleId: { in: ['c1', 'c2', 'c3'] } }),
+        }),
+      );
+      expect(prisma.issue.findMany).not.toHaveBeenCalled();
+      expect(result.averageIssues).toBeCloseTo(10 / 3);
       expect(result.cycles).toEqual([
         { completedIssues: 4, completedPoints: 4, cycleId: 'c1', cycleNumber: 1 },
         { completedIssues: 6, completedPoints: 8, cycleId: 'c2', cycleNumber: 2 },
+        { completedIssues: 0, completedPoints: 0, cycleId: 'c3', cycleNumber: 3 },
       ]);
+    });
+
+    it('caps the cycle window at the requested count', async () => {
+      prisma.cycle.findMany.mockResolvedValue([]);
+
+      await service.getVelocity(TEST_TEAM.id);
+
+      expect(prisma.cycle.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 8 }));
+      expect(prisma.issue.groupBy).not.toHaveBeenCalled();
     });
 
     it('returns zero average when no completed cycles', async () => {
@@ -567,6 +632,32 @@ describe('CycleService', () => {
       const result = await service.autoCreateUpcomingCycles(TEST_ORG.id, TEST_TEAM.id, 2);
 
       expect(result).toHaveLength(2);
+    });
+
+    it('aligns the first cycle to the UTC start of the next start day', async () => {
+      // Wednesday 23:30 UTC — already Thursday in any TZ east of UTC+1, so
+      // local-time day arithmetic would land on a different Monday.
+      vi.useFakeTimers({ now: new Date('2026-09-02T23:30:00Z') });
+      try {
+        prisma.team.findUnique.mockResolvedValue(CYCLES_TEAM);
+        prisma.cycle.findFirst.mockResolvedValue(null);
+        prisma.cycle.findMany.mockResolvedValue([]);
+        prisma.cycle.create.mockImplementation(({ data }) =>
+          Promise.resolve({ ...TEST_CYCLE, ...data }),
+        );
+
+        const [first, second] = await service.autoCreateUpcomingCycles(
+          TEST_ORG.id,
+          TEST_TEAM.id,
+          2,
+        );
+
+        expect(first.startsAt.toISOString()).toBe('2026-09-07T00:00:00.000Z');
+        expect(first.endsAt.toISOString()).toBe('2026-09-21T00:00:00.000Z');
+        expect(second.startsAt.toISOString()).toBe('2026-09-21T00:00:00.000Z');
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('returns no cycles when the team does not have cycles enabled', async () => {

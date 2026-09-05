@@ -42,6 +42,8 @@ export interface Loaders {
    * rows already excluded. Guest visibility is NOT applied here (it's
    * per-caller, not a property of the row set) — callers apply it in
    * memory against the returned array, same shape as before batching. */
+  /** Non-archived child labels of a label, by name. */
+  childrenByLabelParentId: DataLoader<string, IssueLabel[]>;
   childrenByParentId: DataLoader<string, Issue[]>;
 
   /** CustomView lookup by id (org check left to the caller, as before). */
@@ -50,6 +52,15 @@ export interface Loaders {
   cycleProgress: DataLoader<string, { progress: number; scope: number }>;
   /** Document lookup by id (org check left to the caller, as before). */
   documentById: DataLoader<string, Document | null>;
+  /**
+   * Whether `userId` is a *guest* on `teamId`, keyed via `teamUserKey`.
+   * Batched equivalent of `isTeamGuest` (middleware/auth.ts) with the same
+   * semantics: a non-member or a team outside the caller's org is not a
+   * guest (nothing to narrow), a missing role row is `member`, and an
+   * unrecognised role value is treated as `guest` (least privilege). Used by
+   * relation resolvers that narrow a batched row set per caller.
+   */
+  guestByTeamUser: DataLoader<string, boolean>;
 
   /** Org-scoped Initiative lookup by id. */
   initiativeById: DataLoader<string, Initiative | null>;
@@ -102,6 +113,18 @@ function groupBy<T, K extends string>(rows: T[], keys: readonly K[], keyOf: (row
 
 const TEAM_USER_KEY_SEP = '::';
 
+/** Composite key for the `(teamId, userId)`-keyed loaders. */
+export function teamUserKey(teamId: string, userId: string): string {
+  return `${teamId}${TEAM_USER_KEY_SEP}${userId}`;
+}
+
+function splitTeamUserKey(key: string): { teamId: string; userId: string } {
+  const idx = key.indexOf(TEAM_USER_KEY_SEP);
+  return { teamId: key.slice(0, idx), userId: key.slice(idx + TEAM_USER_KEY_SEP.length) };
+}
+
+const VALID_TEAM_ROLES = new Set(['admin', 'member', 'guest']);
+
 export function createLoaders(prisma: PrismaClient, orgId: string | null): Loaders {
   return {
     childrenByInitiativeId: new DataLoader(async (parentIds: readonly string[]) => {
@@ -123,6 +146,17 @@ export function createLoaders(prisma: PrismaClient, orgId: string | null): Loade
           organizationId: orgId,
           parentId: { in: parentIds as string[] },
         },
+      });
+      return groupBy(rows, parentIds, r => r.parentId as string);
+    }),
+
+    childrenByLabelParentId: new DataLoader(async (parentIds: readonly string[]) => {
+      // Mirrors IssueLabel.children's previous per-row query: non-archived
+      // children ordered by name. The parent label is already org-scoped by
+      // the time this field resolver runs.
+      const rows = await prisma.issueLabel.findMany({
+        orderBy: { name: 'asc' },
+        where: { archivedAt: null, parentId: { in: parentIds as string[] } },
       });
       return groupBy(rows, parentIds, r => r.parentId as string);
     }),
@@ -180,6 +214,44 @@ export function createLoaders(prisma: PrismaClient, orgId: string | null): Loade
         where: { id: { in: ids as string[] } },
       });
       return indexById(rows, ids);
+    }),
+
+    guestByTeamUser: new DataLoader(async (keys: readonly string[]) => {
+      if (!orgId) {
+        return keys.map(() => false);
+      }
+      const pairs = keys.map(splitTeamUserKey);
+      const teamIds = Array.from(new Set(pairs.map(p => p.teamId)));
+      const userIds = Array.from(new Set(pairs.map(p => p.userId)));
+      const pairWhere = { teamId: { in: teamIds }, userId: { in: userIds } };
+      // Same superset-then-filter shape as roleByTeamUser below; the two
+      // queries replace getTeamRole's membership + role findUniques.
+      const [memberships, roles] = await Promise.all([
+        prisma.teamMembership.findMany({
+          select: { team: { select: { organizationId: true } }, teamId: true, userId: true },
+          where: pairWhere,
+        }),
+        prisma.teamMemberRole.findMany({
+          select: { role: true, teamId: true, userId: true },
+          where: pairWhere,
+        }),
+      ]);
+      const memberOfOrgTeam = new Set(
+        memberships
+          .filter(m => m.team.organizationId === orgId)
+          .map(m => teamUserKey(m.teamId, m.userId)),
+      );
+      const roleByKey = new Map(roles.map(r => [teamUserKey(r.teamId, r.userId), r.role]));
+      return keys.map(key => {
+        if (!memberOfOrgTeam.has(key)) {
+          return false;
+        }
+        const raw = roleByKey.get(key);
+        if (raw == null) {
+          return false;
+        }
+        return VALID_TEAM_ROLES.has(raw) ? raw === 'guest' : true;
+      });
     }),
 
     initiativeById: new DataLoader(async (ids: readonly string[]) => {
@@ -244,10 +316,7 @@ export function createLoaders(prisma: PrismaClient, orgId: string | null): Loade
     }),
 
     roleByTeamUser: new DataLoader(async (keys: readonly string[]) => {
-      const pairs = keys.map(key => {
-        const idx = key.indexOf(TEAM_USER_KEY_SEP);
-        return { teamId: key.slice(0, idx), userId: key.slice(idx + TEAM_USER_KEY_SEP.length) };
-      });
+      const pairs = keys.map(splitTeamUserKey);
       const teamIds = Array.from(new Set(pairs.map(p => p.teamId)));
       const userIds = Array.from(new Set(pairs.map(p => p.userId)));
       const rows = await prisma.teamMemberRole.findMany({
@@ -257,7 +326,7 @@ export function createLoaders(prisma: PrismaClient, orgId: string | null): Loade
       // Superset query (cartesian of the distinct teamIds/userIds seen),
       // filtered back down to exact (teamId, userId) pairs via the map key
       // — safe because the key encodes both halves of the composite PK.
-      const byKey = new Map(rows.map(r => [`${r.teamId}${TEAM_USER_KEY_SEP}${r.userId}`, r.role]));
+      const byKey = new Map(rows.map(r => [teamUserKey(r.teamId, r.userId), r.role]));
       return keys.map(key => byKey.get(key) ?? 'member');
     }),
 

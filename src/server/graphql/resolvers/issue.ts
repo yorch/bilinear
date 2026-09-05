@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Issue } from '../../../generated/prisma';
+import { toDateOnly } from '../../lib/date-only';
 import { childLogger } from '../../lib/logger';
 import {
   isTeamGuest,
@@ -19,6 +20,7 @@ import {
 } from '../../services/issue.service';
 import type { IssueActivityCreateInput } from '../../services/issue-activity.service';
 import type { GraphQLContext } from '../context';
+import { teamUserKey } from '../loaders';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -45,7 +47,7 @@ function issueFieldToString(issue: Issue, field: string): string | null {
     return null;
   }
   if (v instanceof Date) {
-    return v.toISOString().split('T')[0];
+    return toDateOnly(v);
   }
   return String(v);
 }
@@ -91,7 +93,11 @@ export const issueResolvers = {
       const rows = await ctx.loaders.childrenByParentId.load(issue.id);
       const userId = ctx.userId;
       const orgId = ctx.orgId;
-      if (userId && orgId && (await isTeamGuest(ctx.prisma, issue.teamId, userId, orgId))) {
+      if (
+        userId &&
+        orgId &&
+        (await ctx.loaders.guestByTeamUser.load(teamUserKey(issue.teamId, userId)))
+      ) {
         return rows.filter(r => r.creatorId === userId || r.assigneeId === userId);
       }
       return rows;
@@ -115,7 +121,7 @@ export const issueResolvers = {
       return cycle;
     },
 
-    dueDate: (issue: Issue) => (issue.dueDate ? issue.dueDate.toISOString().split('T')[0] : null),
+    dueDate: (issue: Issue) => (issue.dueDate ? toDateOnly(issue.dueDate) : null),
 
     labels: async (issue: Issue, _args: unknown, ctx: GraphQLContext) =>
       ctx.loaders.labelsByIssueId.load(issue.id),
@@ -136,7 +142,11 @@ export const issueResolvers = {
       // row. Same rule as the top-level `issue` query.
       const userId = ctx.userId;
       const orgId = ctx.orgId;
-      if (userId && orgId && (await isTeamGuest(ctx.prisma, parent.teamId, userId, orgId))) {
+      if (
+        userId &&
+        orgId &&
+        (await ctx.loaders.guestByTeamUser.load(teamUserKey(parent.teamId, userId)))
+      ) {
         if (parent.creatorId !== userId && parent.assigneeId !== userId) {
           return null;
         }
@@ -158,8 +168,7 @@ export const issueResolvers = {
     reactions: async (issue: Issue, _args: unknown, ctx: GraphQLContext) =>
       ctx.loaders.reactionsByIssueId.load(issue.id),
 
-    startDate: (issue: Issue) =>
-      issue.startDate ? issue.startDate.toISOString().split('T')[0] : null,
+    startDate: (issue: Issue) => (issue.startDate ? toDateOnly(issue.startDate) : null),
 
     state: async (issue: Issue, _args: unknown, ctx: GraphQLContext) =>
       ctx.loaders.workflowState.load(issue.stateId),

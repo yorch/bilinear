@@ -10,9 +10,8 @@ import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
-import type { DBIssueLabel } from '@/lib/db';
-import { applyFilters, coerceFilterSet } from '@/lib/filter-engine';
-import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
+import { applyFilters, applySorting, coerceFilterSet, coerceSortFields } from '@/lib/filter-engine';
+import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildIssueHref } from '@/lib/issue-nav';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
@@ -58,21 +57,21 @@ const CustomViewPage = observer(function CustomViewPage() {
     if (!teamId) {
       return [];
     }
-    return issueStore.findByTeamId(teamId).map(i => ({
-      ...i,
-      dueDate: i.dueDate ?? null,
-      labels: (i.labelIds ?? [])
-        .map(id => labelStore.findById(id))
-        .filter((l): l is DBIssueLabel => l !== null)
-        .map(l => ({ color: l.color, id: l.id, name: l.name })),
-    }));
+    return issueStore.findByTeamId(teamId).map(i => toIssueDetail(i, labelStore));
   })();
 
+  // Filter, then sort as the view stored it — `sort` used to be persisted and
+  // never read, so every saved view came back in pool order.
   const issues = view
-    ? applyFilters(
-        allIssues,
-        coerceFilterSet(view.filters),
-        (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
+    ? applySorting(
+        applyFilters(
+          allIssues,
+          coerceFilterSet(view.filters),
+          (issueId, definitionId) =>
+            customFieldStore.findValue(issueId, definitionId)?.value ?? null,
+        ),
+        coerceSortFields(view.sort),
+        new Map(states.map(s => [s.id, s.position])),
       )
     : [];
 

@@ -252,6 +252,43 @@ export function createEmptyFilterSet(): FilterSet {
  * Normalize an untyped stored value (CustomView.filters is persisted as bare
  * JSON with no server-side shape validation) into a safe FilterSet.
  */
+const SORT_FIELDS: ReadonlySet<SortField['field']> = new Set([
+  'assignee',
+  'created',
+  'dueDate',
+  'manual',
+  'priority',
+  'status',
+  'updated',
+]);
+
+/**
+ * Normalize a stored `CustomView.sort` (bare JSON, like `filters`) into the
+ * `SortField[]` `applySorting` accepts. An entry with an unknown field or
+ * direction is dropped rather than letting `applySorting` fall through to
+ * "no comparison", which would silently leave the list in insertion order.
+ */
+export function coerceSortFields(value: unknown): SortField[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const out: SortField[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'object' || entry === null) {
+      continue;
+    }
+    const { direction, field } = entry as Partial<SortField>;
+    if (
+      (direction === 'asc' || direction === 'desc') &&
+      typeof field === 'string' &&
+      SORT_FIELDS.has(field as SortField['field'])
+    ) {
+      out.push({ direction, field: field as SortField['field'] });
+    }
+  }
+  return out;
+}
+
 export function coerceFilterSet(value: unknown): FilterSet {
   const v = value as Partial<FilterSet> | null | undefined;
   if (v && Array.isArray(v.conditions)) {

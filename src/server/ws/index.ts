@@ -519,36 +519,13 @@ const settingsPruneTimer = setInterval(() => {
   });
 }, SYNC_ACTION_PRUNE_INTERVAL_MS);
 
-const cycleService = new CycleService(prisma, config);
+// The service emits the Cycle/Issue SyncActions itself via the injected
+// SyncService, so the sweep is one call.
+const cycleService = new CycleService(prisma, config, { sync: syncService });
 const cycleRolloverTimer = setInterval(() => {
-  cycleService
-    .processDueRollovers()
-    .then(async results => {
-      for (const { cycleId, orgId, movedIssueIds } of results) {
-        log.info({ cycleId, movedCount: movedIssueIds.length }, 'Auto-rolled over cycle');
-        try {
-          // Fetch the full cycle record so the SyncAction data replaces the
-          // client's cached entity correctly (not just 2 fields).
-          const cycle = await prisma.cycle.findUnique({ where: { id: cycleId } });
-          if (cycle) {
-            await syncService.createSyncAction(orgId, 'U', 'Cycle', cycleId, cycle);
-          }
-          if (movedIssueIds.length > 0) {
-            const movedIssues = await prisma.issue.findMany({
-              where: { id: { in: movedIssueIds } },
-            });
-            for (const issue of movedIssues) {
-              await syncService.createSyncAction(orgId, 'U', 'Issue', issue.id, issue);
-            }
-          }
-        } catch (err) {
-          log.error({ cycleId, err, orgId }, 'Failed to emit SyncActions for rolled-over cycle');
-        }
-      }
-    })
-    .catch((err: Error) => {
-      log.error({ err }, 'Cycle auto-rollover sweep failed');
-    });
+  cycleService.processDueRollovers().catch((err: Error) => {
+    log.error({ err }, 'Cycle auto-rollover sweep failed');
+  });
 }, CYCLE_ROLLOVER_INTERVAL_MS);
 
 // Graceful shutdown — handle both SIGTERM (process manager) and SIGINT (Ctrl-C in dev)

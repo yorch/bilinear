@@ -12,8 +12,8 @@
  * domain label and capped length at 254, the other did neither — so the two
  * doors into the same column accepted different sets of addresses.
  */
-export const MAX_EMAIL_LENGTH = 254;
-export const EMAIL_RE = /^[^\s@]+@[^\s@.]+\.[^\s@]+$/;
+const MAX_EMAIL_LENGTH = 254;
+const EMAIL_RE = /^[^\s@]+@[^\s@.]+\.[^\s@]+$/;
 
 export function isValidEmail(email: unknown): email is string {
   return (

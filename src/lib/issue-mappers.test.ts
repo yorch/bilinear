@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { toIssueSyncRow } from './issue-mappers';
+import type { DBIssueLabel } from './db';
+import { resolveIssueLabels, toIssueDetail, toIssueSyncRow } from './issue-mappers';
 
 /** The minimum a row must carry to be accepted — every required `DBIssue` column. */
 const VALID: Record<string, unknown> = {
@@ -97,5 +98,48 @@ describe('toIssueSyncRow', () => {
   it('ignores keys it does not know about', () => {
     const row = toIssueSyncRow({ ...VALID, __typename: 'Issue', somethingNew: 'ignored' });
     expect(row).toEqual(VALID);
+  });
+});
+
+const LABELS: Record<string, DBIssueLabel> = {
+  lbl_bug: { color: 'var(--label-red)', id: 'lbl_bug', name: 'Bug' } as DBIssueLabel,
+  lbl_ux: { color: 'var(--label-green)', id: 'lbl_ux', name: 'UX' } as DBIssueLabel,
+};
+const labelStore = { findById: (id: string) => LABELS[id] ?? null };
+
+describe('resolveIssueLabels', () => {
+  it('maps each known id to its { color, id, name } view model, in order', () => {
+    expect(resolveIssueLabels(['lbl_ux', 'lbl_bug'], labelStore)).toEqual([
+      { color: 'var(--label-green)', id: 'lbl_ux', name: 'UX' },
+      { color: 'var(--label-red)', id: 'lbl_bug', name: 'Bug' },
+    ]);
+  });
+
+  it('drops an id the pool no longer holds instead of rendering a blank chip', () => {
+    expect(resolveIssueLabels(['lbl_bug', 'lbl_gone'], labelStore)).toEqual([
+      { color: 'var(--label-red)', id: 'lbl_bug', name: 'Bug' },
+    ]);
+  });
+
+  it('treats a missing or null id list as no labels', () => {
+    expect(resolveIssueLabels(undefined, labelStore)).toEqual([]);
+    expect(resolveIssueLabels(null, labelStore)).toEqual([]);
+  });
+});
+
+describe('toIssueDetail', () => {
+  it('resolves labels and keeps every other column of the row', () => {
+    const detail = toIssueDetail({ ...VALID, labelIds: ['lbl_bug'] }, labelStore);
+    expect(detail).toMatchObject({
+      ...VALID,
+      labels: [{ color: 'var(--label-red)', id: 'lbl_bug', name: 'Bug' }],
+    });
+  });
+
+  it('normalises an absent dueDate to null and preserves a present one', () => {
+    expect(toIssueDetail(VALID, labelStore).dueDate).toBeNull();
+    expect(toIssueDetail({ ...VALID, dueDate: '2026-03-01' }, labelStore).dueDate).toBe(
+      '2026-03-01',
+    );
   });
 });

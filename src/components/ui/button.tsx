@@ -17,6 +17,9 @@ const buttonVariants = cva(
         icon: 'h-9 w-9',
         lg: 'h-10 rounded-md px-8',
         sm: 'h-8 rounded-md px-3 text-xs',
+        // Inline controls inside a table row or a filter strip, where `sm` is
+        // visibly taller than the inputs it sits beside.
+        xs: 'h-7 rounded px-2.5 text-xs',
       },
       variant: {
         // The one gradient fill in the product surface, reserved for the single

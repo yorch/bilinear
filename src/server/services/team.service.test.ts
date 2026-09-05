@@ -56,6 +56,30 @@ describe('TeamService', () => {
       });
     });
 
+    it('seeds workflow states sequentially inside the transaction', async () => {
+      // Prisma's interactive transaction client serialises commands over
+      // one connection, so the seed must never have two creates in flight.
+      let inFlight = 0;
+      let maxInFlight = 0;
+      let i = 0;
+      prisma.team.create.mockResolvedValue(TEST_TEAM);
+      prisma.teamMembership.create.mockResolvedValue({ id: 'tm-1' });
+      prisma.workflowState.create.mockImplementation(async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await Promise.resolve();
+        inFlight -= 1;
+        return mockStates[i++];
+      });
+      prisma.team.update.mockResolvedValue(TEST_TEAM);
+      prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
+
+      await service.create(TEST_ORG.id, TEST_USER.id, { key: 'ENG', name: 'Engineering' });
+
+      expect(prisma.workflowState.create).toHaveBeenCalledTimes(5);
+      expect(maxInFlight).toBe(1);
+    });
+
     it('creates 6 workflow states when triageEnabled is true', async () => {
       prisma.team.create.mockResolvedValue({
         ...TEST_TEAM,

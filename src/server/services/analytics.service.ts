@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from '../../generated/prisma';
+import { toDateOnly } from '../lib/date-only';
 
 /**
  * Cross-team workflow analytics. All queries are org-scoped and optionally
@@ -193,7 +194,7 @@ export class AnalyticsService {
     );
     return rows.map(r => ({
       count: Number(r.count),
-      weekStart: r.week_start.toISOString().split('T')[0],
+      weekStart: toDateOnly(r.week_start),
     }));
   }
 
