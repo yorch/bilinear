@@ -1,6 +1,11 @@
 services:
   watchtower:
-    image: containrrr/watchtower
+    # containrrr/watchtower was archived December 17, 2025 (last release
+    # v1.7.1, November 2023) — no security patches or registry API updates.
+    # nickfedor/watchtower is the most actively maintained API-compatible
+    # fork: regular releases, CI, and the same label/env-var interface.
+    # See: https://github.com/nicholas-fedor/watchtower
+    image: nickfedor/watchtower
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
