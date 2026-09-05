@@ -10,7 +10,21 @@ services:
       WATCHTOWER_CLEANUP: "true"
       WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-300}
 
+  # All three app-tier services share the same image, so watchtower must
+  # update them together. Labeling only `app` would recreate it (advancing
+  # the schema via `prisma migrate deploy`) while ws/yjs keep stale code —
+  # silent sync/protocol skew with no alert.
   app:
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.scope=${WATCHTOWER_SCOPE:-bilinear}"
+
+  ws:
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.scope=${WATCHTOWER_SCOPE:-bilinear}"
+
+  yjs:
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
       - "com.centurylinklabs.watchtower.scope=${WATCHTOWER_SCOPE:-bilinear}"
