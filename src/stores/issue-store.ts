@@ -1,4 +1,4 @@
-import { action, computed, makeObservable, observable } from 'mobx';
+import { action, computed, makeObservable, observable, observableShallow } from 'mobx';
 import type { DBIssue, IssueSyncRow } from '@/lib/db';
 import { fuzzyScore } from '@/lib/fuzzy-search';
 
@@ -42,7 +42,7 @@ export class IssueStore {
    * whole pool's key set, so any issue add/remove anywhere re-ran every
    * team-list selector; on a 10k-issue store that is a lot of wasted work.
    *
-   * `observable.shallow` so the bucket `Set`s are stored by reference (not
+   * `observableShallow` so the bucket `Set`s are stored by reference (not
    * deep-converted to ObservableSets). Membership changes REPLACE a team's
    * `Set` with a fresh copy — that reference swap is what fires the per-key
    * observers; a same-team field update leaves the bucket untouched (the row
@@ -57,7 +57,7 @@ export class IssueStore {
     makeObservable<IssueStore, 'byTeam'>(this, {
       all: computed,
       applySyncAction: action,
-      byTeam: observable.shallow,
+      byTeam: observableShallow,
       optimisticUpdate: action,
       pool: observable,
       upsertMany: action,
