@@ -94,6 +94,18 @@ async function findStaleIssues(page: Parameters<typeof openWorkspace>[0]): Promi
 /** The seed creates exactly one team; everything else a run made is disposable. */
 const SEEDED_TEAM_KEYS = new Set(['ENG']);
 
+/**
+ * Every project and initiative the specs create is named `E2E <something>`.
+ *
+ * Teams and the other two are filtered differently on purpose. A leftover
+ * team BREAKS the next run — team keys are unique per org, so the second run
+ * cannot recreate one — which is what justifies deleting every non-seeded
+ * team. Projects and initiatives carry no such constraint, so leftovers are
+ * only untidy, and matching on the prefix keeps a suite run pointed at a
+ * database with real data from archiving rows it did not create.
+ */
+const E2E_NAME_PREFIX = 'E2E ';
+
 interface NamedNode {
   id: string;
   name: string;
@@ -121,9 +133,10 @@ async function findStaleContainers(page: Parameters<typeof openWorkspace>[0]) {
     }`,
   );
   expect(res.errors, 'container queries should succeed').toBeUndefined();
+  const madeByThisSuite = (n: NamedNode) => n.name.startsWith(E2E_NAME_PREFIX);
   return {
-    initiatives: res.data?.initiatives ?? [],
-    projects: res.data?.projects.nodes ?? [],
+    initiatives: (res.data?.initiatives ?? []).filter(madeByThisSuite),
+    projects: (res.data?.projects.nodes ?? []).filter(madeByThisSuite),
     teams: (res.data?.teams ?? []).filter(t => !SEEDED_TEAM_KEYS.has(t.key)),
   };
 }
