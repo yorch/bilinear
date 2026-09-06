@@ -1565,9 +1565,13 @@ ones; "all issues in a cycle" may be intentional and should say so.
   notification, project): one happy-path `it` per mutation asserting the
   service spy args and `lastSyncId`.
 - Coverage is configured but has no thresholds and CI never runs it.
-- `prosemirror-model`/`prosemirror-view` are installed twice
-  (`@tiptap/pm` 3.28 vs `y-prosemirror`); `yarn dedupe` plus a
-  `yarn dedupe --check` CI step before collab is enabled by default.
+- ~~`prosemirror-model`/`prosemirror-view` are installed twice
+  (`@tiptap/pm` 3.28 vs `y-prosemirror`)~~ — the duplication is resolved
+  (2026-09-06): `yarn dedupe` during the dependency upgrade collapsed 41
+  packages, `prosemirror-view` among them, and `yarn dedupe --check` is now
+  clean. **The `yarn dedupe --check` CI step is still not added**, which is the
+  part that stops it recurring — still wanted before collab is enabled by
+  default.
 
 ### 8.8 Smaller UI items (frontend)
 
@@ -1583,3 +1587,67 @@ ones; "all issues in a cycle" may be intentional and should say so.
 - Not built: SLA fields (§8.4 of LINEAR_FEATURE_GAPS), a trash view /
   restore, `webhookArchive`, custom-view icon/colour, the public roadmap URL
   on `/projects`, gating `/design` out of production.
+
+## 9. Dependency upgrade holds and traps (2026-09-06)
+
+Everything else is on its latest version. These are the exceptions and the
+things the upgrade exposed. See the 2026-09-06 `CHANGELOG.md` entry for the
+full reasoning.
+
+### 9.1 `graphql` pinned to 16 by Apollo Server
+
+`graphql` 17.0.2 is out; we are on 16.14.2 because `@apollo/server` 5.5.1 (the
+latest) declares `peerDependencies: { graphql: "^16.11.0" }`. Nothing in this
+repo needs graphql 17, so this is a wait, not a workaround.
+
+**Effort:** Small. **Risk:** Medium (every resolver runs on it).
+**Why it's deferred:** blocked upstream, not by design work here.
+**First-touch:** watch `@apollo/server` releases for a graphql 17 peer range.
+`graphql-scalars` 2.x and `graphql-query-complexity` 2.x already accept
+`^16 || ^17`, so when Apollo moves, the core bump should be the only change.
+**Acceptance signal:** `graphql` at 17.x with no `yarn install` peer warnings,
+and the gate suite green.
+
+### 9.2 `@xmldom/xmldom` pinned to 0.8 by xml-crypto
+
+0.9.12 is out; we hold 0.8.13. `xml-crypto` 6.1.2 (latest) depends on
+`@xmldom/xmldom: ^0.8.10`, so bumping our direct dependency does not replace
+xml-crypto's copy — it *adds a second one*. `saml.service.ts` deliberately
+parses with xml-crypto's own parser so the `<ds:Signature>` node it passes over
+resolves namespaces the same way xml-crypto does, which is what makes Exclusive
+C14N canonicalize to what the IdP signed. Two parser copies silently reintroduce
+that hazard while looking like an upgrade.
+
+**Effort:** Small. **Risk:** High — a silent SAML signature-verification
+regression is the failure mode, and it will not show up in unit tests.
+**Why it's deferred:** blocked on xml-crypto; upgrading alone makes things worse.
+**First-touch:** bump only when `xml-crypto` moves to `@xmldom/xmldom` ^0.9, and
+bump both together. 0.9 also changes `DOMParser` error handling (`onError`) and
+wants an explicit mimeType, so `saml.service.ts:179` needs a look at that point.
+**Acceptance signal:** exactly one `@xmldom/xmldom` in the tree
+(`yarn why @xmldom/xmldom`), and a real IdP assertion still verifies.
+
+### 9.3 The auth resolver tests are stateful against Redis
+
+`src/server/graphql/resolvers/auth.test.ts` exercises `checkAuthMutationLimit`,
+which counts attempts in real Redis keyed by email. Nothing clears those keys
+between runs, so against a persistent local Redis the third or fourth
+`yarn test` fails with `RATELIMITED` — `redis-cli flushall` in between is the
+current workaround. CI provisions a fresh `redis:8` service per run and never
+sees it.
+
+Related: `ioredis` 6 no longer fails fast when Redis is unreachable, so these
+two tests now hang to a 5s timeout on a machine with no Redis instead of
+passing. They previously passed *for the wrong reason* — the limiter they test
+was silently unreachable and failing open.
+
+**Effort:** Small. **Risk:** Low.
+**Why it's deferred:** it is a test-isolation change, out of scope for a
+dependency bump.
+**First-touch:** either give the limiter keys a per-test prefix and flush them in
+`beforeEach`, or mock the limiter in this suite — it is testing resolver guard
+behaviour, not Redis. Either way the suite stops depending on ambient Redis state.
+**Acceptance signal:** `yarn test` passes twice in a row against the same
+un-flushed Redis, and the two `emailLogin` tests fail for the right reason when
+the limiter is genuinely tripped.
+
