@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- deps stage ----
-FROM node:24-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 
 COPY package.json yarn.lock .yarnrc.yml ./
@@ -20,7 +20,7 @@ RUN yarn install --immutable
 # playwright, vitest, jsdom, typescript, biome and friends. Building that tree
 # separately lets the runner copy production deps only instead of overlaying the
 # builder's full install.
-FROM node:24-alpine AS prod-deps
+FROM node:26-alpine AS prod-deps
 WORKDIR /app
 
 COPY package.json yarn.lock .yarnrc.yml ./
@@ -31,7 +31,7 @@ COPY prisma ./prisma
 RUN yarn workspaces focus --production
 
 # ---- builder stage ----
-FROM node:24-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -43,7 +43,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN yarn build
 
 # ---- runner stage ----
-FROM node:24-alpine AS runner
+FROM node:26-alpine AS runner
 WORKDIR /app
 
 ARG APP_VERSION=unknown
