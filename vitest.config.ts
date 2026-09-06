@@ -35,11 +35,26 @@ export default defineConfig({
       },
       {
         extends: true,
+        // jsdom tests are browser code, so isomorphic packages must resolve to
+        // their browser build. Vitest transforms through Vite's SSR pipeline,
+        // whose default conditions are node-first — that made `@sentry/nextjs`
+        // resolve to `index.server.js`, which pulls in a webpack bundler plugin
+        // that throws on import as soon as `document` exists (jsdom). Asking for
+        // the `browser` condition gives these tests the same Sentry build the
+        // real browser gets.
+        resolve: {
+          alias,
+          conditions: ['browser', 'module', 'development|production'],
+        },
         test: {
           environment: 'jsdom',
           globals: true,
           include: ['src/**/*.test.tsx'],
           name: 'dom',
+          // Transform `@sentry/nextjs` rather than externalising it: its browser
+          // build imports `next/router` extensionlessly, which Node's ESM
+          // resolver rejects but Vite's resolves.
+          server: { deps: { inline: ['@sentry/nextjs'] } },
           setupFiles: ['./src/test/setup.ts', './src/test/setup-dom.ts'],
         },
       },
