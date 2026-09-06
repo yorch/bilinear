@@ -129,6 +129,27 @@ describe('AutomationService', () => {
       });
     });
 
+    it('skips a rule whose stored actions fail validation instead of executing them', async () => {
+      prisma.automationRule.findMany.mockResolvedValue([
+        {
+          // Json column: a bad backfill or hand edit can leave junk here.
+          actions: [{ config: { priority: 1 }, type: 'not_a_real_action' }],
+          conditions: null,
+          enabled: true,
+          id: 'rule-bad',
+          triggerConfig: {},
+          triggerType: 'issue_created',
+        },
+      ]);
+
+      await expect(
+        service.evaluateForIssue('org-1', { issue, type: 'issue_created' }, 'user-1'),
+      ).resolves.toBeUndefined();
+
+      expect(prisma.issue.update).not.toHaveBeenCalled();
+      expect(prisma.automationRule.update).not.toHaveBeenCalled();
+    });
+
     it('skips rules whose teamId condition does not match the issue', async () => {
       prisma.automationRule.findMany.mockResolvedValue([
         {

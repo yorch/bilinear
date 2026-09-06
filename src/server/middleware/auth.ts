@@ -399,6 +399,18 @@ export function requireUserId(ctx: AuthContext): asserts ctx is AuthContext & { 
  * Fails closed: a session with no `orgRole` (unauthenticated, or an org whose
  * membership failed revalidation) never satisfies any role list.
  */
+/**
+ * Whether the caller administers the current org (`owner` or `admin`).
+ * Reads `ctx.orgRole`, which `extractAuthContext` resolves once per request
+ * — never re-query `organizationMember` for this.
+ */
+export function isOrgAdmin(ctx: AuthContext): boolean {
+  if (!ctx.orgId) {
+    return false;
+  }
+  return ctx.orgRole === 'owner' || ctx.orgRole === 'admin';
+}
+
 export function requireOrgRole(ctx: AuthContext, roles: string[]): string {
   const role = ctx.orgId ? (ctx.orgRole ?? null) : null;
 

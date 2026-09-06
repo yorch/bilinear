@@ -20,9 +20,9 @@ const MAGIC_LINK_EXPIRY_MINUTES = 15;
 const REFRESH_GRACE_PERIOD_MINUTES = 30;
 
 /** Recognised API-key permission scopes. */
-export const VALID_API_SCOPES = new Set(['read', 'write']);
+const VALID_API_SCOPES = new Set(['read', 'write']);
 /** Scopes granted when a key is created without an explicit selection. */
-export const DEFAULT_API_SCOPES = ['read', 'write'] as const;
+const DEFAULT_API_SCOPES = ['read', 'write'] as const;
 
 /**
  * Does this scope set permit write (mutation) operations? Empty scopes are

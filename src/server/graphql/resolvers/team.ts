@@ -2,6 +2,7 @@ import { GraphQLError } from 'graphql';
 import type { Team, TeamMembership } from '../../../generated/prisma';
 import { childLogger } from '../../lib/logger';
 import {
+  isOrgAdmin,
   isTeamGuest,
   requireAuth,
   requireOrgRole,
@@ -17,18 +18,6 @@ import type {
 import type { GraphQLContext } from '../context';
 
 const log = childLogger({ module: 'resolver/team' });
-
-async function isOrgAdmin(
-  prisma: GraphQLContext['prisma'],
-  orgId: string,
-  userId: string,
-): Promise<boolean> {
-  const membership = await prisma.organizationMember.findUnique({
-    select: { role: true },
-    where: { organizationId_userId: { organizationId: orgId, userId } },
-  });
-  return membership?.role === 'admin' || membership?.role === 'owner';
-}
 
 export const teamResolvers = {
   Mutation: {
@@ -174,13 +163,39 @@ export const teamResolvers = {
       // rename the team or flip triage/cycle settings. Require org
       // admin/owner (same bar as teamCreate/teamDelete), or a non-guest
       // team owner.
-      if (!(await isOrgAdmin(ctx.prisma, ctx.orgId, ctx.userId))) {
+      if (!isOrgAdmin(ctx)) {
         await requireTeamOwner(ctx.prisma, id, ctx.userId, ctx.orgId);
         await requireTeamMemberNotGuest(ctx.prisma, id, ctx.userId, ctx.orgId);
       }
 
-      const team = await ctx.services.team.update(id, input);
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Team', id, team);
+      let team: Awaited<ReturnType<typeof ctx.services.team.update>>;
+      try {
+        team = await ctx.services.team.update(id, input);
+      } catch (err) {
+        if ((err as Error).name === 'TeamInvalidSettingError') {
+          throw new GraphQLError((err as Error).message, {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+        throw err;
+      }
+      let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Team', id, team);
+
+      // Turning cycles on (or re-tuning their length while they're on) is
+      // what makes upcoming cycles exist at all — nothing else ever calls
+      // autoCreateUpcomingCycles. It is idempotent (fills up to the
+      // configured count), so a redundant `cyclesEnabled: true` is harmless.
+      const cycleConfigChanged =
+        team.cyclesEnabled &&
+        (input.cycleDuration !== undefined ||
+          input.cycleStartDay !== undefined ||
+          input.cycleCooldownTime !== undefined);
+      if (input.cyclesEnabled === true || cycleConfigChanged) {
+        const created = await ctx.services.cycle.autoCreateUpcomingCycles(ctx.orgId, id);
+        for (const cycle of created) {
+          sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'I', 'Cycle', cycle.id, cycle);
+        }
+      }
       return { lastSyncId: sync.id.toString(), success: true, team };
     },
   },
@@ -194,7 +209,7 @@ export const teamResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      if (team.private && !(await isOrgAdmin(ctx.prisma, ctx.orgId, ctx.userId))) {
+      if (team.private && !isOrgAdmin(ctx)) {
         const isMember = await ctx.services.team.isTeamMember(id, ctx.userId);
         if (!isMember) {
           throw new GraphQLError('Team not found', {
@@ -209,7 +224,7 @@ export const teamResolvers = {
       requireAuth(ctx);
       const allTeams = await ctx.services.team.findByOrgId(ctx.orgId);
 
-      if (await isOrgAdmin(ctx.prisma, ctx.orgId, ctx.userId)) {
+      if (isOrgAdmin(ctx)) {
         return allTeams;
       }
 

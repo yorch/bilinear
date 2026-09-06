@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import { requireAuth } from '../../middleware/auth';
+import { checkFixedWindow } from '../../middleware/rate-limit';
 import type { RoadmapUpsertInput } from '../../services/roadmap.service';
 import {
   RoadmapNotFoundError,
@@ -98,6 +99,21 @@ export const roadmapResolvers = {
       const requiresPassword = !!roadmap.passwordHash && !password;
 
       if (roadmap.passwordHash && password) {
+        // A public page with a shared password is a brute-force target, and
+        // every attempt costs a scrypt. Count attempts per (roadmap, IP) with
+        // an org-wide backstop per roadmap so a distributed guess still
+        // slows down. Fail-closed: an outage of the counter must not turn
+        // the password check into an unlimited oracle.
+        const ip = ctx.clientIp ?? 'unknown';
+        const [perIp, perRoadmap] = await Promise.all([
+          checkFixedWindow(`rl:roadmap:${roadmap.id}:ip:${ip}`, 10, 15 * 60, true),
+          checkFixedWindow(`rl:roadmap:${roadmap.id}:all`, 300, 15 * 60, true),
+        ]);
+        if (perIp.exceeded || perRoadmap.exceeded) {
+          throw new GraphQLError('Too many password attempts — try again later', {
+            extensions: { code: 'RATELIMITED' },
+          });
+        }
         const valid = await ctx.services.roadmap.verifyPassword(roadmap, password);
         if (!valid) {
           throw new GraphQLError('Invalid password', {

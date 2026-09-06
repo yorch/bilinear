@@ -15,7 +15,6 @@ const MAX_CUSTOM_FIELDS_PER_ORG_KEY = 'limits.maxCustomFieldsPerOrg';
 // `createDefinition`). Re-exported from the registry rather than re-declared,
 // so there is one number to change and no way for the two to drift.
 export const MAX_CUSTOM_FIELDS_PER_TEAM = numericSettingDefault(MAX_CUSTOM_FIELDS_PER_TEAM_KEY);
-export const MAX_CUSTOM_FIELDS_PER_ORG = numericSettingDefault(MAX_CUSTOM_FIELDS_PER_ORG_KEY);
 
 export interface CustomFieldOption {
   color?: string;

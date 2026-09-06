@@ -43,8 +43,13 @@ function emittedModelNames(): Map<string, string> {
   // be a dotted expression rather than a literal or bare identifier — both forms
   // exist or plausibly will, and a miss here is silent (the model simply never
   // gets a case generated for it).
+  // Both emit paths: `createSyncAction(orgId, action, model, …)` and the
+  // transaction-safe `recordSyncAction(tx, orgId, action, model, …)`, which
+  // carries one extra leading argument. Scanning only the first let
+  // `IssueReaction` — emitted solely via `recordSyncAction` — go unhandled
+  // on the client for months with this test green.
   const call =
-    /createSyncAction\(\s*(?:[^,()]|\([^()]*\))+,\s*(?:'[A-Z]'|[\w.]+)\s*,\s*'([A-Za-z]+)'/g;
+    /(?:createSyncAction\(|recordSyncAction\(\s*(?:[^,()]|\([^()]*\))+,)\s*(?:[^,()]|\([^()]*\))+,\s*(?:'[A-Z]'|[\w.]+)\s*,\s*'([A-Za-z]+)'/g;
   for (const file of listSourceFiles(SERVER_DIR)) {
     const source = readFileSync(file, 'utf8');
     for (const match of source.matchAll(call)) {

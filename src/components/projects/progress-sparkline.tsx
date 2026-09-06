@@ -1,7 +1,7 @@
 'use client';
 
 import { InlineRetry } from '@/components/shared/inline-retry';
-import { Skeleton } from '@/components/ui/skeleton';
+import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
@@ -45,7 +45,11 @@ export function ProgressSparkline({ projectId, width = 160, height = 28 }: Progr
   );
 
   if (loading) {
-    return <Skeleton className="h-7 w-40" />;
+    return (
+      <LoadingRegion>
+        <Skeleton className="h-7 w-40" />
+      </LoadingRegion>
+    );
   }
   if (error) {
     return (

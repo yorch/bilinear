@@ -1,3 +1,4 @@
+import { toDateOnly } from '../../lib/date-only';
 import { DateTimeScalar, JSONScalar, UUIDScalar } from '../types/scalars';
 import { aiResolvers } from './ai';
 import { analyticsResolvers } from './analytics';
@@ -57,7 +58,7 @@ const DateScalar = {
   serialize: (value: unknown) => {
     // Dates stored as Date objects in Postgres — serialize to YYYY-MM-DD
     if (value instanceof Date) {
-      return value.toISOString().split('T')[0];
+      return toDateOnly(value);
     }
     return coerceDate(value);
   },

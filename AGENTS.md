@@ -34,7 +34,7 @@ current work queue are in [`docs/REVIEW_BACKLOG.md`](docs/REVIEW_BACKLOG.md).
 | Single test file                | `yarn vitest run src/server/services/auth.service.test.ts` |
 | Test watch mode                 | `yarn test:watch`                                          |
 | Coverage                        | `yarn test:coverage`                                       |
-| E2E tests                       | `yarn test:e2e` (needs dev + ws:server running)            |
+| E2E tests                       | `yarn test:e2e` (starts dev + ws itself; needs Postgres + Redis) |
 | E2E with UI                     | `yarn test:e2e:ui`                                         |
 | Generate Prisma client          | `yarn db:generate` (aka `yarn prisma generate`)            |
 | Push schema to DB               | `yarn db:push`                                             |

@@ -53,32 +53,3 @@ export function fuzzyScore(target: string, query: string): number {
   const maxScore = (q.length * (q.length + 1)) / 2;
   return (score / maxScore) * 0.8; // cap below prefix match score
 }
-
-export interface FuzzyMatch<T> {
-  item: T;
-  score: number;
-}
-
-/**
- * Filter and rank an array of items by fuzzy-matching a query against a
- * string extracted from each item.
- *
- * @param items   Array of items to search
- * @param query   Search query
- * @param getText Function that extracts the string to match against
- * @returns Items with score > 0, sorted by descending score
- */
-export function fuzzySearch<T>(
-  items: T[],
-  query: string,
-  getText: (item: T) => string,
-): FuzzyMatch<T>[] {
-  if (!query.trim()) {
-    return items.map(item => ({ item, score: 1 }));
-  }
-
-  return items
-    .map(item => ({ item, score: fuzzyScore(getText(item), query) }))
-    .filter(m => m.score > 0)
-    .sort((a, b) => b.score - a.score);
-}

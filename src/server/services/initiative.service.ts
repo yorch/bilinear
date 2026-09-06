@@ -58,7 +58,7 @@ export interface InitiativeUpdateInput {
  * a second copy of the number.
  */
 const MAX_INITIATIVE_DEPTH_KEY = 'limits.maxInitiativeDepth';
-export const MAX_INITIATIVE_DEPTH = numericSettingDefault(MAX_INITIATIVE_DEPTH_KEY);
+const MAX_INITIATIVE_DEPTH = numericSettingDefault(MAX_INITIATIVE_DEPTH_KEY);
 
 export type InitiativeStatus = 'planned' | 'active' | 'completed' | 'canceled';
 

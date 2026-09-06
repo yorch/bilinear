@@ -52,8 +52,7 @@ export class AnthropicProvider implements AiProvider {
         body: JSON.stringify({
           max_tokens: maxTokens,
           messages: [{ content: user, role: 'user' }],
-          model:
-            this.modelOverride || process.env.ANTHROPIC_MODEL || AnthropicProvider.DEFAULT_MODEL,
+          model: this.modelOverride || AnthropicProvider.DEFAULT_MODEL,
           system,
         }),
         headers: {
@@ -106,7 +105,7 @@ export class OpenAiProvider implements AiProvider {
             { content: system, role: 'system' },
             { content: user, role: 'user' },
           ],
-          model: this.modelOverride || process.env.OPENAI_MODEL || OpenAiProvider.DEFAULT_MODEL,
+          model: this.modelOverride || OpenAiProvider.DEFAULT_MODEL,
         }),
         headers: {
           authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ''}`,
@@ -135,15 +134,17 @@ export interface AiProviderOverrides {
  * Resolve the active provider.
  *
  * Takes overrides resolved from the config registry so the provider and model
- * can be changed without a redeploy; falls back to AI_PROVIDER and then to
- * Anthropic. Unknown values fall back to Anthropic so a typo never silently
- * disables AI. An empty model override is ignored rather than sent as an empty
- * model name — the registry's default for those keys is '' meaning "unset".
+ * can be changed without a redeploy, falling back to Anthropic. The registry
+ * already layers `AI_PROVIDER` / `ANTHROPIC_MODEL` / `OPENAI_MODEL` under the
+ * stored value (see `ai.*` in `src/lib/config/registry.ts`), so there is
+ * deliberately no second `process.env` read here — one fewer place for the
+ * two to disagree. Unknown values fall back to Anthropic so a typo never
+ * silently disables AI. An empty model override is ignored rather than sent
+ * as an empty model name — the registry's default for those keys is ''
+ * meaning "unset".
  */
 export function resolveAiProvider(overrides: AiProviderOverrides = {}): AiProvider {
-  const choice = (overrides.provider || process.env.AI_PROVIDER || 'anthropic')
-    .trim()
-    .toLowerCase();
+  const choice = (overrides.provider || 'anthropic').trim().toLowerCase();
   if (choice === 'openai') {
     return new OpenAiProvider(overrides.openaiModel || undefined);
   }

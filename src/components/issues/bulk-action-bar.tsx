@@ -1,6 +1,6 @@
 'use client';
 
-import { X } from 'lucide-react';
+import { Archive, X } from 'lucide-react';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
 import { ColorDot } from '@/components/ui/color-dot';
@@ -16,6 +16,8 @@ const PRIORITIES = [0, 1, 2, 3, 4] as const;
 interface BulkActionBarProps {
   count: number;
   labels: IssueLabel[];
+  /** Archive every checked issue. Omitted where the page cannot archive. */
+  onArchive?: () => void;
   onClear: () => void;
   onSelectAll?: () => void;
   onUpdate: (patch: Record<string, unknown>) => void;
@@ -29,6 +31,7 @@ export function BulkActionBar({
   states,
   users,
   labels,
+  onArchive,
   onUpdate,
   onClear,
   onSelectAll,
@@ -179,6 +182,17 @@ export function BulkActionBar({
             </div>
           )}
         </SelectPopover>
+      )}
+
+      {onArchive && (
+        <button
+          className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
+          onClick={onArchive}
+          type="button"
+        >
+          <Archive className="h-3.5 w-3.5" />
+          {t('issues.archive')}
+        </button>
       )}
 
       <div className="mx-1 h-4 w-px bg-muted" />

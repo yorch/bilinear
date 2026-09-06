@@ -39,10 +39,13 @@ export interface IssueBase {
 }
 
 export interface IssueDetail extends IssueBase {
+  branchName?: string | null;
   createdAt: string;
   description?: string | null;
   estimate?: number | null;
   projectId?: string | null;
+  projectMilestoneId?: string | null;
+  snoozedUntilAt?: string | null;
   teamId: string;
   updatedAt: string;
 }

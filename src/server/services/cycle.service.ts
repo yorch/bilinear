@@ -1,6 +1,7 @@
 import type { Cycle, PrismaClient } from '../../generated/prisma';
 import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { childLogger } from '../lib/logger';
+import type { SyncService } from './sync.service';
 
 const log = childLogger({ module: 'cycle-service' });
 
@@ -51,10 +52,21 @@ export class CycleCrossTeamError extends Error {
   }
 }
 
+/**
+ * Optional collaborators. `sync` is what `processDueRollovers` uses to emit
+ * the SyncActions for the cycles and issues it touches — the WS scheduler
+ * injects the real `SyncService`; request-path callers that never invoke
+ * the sweep can leave it out.
+ */
+export interface CycleServiceDeps {
+  sync?: Pick<SyncService, 'createSyncAction'>;
+}
+
 export class CycleService {
   constructor(
     private prisma: PrismaClient,
     private config: ConfigReader = DEFAULTS_ONLY_CONFIG,
+    private readonly deps: CycleServiceDeps = {},
   ) {}
 
   async create(orgId: string, input: CycleCreateInput): Promise<Cycle> {
@@ -376,27 +388,35 @@ export class CycleService {
       },
     });
 
-    const cycles = await Promise.all(
-      completedCycles.map(async cycle => {
-        const issues = await this.prisma.issue.findMany({
-          select: { estimate: true },
-          where: {
-            archivedAt: null,
-            completedAt: { not: null },
-            cycleId: cycle.id,
-            trashed: false,
-          },
-        });
-        const completedIssues = issues.length;
-        const completedPoints = issues.reduce((sum, i) => sum + (i.estimate ?? 0), 0);
-        return {
-          completedIssues,
-          completedPoints,
-          cycleId: cycle.id,
-          cycleNumber: cycle.number,
-        };
-      }),
-    );
+    if (completedCycles.length === 0) {
+      return { averageIssues: 0, cycles: [] };
+    }
+
+    // One aggregate over every cycle in the window instead of a findMany
+    // per cycle; cycles with no completed issues get no group and fall
+    // back to zero below.
+    const groups = await this.prisma.issue.groupBy({
+      _count: { _all: true },
+      _sum: { estimate: true },
+      by: ['cycleId'],
+      where: {
+        archivedAt: null,
+        completedAt: { not: null },
+        cycleId: { in: completedCycles.map(c => c.id) },
+        trashed: false,
+      },
+    });
+    const byCycleId = new Map(groups.map(g => [g.cycleId, g]));
+
+    const cycles = completedCycles.map(cycle => {
+      const group = byCycleId.get(cycle.id);
+      return {
+        completedIssues: group?._count._all ?? 0,
+        completedPoints: group?._sum.estimate ?? 0,
+        cycleId: cycle.id,
+        cycleNumber: cycle.number,
+      };
+    });
 
     const averageIssues =
       cycles.length > 0 ? cycles.reduce((sum, c) => sum + c.completedIssues, 0) / cycles.length : 0;
@@ -485,8 +505,11 @@ export class CycleService {
   /**
    * Auto-rollover all cycles whose endsAt has passed but haven't been
    * completed yet. Called by the WS server on a scheduled interval.
-   * Returns one entry per rolled-over cycle for the caller to emit
-   * SyncActions.
+   *
+   * Emits the SyncActions for each rolled-over cycle and every issue it
+   * moved (through `deps.sync`), so any caller keeps the "every mutation
+   * creates a SyncAction" invariant without re-implementing it. Returns
+   * one entry per rolled-over cycle.
    */
   async processDueRollovers(): Promise<
     Array<{ cycleId: string; orgId: string; movedIssueIds: string[] }>
@@ -499,21 +522,53 @@ export class CycleService {
 
     const results: Array<{ cycleId: string; orgId: string; movedIssueIds: string[] }> = [];
     for (const cycle of due) {
+      const orgId = cycle.organizationId;
+      let movedIssueIds: string[];
       try {
-        const result = await this.rollover(cycle.organizationId, cycle.id);
-        results.push({
-          cycleId: cycle.id,
-          movedIssueIds: result.movedIssueIds,
-          orgId: cycle.organizationId,
-        });
+        movedIssueIds = (await this.rollover(orgId, cycle.id)).movedIssueIds;
+      } catch (err) {
+        log.error({ cycleId: cycle.id, err, orgId }, 'Auto-rollover failed for cycle');
+        continue;
+      }
+      results.push({ cycleId: cycle.id, movedIssueIds, orgId });
+      log.info({ cycleId: cycle.id, movedCount: movedIssueIds.length }, 'Auto-rolled over cycle');
+
+      try {
+        await this.emitRolloverSyncActions(orgId, cycle.id, movedIssueIds);
       } catch (err) {
         log.error(
-          { cycleId: cycle.id, err, orgId: cycle.organizationId },
-          'Auto-rollover failed for cycle',
+          { cycleId: cycle.id, err, orgId },
+          'Failed to emit SyncActions for rolled-over cycle',
         );
       }
     }
     return results;
+  }
+
+  private async emitRolloverSyncActions(
+    orgId: string,
+    cycleId: string,
+    movedIssueIds: string[],
+  ): Promise<void> {
+    const sync = this.deps.sync;
+    if (!sync) {
+      log.warn({ cycleId, orgId }, 'No SyncService injected; rolled-over cycle not broadcast');
+      return;
+    }
+    // Fetch the full cycle record so the SyncAction data replaces the
+    // client's cached entity correctly (not just 2 fields).
+    const cycle = await this.prisma.cycle.findUnique({ where: { id: cycleId } });
+    if (cycle) {
+      await sync.createSyncAction(orgId, 'U', 'Cycle', cycleId, cycle);
+    }
+    if (movedIssueIds.length > 0) {
+      const movedIssues = await this.prisma.issue.findMany({
+        where: { id: { in: movedIssueIds } },
+      });
+      for (const issue of movedIssues) {
+        await sync.createSyncAction(orgId, 'U', 'Issue', issue.id, issue);
+      }
+    }
   }
 
   async addIssueToCycle(
@@ -642,18 +697,21 @@ export class CycleService {
       return [];
     }
 
+    // All date arithmetic is in UTC so a cycle boundary is the same instant
+    // on every host — local `setDate`/`setHours` would move it by the
+    // process's TZ offset (and by an hour across DST).
     let nextStart: Date;
     if (latestCycle) {
       nextStart = new Date(latestCycle.endsAt);
-      nextStart.setDate(nextStart.getDate() + cooldownDays);
+      nextStart.setUTCDate(nextStart.getUTCDate() + cooldownDays);
     } else {
       nextStart = new Date();
       // Align to the team's start day (1=Monday, 7=Sunday)
       const startDay = team.cycleStartDay ?? 1;
-      const currentDay = nextStart.getDay() || 7; // Convert 0 (Sunday) to 7
+      const currentDay = nextStart.getUTCDay() || 7; // Convert 0 (Sunday) to 7
       const daysUntilStart = (startDay - currentDay + 7) % 7;
-      nextStart.setDate(nextStart.getDate() + daysUntilStart);
-      nextStart.setHours(0, 0, 0, 0);
+      nextStart.setUTCDate(nextStart.getUTCDate() + daysUntilStart);
+      nextStart.setUTCHours(0, 0, 0, 0);
     }
 
     // Build all cycle date ranges first, then create them in a single
@@ -661,10 +719,10 @@ export class CycleService {
     const ranges: Array<{ startsAt: Date; endsAt: Date }> = [];
     for (let i = 0; i < toCreate; i++) {
       const endsAt = new Date(nextStart);
-      endsAt.setDate(endsAt.getDate() + durationWeeks * 7);
+      endsAt.setUTCDate(endsAt.getUTCDate() + durationWeeks * 7);
       ranges.push({ endsAt, startsAt: new Date(nextStart) });
       nextStart = new Date(endsAt);
-      nextStart.setDate(nextStart.getDate() + cooldownDays);
+      nextStart.setUTCDate(nextStart.getUTCDate() + cooldownDays);
     }
 
     return this.prisma.$transaction(async tx => {

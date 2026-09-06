@@ -412,33 +412,31 @@ function validateSubjectConfirmation(signedContent: string, now: Date): void {
 // ---------------------------------------------------------------------------
 // Replay guard (one-time-use enforcement)
 //
-// Best-effort, in-process cache of consumed assertion IDs. This is per-server-
-// instance and in-memory only:
-//   - it does NOT prevent replay across multiple app instances/processes in a
-//     horizontally-scaled deployment (an attacker could replay a captured
-//     SAMLResponse against a different instance than the one that already
-//     consumed it);
-//   - it resets on process restart/deploy.
+// The authoritative record of consumed assertion IDs lives in Redis, keyed by
+// assertion ID with a TTL equal to the assertion's own acceptance horizon, so
+// it is shared across every app instance and survives a restart — a captured
+// SAMLResponse replayed against a *different* instance than the one that
+// consumed it is refused the same way. `SET NX` makes the claim atomic: two
+// concurrent replays of the same assertion cannot both win.
 //
-// TODO(security): back this with a durable, shared store (e.g. Redis, which
-// is already used elsewhere in this app for pub/sub) keyed by assertion ID
-// with a TTL derived from Conditions/@NotOnOrAfter before relying on this in
-// a multi-instance production deployment.
+// The in-process map remains as the fallback when Redis is unreachable: the
+// login must not fail outright on a cache outage, but a replay against the
+// same process during that window is still caught. That degradation is the
+// documented trade, not an accident.
 // ---------------------------------------------------------------------------
 
 const MAX_REPLAY_CACHE_SIZE = 10_000;
+const REPLAY_KEY_PREFIX = 'saml:assertion:';
 // assertionId -> acceptance-horizon expiry (epoch ms). This is NOT the raw
 // Conditions/@NotOnOrAfter instant — validateConditions() still ACCEPTS an
 // assertion for an extra CLOCK_SKEW_MS past NotOnOrAfter, so pruning a cache
-// entry at the bare NotOnOrAfter instant would evict it right before a
-// replay attempt inside that skew tail could still be accepted, letting the
-// replay through. The stored expiry must be the actual last instant at which
-// the assertion could still pass validateConditions.
+// entry at the raw NotOnOrAfter would let a replay through inside the skew
+// tail. The stored expiry must be the actual last instant at which the
+// assertion could still pass validateConditions.
 const seenAssertionIds = new Map<string, number>();
 
-function recordAssertionUseOrThrow(assertionId: string, notOnOrAfterMs: number): void {
+function recordAssertionUseInMemoryOrThrow(assertionId: string, acceptanceHorizonMs: number): void {
   const now = Date.now();
-  const acceptanceHorizonMs = notOnOrAfterMs + CLOCK_SKEW_MS;
 
   for (const [id, expiry] of seenAssertionIds) {
     if (expiry <= now) {
@@ -460,6 +458,28 @@ function recordAssertionUseOrThrow(assertionId: string, notOnOrAfterMs: number):
   }
 
   seenAssertionIds.set(assertionId, acceptanceHorizonMs);
+}
+
+async function recordAssertionUseOrThrow(
+  assertionId: string,
+  notOnOrAfterMs: number,
+): Promise<void> {
+  const acceptanceHorizonMs = notOnOrAfterMs + CLOCK_SKEW_MS;
+  const ttlMs = Math.max(1, acceptanceHorizonMs - Date.now());
+
+  let claimed: 'OK' | null | undefined;
+  try {
+    claimed = await redis.set(`${REPLAY_KEY_PREFIX}${assertionId}`, '1', 'PX', ttlMs, 'NX');
+  } catch (err) {
+    log.warn({ err }, 'SAML replay cache unavailable — falling back to in-process guard');
+    claimed = undefined;
+  }
+  if (claimed === null) {
+    throw new SamlParseError('SAML assertion has already been used (replay detected)');
+  }
+  // Always record locally too: it is the only guard left if Redis goes away
+  // mid-window, and it costs nothing.
+  recordAssertionUseInMemoryOrThrow(assertionId, acceptanceHorizonMs);
 }
 
 /** Test-only: clear the in-memory replay cache between test cases. */
@@ -618,8 +638,18 @@ export class SamlService {
 
     log.debug({ idpEntityId: config.idpEntityId }, 'Parsing SAML response');
 
-    // Verify the response came from the expected IdP.
-    const issuer = extractIssuer(xml);
+    // Verify XML signature and get the signed fragment to restrict all claim
+    // extraction AND all condition/audience/replay validation to content that
+    // is actually covered by the signature (prevents signature-wrapping
+    // attacks from smuggling unsigned Conditions/Audience/claims in).
+    const signedContent = verifyXmlSignature(xml, config.idpCert);
+
+    // Verify the response came from the expected IdP — read from the SIGNED
+    // fragment, like every other claim. The Assertion carries its own Issuer,
+    // so this holds whether the IdP signed the Response or only the
+    // Assertion; reading the first Issuer in the raw document would trust an
+    // element outside the signature.
+    const issuer = extractIssuer(signedContent);
     if (!issuer) {
       throw new SamlParseError('SAML response missing Issuer');
     }
@@ -628,12 +658,6 @@ export class SamlService {
         `SAML Issuer mismatch: expected "${config.idpEntityId}", got "${issuer}"`,
       );
     }
-
-    // Verify XML signature and get the signed fragment to restrict all claim
-    // extraction AND all condition/audience/replay validation to content that
-    // is actually covered by the signature (prevents signature-wrapping
-    // attacks from smuggling unsigned Conditions/Audience/claims in).
-    const signedContent = verifyXmlSignature(xml, config.idpCert);
 
     // Assertion condition/replay validation. A previous version of this
     // service validated only Issuer + XML signature, which meant a captured
@@ -648,7 +672,7 @@ export class SamlService {
     if (!assertionId) {
       throw new SamlParseError('SAML assertion is missing an ID');
     }
-    recordAssertionUseOrThrow(assertionId, notOnOrAfterMs);
+    await recordAssertionUseOrThrow(assertionId, notOnOrAfterMs);
 
     const nameId = extractNameId(signedContent);
     if (!nameId) {

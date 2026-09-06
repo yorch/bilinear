@@ -42,6 +42,8 @@ function rawQuery(prisma: MockPrismaClient, callIndex = 0): { sql: string; value
  * bootstrap payload shape. The fenced "latest settled row" query runs through
  * `$queryRaw`, mocked separately per test.
  */
+const UNRESTRICTED = { guestTeamIds: [], hiddenTeamIds: [], userId: 'user-1' };
+
 function mockEmptyBootstrap(prisma: MockPrismaClient) {
   prisma.organization.findUnique.mockResolvedValue(null);
   const emptyModels = [
@@ -317,6 +319,7 @@ describe('SyncService.getDeltaSyncActions — guest visibility (IssueRelation bo
 
     const result = await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'), undefined, 50, {
       guestTeamIds: [GUEST_TEAM],
+      hiddenTeamIds: [],
       userId: GUEST_USER,
     });
 
@@ -338,6 +341,7 @@ describe('SyncService.getDeltaSyncActions — guest visibility (IssueRelation bo
 
     const result = await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'), undefined, 50, {
       guestTeamIds: [GUEST_TEAM],
+      hiddenTeamIds: [],
       userId: GUEST_USER,
     });
 
@@ -359,6 +363,7 @@ describe('SyncService.getDeltaSyncActions — guest visibility (IssueRelation bo
 
     const result = await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'), undefined, 50, {
       guestTeamIds: [GUEST_TEAM],
+      hiddenTeamIds: [],
       userId: GUEST_USER,
     });
 
@@ -376,12 +381,131 @@ describe('SyncService.getDeltaSyncActions — guest visibility (IssueRelation bo
 
     const result = await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'), undefined, 50, {
       guestTeamIds: [],
+      hiddenTeamIds: [],
       userId: 'someone',
     });
 
     expect(result.actions).toHaveLength(1);
     // No guest scoping means no need to even look up the issues.
     expect(prisma.issue.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('SyncService — private-team visibility (hiddenTeamIds)', () => {
+  let prisma: MockPrismaClient;
+  let svc: SyncService;
+
+  const HIDDEN_TEAM = '00000000-0000-0000-0000-000000hidden';
+  const OPEN_TEAM = '00000000-0000-0000-0000-00000000open';
+  const VIEWER = '00000000-0000-0000-0000-00000viewer1';
+  const scope = { guestTeamIds: [], hiddenTeamIds: [HIDDEN_TEAM], userId: VIEWER };
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    svc = new SyncService(prisma as never, mockRedis);
+  });
+
+  function row(id: number, modelName: string, data: Record<string, unknown> | null) {
+    return makeRawRow(BigInt(id), `10${id}`, { data, modelId: String(data?.id ?? id), modelName });
+  }
+
+  it('bootstrap excludes the hidden team and everything scoped to it', async () => {
+    mockEmptyBootstrap(prisma);
+    prisma.$queryRaw.mockResolvedValue([{ id: BigInt(1), xactId: '10' }]);
+
+    await svc.getBootstrapData(TEST_ORG.id, scope);
+
+    const whereOf = (model: 'team' | 'issue' | 'cycle' | 'workflowState' | 'customView') =>
+      (prisma[model].findMany.mock.calls[0] as [{ where: Record<string, unknown> }])[0].where;
+    expect(whereOf('team')).toMatchObject({ id: { notIn: [HIDDEN_TEAM] } });
+    expect(whereOf('issue')).toMatchObject({ teamId: { notIn: [HIDDEN_TEAM] } });
+    expect(whereOf('cycle')).toMatchObject({ teamId: { notIn: [HIDDEN_TEAM] } });
+    expect(whereOf('workflowState')).toMatchObject({ teamId: { notIn: [HIDDEN_TEAM] } });
+    // Nullable teamId: workspace-scoped rows must still be admitted.
+    expect(whereOf('customView')).toMatchObject({
+      OR: [{ teamId: null }, { teamId: { notIn: [HIDDEN_TEAM] } }],
+    });
+  });
+
+  it('bootstrap adds no team clauses for an unrestricted caller', async () => {
+    mockEmptyBootstrap(prisma);
+    prisma.$queryRaw.mockResolvedValue([{ id: BigInt(1), xactId: '10' }]);
+
+    await svc.getBootstrapData(TEST_ORG.id, UNRESTRICTED);
+
+    const teamWhere = (prisma.team.findMany.mock.calls[0] as [{ where: object }])[0].where;
+    const issueWhere = (prisma.issue.findMany.mock.calls[0] as [{ where: object }])[0].where;
+    expect(teamWhere).toEqual({ archivedAt: null, organizationId: TEST_ORG.id });
+    expect(issueWhere).toEqual({ archivedAt: null, organizationId: TEST_ORG.id, trashed: false });
+  });
+
+  it('delta drops team-scoped rows of a hidden team and rewrites its Team row to a delete', async () => {
+    prisma.$queryRaw.mockResolvedValue([
+      row(1, 'Team', { id: HIDDEN_TEAM, name: 'Secret', private: true }),
+      row(2, 'Team', { id: OPEN_TEAM, name: 'Open', private: false }),
+      row(3, 'Issue', { id: 'i-hidden', teamId: HIDDEN_TEAM, title: 'leak' }),
+      row(4, 'Issue', { id: 'i-open', teamId: OPEN_TEAM, title: 'fine' }),
+      row(5, 'Cycle', { id: 'c-hidden', teamId: HIDDEN_TEAM }),
+      row(6, 'Comment', { body: 'leak', id: 'cm-hidden', issueId: 'i-hidden' }),
+      row(7, 'Comment', { body: 'fine', id: 'cm-open', issueId: 'i-open' }),
+      row(8, 'Issue', null),
+    ]);
+    prisma.issue.findMany.mockResolvedValue([
+      { assigneeId: null, creatorId: null, id: 'i-hidden', teamId: HIDDEN_TEAM },
+      { assigneeId: null, creatorId: null, id: 'i-open', teamId: OPEN_TEAM },
+    ]);
+
+    const result = await svc.getDeltaSyncActions(
+      TEST_ORG.id,
+      parseCursor('0'),
+      undefined,
+      50,
+      scope,
+    );
+
+    const summary = result.actions.map(a => `${a.modelName}:${a.action}:${a.modelId}`);
+    expect(summary).toEqual([
+      `Team:D:${HIDDEN_TEAM}`,
+      `Team:I:${OPEN_TEAM}`,
+      'Issue:I:i-open',
+      'Comment:I:cm-open',
+      'Issue:I:8',
+    ]);
+    expect(result.actions[0]?.data).toBeNull();
+    // The page end, not the last visible row — a client paging from the last
+    // visible action would re-fetch the rows just filtered out.
+    expect(result.nextCursor).toBe('108-8');
+  });
+
+  it('returns a null nextCursor for an empty page', async () => {
+    prisma.$queryRaw.mockResolvedValue([]);
+    const result = await svc.getDeltaSyncActions(
+      TEST_ORG.id,
+      parseCursor('0'),
+      undefined,
+      50,
+      scope,
+    );
+    expect(result).toEqual({ actions: [], hasMore: false, nextCursor: null, staleCursor: false });
+  });
+
+  it('a guest still receives team metadata but only their own issues on the guest team', async () => {
+    const guestScope = { guestTeamIds: [OPEN_TEAM], hiddenTeamIds: [], userId: VIEWER };
+    prisma.$queryRaw.mockResolvedValue([
+      row(1, 'Cycle', { id: 'c1', teamId: OPEN_TEAM }),
+      row(2, 'Issue', { assigneeId: null, creatorId: 'other', id: 'i-other', teamId: OPEN_TEAM }),
+      row(3, 'Issue', { assigneeId: VIEWER, creatorId: 'other', id: 'i-mine', teamId: OPEN_TEAM }),
+    ]);
+
+    const result = await svc.getDeltaSyncActions(
+      TEST_ORG.id,
+      parseCursor('0'),
+      undefined,
+      50,
+      guestScope,
+    );
+
+    expect(result.actions.map(a => a.modelId)).toEqual(['c1', 'i-mine']);
   });
 });
 
@@ -409,7 +533,7 @@ describe('SyncService — commit-order fence (xact_id / snapshot xmin)', () => {
     mockEmptyBootstrap(prisma);
     prisma.$queryRaw.mockResolvedValue([{ id: BigInt(7), xactId: '4242' }]);
 
-    const data = await svc.getBootstrapData(TEST_ORG.id, 'user-1');
+    const data = await svc.getBootstrapData(TEST_ORG.id, UNRESTRICTED);
 
     // Exactly one `$queryRaw` — the fenced latest-row query inside Promise.all.
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
@@ -429,7 +553,7 @@ describe('SyncService — commit-order fence (xact_id / snapshot xmin)', () => {
     mockEmptyBootstrap(prisma);
     prisma.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([{ xmin: '7000' }]);
 
-    const data = await svc.getBootstrapData(TEST_ORG.id, 'user-1');
+    const data = await svc.getBootstrapData(TEST_ORG.id, UNRESTRICTED);
     expect(data.lastSyncId).toBe('6999-0');
   });
 

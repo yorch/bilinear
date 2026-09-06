@@ -17,6 +17,7 @@ import {
   INITIATIVE_UPDATES_QUERY,
 } from '@/lib/graphql-queries';
 import { PROJECT_HEALTH_CONFIG, PROJECT_HEALTH_LABEL_KEYS } from '@/lib/project-constants';
+import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
 
 interface InitiativeUpdate {
@@ -180,7 +181,10 @@ export function InitiativeUpdatesSection({
                       </button>
                       <DeleteUpdateButton
                         mutation={`mutation ($id: ID!) { initiativeUpdateDelete(id: $id) { success } }`}
-                        onDeleted={fetchUpdates}
+                        onDeleted={() => {
+                          toast.success(t('properties.updateForm.updateDeleted'));
+                          void fetchUpdates();
+                        }}
                         updateId={update.id}
                       />
                     </div>

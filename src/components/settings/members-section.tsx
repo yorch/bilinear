@@ -5,8 +5,11 @@ import { observer } from 'mobx-react-lite';
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { RoleSelect } from '@/components/shared/role-select';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { SimpleSelect } from '@/components/ui/select';
 import { useFormatters } from '@/hooks/use-formatters';
 import { pendingWriteCount, useOrganizationLeave } from '@/hooks/use-organization-switch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -25,23 +28,13 @@ import { useStore } from '@/providers/store-provider';
 const ORG_ROLES = ['owner', 'admin', 'member', 'guest'] as const;
 type OrgRole = (typeof ORG_ROLES)[number];
 
-const ROLE_BADGES: Record<OrgRole, { labelKey: string; cls: string }> = {
-  admin: {
-    cls: 'bg-info-subtle text-info-subtle-foreground',
-    labelKey: 'settings.roles.admin',
-  },
-  guest: {
-    cls: 'bg-muted text-muted-foreground',
-    labelKey: 'settings.roles.guest',
-  },
-  member: {
-    cls: 'bg-muted text-muted-foreground',
-    labelKey: 'settings.roles.member',
-  },
-  owner: {
-    cls: 'bg-brand-subtle text-brand-subtle-foreground',
-    labelKey: 'settings.roles.owner',
-  },
+// Colour comes from `roleTone` (src/lib/role-badges.ts), shared with team
+// member management; only the label keys are local.
+const ROLE_LABEL_KEYS: Record<OrgRole, string> = {
+  admin: 'settings.roles.admin',
+  guest: 'settings.roles.guest',
+  member: 'settings.roles.member',
+  owner: 'settings.roles.owner',
 };
 
 interface PendingInvite {
@@ -232,7 +225,6 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
             <ul className="divide-y divide-border">
               {members.map(user => {
                 const currentRole = memberRoles[user.id] ?? 'member';
-                const roleBadge = ROLE_BADGES[currentRole];
                 const isUpdating = updatingRole === user.id;
                 // An owner row is only manageable by another owner, and
                 // nobody removes themselves here — both mirror the server
@@ -265,29 +257,18 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
                       <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                     </div>
                     {!user.active && (
-                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                      <Badge className="shrink-0" tone="muted">
                         {t('settings.workspace.inactive')}
-                      </span>
+                      </Badge>
                     )}
-                    <div className="relative shrink-0">
-                      <select
-                        className={cn(
-                          'appearance-none rounded-full px-2 py-0.5 text-xs font-medium cursor-pointer',
-                          'border border-transparent focus:outline-none focus:ring-1 focus:ring-brand',
-                          'disabled:opacity-50 disabled:cursor-not-allowed',
-                          roleBadge.cls,
-                        )}
-                        disabled={isUpdating || !manageable}
-                        onChange={e => void updateMemberRole(user.id, e.target.value as OrgRole)}
-                        value={currentRole}
-                      >
-                        {ORG_ROLES.map(r => (
-                          <option key={r} value={r}>
-                            {t(ROLE_BADGES[r].labelKey)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <RoleSelect
+                      ariaLabel={t('settings.workspace.memberRole')}
+                      className="shrink-0"
+                      disabled={isUpdating || !manageable}
+                      onChange={role => void updateMemberRole(user.id, role as OrgRole)}
+                      options={ORG_ROLES.map(r => ({ label: t(ROLE_LABEL_KEYS[r]), value: r }))}
+                      value={currentRole}
+                    />
                     {manageable && (
                       <button
                         aria-label={t('settings.workspace.removeMember')}
@@ -329,18 +310,16 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
                 type="email"
                 value={inviteEmail}
               />
-              <select
-                aria-label={t('settings.roles.member')}
-                className="rounded-md border border-border bg-background px-2 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-brand"
-                onChange={e => setInviteRole(e.target.value as OrgRole)}
+              <SimpleSelect
+                ariaLabel={t('settings.workspace.memberRole')}
+                className="w-32"
+                onChange={role => setInviteRole(role as OrgRole)}
+                options={ORG_ROLES.filter(r => r !== 'owner' || isOwner).map(r => ({
+                  label: t(ROLE_LABEL_KEYS[r]),
+                  value: r,
+                }))}
                 value={inviteRole}
-              >
-                {ORG_ROLES.filter(r => r !== 'owner' || isOwner).map(r => (
-                  <option key={r} value={r}>
-                    {t(ROLE_BADGES[r].labelKey)}
-                  </option>
-                ))}
-              </select>
+              />
               <Button disabled={inviting || !inviteEmail.trim()} size="sm" type="submit">
                 {inviting
                   ? t('settings.workspace.inviteSending')
@@ -359,10 +338,7 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm text-foreground">{invite.email}</p>
                         <p className="text-xs text-muted-foreground">
-                          {t(
-                            ROLE_BADGES[invite.role as OrgRole]?.labelKey ??
-                              'settings.roles.member',
-                          )}
+                          {t(ROLE_LABEL_KEYS[invite.role as OrgRole] ?? 'settings.roles.member')}
                           {' · '}
                           {t('settings.workspace.inviteExpires', {
                             date: formatDate(invite.expiresAt),
@@ -410,16 +386,18 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
             <p className="min-w-0 flex-1 text-xs text-muted-foreground">
               {t('settings.workspace.leaveDescription')}
             </p>
-            <button
-              className="shrink-0 rounded-md border border-destructive/50 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            <Button
+              className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
               disabled={leaving}
               // The count is read when the dialog opens, not when it is
               // confirmed, so the warning matches what the user was shown.
               onClick={() => setConfirmingLeave({ pendingWrites: pendingWriteCount() })}
+              size="sm"
               type="button"
+              variant="outline"
             >
               {leaving ? t('settings.workspace.leaving') : t('settings.workspace.leave')}
-            </button>
+            </Button>
           </div>
         </section>
       )}

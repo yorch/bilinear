@@ -7,12 +7,15 @@ import { EstimatePicker } from '@/components/properties/estimate-picker';
 import { LabelSelect } from '@/components/properties/label-select';
 import { PrioritySelect } from '@/components/properties/priority-select';
 import { StatusSelect } from '@/components/properties/status-select';
+import { Badge } from '@/components/ui/badge';
+import { useFormatters } from '@/hooks/use-formatters';
 import { usePending } from '@/hooks/use-pending-ids';
 import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
 import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
+import { isIssueSnoozed } from './snooze-presets';
 
 export interface IssueRowData {
   assigneeId?: string | null;
@@ -23,6 +26,7 @@ export interface IssueRowData {
   identifier: string;
   labels: IssueLabel[];
   priority: number;
+  snoozedUntilAt?: string | null;
   stateId: string;
   title: string;
 }
@@ -117,6 +121,7 @@ export function IssueRow({
   style,
 }: IssueRowProps) {
   const t = useTranslations();
+  const { formatDate } = useFormatters();
   const pending = usePending(issue.id);
   const isBulkMode = onCheck !== undefined;
   // If no visibility function is provided, every built-in column renders
@@ -222,14 +227,28 @@ export function IssueRow({
       </span>
 
       {/* Title — clicking anywhere in this area opens the issue */}
-      <button
-        className="cursor-pointer truncate text-left text-sm text-foreground"
-        data-testid="issue-row-title"
-        onClick={onOpen}
-        type="button"
-      >
-        {issue.title}
-      </button>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <button
+          className="min-w-0 cursor-pointer truncate text-left text-sm text-foreground"
+          data-testid="issue-row-title"
+          onClick={onOpen}
+          type="button"
+        >
+          {issue.title}
+        </button>
+        {isIssueSnoozed(issue.snoozedUntilAt) && (
+          <Badge
+            className="shrink-0"
+            data-testid="issue-snoozed-badge"
+            title={t('issues.snooze.snoozedUntil', {
+              date: formatDate(issue.snoozedUntilAt ?? ''),
+            })}
+            tone="muted"
+          >
+            {t('issues.snooze.snoozedBadge')}
+          </Badge>
+        )}
+      </span>
 
       {/* Labels */}
       {visible('labels') && (

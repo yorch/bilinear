@@ -384,8 +384,33 @@ describe('issueResolvers', () => {
       );
     });
 
+    it('resolves a human identifier (ENG-1) through the org-scoped identifier lookup', async () => {
+      ctx.prisma.issue.findFirst.mockResolvedValue(TEST_ISSUE);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        isOwner: false,
+        team: { organizationId: TEST_ORG.id },
+        teamId: TEST_ISSUE.teamId,
+        userId: TEST_USER.id,
+      });
+
+      const result = await issueResolvers.Query.issue(null, { id: 'ENG-1' }, ctx as never);
+
+      expect(result).toEqual(TEST_ISSUE);
+      // Never reaches `findUnique`, whose uuid column cast rejects the identifier.
+      expect(ctx.prisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(ctx.prisma.issue.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ identifier: 'ENG-1' }, { previousIdentifiers: { has: 'ENG-1' } }],
+            organizationId: TEST_ORG.id,
+          }),
+        }),
+      );
+    });
+
     it('throws NOT_FOUND when issue does not exist', async () => {
       ctx.prisma.issue.findUnique.mockResolvedValue(null);
+      ctx.prisma.issue.findFirst.mockResolvedValue(null);
 
       await expect(
         issueResolvers.Mutation.issueUpdate(
@@ -493,8 +518,33 @@ describe('issueResolvers', () => {
       expect(result).toEqual(TEST_ISSUE);
     });
 
+    it('resolves a human identifier (ENG-1) through the org-scoped identifier lookup', async () => {
+      ctx.prisma.issue.findFirst.mockResolvedValue(TEST_ISSUE);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        isOwner: false,
+        team: { organizationId: TEST_ORG.id },
+        teamId: TEST_ISSUE.teamId,
+        userId: TEST_USER.id,
+      });
+
+      const result = await issueResolvers.Query.issue(null, { id: 'ENG-1' }, ctx as never);
+
+      expect(result).toEqual(TEST_ISSUE);
+      // Never reaches `findUnique`, whose uuid column cast rejects the identifier.
+      expect(ctx.prisma.issue.findUnique).not.toHaveBeenCalled();
+      expect(ctx.prisma.issue.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ identifier: 'ENG-1' }, { previousIdentifiers: { has: 'ENG-1' } }],
+            organizationId: TEST_ORG.id,
+          }),
+        }),
+      );
+    });
+
     it('throws NOT_FOUND when issue does not exist', async () => {
       ctx.prisma.issue.findUnique.mockResolvedValue(null);
+      ctx.prisma.issue.findFirst.mockResolvedValue(null);
 
       await expect(
         issueResolvers.Query.issue(null, { id: 'missing' }, ctx as never),
@@ -632,12 +682,10 @@ describe('issueResolvers', () => {
     it('returns the parent when it belongs to the same org', async () => {
       const parent = { ...TEST_ISSUE, id: 'parent-1' };
       ctx.prisma.issue.findMany.mockResolvedValue([parent]);
-      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
-        isOwner: false,
-        team: { organizationId: TEST_ORG.id },
-        teamId: parent.teamId,
-        userId: TEST_USER.id,
-      });
+      ctx.prisma.teamMembership.findMany.mockResolvedValue([
+        { team: { organizationId: TEST_ORG.id }, teamId: parent.teamId, userId: TEST_USER.id },
+      ]);
+      ctx.prisma.teamMemberRole.findMany.mockResolvedValue([]);
 
       const result = await issueResolvers.Issue.parent(
         { ...TEST_ISSUE, parentId: 'parent-1' } as never,
@@ -652,6 +700,8 @@ describe('issueResolvers', () => {
   describe('Issue.children', () => {
     it('scopes the children lookup to the issue own organizationId', async () => {
       ctx.prisma.issue.findMany.mockResolvedValue([]);
+      ctx.prisma.teamMembership.findMany.mockResolvedValue([]);
+      ctx.prisma.teamMemberRole.findMany.mockResolvedValue([]);
 
       await issueResolvers.Issue.children(TEST_ISSUE as never, {}, ctx as never);
 
@@ -678,13 +728,14 @@ describe('issueResolvers', () => {
         parentId: TEST_ISSUE.id,
       };
       ctx.prisma.issue.findMany.mockResolvedValue([own, other]);
-      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
-        isOwner: false,
-        team: { organizationId: TEST_ORG.id },
-        teamId: TEST_ISSUE.teamId,
-        userId: TEST_USER.id,
-      });
-      ctx.prisma.teamMemberRole.findUnique.mockResolvedValue({ role: 'guest' });
+      // The guest check is batched too (guestByTeamUser) — it reads
+      // membership + role via findMany, never the per-row findUnique.
+      ctx.prisma.teamMembership.findMany.mockResolvedValue([
+        { team: { organizationId: TEST_ORG.id }, teamId: TEST_ISSUE.teamId, userId: TEST_USER.id },
+      ]);
+      ctx.prisma.teamMemberRole.findMany.mockResolvedValue([
+        { role: 'guest', teamId: TEST_ISSUE.teamId, userId: TEST_USER.id },
+      ]);
 
       const result = await issueResolvers.Issue.children(TEST_ISSUE as never, {}, ctx as never);
 
@@ -692,6 +743,24 @@ describe('issueResolvers', () => {
       // The base fetch is batched — one findMany call regardless of the
       // guest filter applied afterwards in memory.
       expect(ctx.prisma.issue.findMany).toHaveBeenCalledTimes(1);
+      expect(ctx.prisma.teamMembership.findUnique).not.toHaveBeenCalled();
+      expect(ctx.prisma.teamMemberRole.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('resolves the guest check once for many children of the same team', async () => {
+      ctx.prisma.issue.findMany.mockResolvedValue([]);
+      ctx.prisma.teamMembership.findMany.mockResolvedValue([]);
+      ctx.prisma.teamMemberRole.findMany.mockResolvedValue([]);
+
+      await Promise.all(
+        ['a', 'b', 'c'].map(id =>
+          issueResolvers.Issue.children({ ...TEST_ISSUE, id } as never, {}, ctx as never),
+        ),
+      );
+
+      expect(ctx.prisma.teamMembership.findMany).toHaveBeenCalledTimes(1);
+      expect(ctx.prisma.teamMemberRole.findMany).toHaveBeenCalledTimes(1);
+      expect(ctx.prisma.teamMembership.findUnique).not.toHaveBeenCalled();
     });
   });
 });

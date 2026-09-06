@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyFilters,
   applySorting,
+  coerceSortFields,
   createEmptyFilterSet,
   type FilterableIssue,
   type FilterSet,
@@ -313,5 +314,42 @@ describe('applySorting', () => {
 describe('createEmptyFilterSet', () => {
   it('returns an and-composed set with no conditions', () => {
     expect(createEmptyFilterSet()).toEqual({ composition: 'and', conditions: [] });
+  });
+});
+
+describe('coerceSortFields', () => {
+  it('passes a well-formed stored sort through', () => {
+    const sort: SortField[] = [
+      { direction: 'desc', field: 'priority' },
+      { direction: 'asc', field: 'dueDate' },
+    ];
+    expect(coerceSortFields(sort)).toEqual(sort);
+  });
+
+  it('returns no sort for a non-array (a view saved before sort existed)', () => {
+    expect(coerceSortFields(undefined)).toEqual([]);
+    expect(coerceSortFields(null)).toEqual([]);
+    expect(coerceSortFields({})).toEqual([]);
+  });
+
+  it('drops entries with an unknown field or direction instead of passing them on', () => {
+    expect(
+      coerceSortFields([
+        { direction: 'asc', field: 'priority' },
+        { direction: 'sideways', field: 'priority' },
+        { direction: 'asc', field: 'colour' },
+        'priority',
+        null,
+      ]),
+    ).toEqual([{ direction: 'asc', field: 'priority' }]);
+  });
+
+  it('feeds applySorting so a stored view sort actually orders the list', () => {
+    const sorted = applySorting(
+      ISSUES,
+      coerceSortFields([{ direction: 'desc', field: 'priority' }]),
+    );
+    const priorities = sorted.map(i => i.priority);
+    expect(priorities).toEqual([...priorities].sort((a, b) => b - a));
   });
 });

@@ -1,15 +1,23 @@
 'use client';
 
-import { ArrowLeft, Calendar, CircleDot, User } from 'lucide-react';
+import { Archive, ArrowLeft, CircleDot, MoreHorizontal, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { type ReactNode, useMemo, useState } from 'react';
 import { ProgressSparkline } from '@/components/projects/progress-sparkline';
 import { ProjectMilestonesSection } from '@/components/projects/project-milestones-section';
+import { ProjectPropertiesPanel } from '@/components/projects/project-properties-panel';
 import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
-import { InlineRetry } from '@/components/shared/inline-retry';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { LoadError } from '@/components/shared/load-error';
+import { SectionCard } from '@/components/shared/section-card';
+import { SectionHeader } from '@/components/shared/section-header';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { SimpleSelect } from '@/components/ui/select';
+import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -24,7 +32,7 @@ import {
   PROJECT_STATUS_LABEL_KEYS,
 } from '@/lib/project-constants';
 import { toast } from '@/lib/toast';
-import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /** Shared by the status and health selects — one operation, one selection set. */
@@ -32,7 +40,12 @@ const PROJECT_UPDATE_MUTATION = `mutation ($id: ID!, $input: ProjectUpdateInput!
   projectUpdate(id: $id, input: $input) { success }
 }`;
 
+const PROJECT_ARCHIVE_MUTATION = `mutation ($id: ID!) { projectArchive(id: $id) { success } }`;
+const PROJECT_DELETE_MUTATION = `mutation ($id: ID!) { projectDelete(id: $id) { success } }`;
+
 interface ProjectDetailViewProps {
+  /** Extra header actions rendered before the view's own menu (e.g. the favorite star). */
+  actions?: ReactNode;
   projectSlugId: string;
   workspaceKey: string;
 }
@@ -44,13 +57,16 @@ interface ServerProgress {
 }
 
 export const ProjectDetailView = observer(function ProjectDetailView({
+  actions,
   projectSlugId,
   workspaceKey,
 }: ProjectDetailViewProps) {
   const t = useTranslations();
+  const router = useRouter();
   const { projectStore, issueStore, userStore, workflowStateStore } = useStore();
   const viewerId = userStore.currentUserId ?? '';
   const project = projectStore.findBySlugId(projectSlugId);
+  const [pendingAction, setPendingAction] = useState<'archive' | 'delete' | null>(null);
 
   useDocumentTitle(project?.name);
 
@@ -74,6 +90,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
   const {
     data: projectProgress,
     error: progressError,
+    cause: progressCause,
     refetch: refetchProgress,
   } = useRetryableFetch<ServerProgress | null>(
     () =>
@@ -85,15 +102,11 @@ export const ProjectDetailView = observer(function ProjectDetailView({
   );
 
   if (!project) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        {t('projects.projectNotFound')}
-      </div>
-    );
+    return <EmptyState className="flex-1" title={t('projects.projectNotFound')} />;
   }
 
   const status = PROJECT_STATUS_CONFIG[project.statusType] ?? PROJECT_STATUS_CONFIG.planned;
-  const lead = project.leadId ? userStore.findById(project.leadId) : null;
+  const projectsHref = `/${workspaceKey}/projects`;
 
   // Null until the server answers (and while retrying after a failure) — the
   // bar and the ratio render blank rather than defaulting to 0%, which is the
@@ -130,29 +143,99 @@ export const ProjectDetailView = observer(function ProjectDetailView({
     }
   };
 
+  // Both leave the page: an archived project drops out of `projectStore.all`
+  // and a deleted one out of the pool, so staying here would render "not
+  // found" over the thing the user just acted on.
+  const handleArchive = async () => {
+    try {
+      await gqlMutate(PROJECT_ARCHIVE_MUTATION, { id: project.id });
+      toast.success(t('projects.projectArchived'));
+      router.push(projectsHref);
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('projects.failedToArchive')));
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await gqlMutate(PROJECT_DELETE_MUTATION, { id: project.id });
+      toast.success(t('projects.projectDeleted'));
+      router.push(projectsHref);
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('projects.failedToDelete')));
+    }
+  };
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex h-12 items-center gap-3 border-b border-border px-4">
-        <Link
-          className={cn(
-            'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
-            TOUCH_TARGET_SQUARE,
-          )}
-          href={`/${workspaceKey}/projects`}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <span
-          className="flex h-5 w-5 items-center justify-center rounded text-xs"
-          style={{
-            backgroundColor: `${project.color}20`,
-            color: project.color,
-          }}
-        >
-          {project.icon ?? ''}
-        </span>
-        <h1 className="text-sm font-semibold text-foreground">{project.name}</h1>
-      </div>
+      <PageHeader
+        actions={
+          <>
+            {actions}
+            <SelectPopover
+              align="right"
+              panelClassName="min-w-[160px] py-1"
+              triggerChildren={<MoreHorizontal className="h-4 w-4" />}
+              triggerClassName={cn(
+                'flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+                TOUCH_TARGET_SQUARE,
+              )}
+              triggerTitle={t('projects.moreActions')}
+            >
+              {close => (
+                <>
+                  <button
+                    className={cn(POPOVER_ITEM_CLASS, 'text-foreground-secondary')}
+                    onClick={() => {
+                      close();
+                      setPendingAction('archive');
+                    }}
+                    type="button"
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    {t('projects.archive')}
+                  </button>
+                  <button
+                    className={cn(POPOVER_ITEM_CLASS, 'text-danger-subtle-foreground')}
+                    onClick={() => {
+                      close();
+                      setPendingAction('delete');
+                    }}
+                    type="button"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {t('common.delete')}
+                  </button>
+                </>
+              )}
+            </SelectPopover>
+          </>
+        }
+        leading={
+          <>
+            <Link
+              aria-label={t('projects.backToProjects')}
+              className={cn(
+                'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+                TOUCH_TARGET_SQUARE,
+              )}
+              href={projectsHref}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <span
+              className="flex h-5 w-5 items-center justify-center rounded text-xs"
+              style={{
+                backgroundColor: `${project.color}20`,
+                color: project.color,
+              }}
+            >
+              {project.icon ?? ''}
+            </span>
+          </>
+        }
+        title={project.name}
+      />
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-4xl px-6 py-6">
@@ -189,24 +272,10 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                 ))}
               </div>
             </div>
-            {lead && (
-              <div className="flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">{lead.displayName}</span>
-              </div>
-            )}
-            {(project.startDate || project.targetDate) && (
-              <div className="flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">
-                  {project.startDate ?? '?'} &rarr; {project.targetDate ?? '?'}
-                </span>
-              </div>
-            )}
           </div>
-          {project.description && (
-            <p className="mt-4 text-sm text-muted-foreground">{project.description}</p>
-          )}
+          <SectionCard className="mt-6" title={t('projects.properties')}>
+            <ProjectPropertiesPanel project={project} />
+          </SectionCard>
           <div className="mt-6 rounded-lg border border-border p-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">
@@ -224,9 +293,9 @@ export const ProjectDetailView = observer(function ProjectDetailView({
             </div>
             <ProgressBar className="mt-2 h-2" value={progressStats?.percent ?? 0} />
             {progressError && (
-              <InlineRetry
-                className="py-2"
-                message={t('common.somethingWentWrong')}
+              <LoadError
+                cause={progressCause}
+                fallback={t('common.somethingWentWrong')}
                 onRetry={() => refetchProgress()}
               />
             )}
@@ -237,16 +306,10 @@ export const ProjectDetailView = observer(function ProjectDetailView({
           </div>
           <ProjectMilestonesSection projectId={project.id} />
           <div className="mt-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {t('projects.issuesCount', { count: projectIssues.length })}
-              </h3>
-            </div>
+            <SectionHeader title={t('projects.issuesCount', { count: projectIssues.length })} />
             <div className="mt-2 flex flex-col gap-0.5">
               {projectIssues.length === 0 ? (
-                <p className="py-8 text-center text-xs text-muted-foreground">
-                  {t('projects.noIssuesAssigned')}
-                </p>
+                <EmptyState size="compact" title={t('projects.noIssuesAssigned')} />
               ) : (
                 projectIssues.map(issue => {
                   const state = workflowStateStore.findById(issue.stateId);
@@ -278,6 +341,26 @@ export const ProjectDetailView = observer(function ProjectDetailView({
           <ProjectUpdatesSection projectId={project.id} viewerId={viewerId} />
         </div>
       </div>
+      <ConfirmDialog
+        confirmLabel={pendingAction === 'archive' ? t('projects.archive') : t('common.delete')}
+        message={
+          pendingAction === 'archive'
+            ? t('projects.archiveConfirm', { name: project.name })
+            : t('projects.deleteConfirm', { name: project.name })
+        }
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => {
+          const action = pendingAction;
+          setPendingAction(null);
+          if (action === 'archive') {
+            void handleArchive();
+          } else if (action === 'delete') {
+            void handleDelete();
+          }
+        }}
+        open={pendingAction !== null}
+        title={pendingAction === 'archive' ? t('projects.archive') : t('common.delete')}
+      />
     </div>
   );
 });

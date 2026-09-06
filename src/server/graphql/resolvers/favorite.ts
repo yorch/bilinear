@@ -4,43 +4,20 @@ import { requireAuth } from '../../middleware/auth';
 import {
   entityBelongsToOrg,
   type FavoriteCreateInput,
-  FavoriteCrossOrgConflictError,
-  FavoriteEntityNotInOrgError,
-  FavoriteInvalidEntityTypeError,
-  FavoriteNotFoundError,
   type FavoriteReorderEntry,
-  FavoriteReorderTooLargeError,
 } from '../../services/favorite.service';
 import type { GraphQLContext } from '../context';
+import { mapServiceError } from '../types/errors';
 
-function mapError(err: unknown): never {
-  if (err instanceof FavoriteNotFoundError) {
-    throw new GraphQLError(err.message, {
-      extensions: { code: 'NOT_FOUND' },
-    });
-  }
-  if (err instanceof FavoriteInvalidEntityTypeError) {
-    throw new GraphQLError(err.message, {
-      extensions: { code: 'BAD_USER_INPUT' },
-    });
-  }
-  if (err instanceof FavoriteEntityNotInOrgError) {
-    throw new GraphQLError(err.message, {
-      extensions: { code: 'BAD_USER_INPUT' },
-    });
-  }
-  if (err instanceof FavoriteCrossOrgConflictError) {
-    throw new GraphQLError(err.message, {
-      extensions: { code: 'BAD_USER_INPUT' },
-    });
-  }
-  if (err instanceof FavoriteReorderTooLargeError) {
-    throw new GraphQLError(err.message, {
-      extensions: { code: 'BAD_USER_INPUT' },
-    });
-  }
-  throw err;
-}
+const FAVORITE_ERRORS = {
+  BAD_USER_INPUT: [
+    'FavoriteCrossOrgConflictError',
+    'FavoriteEntityNotInOrgError',
+    'FavoriteInvalidEntityTypeError',
+    'FavoriteReorderTooLargeError',
+  ],
+  NOT_FOUND: ['FavoriteNotFoundError'],
+} as const;
 
 /**
  * Resolve the favorite's target entity to the matching union member. Returns
@@ -156,7 +133,7 @@ export const favoriteResolvers = {
         );
         return { favorite: fav, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapError(err);
+        mapServiceError(err, FAVORITE_ERRORS);
       }
     },
     favoriteDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
@@ -166,7 +143,7 @@ export const favoriteResolvers = {
         const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Favorite', id, null);
         return { lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapError(err);
+        mapServiceError(err, FAVORITE_ERRORS);
       }
     },
     favoriteReorder: async (
@@ -194,7 +171,7 @@ export const favoriteResolvers = {
         }
         return { favorites: favs, lastSyncId, success: true };
       } catch (err) {
-        mapError(err);
+        mapServiceError(err, FAVORITE_ERRORS);
       }
     },
   },

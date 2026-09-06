@@ -5,6 +5,8 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useTranslations } from '@/hooks/use-translations';
 import { createDocument } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -58,30 +60,28 @@ export const DocumentList = observer(function DocumentList({
     <div className="flex flex-col gap-1 p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-foreground">{t('documents.title')}</h2>
-        <button
-          className="flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          disabled={creating}
-          onClick={handleNewDocument}
-          type="button"
-        >
+        <Button disabled={creating} onClick={handleNewDocument} size="sm" type="button">
           <Plus className="h-3 w-3" />
           {creating ? t('documents.creating') : t('documents.newDocument')}
-        </button>
+        </Button>
       </div>
 
       {documents.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
-          <FileText className="h-8 w-8" />
-          <p className="text-sm">{t('documents.emptyState')}</p>
-          <button
-            className="text-xs text-brand hover:text-brand-hover disabled:opacity-50"
-            disabled={creating}
-            onClick={handleNewDocument}
-            type="button"
-          >
-            {creating ? t('documents.creating') : t('documents.createFirst')}
-          </button>
-        </div>
+        <EmptyState
+          action={
+            <Button
+              disabled={creating}
+              onClick={handleNewDocument}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {creating ? t('documents.creating') : t('documents.createFirst')}
+            </Button>
+          }
+          icon={<FileText className="h-5 w-5" />}
+          title={t('documents.emptyState')}
+        />
       ) : (
         <ul className="flex flex-col gap-0.5">
           {documents.map(doc => (

@@ -3,6 +3,7 @@
 import { Menu } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useTranslations } from '@/hooks/use-translations';
+import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useAppName } from '@/providers/branding-provider';
 import { useStore } from '@/providers/store-provider';
 
@@ -28,7 +29,10 @@ export const MobileTopBar = observer(function MobileTopBar({
     <div className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-border px-2 md:hidden">
       <button
         aria-label={t('nav.openMenu')}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+        className={cn(
+          'flex shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground',
+          TOUCH_TARGET_SQUARE,
+        )}
         onClick={onOpenNav}
         title={t('nav.openMenu')}
         type="button"

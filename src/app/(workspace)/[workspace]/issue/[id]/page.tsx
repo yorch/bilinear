@@ -11,6 +11,7 @@ import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, isGqlErrorCode } from '@/lib/graphql';
+import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
@@ -74,22 +75,9 @@ const IssueDetailPage = observer(function IssueDetailPage() {
     if (storeIssue && id.startsWith('temp-')) {
       const team = teamStore.findById(storeIssue.teamId);
       const states = team ? workflowStateStore.findByTeamId(team.id) : [];
-      const members = userStore.all.map(u => ({
-        user: {
-          avatarBackgroundColor: u.avatarBgColor,
-          avatarUrl: u.avatarUrl ?? null,
-          displayName: u.displayName,
-          id: u.id,
-          initials: u.initials,
-        },
-      }));
+      const members = toIssueUsers(userStore.all).map(user => ({ user }));
       const localIssue: IssueWithTeam = {
-        ...storeIssue,
-        dueDate: storeIssue.dueDate ?? null,
-        labels: (storeIssue.labelIds ?? [])
-          .map(lid => labelStore.findById(lid))
-          .filter((l): l is NonNullable<typeof l> => l !== null)
-          .map(l => ({ color: l.color, id: l.id, name: l.name })),
+        ...toIssueDetail(storeIssue, labelStore),
         team: {
           id: team?.id ?? storeIssue.teamId,
           key: team?.key ?? '',
@@ -99,7 +87,7 @@ const IssueDetailPage = observer(function IssueDetailPage() {
       };
       return {
         issue: localIssue,
-        labels: labelStore.all.map(l => ({ color: l.color, id: l.id, name: l.name })),
+        labels: toIssueLabels(labelStore.all),
       };
     }
 

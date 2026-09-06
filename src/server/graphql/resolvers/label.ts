@@ -34,10 +34,7 @@ async function requireLabelWriteAccess(
 export const labelResolvers = {
   IssueLabel: {
     children: async (label: IssueLabel, _args: unknown, ctx: GraphQLContext) =>
-      ctx.prisma.issueLabel.findMany({
-        orderBy: { name: 'asc' },
-        where: { archivedAt: null, parentId: label.id },
-      }),
+      ctx.loaders.childrenByLabelParentId.load(label.id),
     parent: async (label: IssueLabel, _args: unknown, ctx: GraphQLContext) => {
       if (!label.parentId) {
         return null;

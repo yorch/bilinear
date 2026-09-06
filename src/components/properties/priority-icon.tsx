@@ -10,7 +10,7 @@ interface PriorityIconProps {
 }
 
 /** Maps priority numeric values to i18n keys under `properties.priority.*`. */
-export const PRIORITY_LABEL_KEYS: Record<number, string> = {
+const PRIORITY_LABEL_KEYS: Record<number, string> = {
   0: 'properties.priority.noPriority',
   1: 'properties.priority.urgent',
   2: 'properties.priority.high',

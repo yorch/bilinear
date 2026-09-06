@@ -6,6 +6,7 @@ import {
   SYNC_ACTION_RETENTION_DAYS,
 } from '../../lib/sync-config';
 import { childLogger } from '../lib/logger';
+import { isUnrestricted, type SyncVisibility } from '../lib/sync-visibility';
 
 const log = childLogger({ module: 'sync' });
 
@@ -130,6 +131,13 @@ interface RawSyncActionRow {
   modelName: string;
   organizationId: string;
   xactId: string;
+}
+
+/** The JSON payload of a row as a record, or null for delete rows / non-objects. */
+function payloadOf(row: SyncActionRow): Record<string, unknown> | null {
+  return row.data && typeof row.data === 'object' && !Array.isArray(row.data)
+    ? (row.data as Record<string, unknown>)
+    : null;
 }
 
 function mapRow(row: RawSyncActionRow): SyncActionRow {
@@ -302,21 +310,27 @@ export class SyncService {
   }
 
   /**
-   * @param userId The caller's id — needed to evaluate guest visibility
-   * (creator-or-assignee) against `guestTeamIds`. Non-guest callers should
-   * still pass their own userId; it's only consulted when `guestTeamIds`
-   * is non-empty.
-   * @param guestTeamIds Team ids (within `orgId`) where the caller holds the
-   * `guest` role — see `getGuestTeamIds` in `middleware/auth.ts`. When
-   * non-empty, every issue-derived collection below is narrowed to: issues
-   * on a NON-guest team, OR issues the caller created, OR issues the caller
-   * is assigned to — mirroring the same visibility rule the top-level
-   * `issues` query and `Project.issues` resolver apply (guests only see
-   * their own work on teams where they're a guest). Empty array (the
-   * default) means "not a guest anywhere" — no narrowing, full org data,
-   * preserving prior behavior for ordinary members/admins/owners.
+   * @param visibility The caller's replication scope — see
+   * `src/server/lib/sync-visibility.ts`. Two narrowings apply, mirroring the
+   * rules every GraphQL resolver enforces per request:
+   *
+   * - `hiddenTeamIds` (private teams the caller is not a member of): nothing
+   *   team-scoped from those teams is returned — not the team row, its
+   *   workflow states, cycles, templates, views or documents, and no issue
+   *   or issue-derived row. Before this existed the bootstrap shipped every
+   *   private team's issues to every org member, so the per-issue
+   *   `requireTeamMember` check in `Query.issue` was guarding rows that were
+   *   already sitting in the caller's IndexedDB.
+   * - `guestTeamIds` (teams where the caller holds the `guest` role): every
+   *   issue-derived collection is narrowed to issues on a NON-guest team, OR
+   *   issues the caller created, OR issues the caller is assigned to — the
+   *   same rule the top-level `issues` query and `Project.issues` apply.
+   *
+   * An unrestricted scope (both arrays empty) adds no clauses at all,
+   * preserving the plain org-wide read for ordinary members/admins/owners.
    */
-  async getBootstrapData(orgId: string, userId: string, guestTeamIds: string[] = []) {
+  async getBootstrapData(orgId: string, visibility: SyncVisibility) {
+    const { guestTeamIds, hiddenTeamIds, userId } = visibility;
     const guestVisibilityClause =
       guestTeamIds.length > 0
         ? {
@@ -328,16 +342,26 @@ export class SyncService {
           }
         : null;
     // Spread directly rather than wrapping in `AND: [guestVisibilityClause]`
-    // — none of the four where-clauses below already declare a top-level
-    // `OR`, so Prisma's implicit AND between sibling keys already composes
-    // this `OR` with the existing archivedAt/organizationId/trashed filters
-    // identically to the explicit `AND` wrapper (see buildWhere in
-    // issue.service.ts for the same underlying pattern). If a future
-    // clause here ever needs its own top-level `OR`, that one call site
-    // will need the `AND: [...]` wrapper back to avoid the two `OR` keys
-    // colliding.
-    const withGuestVisibility = <T extends object>(where: T): T =>
-      guestVisibilityClause ? ({ ...where, ...guestVisibilityClause } as T) : where;
+    // — none of the where-clauses below already declare a top-level `OR`, so
+    // Prisma's implicit AND between sibling keys composes this `OR` with the
+    // existing archivedAt/organizationId/trashed/teamId filters identically
+    // to the explicit `AND` wrapper (see buildWhere in issue.service.ts for
+    // the same underlying pattern). If a future clause here ever needs its
+    // own top-level `OR`, that one call site will need the `AND: [...]`
+    // wrapper back to avoid the two `OR` keys colliding.
+    //
+    // `hiddenTeamClause` is a plain `teamId NOT IN` — it composes with the
+    // guest `OR` by the same implicit AND, so a caller who is both a guest
+    // somewhere and locked out of a private team elsewhere gets both.
+    const hiddenTeamClause = hiddenTeamIds.length > 0 ? { teamId: { notIn: hiddenTeamIds } } : null;
+    const withVisibility = <T extends object>(where: T): T =>
+      ({ ...where, ...(hiddenTeamClause ?? {}), ...(guestVisibilityClause ?? {}) }) as T;
+    // For rows whose `teamId` is nullable (workspace-scoped views, documents
+    // and custom-field definitions): `NOT IN` never matches NULL in SQL, so
+    // the workspace-scoped rows have to be admitted explicitly.
+    const teamVisibleOrWorkspace = hiddenTeamClause
+      ? { OR: [{ teamId: null }, hiddenTeamClause] }
+      : {};
 
     // Take the cursor BEFORE the (non-atomic, individually-snapshotted) entity
     // reads below — never inside their `Promise.all`. Under READ COMMITTED each
@@ -393,7 +417,11 @@ export class SyncService {
         where: { organizationId: orgId },
       }),
       this.prisma.team.findMany({
-        where: { archivedAt: null, organizationId: orgId },
+        where: {
+          archivedAt: null,
+          organizationId: orgId,
+          ...(hiddenTeamIds.length > 0 ? { id: { notIn: hiddenTeamIds } } : {}),
+        },
       }),
       this.prisma.user.findMany({
         omit: USER_SYNC_OMIT,
@@ -405,21 +433,21 @@ export class SyncService {
         // bootstrap payload) — pure over-fetch here, same reasoning as
         // IssueService.findMany/findByTeamId.
         omit: { descriptionState: true },
-        where: withGuestVisibility({
+        where: withVisibility({
           archivedAt: null,
           organizationId: orgId,
           trashed: false,
         }),
       }),
       this.prisma.workflowState.findMany({
-        where: { archivedAt: null, team: { organizationId: orgId } },
+        where: { archivedAt: null, team: { organizationId: orgId }, ...(hiddenTeamClause ?? {}) },
       }),
       this.prisma.issueLabel.findMany({
         where: { archivedAt: null, organizationId: orgId },
       }),
       this.prisma.issueLabelAssignment.findMany({
         where: {
-          issue: withGuestVisibility({
+          issue: withVisibility({
             archivedAt: null,
             organizationId: orgId,
             trashed: false,
@@ -427,13 +455,13 @@ export class SyncService {
         },
       }),
       this.prisma.cycle.findMany({
-        where: { archivedAt: null, organizationId: orgId },
+        where: { archivedAt: null, organizationId: orgId, ...(hiddenTeamClause ?? {}) },
       }),
       this.prisma.document.findMany({
         // contentState is the analogous YJS blob for documents — same
         // over-fetch reasoning as Issue.descriptionState above.
         omit: { contentState: true },
-        where: { archivedAt: null, organizationId: orgId },
+        where: { archivedAt: null, organizationId: orgId, ...teamVisibleOrWorkspace },
       }),
       this.prisma.project.findMany({
         where: { archivedAt: null, organizationId: orgId, trashed: false },
@@ -461,11 +489,11 @@ export class SyncService {
         where: { archivedAt: null, organizationId: orgId, trashed: false },
       }),
       this.prisma.customView.findMany({
-        where: { archivedAt: null, organizationId: orgId },
+        where: { archivedAt: null, organizationId: orgId, ...teamVisibleOrWorkspace },
       }),
       this.prisma.issueRelation.findMany({
         where: {
-          issue: withGuestVisibility({
+          issue: withVisibility({
             archivedAt: null,
             organizationId: orgId,
             trashed: false,
@@ -481,18 +509,18 @@ export class SyncService {
         },
       }),
       this.prisma.issueTemplate.findMany({
-        where: { archivedAt: null, team: { organizationId: orgId } },
+        where: { archivedAt: null, team: { organizationId: orgId }, ...(hiddenTeamClause ?? {}) },
       }),
       this.prisma.customFieldDefinition.findMany({
         // Include workspace-scoped definitions (team_id IS NULL) alongside
         // team-scoped ones. organization_id is denormalised onto every row
         // (NOT NULL since the 2026-05-21 migration), so the workspace tenant
         // filter is a single column lookup.
-        where: { archivedAt: null, organizationId: orgId },
+        where: { archivedAt: null, organizationId: orgId, ...teamVisibleOrWorkspace },
       }),
       this.prisma.customFieldValue.findMany({
         where: {
-          issue: withGuestVisibility({
+          issue: withVisibility({
             archivedAt: null,
             organizationId: orgId,
             trashed: false,
@@ -557,42 +585,6 @@ export class SyncService {
   }
 
   /**
-   * Fetch up to `limit` SyncActions strictly after the cursor, fenced to
-   * rows whose writing transaction has SETTLED. The cursor is a
-   * `(xactId, id)` tuple — using id alone would skip any row whose
-   * transaction committed out of order with its BIGSERIAL id (a slow tx
-   * whose id is lower than a later-started-but-faster-committing tx).
-   *
-   * The fence is `xact_id < pg_snapshot_xmin(pg_current_snapshot())`:
-   * `pg_snapshot_xmin` is the oldest transaction id still considered
-   * in-progress at this statement's snapshot, so every row with a smaller
-   * `xact_id` has already committed or aborted — and, crucially, NO
-   * still-running transaction can later insert a row with an `xact_id`
-   * below the cursor. Ordering by `(xact_id, id)` and never serving a row
-   * at or above the fence therefore gives a provably never-skip cursor
-   * that advances strictly forward, with no wall-clock guess. This is the
-   * robust replacement for the former `committed_at = statement_timestamp()`
-   * + 500ms window, which could miss a transaction that inserted early and
-   * took longer than the window to commit.
-   *
-   * Cap is per-page so a long-offline client cannot request a
-   * multi-million-row response that OOMs the server; callers paginate
-   * by resubmitting with the last returned cursor until `hasMore` is
-   * false. `toCursor`, when provided, caps the upper bound — useful for
-   * the bootstrap-then-delta handoff.
-   *
-   * @param guestScope When the caller is a guest on one or more teams
-   * (`guestTeamIds` non-empty), the returned page is post-filtered via
-   * `filterGuestVisibleActions` so a guest never receives a SyncAction for
-   * an issue (or issue-derived row) they can't see through the regular
-   * `issues` query. Undefined (the default) means "not a guest anywhere" —
-   * no filtering, preserving prior behavior. NOTE: filtering happens AFTER
-   * the `limit`/`hasMore` page slice, so a guest-heavy page can come back
-   * smaller than `limit` even when `hasMore` is true — callers already
-   * paginate by resubmitting with the last cursor, so this just means an
-   * extra round-trip, not a correctness gap.
-   */
-  /**
    * Delete `sync_actions` rows older than the retention window, and record how
    * far the deletion reached so `getDeltaSyncActions` can recognise a cursor
    * that can no longer be caught up.
@@ -650,13 +642,60 @@ export class SyncService {
     return deleted;
   }
 
+  /**
+   * Fetch up to `limit` SyncActions strictly after the cursor, fenced to
+   * rows whose writing transaction has SETTLED. The cursor is a
+   * `(xactId, id)` tuple — using id alone would skip any row whose
+   * transaction committed out of order with its BIGSERIAL id (a slow tx
+   * whose id is lower than a later-started-but-faster-committing tx).
+   *
+   * The fence is `xact_id < pg_snapshot_xmin(pg_current_snapshot())`:
+   * `pg_snapshot_xmin` is the oldest transaction id still considered
+   * in-progress at this statement's snapshot, so every row with a smaller
+   * `xact_id` has already committed or aborted — and, crucially, NO
+   * still-running transaction can later insert a row with an `xact_id`
+   * below the cursor. Ordering by `(xact_id, id)` and never serving a row
+   * at or above the fence therefore gives a provably never-skip cursor
+   * that advances strictly forward, with no wall-clock guess. This is the
+   * robust replacement for the former `committed_at = statement_timestamp()`
+   * + 500ms window, which could miss a transaction that inserted early and
+   * took longer than the window to commit.
+   *
+   * Cap is per-page so a long-offline client cannot request a
+   * multi-million-row response that OOMs the server; callers paginate
+   * by resubmitting with the last returned cursor until `hasMore` is
+   * false. `toCursor`, when provided, caps the upper bound — useful for
+   * the bootstrap-then-delta handoff.
+   *
+   * @param visibility The caller's replication scope (see
+   * `src/server/lib/sync-visibility.ts`). When it narrows anything — a
+   * guest role somewhere, or a private team the caller is not on — the
+   * returned page is post-filtered via `filterVisibleActions` so the caller
+   * never receives a SyncAction for a row they can't read through the
+   * regular queries. Undefined or unrestricted means no filtering. NOTE:
+   * filtering happens AFTER the `limit`/`hasMore` page slice, so a heavily
+   * filtered page can come back smaller than `limit` even when `hasMore` is
+   * true — callers already paginate by resubmitting with the last cursor,
+   * so this just means an extra round-trip, never a gap.
+   */
   async getDeltaSyncActions(
     orgId: string,
     fromCursor: DeltaCursor,
     toCursor?: DeltaCursor,
     limit = DELTA_PAGE_SIZE,
-    guestScope?: { userId: string; guestTeamIds: string[] },
-  ): Promise<{ actions: SyncActionRow[]; hasMore: boolean; staleCursor: boolean }> {
+    visibility?: SyncVisibility,
+  ): Promise<{
+    actions: SyncActionRow[];
+    hasMore: boolean;
+    /**
+     * Cursor of the last row of the page BEFORE visibility filtering, so a
+     * client can advance past rows it was not allowed to see. Without it a
+     * caller whose page filters to nothing sits on the same cursor forever
+     * and never catches up. `null` when the page is empty.
+     */
+    nextCursor: string | null;
+    staleCursor: boolean;
+  }> {
     // A cursor at or below the retention high-water mark cannot be caught up:
     // the rows between it and the mark have been deleted. Serving whatever
     // survives would look like a successful sync while leaving the client's
@@ -672,7 +711,7 @@ export class SyncService {
     const prunedThrough = org?.syncActionsPrunedThroughXactId;
     if (prunedThrough !== null && prunedThrough !== undefined) {
       if (fromCursor.xactId < BigInt(prunedThrough.toString())) {
-        return { actions: [], hasMore: false, staleCursor: true };
+        return { actions: [], hasMore: false, nextCursor: null, staleCursor: true };
       }
     }
 
@@ -705,67 +744,71 @@ export class SyncService {
     const rows = raw.map(mapRow);
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page[page.length - 1];
+    const nextCursor = last ? encodeCursor(last.xactId, last.id) : null;
 
-    if (guestScope && guestScope.guestTeamIds.length > 0) {
-      const actions = await this.filterGuestVisibleActions(
-        page,
-        guestScope.guestTeamIds,
-        guestScope.userId,
-      );
-      return { actions, hasMore, staleCursor: false };
+    if (visibility && !isUnrestricted(visibility)) {
+      const actions = await this.filterVisibleActions(page, visibility);
+      return { actions, hasMore, nextCursor, staleCursor: false };
     }
 
-    return { actions: page, hasMore, staleCursor: false };
+    return { actions: page, hasMore, nextCursor, staleCursor: false };
   }
 
   /**
-   * Post-filter a page of SyncActions so a guest caller only receives rows
-   * for issues (or issue-derived rows) they're allowed to see — mirroring
-   * `IssueService.buildWhere`'s `guestUserId` clause. SyncActions aren't a
-   * clean fit for this: each row's `data` is a point-in-time JSON snapshot
-   * taken at write time (see `recordSyncAction` call sites), not a live
-   * join, so visibility has to be derived from whatever the payload itself
-   * carries.
+   * Post-filter SyncActions to what one caller may receive. Shared by delta
+   * sync and the WebSocket fan-out (per restricted socket), so the two
+   * catch-up paths cannot disagree about who sees what.
    *
-   * Covers the two modelNames that carry issue-scoped data: `Issue` rows
-   * embed `teamId`/`creatorId`/`assigneeId` directly (the full issue is the
-   * payload); `IssueRelation`/`IssueReaction` rows embed `issueId` but not
-   * the parent issue's team/creator/assignee, so those are resolved with a
-   * single batched lookup instead of a query per row.
+   * SyncActions aren't a clean fit for visibility: each row's `data` is a
+   * point-in-time JSON snapshot taken at write time, not a live join, so the
+   * decision is derived from whatever the payload carries:
    *
-   * A row with no `data` (delete actions are recorded with `data: null`)
-   * carries nothing to leak beyond "this id was deleted", so it passes
-   * through unfiltered — dropping it would just leave a stale row in a
-   * guest's local cache with no confidentiality benefit.
+   * - A `Team` row for a hidden team is rewritten to a delete so a client
+   *   that held the team before it went private drops it, instead of being
+   *   silently starved of updates while keeping a stale copy.
+   * - Any row carrying `teamId` (Issue, Cycle, WorkflowState, IssueTemplate,
+   *   CustomView, Document, CustomFieldDefinition, …) is dropped when that
+   *   team is hidden. `Issue` rows on a guest team additionally require the
+   *   caller to be creator or assignee; team-scoped metadata on a guest team
+   *   is visible, matching the bootstrap.
+   * - Any row carrying `issueId` but no `teamId` (Comment, IssueRelation,
+   *   IssueReaction, CustomFieldValue, File, …) resolves its parent issue in
+   *   one batched lookup and inherits its answer. `IssueRelation` checks both
+   *   endpoints — the row embeds the related issue's UUID and the relation
+   *   type, which is itself information about an issue the caller may not
+   *   see.
    *
-   * KNOWN RESIDUAL: other issue-derived writes (label/custom-field changes)
-   * are folded into an `Issue` `U` SyncAction by their resolvers (see
-   * custom-field.ts, issue.ts label handling) rather than getting their own
-   * modelName, so they're covered by the `Issue` branch above. Any FUTURE
-   * modelName that carries issue-derived data would need a case added here
-   * — this is a denylist-by-omission, not a structurally-enforced guarantee.
+   * A row with no `data` (deletes are recorded with `data: null`) carries
+   * nothing to leak beyond "this id was deleted", so it passes through —
+   * dropping it would only leave a stale row in the client's cache.
+   *
+   * This keys on payload field names rather than a model allow-list on
+   * purpose: a new issue-derived model that carries `issueId` is covered the
+   * day it is added, where a per-model switch would silently omit it.
    */
-  private async filterGuestVisibleActions(
+  async filterVisibleActions(
     rows: SyncActionRow[],
-    guestTeamIds: string[],
-    guestUserId: string,
+    visibility: SyncVisibility,
   ): Promise<SyncActionRow[]> {
-    const guestTeamSet = new Set(guestTeamIds);
+    if (isUnrestricted(visibility)) {
+      return rows;
+    }
+    const { userId } = visibility;
+    const guestTeamSet = new Set(visibility.guestTeamIds);
+    const hiddenTeamSet = new Set(visibility.hiddenTeamIds);
 
     const relatedIssueIds = new Set<string>();
     for (const row of rows) {
-      if ((row.modelName === 'IssueRelation' || row.modelName === 'IssueReaction') && row.data) {
-        const data = row.data as Record<string, unknown>;
-        if (typeof data.issueId === 'string') {
-          relatedIssueIds.add(data.issueId);
-        }
-        // IssueRelation carries a SECOND issue endpoint (relatedIssueId) —
-        // both sides need a visibility lookup, not just `issueId`, or a
-        // guest could see a relation for a relatedIssue they can't
-        // otherwise access.
-        if (row.modelName === 'IssueRelation' && typeof data.relatedIssueId === 'string') {
-          relatedIssueIds.add(data.relatedIssueId);
-        }
+      const data = payloadOf(row);
+      if (!data || typeof data.teamId === 'string') {
+        continue;
+      }
+      if (typeof data.issueId === 'string') {
+        relatedIssueIds.add(data.issueId);
+      }
+      if (row.modelName === 'IssueRelation' && typeof data.relatedIssueId === 'string') {
+        relatedIssueIds.add(data.relatedIssueId);
       }
     }
 
@@ -781,63 +824,71 @@ export class SyncService {
       issueLookup = new Map(found.map(i => [i.id, i]));
     }
 
-    const canSee = (
+    const canSeeIssue = (
       teamId: string | null | undefined,
       creatorId: string | null | undefined,
       assigneeId: string | null | undefined,
     ): boolean => {
-      if (!teamId || !guestTeamSet.has(teamId)) {
+      if (!teamId) {
         return true;
       }
-      return creatorId === guestUserId || assigneeId === guestUserId;
+      if (hiddenTeamSet.has(teamId)) {
+        return false;
+      }
+      if (!guestTeamSet.has(teamId)) {
+        return true;
+      }
+      return creatorId === userId || assigneeId === userId;
+    };
+    // Issue no longer exists (hard-deleted) or wasn't found — nothing left to
+    // gate visibility on; let it through rather than silently dropping a row
+    // we can't reason about.
+    const canSeeIssueId = (issueId: unknown): boolean => {
+      if (typeof issueId !== 'string') {
+        return true;
+      }
+      const info = issueLookup.get(issueId);
+      return !info || canSeeIssue(info.teamId, info.creatorId, info.assigneeId);
     };
 
-    return rows.filter(row => {
-      if (!row.data) {
-        return true;
+    const out: SyncActionRow[] = [];
+    for (const row of rows) {
+      const data = payloadOf(row);
+      if (!data) {
+        out.push(row);
+        continue;
       }
-      const data = row.data as Record<string, unknown>;
-      if (row.modelName === 'Issue') {
-        return canSee(
-          data.teamId as string | undefined,
-          data.creatorId as string | undefined,
-          data.assigneeId as string | undefined,
-        );
+      if (row.modelName === 'Team') {
+        if (typeof data.id === 'string' && hiddenTeamSet.has(data.id)) {
+          out.push({ ...row, action: 'D', data: null });
+        } else {
+          out.push(row);
+        }
+        continue;
       }
-      if (row.modelName === 'IssueRelation' || row.modelName === 'IssueReaction') {
-        const issueId = data.issueId as string | undefined;
-        if (!issueId) {
-          return true;
+      if (typeof data.teamId === 'string') {
+        const visible =
+          row.modelName === 'Issue'
+            ? canSeeIssue(
+                data.teamId,
+                data.creatorId as string | null | undefined,
+                data.assigneeId as string | null | undefined,
+              )
+            : !hiddenTeamSet.has(data.teamId);
+        if (visible) {
+          out.push(row);
         }
-        const info = issueLookup.get(issueId);
-        // Issue no longer exists (hard-deleted) or wasn't found — nothing
-        // left to gate visibility on; let it through rather than silently
-        // dropping a row we can't reason about.
-        if (info && !canSee(info.teamId, info.creatorId, info.assigneeId)) {
-          return false;
-        }
-
-        // IssueRelation additionally embeds a relatedIssueId — a guest must
-        // be able to see BOTH endpoints, since this row leaks the related
-        // issue's UUID + relation type even when they can already see the
-        // `issue` side.
-        if (row.modelName === 'IssueRelation') {
-          const relatedIssueId = data.relatedIssueId as string | undefined;
-          if (relatedIssueId) {
-            const relatedInfo = issueLookup.get(relatedIssueId);
-            if (
-              relatedInfo &&
-              !canSee(relatedInfo.teamId, relatedInfo.creatorId, relatedInfo.assigneeId)
-            ) {
-              return false;
-            }
-          }
-        }
-
-        return true;
+        continue;
       }
-      return true;
-    });
+      if (!canSeeIssueId(data.issueId)) {
+        continue;
+      }
+      if (row.modelName === 'IssueRelation' && !canSeeIssueId(data.relatedIssueId)) {
+        continue;
+      }
+      out.push(row);
+    }
+    return out;
   }
 
   /**

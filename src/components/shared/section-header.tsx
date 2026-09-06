@@ -5,7 +5,7 @@ interface SectionHeaderProps {
   /** Optional right-aligned control, e.g. a <SectionAddButton />. */
   action?: ReactNode;
   /** Heading level to render, for document-outline correctness. Defaults to h3. */
-  as?: 'h3' | 'h4';
+  as?: 'h2' | 'h3' | 'h4';
   /** Heading content — a plain string or a node (e.g. title plus an inline count). */
   title: ReactNode;
 }

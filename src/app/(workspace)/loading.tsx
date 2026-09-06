@@ -1,4 +1,9 @@
-import { IssueListSkeleton, SidebarSkeleton, Skeleton } from '@/components/ui/skeleton';
+import {
+  IssueListSkeleton,
+  LoadingRegion,
+  SidebarSkeleton,
+  Skeleton,
+} from '@/components/ui/skeleton';
 
 /**
  * Suspense fallback shown while a workspace route resolves. Approximates
@@ -13,9 +18,9 @@ export default function WorkspaceLoading() {
         <SidebarSkeleton />
       </aside>
       <main className="flex flex-1 flex-col">
-        <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
+        <LoadingRegion className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
           <Skeleton className="h-3.5 w-32" />
-        </div>
+        </LoadingRegion>
         <IssueListSkeleton count={10} />
       </main>
     </div>

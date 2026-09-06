@@ -1,13 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { InlineRetry } from '@/components/shared/inline-retry';
+import { LoadError } from '@/components/shared/load-error';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
+import { PageHeader } from '@/components/ui/page-header';
+import { SimpleSelect } from '@/components/ui/select';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
-import { gqlQuery, isPermissionError } from '@/lib/graphql';
+import { gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { getErrorMessage } from '@/lib/utils';
 
@@ -135,10 +141,6 @@ export default function AuditLogPage() {
     { entries: [], hasMore: false, nextCursor: null },
   );
 
-  // A non-admin simply cannot see the audit log. That is "not for you" — a
-  // terminal state with nothing to retry — so it is told apart from a genuine
-  // failure by the error's own code, not by a sentinel the fetcher invents.
-  const forbidden = isPermissionError(cause);
   const { entries, hasMore, nextCursor } = page;
 
   async function handleLoadMore() {
@@ -182,180 +184,179 @@ export default function AuditLogPage() {
     setAppliedUserId('');
   }
 
-  if (forbidden) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-muted-foreground">{t('settings.auditLog.forbidden')}</p>
-      </div>
-    );
-  }
-
+  // A non-admin's FORBIDDEN is "not for you" — a terminal state with nothing
+  // to retry — and `LoadError` tells it apart from a genuine failure by the
+  // error's own code. The page chrome stays either way, so a refused read
+  // reads as a closed section rather than a crash.
   if (error) {
     return (
-      <div className="p-6">
-        {/* Deliberately the localized string, not `getErrorMessage(cause, …)`:
-            this page is workspace-facing, and a raw `Failed to fetch` or
-            `GraphQL request failed: 502` reaches a member in whatever language
-            the server happened to speak. The admin console shows the server's
-            own text because there the message *is* the diagnostic; here it is
-            noise the reader cannot act on. See REVIEW_BACKLOG §4.3. */}
-        <InlineRetry message={t('common.somethingWentWrong')} onRetry={() => load()} />
+      <div className="flex flex-1 flex-col overflow-y-auto">
+        <PageHeader
+          description={t('settings.auditLog.description')}
+          title={t('settings.auditLog.title')}
+        />
+        <div className="p-6">
+          {/* Deliberately the localized fallback, not the server's raw text:
+              this page is workspace-facing, and a raw `Failed to fetch` or
+              `GraphQL request failed: 502` reaches a member in whatever language
+              the server happened to speak. See REVIEW_BACKLOG §4.3. */}
+          <LoadError
+            cause={cause}
+            fallback={t('common.somethingWentWrong')}
+            forbiddenMessage={t('settings.auditLog.forbidden')}
+            onRetry={() => load()}
+          />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-lg font-semibold text-foreground">{t('settings.auditLog.title')}</h1>
-        <p className="mt-1 text-xs text-muted-foreground">{t('settings.auditLog.description')}</p>
-      </div>
+    <div className="flex flex-1 flex-col overflow-y-auto">
+      <PageHeader
+        description={t('settings.auditLog.description')}
+        title={t('settings.auditLog.title')}
+      />
+      <div className="mx-auto w-full max-w-5xl px-6 py-8">
+        {/* Filters */}
+        <div className="mb-4 flex flex-wrap gap-2">
+          <SimpleSelect
+            ariaLabel={t('settings.auditLog.columnAction')}
+            className="w-48"
+            onChange={setActionFilter}
+            options={[
+              { label: t('settings.auditLog.allActions'), value: '' },
+              ...AUDIT_ACTIONS.map(a => ({ label: a, value: a })),
+            ]}
+            value={actionFilter}
+          />
+          <Input
+            className="w-56"
+            onChange={e => setUserIdFilter(e.target.value)}
+            placeholder={t('settings.auditLog.filterByUserId')}
+            value={userIdFilter}
+          />
+          <Button onClick={handleApplyFilters} size="sm" type="button">
+            {t('settings.auditLog.apply')}
+          </Button>
+          {(appliedAction || appliedUserId) && (
+            <Button onClick={handleClearFilters} size="sm" type="button" variant="outline">
+              {t('settings.auditLog.clear')}
+            </Button>
+          )}
+        </div>
 
-      {/* Filters */}
-      <div className="mb-4 flex flex-wrap gap-2">
-        <select
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          onChange={e => setActionFilter(e.target.value)}
-          value={actionFilter}
-        >
-          <option value="">{t('settings.auditLog.allActions')}</option>
-          {AUDIT_ACTIONS.map(a => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
-        <input
-          className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-          onChange={e => setUserIdFilter(e.target.value)}
-          placeholder={t('settings.auditLog.filterByUserId')}
-          value={userIdFilter}
-        />
-        <button
-          className="rounded bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90"
-          onClick={handleApplyFilters}
-          type="button"
-        >
-          {t('settings.auditLog.apply')}
-        </button>
-        {(appliedAction || appliedUserId) && (
-          <button
-            className="rounded border border-border px-3 py-1 text-xs hover:bg-muted"
-            onClick={handleClearFilters}
-            type="button"
-          >
-            {t('settings.auditLog.clear')}
-          </button>
+        {loading ? (
+          <RowsSkeleton className="p-6" count={6} />
+        ) : entries.length === 0 ? (
+          <EmptyState size="compact" title={t('settings.auditLog.noEntriesFound')} />
+        ) : (
+          <div className="overflow-hidden rounded border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted">
+                  <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
+                    {t('settings.auditLog.columnAction')}
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
+                    {t('settings.auditLog.columnUser')}
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
+                    {t('settings.auditLog.columnResource')}
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
+                    {t('settings.auditLog.columnIp')}
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
+                    {t('settings.auditLog.columnTimestamp')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {entries.map(entry => (
+                  <tr className="bg-background hover:bg-muted" key={entry.id}>
+                    <td className="px-4 py-2">
+                      <Badge
+                        className="font-mono text-foreground-secondary"
+                        tone="muted"
+                        variant="square"
+                      >
+                        {entry.action}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-2">
+                      {entry.user ? (
+                        <div>
+                          <p className="text-xs font-medium text-foreground">
+                            {entry.user.displayName}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">{entry.user.email}</p>
+                        </div>
+                      ) : entry.userId ? (
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {entry.userId}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          {t('settings.auditLog.system')}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      {entry.resourceType ? (
+                        <span className="text-xs text-muted-foreground">
+                          {entry.resourceType}
+                          {entry.resourceId ? (
+                            <span className="ml-1 font-mono text-muted-foreground">
+                              {entry.resourceId.slice(0, 8)}
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-foreground-faint">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      {entry.ipAddress ? (
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {entry.ipAddress}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-foreground-faint">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className="text-xs text-muted-foreground">
+                        {formatDateTime(entry.createdAt, {
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {hasMore && (
+          <div className="mt-4 flex justify-center">
+            <Button
+              disabled={loadingMore}
+              onClick={handleLoadMore}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {loadingMore ? t('common.loading') : t('settings.auditLog.loadMore')}
+            </Button>
+          </div>
         )}
       </div>
-
-      {loading ? (
-        <RowsSkeleton className="p-6" count={6} />
-      ) : entries.length === 0 ? (
-        <div className="rounded border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-          {t('settings.auditLog.noEntriesFound')}
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded border border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted">
-                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                  {t('settings.auditLog.columnAction')}
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                  {t('settings.auditLog.columnUser')}
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                  {t('settings.auditLog.columnResource')}
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                  {t('settings.auditLog.columnIp')}
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                  {t('settings.auditLog.columnTimestamp')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {entries.map(entry => (
-                <tr className="bg-background hover:bg-muted" key={entry.id}>
-                  <td className="px-4 py-2">
-                    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground-secondary">
-                      {entry.action}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2">
-                    {entry.user ? (
-                      <div>
-                        <p className="text-xs font-medium text-foreground">
-                          {entry.user.displayName}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground">{entry.user.email}</p>
-                      </div>
-                    ) : entry.userId ? (
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {entry.userId}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        {t('settings.auditLog.system')}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    {entry.resourceType ? (
-                      <span className="text-xs text-muted-foreground">
-                        {entry.resourceType}
-                        {entry.resourceId ? (
-                          <span className="ml-1 font-mono text-muted-foreground">
-                            {entry.resourceId.slice(0, 8)}
-                          </span>
-                        ) : null}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-foreground-faint">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    {entry.ipAddress ? (
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {entry.ipAddress}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-foreground-faint">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    <span className="text-xs text-muted-foreground">
-                      {formatDateTime(entry.createdAt, {
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {hasMore && (
-        <div className="mt-4 flex justify-center">
-          <button
-            className="rounded border border-border px-4 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
-            disabled={loadingMore}
-            onClick={handleLoadMore}
-            type="button"
-          >
-            {loadingMore ? t('common.loading') : t('settings.auditLog.loadMore')}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

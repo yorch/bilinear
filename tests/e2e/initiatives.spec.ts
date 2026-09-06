@@ -128,15 +128,13 @@ test.describe('Initiatives', () => {
     // assertion to the expanded panel — `getByText(projectName)` would otherwise
     // strict-mode-collide with the success toast text "Added <projectName>".
     await expect(page.getByText(/^projects \(1\)$/i)).toBeVisible({ timeout: 10_000 });
-    // The expanded panel is the sibling div following the row button (px-12 pb-3
-    // container in src/app/(workspace)/[workspace]/initiatives/page.tsx). Use
-    // contains() since the row button has multiple inner spans (color, name,
-    // status pill, progress %, target date).
+    // The expanded panel is the `initiative-projects` region inside this
+    // initiative's `initiative-row` (src/app/(workspace)/[workspace]/initiatives/page.tsx).
     const expandedPanel = page
-      .locator(
-        `xpath=//button[contains(., "${initiativeName}")]/following-sibling::div[contains(@class, "px-12")][1]`,
-      )
-      .first();
+      .getByTestId('initiative-row')
+      .filter({ hasText: initiativeName })
+      .first()
+      .getByTestId('initiative-projects');
     await expect(expandedPanel.getByText(projectName)).toBeVisible({ timeout: 10_000 });
   });
 

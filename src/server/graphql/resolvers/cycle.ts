@@ -1,10 +1,11 @@
 import { GraphQLError } from 'graphql';
 import type { Cycle } from '../../../generated/prisma';
 import { logger } from '../../lib/logger';
-import { isTeamGuest, requireAuth, requireTeamMember } from '../../middleware/auth';
+import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { CycleCreateInput, CycleUpdateInput } from '../../services/cycle.service';
 import { IssueService } from '../../services/issue.service';
 import type { GraphQLContext } from '../context';
+import { teamUserKey } from '../loaders';
 
 export const cycleResolvers = {
   Cycle: {
@@ -20,7 +21,11 @@ export const cycleResolvers = {
       // cleanly with the creator/assignee OR.
       const userId = ctx.userId;
       const orgId = ctx.orgId;
-      if (userId && orgId && (await isTeamGuest(ctx.prisma, cycle.teamId, userId, orgId))) {
+      if (
+        userId &&
+        orgId &&
+        (await ctx.loaders.guestByTeamUser.load(teamUserKey(cycle.teamId, userId)))
+      ) {
         return ctx.prisma.issue.findMany({
           orderBy: { sortOrder: 'asc' },
           where: {

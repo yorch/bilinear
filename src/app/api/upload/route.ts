@@ -9,10 +9,16 @@ import { env } from '@/server/lib/env';
 import { prisma } from '@/server/lib/prisma';
 import { getUploadDir } from '@/server/lib/upload-dir';
 import { requireAuthContext } from '@/server/middleware/auth';
+import { checkFixedWindow } from '@/server/middleware/rate-limit';
 import { apiScopesAllowWrite } from '@/server/services/auth.service';
 import { FileService } from '@/server/services/file.service';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
+// Multipart boundaries, part headers and the optional issueId/projectId
+// fields — generous, and still three orders of magnitude below a body that
+// could hurt.
+const MULTIPART_SLACK = 64 * 1024;
+const UPLOADS_PER_MINUTE = 60;
 
 // Allow-list of file extensions we accept. Mirrors the SAFE_MIME map in
 // /api/uploads/[...path]/route.ts so we never persist a file the
@@ -57,6 +63,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'API key lacks the "write" scope' }, { status: 403 });
   }
   const { userId, orgId } = authCtx;
+
+  // `req.formData()` materialises the whole multipart body before the
+  // per-file size check below can run, so reject oversized requests on the
+  // declared length first — the multipart framing adds a little, hence the
+  // slack. A body without a Content-Length is chunked; the streaming guard
+  // in `pipeline` below still bounds what reaches disk.
+  const declaredLength = Number(req.headers.get('content-length') ?? '0');
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_FILE_SIZE + MULTIPART_SLACK) {
+    return NextResponse.json(
+      { error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024} MB limit` },
+      { status: 413 },
+    );
+  }
+  const { exceeded } = await checkFixedWindow(`rl:upload:${userId}`, UPLOADS_PER_MINUTE, 60);
+  if (exceeded) {
+    return NextResponse.json(
+      { error: 'Too many uploads — try again in a minute' },
+      { headers: { 'Retry-After': '60' }, status: 429 },
+    );
+  }
 
   let formData: FormData;
   try {

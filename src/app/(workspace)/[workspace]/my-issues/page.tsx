@@ -3,12 +3,14 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
-import { type BoardGroupBy, type BoardSwimlaneBy, BoardView } from '@/components/issues/board-view';
+import { BoardControls } from '@/components/issues/board-controls';
+import { BoardView } from '@/components/issues/board-view';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView } from '@/components/issues/issue-list-view';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
 import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
@@ -17,9 +19,8 @@ import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
 import { useTranslations } from '@/hooks/use-translations';
-import type { DBIssueLabel } from '@/lib/db';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
-import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
+import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildIssueHref } from '@/lib/issue-nav';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
@@ -52,14 +53,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
     }
     return Array.from(issueStore.pool.values())
       .filter(i => i.assigneeId === currentUser.id && !i.trashed && !i.archivedAt)
-      .map(i => ({
-        ...i,
-        dueDate: i.dueDate ?? null,
-        labels: (i.labelIds ?? [])
-          .map(id => labelStore.findById(id))
-          .filter((l): l is DBIssueLabel => l !== null)
-          .map(l => ({ color: l.color, id: l.id, name: l.name })),
-      }))
+      .map(i => toIssueDetail(i, labelStore))
       .sort((a, b) => a.sortOrder - b.sortOrder);
   }, [issueStore.pool.size, userStore.pool.size, currentUser, issueStore, labelStore]);
 
@@ -88,9 +82,13 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   const {
     boardGroupBy,
     closeDetail,
+    deleteDialogProps,
     detailIssue,
+    handleArchive,
+    handleArchiveMany,
     handleOpen,
     openProperty,
+    requestDelete,
     selectedId,
     setBoardGroupBy,
     setOpenProperty,
@@ -125,26 +123,12 @@ const MyIssuesPage = observer(function MyIssuesPage() {
         actions={
           <>
             {viewMode === 'board' && (
-              <>
-                <select
-                  className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
-                  onChange={e => setBoardGroupBy(e.target.value as BoardGroupBy)}
-                  value={boardGroupBy}
-                >
-                  <option value="status">{t('issues.groupByStatus')}</option>
-                  <option value="assignee">{t('issues.groupByAssignee')}</option>
-                  <option value="priority">{t('issues.groupByPriority')}</option>
-                </select>
-                <select
-                  className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground-secondary"
-                  onChange={e => setSwimlaneBy(e.target.value as BoardSwimlaneBy)}
-                  value={swimlaneBy}
-                >
-                  <option value="none">{t('issues.noSwimlanes')}</option>
-                  <option value="assignee">{t('issues.swimlaneByAssignee')}</option>
-                  <option value="priority">{t('issues.swimlaneByPriority')}</option>
-                </select>
-              </>
+              <BoardControls
+                groupBy={boardGroupBy}
+                onGroupBy={setBoardGroupBy}
+                onSwimlaneBy={setSwimlaneBy}
+                swimlaneBy={swimlaneBy}
+              />
             )}
             <ViewToggle mode={viewMode} onChange={setViewMode} />
           </>
@@ -169,7 +153,10 @@ const MyIssuesPage = observer(function MyIssuesPage() {
           <IssueListView
             issues={issues}
             labels={labels}
+            onArchive={handleArchive}
+            onArchiveMany={handleArchiveMany}
             onBulkUpdate={handleBulkUpdate}
+            onDelete={requestDelete}
             onOpen={handleOpen}
             onPropertyClosed={() => setOpenProperty(null)}
             onSelect={setSelectedId}
@@ -220,6 +207,9 @@ const MyIssuesPage = observer(function MyIssuesPage() {
         states={states}
         users={users}
       />
+
+      {/* Delete confirmation (context menu) */}
+      <ConfirmDialog {...deleteDialogProps} />
     </div>
   );
 });

@@ -12,6 +12,7 @@ import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { PROJECT_HEALTH_CONFIG, PROJECT_HEALTH_LABEL_KEYS } from '@/lib/project-constants';
+import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -152,6 +153,7 @@ export const ProjectUpdatesSection = observer(function ProjectUpdatesSection({
                       </button>
                       <DeleteUpdateButton
                         mutation={`mutation ($id: ID!) { projectUpdateDelete(id: $id) { success } }`}
+                        onDeleted={() => toast.success(t('properties.updateForm.updateDeleted'))}
                         updateId={update.id}
                       />
                     </div>

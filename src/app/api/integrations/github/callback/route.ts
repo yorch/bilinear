@@ -6,6 +6,7 @@ import { verifyGithubOAuthState } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
+import { extractAuthContext } from '@/server/middleware/auth';
 import { GitHubService } from '@/server/services/github.service';
 
 const log = childLogger({ module: 'github-callback' });
@@ -41,6 +42,21 @@ async function handleGet(req: NextRequest) {
     return NextResponse.redirect(`${fallbackUrl}?error=invalid_state`);
   }
   bindRequestContext({ orgId, userId });
+
+  // The signed state proves who STARTED the flow, not who is finishing it.
+  // The provider redirects whichever browser completes the consent screen, so
+  // an attacker could start the flow for their own org, hand the authorize
+  // URL to an admin of another org, and have that admin's provider account
+  // bound to the attacker's workspace. Require the finishing browser to hold
+  // the session the state was minted for.
+  const session = await extractAuthContext(
+    null,
+    req.cookies.get('access_token')?.value ?? null,
+    prisma,
+  );
+  if (session.userId !== userId || session.orgId !== orgId) {
+    return NextResponse.redirect(`${fallbackUrl}?error=session_mismatch`);
+  }
 
   // Defense in depth: confirm the initiating user is still an owner/admin of
   // the org before completing the connection (the signed state proves they

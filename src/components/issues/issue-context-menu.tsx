@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowLeft } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { LabelDot } from '@/components/properties/label-select';
@@ -9,13 +10,18 @@ import { StatusDot } from '@/components/properties/status-select';
 import { ColorDot } from '@/components/ui/color-dot';
 import { POPOVER_ITEM_CLASS } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
+import { useFavoriteToggle } from '@/hooks/use-favorite-toggle';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useIssueSnooze } from '@/hooks/use-issue-snooze';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
 import { getBranchName, getPriorityConfig, PRIORITY_OPTIONS } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
+import { useStore } from '@/providers/store-provider';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
+import { getSnoozePresets, isIssueSnoozed, snoozeUntilDate } from './snooze-presets';
 
-type SubMenu = 'root' | 'status' | 'priority' | 'assignee' | 'label';
+type SubMenu = 'root' | 'status' | 'priority' | 'assignee' | 'label' | 'snooze';
 
 interface IssueContextMenuProps {
   currentAssigneeId?: string | null;
@@ -25,9 +31,11 @@ interface IssueContextMenuProps {
   identifier: string;
   issueId: string;
   labels?: IssueLabel[];
-  onArchive: () => void;
+  /** Omit on surfaces that cannot archive — the item is hidden, never a no-op. */
+  onArchive?: () => void;
   onClose: () => void;
-  onDelete: () => void;
+  /** Omit on surfaces that cannot delete — the item is hidden, never a no-op. */
+  onDelete?: () => void;
   onOpen: () => void;
   onUpdate?: (patch: Record<string, unknown>) => void;
   states?: WorkflowState[];
@@ -51,7 +59,7 @@ interface MenuSeparator {
 
 type MenuEntry = MenuItem | MenuSeparator;
 
-export function IssueContextMenu({
+export const IssueContextMenu = observer(function IssueContextMenu({
   issueId,
   identifier,
   title,
@@ -71,10 +79,16 @@ export function IssueContextMenu({
   currentLabelIds = [],
 }: IssueContextMenuProps) {
   const t = useTranslations();
+  const { formatDate } = useFormatters();
+  const { issueStore } = useStore();
   const params = useParams<{ workspace?: string }>();
   const workspaceKey = params.workspace ?? '';
   const menuRef = useRef<HTMLDivElement>(null);
   const [submenu, setSubmenu] = useState<SubMenu>('root');
+  const { isFavorite, toggle: toggleFavorite } = useFavoriteToggle('Issue', issueId);
+  const { snooze, unsnooze } = useIssueSnooze();
+  const snoozed = isIssueSnoozed(issueStore.findById(issueId)?.snoozedUntilAt);
+  const snoozePresets = getSnoozePresets();
 
   useOutsideClick(menuRef, onClose, true, true);
 
@@ -146,28 +160,62 @@ export function IssueContextMenu({
       : []),
     { separator: true },
     {
-      danger: false,
-      label: t('issues.archive'),
+      label: isFavorite ? t('nav.removeFromFavorites') : t('favorites.addToFavorites'),
       onClick: () => {
-        onArchive();
+        void toggleFavorite();
         onClose();
       },
     },
-    {
-      danger: true,
-      label: t('common.delete'),
-      onClick: () => {
-        onDelete();
-        onClose();
-      },
-    },
+    snoozed
+      ? {
+          label: t('issues.snooze.unsnooze'),
+          onClick: () => {
+            void unsnooze(issueId);
+            onClose();
+          },
+        }
+      : {
+          label: t('issues.snooze.snooze'),
+          onClick: () => setSubmenu('snooze'),
+        },
+    ...(onArchive || onDelete ? ([{ separator: true }] as MenuEntry[]) : []),
+    ...(onArchive
+      ? ([
+          {
+            danger: false,
+            label: t('issues.archive'),
+            onClick: () => {
+              onArchive();
+              onClose();
+            },
+          },
+        ] as MenuEntry[])
+      : []),
+    ...(onDelete
+      ? ([
+          {
+            danger: true,
+            label: t('common.delete'),
+            onClick: () => {
+              onDelete();
+              onClose();
+            },
+          },
+        ] as MenuEntry[])
+      : []),
   ];
 
   const submenuTitleKey: Record<Exclude<SubMenu, 'root'>, string> = {
     assignee: 'commandPalette.submenu.setAssignee',
     label: 'commandPalette.submenu.setLabel',
     priority: 'commandPalette.submenu.setPriority',
+    snooze: 'issues.snooze.snooze',
     status: 'commandPalette.submenu.setStatus',
+  };
+
+  const presetLabelKey: Record<(typeof snoozePresets)[number]['key'], string> = {
+    nextWeek: 'issues.snooze.nextWeek',
+    tomorrow: 'issues.snooze.tomorrow',
   };
 
   return (
@@ -290,6 +338,41 @@ export function IssueContextMenu({
                 ))}
               </>
             )}
+            {submenu === 'snooze' && (
+              <>
+                {snoozePresets.map(preset => (
+                  <button
+                    className={POPOVER_ITEM_CLASS}
+                    key={preset.key}
+                    onClick={() => {
+                      void snooze(issueId, preset.until);
+                      onClose();
+                    }}
+                    type="button"
+                  >
+                    <span className="flex-1 text-left">{t(presetLabelKey[preset.key])}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDate(preset.until, { day: 'numeric', month: 'short' })}
+                    </span>
+                  </button>
+                ))}
+                <label className="flex flex-col gap-1 px-3 py-1.5 text-xs text-muted-foreground">
+                  {t('issues.snooze.customDate')}
+                  <input
+                    aria-label={t('issues.snooze.customDate')}
+                    className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
+                    onChange={e => {
+                      const until = snoozeUntilDate(e.target.value);
+                      if (until) {
+                        void snooze(issueId, until);
+                        onClose();
+                      }
+                    }}
+                    type="date"
+                  />
+                </label>
+              </>
+            )}
             {submenu === 'label' &&
               (labels.length === 0 ? (
                 <p className="px-3 py-2 text-xs text-muted-foreground">
@@ -322,4 +405,4 @@ export function IssueContextMenu({
       )}
     </div>
   );
-}
+});

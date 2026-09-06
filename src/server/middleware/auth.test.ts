@@ -5,6 +5,7 @@ import {
   type AuthContext,
   checkSessionValidity,
   extractAuthContext,
+  isOrgAdmin,
   requireAuth,
   requireOrgRole,
   requirePlatformAdmin,
@@ -48,6 +49,25 @@ describe('requireAuth', () => {
   it('does not throw when both userId and orgId are present', () => {
     const ctx = { orgId: 'org-1', userId: 'user-1' };
     expect(() => requireAuth(ctx)).not.toThrow();
+  });
+});
+
+describe('isOrgAdmin', () => {
+  const ctx = (orgRole: string | null, orgId: string | null = 'org-1') => ({
+    orgId,
+    orgRole,
+    userId: 'user-1',
+  });
+
+  it('is true for owner and admin, false for everyone else', () => {
+    expect(isOrgAdmin(ctx('owner'))).toBe(true);
+    expect(isOrgAdmin(ctx('admin'))).toBe(true);
+    expect(isOrgAdmin(ctx('member'))).toBe(false);
+    expect(isOrgAdmin(ctx(null))).toBe(false);
+  });
+
+  it('is false without an org, whatever the stale role says', () => {
+    expect(isOrgAdmin(ctx('owner', null))).toBe(false);
   });
 });
 

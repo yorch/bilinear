@@ -4,7 +4,8 @@ import { logger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { redis } from '@/server/lib/redis';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
-import { getGuestTeamIds, requireAuthContext } from '@/server/middleware/auth';
+import { getSyncVisibility } from '@/server/lib/sync-visibility';
+import { requireAuthContext } from '@/server/middleware/auth';
 import { SyncService } from '@/server/services/sync.service';
 
 /**
@@ -27,11 +28,11 @@ async function handleGet(req: NextRequest) {
   const { orgId, userId } = authResult.ctx;
   bindRequestContext({ orgId });
 
-  const guestTeamIds = await getGuestTeamIds(prisma, userId, orgId);
+  const visibility = await getSyncVisibility(prisma, userId, orgId);
   const syncService = new SyncService(prisma, redis);
 
   try {
-    const data = await syncService.getBootstrapData(orgId, userId, guestTeamIds);
+    const data = await syncService.getBootstrapData(orgId, visibility);
 
     const lines: string[] = [];
 

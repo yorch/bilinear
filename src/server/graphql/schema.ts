@@ -151,6 +151,13 @@ export const typeDefs = `
     private: Boolean!
     timezone: String!
     cyclesEnabled: Boolean!
+    cycleDuration: Int
+    cycleStartDay: Int
+    cycleCooldownTime: Int
+    autoClosePeriod: Int
+    autoArchivePeriod: Int
+    autoCloseChildIssues: Boolean!
+    autoCloseParentIssues: Boolean!
     issueEstimationType: IssueEstimationType!
     triageEnabled: Boolean!
     issueCount: Int!
@@ -532,10 +539,15 @@ export const typeDefs = `
     timezone: String
     cyclesEnabled: Boolean
     cycleDuration: Int
+    cycleStartDay: Int
+    cycleCooldownTime: Int
     issueEstimationType: IssueEstimationType
     triageEnabled: Boolean
     autoClosePeriod: Int
     autoArchivePeriod: Int
+    autoCloseChildIssues: Boolean
+    autoCloseParentIssues: Boolean
+    defaultIssueStateId: ID
     parentId: ID
   }
 

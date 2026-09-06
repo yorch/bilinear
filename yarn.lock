@@ -3466,7 +3466,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tiptap/extensions@npm:3.28.0, @tiptap/extensions@npm:^3.28.0":
+"@tiptap/extensions@npm:^3.28.0":
   version: 3.28.0
   resolution: "@tiptap/extensions@npm:3.28.0"
   peerDependencies:
@@ -4630,7 +4630,6 @@ __metadata:
     "@tiptap/extension-task-list": "npm:3.28.0"
     "@tiptap/extension-text-style": "npm:3.28.0"
     "@tiptap/extension-underline": "npm:3.28.0"
-    "@tiptap/extensions": "npm:3.28.0"
     "@tiptap/pm": "npm:3.28.0"
     "@tiptap/react": "npm:3.28.0"
     "@tiptap/starter-kit": "npm:3.28.0"
@@ -4656,8 +4655,6 @@ __metadata:
     graphql-depth-limit: "npm:1.1.0"
     graphql-query-complexity: "npm:1.1.1"
     graphql-scalars: "npm:1.25.0"
-    graphql-tag: "npm:2.12.7"
-    highlight.js: "npm:11.11.1"
     ioredis: "npm:5.11.1"
     jose: "npm:6.2.4"
     jsdom: "npm:29.1.1"
@@ -4680,13 +4677,13 @@ __metadata:
     tailwindcss: "npm:4.3.3"
     tsx: "npm:4.23.1"
     typescript: "npm:6.0.3"
+    undici: "npm:7.28.0"
     vitest: "npm:4.1.10"
     ws: "npm:8.21.1"
     xml-crypto: "npm:6.1.2"
     y-prosemirror: "npm:1.3.7"
     y-protocols: "npm:1.0.7"
     yjs: "npm:13.6.31"
-    zod: "npm:4.4.3"
   languageName: unknown
   linkType: soft
 
@@ -6254,17 +6251,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"graphql-tag@npm:2.12.7":
-  version: 2.12.7
-  resolution: "graphql-tag@npm:2.12.7"
-  dependencies:
-    tslib: "npm:^2.1.0"
-  peerDependencies:
-    graphql: ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0
-  checksum: 10c0/c5b973b6b0477d3f734a0df7ebea2061790e268774d7fea310fde64820c1686c3b43f3e7262e4224d689917f42ae8e84c67f32772c003c308d38896ed960c5ec
-  languageName: node
-  linkType: hard
-
 "graphql@npm:16.14.2":
   version: 16.14.2
   resolution: "graphql@npm:16.14.2"
@@ -6345,7 +6331,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"highlight.js@npm:11.11.1, highlight.js@npm:~11.11.0":
+"highlight.js@npm:~11.11.0":
   version: 11.11.1
   resolution: "highlight.js@npm:11.11.1"
   checksum: 10c0/40f53ac19dac079891fcefd5bd8a21cf2e8931fd47da5bd1dca73b7e4375c1defed0636fc39120c639b9c44119b7d110f7f0c15aa899557a5a1c8910f3c0144c
@@ -9052,7 +9038,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tslib@npm:^2.0.0, tslib@npm:^2.1.0, tslib@npm:^2.4.0, tslib@npm:^2.5.0, tslib@npm:^2.6.3, tslib@npm:^2.8.0, tslib@npm:^2.8.1":
+"tslib@npm:^2.0.0, tslib@npm:^2.4.0, tslib@npm:^2.5.0, tslib@npm:^2.6.3, tslib@npm:^2.8.0, tslib@npm:^2.8.1":
   version: 2.8.1
   resolution: "tslib@npm:2.8.1"
   checksum: 10c0/9c4759110a19c53f992d9aae23aac5ced636e99887b51b9e61def52611732872ff7668757d4e4c61f19691e36f4da981cd9485e869b4a7408d689f6bf1f14e62
@@ -9144,17 +9130,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"undici@npm:7.28.0, undici@npm:^7.25.0":
+  version: 7.28.0
+  resolution: "undici@npm:7.28.0"
+  checksum: 10c0/fe781983a26098795e99bb1f64906cbb7d0bcaa029a26baade007b53ea67f2631d189b8f9671a31f4c8d0cb3773b7559608628ba54452fef51fec90e7c78bb0d
+  languageName: node
+  linkType: hard
+
 "undici@npm:^6.25.0":
   version: 6.25.0
   resolution: "undici@npm:6.25.0"
   checksum: 10c0/2597cc6689bdb02c210c557b1f85febbfda65becae6e6fc1061508e2f33734d25207f81cd8af56ada9956329eb3a7bd7431e87dcfeceba20ee87059b57dcf985
-  languageName: node
-  linkType: hard
-
-"undici@npm:^7.25.0":
-  version: 7.28.0
-  resolution: "undici@npm:7.28.0"
-  checksum: 10c0/fe781983a26098795e99bb1f64906cbb7d0bcaa029a26baade007b53ea67f2631d189b8f9671a31f4c8d0cb3773b7559608628ba54452fef51fec90e7c78bb0d
   languageName: node
   linkType: hard
 
@@ -9617,12 +9603,5 @@ __metadata:
     grammex: "npm:^3.1.11"
     graphmatch: "npm:^1.1.0"
   checksum: 10c0/6baa15863f1bbf0131a50f80df82bdc1d174f45e81587ff6a2ac2ad13a0c4a1f80e883794d5711ad31acdd85195ebe052375e43db5c4bcbaff98f040c082234e
-  languageName: node
-  linkType: hard
-
-"zod@npm:4.4.3":
-  version: 4.4.3
-  resolution: "zod@npm:4.4.3"
-  checksum: 10c0/7ea31b558e88f9faf44f31dd185e2e1cbf51fed3081787fb96cc2534749b50c0acfc6da7f0922a7353ed092dd358c7d50c28ea96c94d04af64191bd33152eca3
   languageName: node
   linkType: hard

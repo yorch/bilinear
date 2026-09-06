@@ -17,6 +17,7 @@ import { logger, runWithRequestContext } from '@/server/lib/logger';
 import { isOriginStringAllowed } from '@/server/lib/request-security';
 import {
   buildRateLimitedResponse,
+  checkFixedWindow,
   checkRateLimit,
   estimateComplexity,
   withRateLimitHeaders,
@@ -265,6 +266,9 @@ const handler = startServerAndCreateNextHandler<NextRequest, GraphQLContext>(ser
   },
 });
 
+/** Per-IP cap on unauthenticated GraphQL requests (fixed one-minute window). */
+const ANON_REQUESTS_PER_MINUTE = 120;
+
 async function handleRequest(req: NextRequest): Promise<Response> {
   // Build context once — createContext only reads headers/cookies, never the body.
   const ctx = await createContext(req);
@@ -281,7 +285,26 @@ async function handleRequest(req: NextRequest): Promise<Response> {
   }
 
   return runWithRequestContext(bindings, async () => {
-    // Rate-limit authenticated requests only.
+    // Anonymous traffic gets a coarse per-IP cap. The unauthenticated surface
+    // is small (login, verify, token refresh, the public roadmap) but the
+    // roadmap password check runs scrypt per attempt, so without this an
+    // unauthenticated caller had both an unlimited password oracle and a
+    // cheap CPU-exhaustion vector. Login and verify keep their own tighter
+    // per-email limits on top. No client IP (direct exposure without a
+    // socket address) means no key to count on, so the request proceeds.
+    if (!ctx.userId && ctx.clientIp) {
+      const { exceeded } = await checkFixedWindow(
+        `rl:anon:${ctx.clientIp}`,
+        ANON_REQUESTS_PER_MINUTE,
+        60,
+      );
+      if (exceeded) {
+        logger.warn({ clientIp: ctx.clientIp }, 'Anonymous rate limit exceeded');
+        return buildRateLimitedResponse({ 'Retry-After': '60' });
+      }
+    }
+
+    // Complexity-weighted per-user limiting for authenticated requests.
     if (ctx.userId) {
       // req.body is a one-shot ReadableStream. Avoid req.clone() — tee semantics
       // are unreliable in some Node.js / Next.js versions and can leave Apollo's

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Bell, BellOff } from 'lucide-react';
+import { ArrowLeft, Bell, BellOff, Check, Copy } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CustomFieldsEditor } from '@/components/custom-fields/custom-fields-editor';
@@ -10,10 +10,12 @@ import { CycleSelect } from '@/components/properties/cycle-select';
 import { DueDatePicker } from '@/components/properties/due-date-picker';
 import { EstimatePicker } from '@/components/properties/estimate-picker';
 import { LabelDot, LabelSelect } from '@/components/properties/label-select';
+import { MilestoneSelect } from '@/components/properties/milestone-select';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { PrioritySelect } from '@/components/properties/priority-select';
 import { ProjectSelect } from '@/components/properties/project-select';
 import { StatusSelect } from '@/components/properties/status-select';
+import { Badge } from '@/components/ui/badge';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useTranslations } from '@/hooks/use-translations';
@@ -24,7 +26,7 @@ import {
   ISSUE_SUBSCRIPTION_QUERY,
   ISSUE_UNSUBSCRIBE_MUTATION,
 } from '@/lib/graphql-queries';
-import { getDueDateColor } from '@/lib/issue-utils';
+import { getBranchName, getDueDateColor } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -36,6 +38,7 @@ import { FileAttachments } from './file-attachments';
 import { IssueReactionBar } from './issue-reaction-bar';
 import { PullRequestsSection } from './pull-requests-section';
 import { RelationsSection } from './relations-section';
+import { isIssueSnoozed } from './snooze-presets';
 import { SubIssueList } from './sub-issue-list';
 
 interface IssueDetailPanelProps {
@@ -58,7 +61,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
   onUpdate,
 }: IssueDetailPanelProps) {
   const t = useTranslations();
-  const { formatDueDate } = useFormatters();
+  const { formatDueDate, formatDate } = useFormatters();
   const { userStore, teamStore, issueStore, cycleStore } = useStore();
   const currentUserId = userStore.currentUser?.id;
   const currentUserName = userStore.currentUser?.displayName ?? t('issueDetail.defaultUserName');
@@ -72,7 +75,11 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState('');
   const [activityKey, setActivityKey] = useState(0);
+  const [branchCopied, setBranchCopied] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
+  // `IssueDetail` is the narrow list-row shape; the fields only the panel shows
+  // (milestone, snooze, branch) come straight off the store row.
+  const storeRow = issue ? issueStore.findById(issue.id) : null;
 
   // Wrap onUpdate so any mutation triggers an activity re-fetch
   const handleUpdate = useCallback(
@@ -188,6 +195,18 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
   const assignee = users.find(u => u.id === issue.assigneeId);
   const dueDateColor = getDueDateColor(issue.dueDate);
   const currentCycle = issue.cycleId ? cycleStore.findById(issue.cycleId) : null;
+  const branchName = storeRow?.branchName ?? getBranchName(issue.identifier, issue.title);
+  const snoozedUntilAt = storeRow?.snoozedUntilAt ?? null;
+
+  const copyBranchName = () => {
+    navigator.clipboard
+      .writeText(branchName)
+      .then(() => {
+        setBranchCopied(true);
+        setTimeout(() => setBranchCopied(false), 1500);
+      })
+      .catch(() => toast.error(t('issueDetail.properties.copyFailed')));
+  };
 
   const saveTitle = () => {
     if (titleDraft.trim() && titleDraft.trim() !== issue.title) {
@@ -231,6 +250,15 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
               </>
             )}
             <span className="font-mono text-xs text-muted-foreground">{issue.identifier}</span>
+            {isIssueSnoozed(snoozedUntilAt) && (
+              <Badge
+                data-testid="issue-snoozed-badge"
+                title={t('issues.snooze.snoozedUntil', { date: formatDate(snoozedUntilAt ?? '') })}
+                tone="muted"
+              >
+                {t('issues.snooze.snoozedBadge')}
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-1">
             {subscribed !== null && (
@@ -351,9 +379,26 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
             {/* Project */}
             <span className="text-muted-foreground">{t('issueDetail.properties.project')}</span>
             <ProjectSelect
-              onChange={projectId => handleUpdate(issue.id, { projectId })}
+              onChange={projectId =>
+                // A milestone belongs to its project, so moving projects clears it.
+                handleUpdate(issue.id, { projectId, projectMilestoneId: null })
+              }
               value={issue.projectId ?? null}
             />
+
+            {/* Milestone — only meaningful once the issue is in a project */}
+            {issue.projectId && (
+              <>
+                <span className="text-muted-foreground">
+                  {t('issueDetail.properties.milestone')}
+                </span>
+                <MilestoneSelect
+                  onChange={projectMilestoneId => handleUpdate(issue.id, { projectMilestoneId })}
+                  projectId={issue.projectId}
+                  value={storeRow?.projectMilestoneId ?? null}
+                />
+              </>
+            )}
 
             {/* Cycle */}
             <span className="text-muted-foreground">{t('issueDetail.properties.cycle')}</span>
@@ -369,6 +414,14 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                 </span>
               )}
             </div>
+
+            {/* Start date */}
+            <span className="text-muted-foreground">{t('issueDetail.properties.startDate')}</span>
+            <DueDatePicker
+              label={t('issueDetail.properties.startDate')}
+              onChange={startDate => handleUpdate(issue.id, { startDate })}
+              value={issue.startDate}
+            />
 
             {/* Due date */}
             <span className="text-muted-foreground">{t('issueDetail.properties.dueDate')}</span>
@@ -395,6 +448,34 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
                 />
               </>
             )}
+
+            {/* Branch name — derived until the server assigns one */}
+            <span className="text-muted-foreground">{t('issueDetail.properties.branch')}</span>
+            <div className="flex min-w-0 items-center gap-1">
+              <code
+                className="min-w-0 truncate font-mono text-xs text-foreground-secondary"
+                data-testid="issue-branch-name"
+                title={branchName}
+              >
+                {branchName}
+              </code>
+              <button
+                aria-label={t('issues.copyBranchName')}
+                className={cn(
+                  'shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground',
+                  TOUCH_TARGET,
+                )}
+                onClick={copyBranchName}
+                title={t('issues.copyBranchName')}
+                type="button"
+              >
+                {branchCopied ? (
+                  <Check className="h-3 w-3 text-success" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Custom fields (per-team) */}

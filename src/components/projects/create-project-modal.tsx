@@ -1,12 +1,13 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { ModalDialog, ModalFooter, ModalHeader } from '@/components/ui/modal-dialog';
 import { SimpleSelect } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useTranslations } from '@/hooks/use-translations';
+import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -31,7 +32,6 @@ export const CreateProjectModal = observer(function CreateProjectModal({
 }: CreateProjectModalProps) {
   const t = useTranslations();
   const { teamStore } = useStore();
-  const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [statusType, setStatusType] = useState('planned');
@@ -64,7 +64,6 @@ export const CreateProjectModal = observer(function CreateProjectModal({
     setTargetDate('');
     setSubmitting(false);
     setSubmitError('');
-    setTimeout(() => nameRef.current?.focus(), 50);
   }, [open]);
 
   const toggleTeam = (teamId: string) => {
@@ -90,6 +89,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
         targetDate: targetDate || undefined,
         teamIds: selectedTeamIds,
       });
+      toast.success(t('projects.projectCreated'));
       onClose();
     } catch (err) {
       setSubmitError(getErrorMessage(err, t('projects.failedToCreate')));
@@ -111,10 +111,10 @@ export const CreateProjectModal = observer(function CreateProjectModal({
               {t('projects.name')}
             </label>
             <Input
+              data-autofocus
               id="project-name"
               onChange={e => setName(e.target.value)}
               placeholder={t('projects.namePlaceholder')}
-              ref={nameRef}
               required
               value={name}
             />

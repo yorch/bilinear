@@ -15,7 +15,7 @@ export interface SlashCommandItem {
 // Pre-load to avoid async race when the user types and immediately presses a key.
 const slashCommandListModule = import('./slash-command-list');
 
-export const SLASH_COMMANDS: SlashCommandItem[] = [
+const SLASH_COMMANDS: SlashCommandItem[] = [
   {
     command: editor => editor.chain().focus().toggleHeading({ level: 1 }).run(),
     description: 'Large section heading',

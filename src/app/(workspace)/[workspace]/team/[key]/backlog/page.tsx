@@ -1,201 +1,46 @@
 'use client';
 
-import { Archive } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useState } from 'react';
+import { BoardControls } from '@/components/issues/board-controls';
+import { BoardView } from '@/components/issues/board-view';
+import { ColumnPicker } from '@/components/issues/column-picker';
+import { CsvExportButton } from '@/components/issues/csv-export-button';
 import { FilterBuilder } from '@/components/issues/filter-builder';
-import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
-import { EmptyState } from '@/components/ui/empty-state';
+import { IssueListView } from '@/components/issues/issue-list-view';
+import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
+import { ViewToggle } from '@/components/issues/view-toggle';
+import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { SyncErrorState } from '@/components/shared/sync-error-state';
+import { Button } from '@/components/ui/button';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
-import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
+import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
 import { useTranslations } from '@/hooks/use-translations';
-import type { DBIssueLabel } from '@/lib/db';
+import { useVisibleColumns } from '@/hooks/use-visible-columns';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
-import { ISSUE_ARCHIVE_MUTATION } from '@/lib/graphql-queries';
-import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
-import { toast } from '@/lib/toast';
-import { TransactionQueue } from '@/lib/transaction-queue';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
+import { buildIssueHref } from '@/lib/issue-nav';
 import { useStore } from '@/providers/store-provider';
-import type { IssueLabel, IssueUser } from '@/types/issues';
+import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
-// ─── Staleness indicator ────────────────────────────────────────────────────
+/** Workflow state categories the backlog page shows. */
+const BACKLOG_STATE_TYPES = new Set(['backlog', 'unstarted']);
 
-function StalenessIndicator({ updatedAt }: { updatedAt: string }) {
-  const t = useTranslations();
-  const daysSince = Math.floor(
-    (Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60 * 24),
-  );
-
-  if (daysSince < 7) {
-    return null;
-  }
-
-  return (
-    <span
-      className={cn(
-        'text-[10px] font-medium',
-        daysSince >= 30
-          ? 'text-danger-subtle-foreground'
-          : daysSince >= 14
-            ? 'text-warning-subtle-foreground'
-            : 'text-muted-foreground',
-      )}
-      title={t('issues.lastUpdatedDaysAgo', { count: daysSince })}
-    >
-      {daysSince}d
-    </span>
-  );
-}
-
-// ─── Backlog row ────────────────────────────────────────────────────────────
-
-interface BacklogIssue {
-  assigneeId?: string | null;
-  createdAt: string;
-  dueDate?: string | null;
-  estimate?: number | null;
-  id: string;
-  identifier: string;
-  labels: IssueLabel[];
-  priority: number;
-  stateId: string;
-  title: string;
-  updatedAt: string;
-}
-
-interface BacklogRowProps {
-  issue: BacklogIssue;
-  onSelect: () => void;
-  onUpdate: (id: string, patch: Record<string, unknown>) => void;
-  selected: boolean;
-}
-
-function BacklogRow({ issue, selected, onSelect, onUpdate }: BacklogRowProps) {
-  const t = useTranslations();
-  return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: row contains interactive children; top-level click selects
-    // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard nav handled at page level
-    <div
-      className={cn(
-        'flex items-center gap-3 border-b border-border px-4 py-2 transition-colors',
-        selected ? 'bg-brand-subtle' : 'hover:bg-accent/50',
-      )}
-      onClick={onSelect}
-    >
-      {/* Priority */}
-      <button
-        className="flex-shrink-0"
-        onClick={e => {
-          e.stopPropagation();
-          const next = issue.priority >= 4 ? 0 : issue.priority + 1;
-          onUpdate(issue.id, { priority: next });
-        }}
-        title={t(priorityLabelKey(issue.priority))}
-        type="button"
-      >
-        <PriorityIcon className="h-3.5 w-3.5" priority={issue.priority} />
-      </button>
-
-      {/* Identifier */}
-      <span className="w-16 flex-shrink-0 text-xs text-muted-foreground">{issue.identifier}</span>
-
-      {/* Title */}
-      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{issue.title}</span>
-
-      {/* Estimate — inline editable */}
-      <button
-        className="w-8 flex-shrink-0 text-center text-xs text-muted-foreground hover:text-foreground-secondary"
-        onClick={e => {
-          e.stopPropagation();
-          const val = prompt(t('issues.estimatePrompt'), String(issue.estimate ?? ''));
-          if (val !== null) {
-            const num = val === '' ? null : parseFloat(val);
-            onUpdate(issue.id, { estimate: num });
-          }
-        }}
-        title={t('issues.setEstimate')}
-        type="button"
-      >
-        {issue.estimate ?? '—'}
-      </button>
-
-      {/* Labels */}
-      <div className="flex flex-shrink-0 gap-0.5">
-        {issue.labels.slice(0, 3).map(label => (
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            key={label.id}
-            style={{ backgroundColor: label.color }}
-            title={label.name}
-          />
-        ))}
-      </div>
-
-      {/* Staleness */}
-      <div className="w-8 flex-shrink-0 text-right">
-        <StalenessIndicator updatedAt={issue.updatedAt} />
-      </div>
-    </div>
-  );
-}
-
-// ─── Priority group ─────────────────────────────────────────────────────────
-
-function PriorityGroup({
-  priority,
-  issues,
-  selectedIds,
-  onToggleSelect,
-  onUpdate,
-}: {
-  priority: number;
-  issues: BacklogIssue[];
-  selectedIds: Set<string>;
-  onToggleSelect: (id: string) => void;
-  onUpdate: (id: string, patch: Record<string, unknown>) => void;
-}) {
-  const t = useTranslations();
-  const [collapsed, setCollapsed] = useState(false);
-
-  return (
-    <div>
-      <button
-        className="flex w-full items-center gap-2 border-b border-border bg-card px-4 py-1.5 text-left"
-        onClick={() => setCollapsed(!collapsed)}
-        type="button"
-      >
-        <span className="text-xs font-medium text-foreground-secondary">
-          {t(priorityLabelKey(priority))}
-        </span>
-        <span className="text-xs text-muted-foreground">{issues.length}</span>
-        <span className="text-xs text-muted-foreground">{collapsed ? '▸' : '▾'}</span>
-      </button>
-      {!collapsed &&
-        issues.map(issue => (
-          <BacklogRow
-            issue={issue}
-            key={issue.id}
-            onSelect={() => onToggleSelect(issue.id)}
-            onUpdate={onUpdate}
-            selected={selectedIds.has(issue.id)}
-          />
-        ))}
-    </div>
-  );
-}
-
-// ─── Main backlog page ──────────────────────────────────────────────────────
-
+/**
+ * Team backlog: the same list/board/timeline surface as the team issues page,
+ * restricted to issues in backlog-category workflow states. It used to draw its
+ * own rows and so lacked the context menu, board toggle, column picker and CSV
+ * export the team page had.
+ */
 const BacklogPage = observer(function BacklogPage() {
-  const { key: teamKey } = useParams<{
-    workspace: string;
-    key: string;
-  }>();
+  const { workspace, key: teamKey } = useParams<{ workspace: string; key: string }>();
+  const t = useTranslations();
   const {
     issueStore,
     teamStore,
@@ -203,134 +48,91 @@ const BacklogPage = observer(function BacklogPage() {
     workflowStateStore,
     labelStore,
     customFieldStore,
+    projectStore,
+    cycleStore,
     syncStore,
+    uiStore,
   } = useStore();
 
-  const t = useTranslations();
   useDocumentTitle(t('nav.backlog'));
-  const txQueue = useMemo(() => new TransactionQueue(), []);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filterSet, setFilterSet] = useState<FilterSet>(createEmptyFilterSet());
 
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
+  const basePath = `/${workspace}/team/${teamKey}/backlog`;
 
   const rawStates = teamId ? workflowStateStore.findByTeamId(teamId) : [];
+  // Only the backlog-category states, so the grouped list never shows an
+  // empty "In progress" header.
+  const states = rawStates.filter(s => BACKLOG_STATE_TYPES.has(s.type));
+  const backlogStateIds = new Set(states.map(s => s.id));
 
-  // Backlog shows only Backlog + Unstarted state categories
-  const backlogStateIds = useMemo(
-    () =>
-      new Set(rawStates.filter(s => s.type === 'backlog' || s.type === 'unstarted').map(s => s.id)),
-    [rawStates],
-  );
-
-  const allBacklogIssues = useMemo(() => {
+  // Plain selectors rather than useMemo — see team/[key]/page.tsx for why
+  // memoising on `.size` misses in-place mutations.
+  const allBacklogIssues: IssueDetail[] = (() => {
     if (!teamId) {
       return [];
     }
+    const statePositionMap = new Map(states.map(s => [s.id, s.position]));
     return issueStore
       .findByTeamId(teamId)
       .filter(i => backlogStateIds.has(i.stateId))
-      .map(i => ({
-        ...i,
-        dueDate: i.dueDate ?? null,
-        labels: (i.labelIds ?? [])
-          .map(id => labelStore.findById(id))
-          .filter((l): l is DBIssueLabel => l !== null)
-          .map(l => ({ color: l.color, id: l.id, name: l.name })),
-      }));
-  }, [teamId, issueStore, labelStore, backlogStateIds]);
+      .map(i => toIssueDetail(i, labelStore))
+      .sort((a, b) => {
+        const posA = statePositionMap.get(a.stateId) ?? 0;
+        const posB = statePositionMap.get(b.stateId) ?? 0;
+        if (posA !== posB) {
+          return posA - posB;
+        }
+        return a.sortOrder - b.sortOrder;
+      });
+  })();
 
-  // Plain selectors — see team/[key]/page.tsx for rationale. Memo deps
-  // keyed on `.size` ignored in-place definition/value mutations.
   const customFieldDefs = teamId ? customFieldStore.findDefinitionsByTeamId(teamId) : [];
+  const { isVisible: isColumnVisible, toggle: toggleColumn } = useVisibleColumns(
+    `${teamId ?? 'no-team'}:backlog`,
+  );
 
-  const filteredIssues = applyFilters(
+  const issues = applyFilters(
     allBacklogIssues,
     filterSet,
     (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
   );
 
-  // Group by priority
-  const priorityGroups = useMemo(() => {
-    const groups = new Map<number, typeof filteredIssues>();
-    for (const issue of filteredIssues) {
-      const list = groups.get(issue.priority) ?? [];
-      list.push(issue);
-      groups.set(issue.priority, list);
-    }
-    // Sort by priority: urgent first, then high, medium, low, none
-    return [1, 2, 3, 4, 0]
-      .filter(p => groups.has(p))
-      .map(p => ({ issues: groups.get(p) ?? [], priority: p }));
-  }, [filteredIssues]);
-
   const users: IssueUser[] = toIssueUsers(userStore.all);
-
   const labels: IssueLabel[] = toIssueLabels(labelStore.all);
 
-  const states = rawStates;
-
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
+  const hasError = syncStore.status === 'error';
 
-  // ── Mutations ───────────────────────────────────────────────────────────
+  // ── Mutations, selection, shortcuts ─────────────────────────────────────
 
   const handleUpdate = useIssueUpdate();
+  const handleBulkUpdate = useIssuesBulkUpdate();
 
-  const handleToggleSelect = useCallback((id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
-  // ── Bulk operations ─────────────────────────────────────────────────────
-
-  const handleBulkSetPriority = useCallback(
-    (priority: number) => {
-      for (const id of selectedIds) {
-        handleUpdate(id, { priority });
-      }
-      setSelectedIds(new Set());
-    },
-    [selectedIds, handleUpdate],
-  );
-
-  const handleBulkSetEstimate = useCallback(
-    (estimate: number | null) => {
-      for (const id of selectedIds) {
-        handleUpdate(id, { estimate });
-      }
-      setSelectedIds(new Set());
-    },
-    [selectedIds, handleUpdate],
-  );
-
-  const handleBulkArchive = useCallback(() => {
-    for (const id of selectedIds) {
-      issueStore.optimisticUpdate(id, { archivedAt: new Date().toISOString() });
-      txQueue.enqueue(
-        ISSUE_ARCHIVE_MUTATION,
-        { id },
-        {
-          onError: err => {
-            toast.error(getErrorMessage(err, t('issues.archiveFailed')));
-            issueStore.optimisticUpdate(id, { archivedAt: null });
-          },
-        },
-      );
-    }
-    setSelectedIds(new Set());
-  }, [selectedIds, issueStore, txQueue, t]);
-
-  // ── Keyboard shortcuts ──────────────────────────────────────────────────
-
-  useHotkeys('escape', () => setSelectedIds(new Set()), {}, []);
+  const {
+    boardGroupBy,
+    closeDetail,
+    deleteDialogProps,
+    detailIssue,
+    handleArchive,
+    handleArchiveMany,
+    handleOpen,
+    openProperty,
+    requestDelete,
+    selectedId,
+    setBoardGroupBy,
+    setOpenProperty,
+    setSelectedId,
+    setSwimlaneBy,
+    setViewMode,
+    swimlaneBy,
+    viewMode,
+  } = useIssueListPage({
+    basePath,
+    buildHref: id => buildIssueHref(workspace, id, { label: t('nav.backlog'), path: basePath }),
+    issues,
+  });
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -338,6 +140,10 @@ const BacklogPage = observer(function BacklogPage() {
     // A shaped skeleton rather than a centred "Loading…" string: it tells you
     // what is arriving and keeps the page from jumping when it does.
     return <IssueListSkeleton />;
+  }
+
+  if (hasError) {
+    return <SyncErrorState message={t('issues.failedToLoad')} />;
   }
 
   if (!team) {
@@ -352,12 +158,28 @@ const BacklogPage = observer(function BacklogPage() {
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
       <PageHeader
-        count={filteredIssues.length}
+        actions={
+          <>
+            {viewMode === 'board' && (
+              <BoardControls
+                groupBy={boardGroupBy}
+                onGroupBy={setBoardGroupBy}
+                onSwimlaneBy={setSwimlaneBy}
+                swimlaneBy={swimlaneBy}
+              />
+            )}
+            <ViewToggle mode={viewMode} onChange={setViewMode} />
+            <Button onClick={() => uiStore.openCreateIssueModal()} size="sm" type="button">
+              {t('issues.newIssue')}
+            </Button>
+          </>
+        }
+        count={issues.length}
         title={t('issues.teamBacklogTitle', { team: team.displayName ?? team.name })}
       />
 
       {/* Filter bar */}
-      <Toolbar>
+      <Toolbar className="justify-between">
         <FilterBuilder
           customFields={customFieldDefs}
           filterSet={filterSet}
@@ -366,76 +188,107 @@ const BacklogPage = observer(function BacklogPage() {
           states={states}
           users={users}
         />
+        {viewMode === 'list' && (
+          <div className="flex items-center gap-1">
+            <CsvExportButton
+              customFields={customFieldDefs}
+              cyclesById={
+                new Map(
+                  Array.from(cycleStore.pool.values()).map(c => [
+                    c.id,
+                    { name: c.name ?? null, number: c.number },
+                  ]),
+                )
+              }
+              getCustomFieldValue={(issueId, definitionId) =>
+                customFieldStore.findValue(issueId, definitionId)?.value ?? null
+              }
+              issues={issues}
+              projectsById={
+                new Map(Array.from(projectStore.pool.values()).map(p => [p.id, { name: p.name }]))
+              }
+              states={states}
+              stem={`team-${team.key}-backlog`}
+              users={users}
+            />
+            <ColumnPicker
+              customFields={customFieldDefs}
+              isVisible={isColumnVisible}
+              onToggle={toggleColumn}
+            />
+          </div>
+        )}
       </Toolbar>
 
-      {/* Bulk actions toolbar */}
-      {selectedIds.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-brand-border bg-brand-subtle px-4 py-2">
-          <span className="text-xs font-medium text-brand-subtle-foreground">
-            {t('issues.selectedCount', { count: selectedIds.size })}
-          </span>
-          <div className="flex items-center gap-1">
-            {[1, 2, 3, 4].map(p => (
-              <button
-                className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-brand-subtle"
-                key={p}
-                onClick={() => handleBulkSetPriority(p)}
-                title={t('issues.setPriorityN', {
-                  priority: t(priorityLabelKey(p)),
-                })}
-                type="button"
-              >
-                <PriorityIcon className="h-3 w-3" priority={p} />
-              </button>
-            ))}
-          </div>
-          <button
-            className="rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-brand-subtle"
-            onClick={() => {
-              const val = prompt(t('issues.setEstimateForSelectedPrompt'));
-              if (val !== null) {
-                const num = val === '' ? null : parseFloat(val);
-                handleBulkSetEstimate(num);
-              }
-            }}
-            type="button"
-          >
-            {t('issues.estimate')}
-          </button>
-          <button
-            className="rounded px-2 py-0.5 text-xs text-danger-subtle-foreground hover:bg-danger-subtle"
-            onClick={handleBulkArchive}
-            type="button"
-          >
-            {t('issues.archive')}
-          </button>
-          <button
-            className="ml-auto text-xs text-muted-foreground hover:text-foreground-secondary"
-            onClick={() => setSelectedIds(new Set())}
-            type="button"
-          >
-            {t('issues.clear')}
-          </button>
-        </div>
-      )}
-
-      {/* Backlog list */}
+      {/* Backlog list / board / timeline */}
       <div className="flex-1 overflow-y-auto">
-        {priorityGroups.length === 0 ? (
-          <EmptyState icon={<Archive className="h-5 w-5" />} title={t('issues.noBacklogIssues')} />
+        {viewMode === 'list' ? (
+          <IssueListView
+            customFields={customFieldDefs}
+            getCustomFieldValue={(issueId, definitionId) =>
+              customFieldStore.findValue(issueId, definitionId)?.value ?? null
+            }
+            isColumnVisible={isColumnVisible}
+            issues={issues}
+            labels={labels}
+            onArchive={handleArchive}
+            onArchiveMany={handleArchiveMany}
+            onBulkUpdate={handleBulkUpdate}
+            onDelete={requestDelete}
+            onOpen={handleOpen}
+            onPropertyClosed={() => setOpenProperty(null)}
+            onSelect={setSelectedId}
+            onUpdate={handleUpdate}
+            openProperty={openProperty}
+            selectedId={selectedId}
+            states={states}
+            teamId={teamId ?? undefined}
+            users={users}
+          />
+        ) : viewMode === 'timeline' ? (
+          <GanttView
+            emptyMessage={t('issues.ganttEmptyMessage')}
+            items={issues
+              .filter(i => i.startDate ?? i.dueDate)
+              .map<GanttItem>(i => ({
+                endDate: i.dueDate ?? null,
+                id: i.id,
+                name: `${i.identifier} ${i.title}`,
+                startDate: i.startDate ?? null,
+                subtitle: states.find(s => s.id === i.stateId)?.name ?? undefined,
+              }))}
+            onChange={(id, startDate, endDate) => {
+              handleUpdate(id, { dueDate: endDate, startDate });
+            }}
+          />
         ) : (
-          priorityGroups.map(({ priority, issues: groupIssues }) => (
-            <PriorityGroup
-              issues={groupIssues}
-              key={priority}
-              onToggleSelect={handleToggleSelect}
-              onUpdate={handleUpdate}
-              priority={priority}
-              selectedIds={selectedIds}
-            />
-          ))
+          <BoardView
+            groupBy={boardGroupBy}
+            issues={issues}
+            labels={labels}
+            onOpen={handleOpen}
+            onSelect={setSelectedId}
+            onUpdate={handleUpdate}
+            selectedId={selectedId}
+            states={states}
+            swimlaneBy={swimlaneBy}
+            users={users}
+          />
         )}
       </div>
+
+      {/* Detail panel (lazy-loaded) */}
+      <LazyIssueDetailPanel
+        issue={detailIssue}
+        labels={labels}
+        onClose={closeDetail}
+        onUpdate={handleUpdate}
+        states={states}
+        users={users}
+      />
+
+      {/* Delete confirmation (context menu) */}
+      <ConfirmDialog {...deleteDialogProps} />
     </div>
   );
 });

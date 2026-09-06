@@ -5,6 +5,7 @@ import { verifySlackOAuthState } from '@/server/lib/jwt';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
+import { extractAuthContext } from '@/server/middleware/auth';
 import { IssueService } from '@/server/services/issue.service';
 import { exchangeSlackCode, SlackService } from '@/server/services/slack.service';
 
@@ -35,6 +36,21 @@ async function handleGet(req: NextRequest) {
     return NextResponse.redirect(`${appUrl}?error=invalid_state`);
   }
   bindRequestContext({ orgId, userId });
+
+  // The signed state proves who STARTED the flow, not who is finishing it.
+  // The provider redirects whichever browser completes the consent screen, so
+  // an attacker could start the flow for their own org, hand the authorize
+  // URL to an admin of another org, and have that admin's provider account
+  // bound to the attacker's workspace. Require the finishing browser to hold
+  // the session the state was minted for.
+  const session = await extractAuthContext(
+    null,
+    req.cookies.get('access_token')?.value ?? null,
+    prisma,
+  );
+  if (session.userId !== userId || session.orgId !== orgId) {
+    return NextResponse.redirect(`${appUrl}?error=session_mismatch`);
+  }
 
   const membership = await prisma.organizationMember.findUnique({
     select: { role: true },

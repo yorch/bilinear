@@ -7,12 +7,44 @@ import { logger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import {
   ACCESS_TOKEN_MAX_AGE,
+  isOriginAllowed,
   REFRESH_TOKEN_MAX_AGE,
   setSessionCookie,
 } from '@/server/lib/request-security';
 
+/**
+ * Cookie-rewriting routes outside Apollo get no csrfPrevention, so they carry
+ * their own guard. Without it a cross-site `<form enctype="text/plain">` can
+ * post a JSON-shaped body here without a preflight and log the victim into
+ * the attacker's account (login CSRF); the DELETE is an unauthenticated
+ * logout-CSRF. Origin is checked against the same allow-list the GraphQL
+ * route uses, and the POST additionally demands a JSON content type — a
+ * plain form cannot send one.
+ */
+function refuseCrossSite(req: NextRequest): NextResponse | null {
+  if (!isOriginAllowed(req)) {
+    return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
+  }
+  return null;
+}
+
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const refused = refuseCrossSite(req);
+  if (refused) {
+    return refused;
+  }
+  if (!req.headers.get('content-type')?.toLowerCase().startsWith('application/json')) {
+    return NextResponse.json({ error: 'Expected application/json' }, { status: 415 });
+  }
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+  if (!body || typeof body !== 'object') {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
   const { accessToken, refreshToken } = body as {
     accessToken: string;
     refreshToken: string;
@@ -86,7 +118,11 @@ export async function POST(req: NextRequest) {
   return res;
 }
 
-export async function DELETE(_req: NextRequest) {
+export async function DELETE(req: NextRequest) {
+  const refused = refuseCrossSite(req);
+  if (refused) {
+    return refused;
+  }
   const res = NextResponse.json({ success: true });
   res.cookies.delete('access_token');
   res.cookies.delete('refresh_token');

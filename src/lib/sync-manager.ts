@@ -134,7 +134,15 @@ export const UNCACHED_MODELS = [
   // differently for a different team or user). The action exists because every
   // mutation emits one; a client that wants live config would refetch on it.
   'Setting',
+  // Membership rows are not replicated (the client reads team members over
+  // GraphQL), but a change to the CURRENT user's own membership is the one
+  // event that changes what the server will let this client see: joining a
+  // private team makes its history visible, and that history predates every
+  // cursor, so no delta can replay it. `applyActions` re-bootstraps on it.
   'TeamMembership',
+  // Reactions are fetched with the issue's comments and reaction bar over
+  // GraphQL; there is no reaction store. Emitted via `recordSyncAction`.
+  'IssueReaction',
 ] as const;
 
 /**
@@ -806,6 +814,7 @@ export class SyncManager {
         const body = (await res.json()) as {
           actions: SerializedSyncAction[];
           hasMore: boolean;
+          nextCursor?: string | null;
           staleCursor?: boolean;
         };
         // Our cursor predates the server's `sync_actions` retention window, so
@@ -816,10 +825,11 @@ export class SyncManager {
           log.warn('Delta cursor older than server retention window — re-bootstrapping');
           this.isDeltaSyncing = false;
           await this.fullBootstrap();
+          // Same reasoning as the `!res.ok` path above: the WebSocket is
+          // live during this bootstrap, so anything applied while the
+          // snapshot was in flight was overwritten and must be re-delivered.
+          this.scheduleFollowUpDelta();
           return;
-        }
-        if (body.actions.length === 0) {
-          break;
         }
         // Advance the LOCAL cursor from this page's own actions before
         // applying them (see rationale above) so a concurrent WS apply
@@ -830,7 +840,21 @@ export class SyncManager {
             cursor = actionC;
           }
         }
-        await this.applyActions(body.actions);
+        // The server filters each page to what this user may see AFTER
+        // slicing it, so a page can come back with fewer actions than it
+        // covered — or none at all, when everything in it belonged to a
+        // private team or another guest's issues. `nextCursor` is the end of
+        // the unfiltered page; paging from the last *visible* action would
+        // re-fetch the same rows, and breaking on an empty page would pin the
+        // cursor until the retention window forced a re-bootstrap.
+        if (body.nextCursor && compareCursor(body.nextCursor, cursor) > 0) {
+          cursor = body.nextCursor;
+        }
+        if (body.actions.length > 0) {
+          await this.applyActions(body.actions);
+        } else if (!body.nextCursor) {
+          break;
+        }
         if (!body.hasMore) {
           break;
         }
@@ -897,7 +921,14 @@ export class SyncManager {
   private async doApplyActions(actions: SerializedSyncAction[]) {
     // Only the stores the bespoke `case` arms below reach for directly; the
     // uniform models resolve theirs through CACHED_MODELS.
-    const { issueStore, customFieldStore, notificationStore, userStore, syncStore } = this.stores;
+    const {
+      issueStore,
+      issueRelationStore,
+      customFieldStore,
+      notificationStore,
+      userStore,
+      syncStore,
+    } = this.stores;
 
     let maxId = syncStore.lastSyncId;
 
@@ -977,6 +1008,9 @@ export class SyncManager {
      * insert fresh ones atomically in the closing transaction.
      */
     const customFieldValueReplaces = new Map<string, object[]>();
+    /** Issues hard-deleted in this batch; their dependent rows are dropped too. */
+    const deletedIssueIds: string[] = [];
+    let ownMembershipChanged = false;
 
     for (const action of actions) {
       const { action: act, modelName, modelId, data } = action;
@@ -1025,6 +1059,14 @@ export class SyncManager {
             issueStore.applySyncAction(act, modelId, normalized);
             if (act === 'D') {
               dexieDeletes.push({ id: modelId, table: 'issues' });
+              // Postgres cascades the issue's values and relations; the
+              // server emits nothing for those rows, so mirror the cascade
+              // here or they linger in both MobX and Dexie until the next
+              // bootstrap — a dangling relation edge points at an issue that
+              // no longer exists.
+              deletedIssueIds.push(modelId);
+              customFieldStore.removeValuesForIssue(modelId);
+              issueRelationStore.removeForIssue(modelId);
             } else if (normalized?.id) {
               // `db.issues` has an inbound `id` keyPath, and a put with no `id`
               // throws inside the shared transaction, rolling back every other
@@ -1069,6 +1111,13 @@ export class SyncManager {
         // Everything else is either uniform (CACHED_MODELS) or deliberately not
         // cached (UNCACHED_MODELS). The warn is why a missing model is loud
         // rather than silent — see UNCACHED_MODELS for the story behind that.
+        case 'TeamMembership': {
+          const memberId = (data as { userId?: string } | null)?.userId;
+          if (memberId && memberId === userStore.currentUserId) {
+            ownMembershipChanged = true;
+          }
+          break;
+        }
         default: {
           // A `Map`, not an object literal: a bare index on a literal walks
           // `Object.prototype`, so a model named `constructor` or `toString`
@@ -1077,10 +1126,22 @@ export class SyncManager {
           // stalling the cursor.
           const cached = CACHED_MODELS.get(modelName);
           if (!cached) {
-            log.warn('Unhandled SyncAction model — not cached', undefined, {
-              modelName: action.modelName,
-            });
+            if (!(UNCACHED_MODELS as readonly string[]).includes(modelName)) {
+              log.warn('Unhandled SyncAction model — not cached', undefined, {
+                modelName: action.modelName,
+              });
+            }
             break;
+          }
+          // Favorites broadcast org-wide but belong to one user, exactly like
+          // notifications: a colleague starring a project must not land in
+          // this user's sidebar. Deletes carry no payload and are keyed by
+          // id, so a foreign delete matches nothing here.
+          if (modelName === 'Favorite' && act !== 'D') {
+            const owner = (data as { userId?: string } | null)?.userId;
+            if (owner && owner !== userStore.currentUserId) {
+              break;
+            }
           }
           cached.apply(this.stores, act, modelId, data);
           if (act === 'D') {
@@ -1227,14 +1288,58 @@ export class SyncManager {
             await db.customFieldValues.where('definitionId').equals(del.id).delete();
           }
         }
+        // Same for a hard-deleted issue's values and relation edges.
+        for (const issueId of deletedIssueIds) {
+          await db.customFieldValues.where('issueId').equals(issueId).delete();
+          await db.issueRelations.where('issueId').equals(issueId).delete();
+          await db.issueRelations.where('relatedIssueId').equals(issueId).delete();
+        }
       },
     );
+
+    if (ownMembershipChanged) {
+      this.scheduleRebootstrap();
+    }
+  }
+
+  /**
+   * Re-fetch the whole snapshot after this user's own team membership changed.
+   *
+   * The server narrows bootstrap, delta and the live stream to what the
+   * caller may see (private teams, guest scope). Joining a private team makes
+   * its history visible, and that history predates every cursor this client
+   * holds, so no delta can replay it; leaving one leaves rows behind that the
+   * server will never send a delete for. Deferred to a fresh task because
+   * `applyActions` runs under the same lock the bootstrap's write phase takes.
+   */
+  private scheduleRebootstrap(): void {
+    if (this.stopped) {
+      return;
+    }
+    setTimeout(() => {
+      if (this.stopped) {
+        return;
+      }
+      this.fullBootstrap()
+        .then(() => this.scheduleFollowUpDelta())
+        .catch((err: unknown) => {
+          log.error('Re-bootstrap after membership change failed', err);
+        });
+    }, 0);
   }
 
   private setupWebSocket() {
     const unsub1 = this.wsClient.onMessage(async msg => {
       if (msg.cmd === 'sync') {
-        await this.applyActions(msg.sync);
+        try {
+          await this.applyActions(msg.sync);
+        } catch (err) {
+          // A failed Dexie flush here used to surface as an unhandled
+          // rejection with no context. The in-memory apply already happened,
+          // and the cursor on disk stays behind the one in memory, so the
+          // batch is simply re-delivered by the next delta — log and move on.
+          log.error('Failed to apply live sync batch', err);
+        }
       } else if (msg.cmd === 'resync') {
         // Server lost messages (typically after a Redis subscriber blip).
         // Re-run delta from our cursor to pull whatever the WS dropped.

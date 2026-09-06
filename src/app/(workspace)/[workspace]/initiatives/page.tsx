@@ -1,21 +1,25 @@
 'use client';
-import { Flag } from 'lucide-react';
 
+import { Archive, Flag, MoreHorizontal, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
+import { FavoriteToggle } from '@/components/layouts/favorite-toggle';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ColorDot } from '@/components/ui/color-dot';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
+import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBInitiative } from '@/lib/db';
-import { gql, gqlQuery } from '@/lib/graphql';
+import { gql, gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn, TOUCH_TARGET } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /**
@@ -67,6 +71,14 @@ const INITIATIVE_REMOVE_PROJECT_MUTATION = `
   }
 `;
 
+const INITIATIVE_ARCHIVE_MUTATION = `
+  mutation InitiativeArchive($id: ID!) { initiativeArchive(id: $id) { success lastSyncId } }
+`;
+
+const INITIATIVE_DELETE_MUTATION = `
+  mutation InitiativeDelete($id: ID!) { initiativeDelete(id: $id) { success lastSyncId } }
+`;
+
 const INITIATIVE_PROJECT_PROGRESS_QUERY = `
   query InitiativeProjectProgress($id: ID!) {
     initiative(id: $id) {
@@ -95,6 +107,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
   const viewerId = userStore.currentUser?.id ?? '';
   const [expanded, setExpanded] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'archive' | 'delete' | null>(null);
   // Progress must come from the server. Computing it from `issueStore` divides
   // over whatever issues this client happens to hold, and a guest's pool is
   // scoped to issues they created or are assigned — so one owned issue in a
@@ -129,49 +142,137 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
       });
   }, [expanded, projectIdKey, initiative.id]);
 
+  // Archive is optimistic: `initiativeStore.all` filters on `archivedAt`, so
+  // patching it drops the row at once and the sync action confirms or, on
+  // failure, the patch is reverted. Delete waits for the server — a removed
+  // row that comes back is more confusing than a short delay.
+  const handleArchive = async () => {
+    initiativeStore.optimisticUpdate(initiative.id, { archivedAt: new Date().toISOString() });
+    try {
+      await gqlMutate(INITIATIVE_ARCHIVE_MUTATION, { id: initiative.id });
+      toast.success(t('initiatives.row.archived'));
+    } catch (err) {
+      initiativeStore.optimisticUpdate(initiative.id, { archivedAt: null });
+      toast.error(getErrorMessage(err, t('initiatives.row.archiveFailed')));
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await gqlMutate(INITIATIVE_DELETE_MUTATION, { id: initiative.id });
+      toast.success(t('initiatives.row.deleted'));
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('initiatives.row.deleteFailed')));
+    }
+  };
+
   const indentPx = depth * 20;
   return (
-    <div className="border-b border-border">
-      <button
-        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent/50"
-        onClick={() => setExpanded(e => !e)}
+    <div className="border-b border-border" data-testid="initiative-row">
+      <div
+        className="flex w-full items-center gap-3 px-4 py-3 hover:bg-accent/50"
         style={{ paddingLeft: `${16 + indentPx}px` }}
-        type="button"
       >
-        {children.length > 0 && (
-          <span
-            className={cn(
-              'text-muted-foreground text-xs shrink-0 transition-transform',
-              expanded && 'rotate-90',
-            )}
-          >
-            ▶
-          </span>
-        )}
-        <span
-          className="inline-block h-3 w-3 shrink-0 rounded"
-          style={{ backgroundColor: initiative.color }}
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-foreground">
-            {initiative.name}
-          </span>
-          {initiative.description ? (
-            <span className="block truncate text-xs text-muted-foreground">
-              {initiative.description}
+        <button
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          onClick={() => setExpanded(e => !e)}
+          type="button"
+        >
+          {children.length > 0 && (
+            <span
+              className={cn(
+                'text-muted-foreground text-xs shrink-0 transition-transform',
+                expanded && 'rotate-90',
+              )}
+            >
+              ▶
             </span>
-          ) : null}
-        </span>
-        <span className="rounded bg-muted px-2 py-0.5 text-xs text-foreground-secondary">
-          {STATUS_LABELS[initiative.status] ?? initiative.status}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {Math.round(initiative.progress * 100)}%
-        </span>
-        <span className="w-20 text-xs text-muted-foreground">{initiative.targetDate ?? ''}</span>
-      </button>
+          )}
+          <span
+            className="inline-block h-3 w-3 shrink-0 rounded"
+            style={{ backgroundColor: initiative.color }}
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-foreground">
+              {initiative.name}
+            </span>
+            {initiative.description ? (
+              <span className="block truncate text-xs text-muted-foreground">
+                {initiative.description}
+              </span>
+            ) : null}
+          </span>
+          <Badge className="text-foreground-secondary" tone="muted" variant="square">
+            {STATUS_LABELS[initiative.status] ?? initiative.status}
+          </Badge>
+          <span className="text-xs text-muted-foreground">
+            {Math.round(initiative.progress * 100)}%
+          </span>
+          <span className="w-20 text-xs text-muted-foreground">{initiative.targetDate ?? ''}</span>
+        </button>
+        <FavoriteToggle className="h-7 w-7" entityId={initiative.id} entityType="Initiative" />
+        <SelectPopover
+          align="right"
+          panelClassName="min-w-[160px] py-1"
+          triggerChildren={<MoreHorizontal className="h-4 w-4" />}
+          triggerClassName={cn(
+            'flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+            TOUCH_TARGET_SQUARE,
+          )}
+          triggerTitle={t('initiatives.row.moreActions')}
+        >
+          {close => (
+            <>
+              <button
+                className={cn(POPOVER_ITEM_CLASS, 'text-foreground-secondary')}
+                onClick={() => {
+                  close();
+                  setPendingAction('archive');
+                }}
+                type="button"
+              >
+                <Archive className="h-3.5 w-3.5" />
+                {t('initiatives.row.archive')}
+              </button>
+              <button
+                className={cn(POPOVER_ITEM_CLASS, 'text-danger-subtle-foreground')}
+                onClick={() => {
+                  close();
+                  setPendingAction('delete');
+                }}
+                type="button"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {t('common.delete')}
+              </button>
+            </>
+          )}
+        </SelectPopover>
+      </div>
+      <ConfirmDialog
+        confirmLabel={
+          pendingAction === 'archive' ? t('initiatives.row.archive') : t('common.delete')
+        }
+        message={
+          pendingAction === 'archive'
+            ? t('initiatives.row.archiveConfirm', { name: initiative.name })
+            : t('initiatives.row.deleteConfirm', { name: initiative.name })
+        }
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => {
+          const action = pendingAction;
+          setPendingAction(null);
+          if (action === 'archive') {
+            void handleArchive();
+          } else if (action === 'delete') {
+            void handleDelete();
+          }
+        }}
+        open={pendingAction !== null}
+        title={pendingAction === 'archive' ? t('initiatives.row.archive') : t('common.delete')}
+      />
       {expanded ? (
-        <div className="px-12 pb-3">
+        <div className="px-12 pb-3" data-testid="initiative-projects">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-medium text-foreground-secondary">
               {t('initiatives.row.projects', { count: projects.length })}

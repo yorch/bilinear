@@ -66,7 +66,7 @@ export function getClientIp(req: NextRequest): string | null {
  * `APP_URL` plus comma-separated `GRAPHQL_ALLOWED_ORIGINS`. An empty list
  * disables the check (e.g. tests, or same-origin requests with no Origin).
  */
-export function getAllowedOrigins(): string[] {
+function getAllowedOrigins(): string[] {
   const origins: string[] = [];
   if (process.env.APP_URL) {
     origins.push(process.env.APP_URL.replace(/\/$/, ''));

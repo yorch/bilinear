@@ -133,7 +133,7 @@ In development, magic link codes are printed to the server console instead of be
 | `yarn db:verify:indexes`     | EXPLAIN-benchmark the hot paths (live Postgres)        |
 | `yarn db:verify:schema`      | Assert the custom migration applied (live Postgres)    |
 | `yarn admin:grant`           | Grant a user the platform-admin flag                   |
-| `yarn test:e2e`              | Run Playwright E2E tests (requires running dev server) |
+| `yarn test:e2e`              | Run Playwright E2E tests (starts dev + ws servers itself; needs Postgres + Redis) |
 | `yarn test:e2e:ui`           | Open Playwright UI for interactive E2E debugging       |
 | `yarn analyze`               | Build with bundle analyzer (`ANALYZE=true`)            |
 | `node scripts/generate-pwa-icons.mjs` | Regenerate the committed PWA icons in `public/icons` |

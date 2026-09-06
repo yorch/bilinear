@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils';
 interface DueDatePickerProps {
   className?: string;
   forceOpen?: boolean;
+  /** Empty-state trigger text; defaults to "Due date". The start-date picker overrides it. */
+  label?: string;
   onChange: (date: string | null) => void;
   onClose?: () => void;
   value: string | null | undefined;
@@ -19,6 +21,7 @@ export function DueDatePicker({
   onChange,
   className,
   forceOpen,
+  label,
   onClose,
 }: DueDatePickerProps) {
   const t = useTranslations();
@@ -32,7 +35,7 @@ export function DueDatePicker({
       forceOpen={forceOpen}
       onClose={onClose}
       panelClassName="p-2"
-      triggerChildren={value ? formatDueDate(value) : t('properties.dueDate.dueDate')}
+      triggerChildren={value ? formatDueDate(value) : (label ?? t('properties.dueDate.dueDate'))}
       triggerClassName={cn('px-1.5 py-1 text-xs', value ? colorClass : 'text-muted-foreground')}
       triggerTitle={
         value

@@ -22,14 +22,29 @@ describe('resolveAiProvider', () => {
     expect(resolveAiProvider()).toBeInstanceOf(AnthropicProvider);
   });
 
-  it('returns Anthropic for an unknown AI_PROVIDER (typo-safe fallback)', () => {
-    process.env.AI_PROVIDER = 'gemini';
-    expect(resolveAiProvider()).toBeInstanceOf(AnthropicProvider);
+  it('returns Anthropic for an unknown provider (typo-safe fallback)', () => {
+    expect(resolveAiProvider({ provider: 'gemini' })).toBeInstanceOf(AnthropicProvider);
   });
 
-  it('returns OpenAI when AI_PROVIDER=openai (case/space-insensitive)', () => {
-    process.env.AI_PROVIDER = '  OpenAI ';
-    expect(resolveAiProvider()).toBeInstanceOf(OpenAiProvider);
+  it('returns OpenAI for provider=openai (case/space-insensitive)', () => {
+    expect(resolveAiProvider({ provider: '  OpenAI ' })).toBeInstanceOf(OpenAiProvider);
+  });
+
+  it('ignores AI_PROVIDER / *_MODEL env vars — the config registry layers those', () => {
+    // The registry declares the env layer for ai.provider / ai.*Model, so a
+    // second process.env read here would let the two disagree.
+    process.env.AI_PROVIDER = 'openai';
+    process.env.ANTHROPIC_MODEL = 'from-env';
+    process.env.OPENAI_MODEL = 'from-env';
+    expect(resolveAiProvider()).toBeInstanceOf(AnthropicProvider);
+    const anthropicBody = JSON.parse(
+      new AnthropicProvider().buildRequest('s', 'u', 1).init.body as string,
+    );
+    expect(anthropicBody.model).not.toBe('from-env');
+    const openaiBody = JSON.parse(
+      new OpenAiProvider().buildRequest('s', 'u', 1).init.body as string,
+    );
+    expect(openaiBody.model).not.toBe('from-env');
   });
 });
 
@@ -54,11 +69,10 @@ describe('AnthropicProvider', () => {
     expect(body.messages).toEqual([{ content: 'usr', role: 'user' }]);
   });
 
-  it('respects ANTHROPIC_BASE_URL and ANTHROPIC_MODEL overrides', () => {
+  it('respects ANTHROPIC_BASE_URL and a model override', () => {
     // Base excludes the version segment; the provider appends /v1/messages.
     process.env.ANTHROPIC_BASE_URL = 'https://proxy.internal/';
-    process.env.ANTHROPIC_MODEL = 'claude-opus-4-8';
-    const { url, init } = p.buildRequest('s', 'u', 10);
+    const { url, init } = new AnthropicProvider('claude-opus-4-8').buildRequest('s', 'u', 10);
     expect(url).toBe('https://proxy.internal/v1/messages');
     expect(JSON.parse(init.body as string).model).toBe('claude-opus-4-8');
   });

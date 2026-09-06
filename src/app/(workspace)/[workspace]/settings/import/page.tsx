@@ -2,6 +2,9 @@
 
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
@@ -64,6 +67,9 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
   const [rowCount, setRowCount] = useState(0);
   const [mapping, setMapping] = useState<Partial<Record<FieldKey, string>>>({});
   const [importing, setImporting] = useState(false);
+  // The preview parses the whole CSV server-side; on a large file that is
+  // long enough that a silent gap read as "the picker did nothing".
+  const [previewing, setPreviewing] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
 
   const activeTeamId = teamId || teams[0]?.id || '';
@@ -94,6 +100,7 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
     if (!text.trim()) {
       return;
     }
+    setPreviewing(true);
     try {
       const data = await gqlQuery<{ headers: string[]; rowCount: number } | null>(
         PREVIEW_QUERY,
@@ -110,6 +117,8 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
       setResult(null);
     } catch (err) {
       toast.error(getErrorMessage(err, t('settings.import.couldNotParseCsv')));
+    } finally {
+      setPreviewing(false);
     }
   }
 
@@ -174,115 +183,114 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
   );
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8 p-8">
-      <div>
-        <h1 className="text-xl font-semibold">{t('settings.import.title')}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t('settings.import.description')}</p>
-      </div>
+    <div className="flex flex-1 flex-col overflow-y-auto">
+      <PageHeader
+        description={t('settings.import.description')}
+        title={t('settings.import.title')}
+      />
+      <div className="mx-auto w-full max-w-2xl space-y-8 p-8">
+        {/* Import */}
+        <section className="rounded-lg border p-6 space-y-4">
+          <h2 className="font-medium">{t('settings.import.importHeading')}</h2>
 
-      {/* Import */}
-      <section className="rounded-lg border p-6 space-y-4">
-        <h2 className="font-medium">{t('settings.import.importHeading')}</h2>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <input
-            accept=".csv,text/csv"
-            className="text-sm"
-            onChange={e => {
-              const f = e.target.files?.[0];
-              if (f) {
-                void handleFile(f);
-              }
-            }}
-            type="file"
-          />
-          <select
-            className={inputCls}
-            onChange={e => setTeamId(e.target.value)}
-            value={activeTeamId}
-          >
-            {teams.length === 0 && <option value="">{t('settings.import.noTeams')}</option>}
-            {teams.map(team => (
-              <option key={team.id} value={team.id}>
-                {team.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {headers.length > 0 && (
-          <>
-            <p className="text-xs text-muted-foreground">
-              {t('settings.import.rowsDetected', { count: rowCount })}
-            </p>
-            <div className="space-y-2">
-              {MAPPABLE_FIELDS.map(f => (
-                <label className="flex items-center justify-between gap-3" key={f.key}>
-                  <span className="text-sm">
-                    {t(f.labelKey)}
-                    {f.required && <span className="text-destructive"> *</span>}
-                  </span>
-                  <select
-                    className={inputCls}
-                    onChange={e =>
-                      setMapping(m => ({ ...m, [f.key]: e.target.value || undefined }))
-                    }
-                    value={mapping[f.key] ?? ''}
-                  >
-                    <option value="">{t('settings.import.noneOption')}</option>
-                    {headers.map(h => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-            </div>
-            <button
-              className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              disabled={importing || !mapping.title}
-              onClick={() => void runImport()}
-              type="button"
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              accept=".csv,text/csv"
+              className="text-sm"
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (f) {
+                  void handleFile(f);
+                }
+              }}
+              type="file"
+            />
+            <select
+              className={inputCls}
+              onChange={e => setTeamId(e.target.value)}
+              value={activeTeamId}
             >
-              {importing
-                ? t('settings.import.importingEllipsis')
-                : t('settings.import.importCount', { count: rowCount })}
-            </button>
-          </>
-        )}
-
-        {result && (
-          <div className="rounded-md bg-muted/50 p-3 text-sm">
-            <p>
-              {t('settings.import.createdSkipped', {
-                created: result.created,
-                skipped: result.skipped,
-              })}
-            </p>
-            {result.errors.length > 0 && (
-              <ul className="mt-2 max-h-40 list-disc overflow-auto pl-5 text-xs text-destructive">
-                {result.errors.map(e => (
-                  <li key={e}>{e}</li>
-                ))}
-              </ul>
-            )}
+              {teams.length === 0 && <option value="">{t('settings.import.noTeams')}</option>}
+              {teams.map(team => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
           </div>
-        )}
-      </section>
 
-      {/* Export */}
-      <section className="rounded-lg border p-6 space-y-3">
-        <h2 className="font-medium">{t('settings.import.exportHeading')}</h2>
-        <p className="text-sm text-muted-foreground">{t('settings.import.exportDescription')}</p>
-        <button
-          className="rounded-md border px-4 py-1.5 text-sm hover:bg-muted"
-          onClick={() => void runExport()}
-          type="button"
-        >
-          {t('settings.import.exportJson')}
-        </button>
-      </section>
+          {previewing && <RowsSkeleton count={3} />}
+
+          {!previewing && headers.length > 0 && (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {t('settings.import.rowsDetected', { count: rowCount })}
+              </p>
+              <div className="space-y-2">
+                {MAPPABLE_FIELDS.map(f => (
+                  <label className="flex items-center justify-between gap-3" key={f.key}>
+                    <span className="text-sm">
+                      {t(f.labelKey)}
+                      {f.required && <span className="text-destructive"> *</span>}
+                    </span>
+                    <select
+                      className={inputCls}
+                      onChange={e =>
+                        setMapping(m => ({ ...m, [f.key]: e.target.value || undefined }))
+                      }
+                      value={mapping[f.key] ?? ''}
+                    >
+                      <option value="">{t('settings.import.noneOption')}</option>
+                      {headers.map(h => (
+                        <option key={h} value={h}>
+                          {h}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+              <Button
+                disabled={importing || !mapping.title}
+                onClick={() => void runImport()}
+                size="sm"
+                type="button"
+              >
+                {importing
+                  ? t('settings.import.importingEllipsis')
+                  : t('settings.import.importCount', { count: rowCount })}
+              </Button>
+            </>
+          )}
+
+          {result && (
+            <div className="rounded-md bg-muted/50 p-3 text-sm">
+              <p>
+                {t('settings.import.createdSkipped', {
+                  created: result.created,
+                  skipped: result.skipped,
+                })}
+              </p>
+              {result.errors.length > 0 && (
+                <ul className="mt-2 max-h-40 list-disc overflow-auto pl-5 text-xs text-destructive">
+                  {result.errors.map(e => (
+                    <li key={e}>{e}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* Export */}
+        <section className="rounded-lg border p-6 space-y-3">
+          <h2 className="font-medium">{t('settings.import.exportHeading')}</h2>
+          <p className="text-sm text-muted-foreground">{t('settings.import.exportDescription')}</p>
+          <Button onClick={() => void runExport()} size="sm" type="button" variant="outline">
+            {t('settings.import.exportJson')}
+          </Button>
+        </section>
+      </div>
     </div>
   );
 });

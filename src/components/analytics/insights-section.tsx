@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { SectionCard } from '@/components/shared/section-card';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
@@ -263,50 +265,38 @@ export function InsightsSection({
       </div>
 
       {loading ? (
-        <p className="text-xs text-muted-foreground">{t('analytics.insights.loading')}</p>
+        <RowsSkeleton count={4} />
       ) : error ? (
         <InlineRetry message={t('analytics.workspace.failedToLoad')} onRetry={refetch} />
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          <div className="rounded-lg border border-border bg-card p-5">
-            <h3 className="mb-3 text-sm font-medium text-foreground">
-              {t('analytics.insights.leadTime')}
-            </h3>
-            <p className="mb-3 text-[11px] text-muted-foreground">
-              {t('analytics.insights.leadTimeSubtitle')}
-            </p>
+          <SectionCard
+            description={t('analytics.insights.leadTimeSubtitle')}
+            title={t('analytics.insights.leadTime')}
+          >
             <Histogram buckets={data?.lead ?? []} color="var(--chart-ideal)" />
-          </div>
+          </SectionCard>
 
-          <div className="rounded-lg border border-border bg-card p-5">
-            <h3 className="mb-3 text-sm font-medium text-foreground">
-              {t('analytics.insights.cycleTime')}
-            </h3>
-            <p className="mb-3 text-[11px] text-muted-foreground">
-              {t('analytics.insights.cycleTimeSubtitle')}
-            </p>
+          <SectionCard
+            description={t('analytics.insights.cycleTimeSubtitle')}
+            title={t('analytics.insights.cycleTime')}
+          >
             <Histogram buckets={data?.cycle ?? []} color="var(--chart-actual)" />
-          </div>
+          </SectionCard>
 
-          <div className="rounded-lg border border-border bg-card p-5">
-            <h3 className="mb-3 text-sm font-medium text-foreground">
-              {t('analytics.insights.throughputTrend')}
-            </h3>
-            <p className="mb-3 text-[11px] text-muted-foreground">
-              {t('analytics.insights.throughputTrendSubtitle')}
-            </p>
+          <SectionCard
+            description={t('analytics.insights.throughputTrendSubtitle')}
+            title={t('analytics.insights.throughputTrend')}
+          >
             <ThroughputChart points={data?.throughput ?? []} />
-          </div>
+          </SectionCard>
 
-          <div className="rounded-lg border border-border bg-card p-5">
-            <h3 className="mb-3 text-sm font-medium text-foreground">
-              {t('analytics.insights.avgTimeInState')}
-            </h3>
-            <p className="mb-3 text-[11px] text-muted-foreground">
-              {t('analytics.insights.avgTimeInStateSubtitle')}
-            </p>
+          <SectionCard
+            description={t('analytics.insights.avgTimeInStateSubtitle')}
+            title={t('analytics.insights.avgTimeInState')}
+          >
             <TimeInStateChart rows={data?.timeInState ?? []} states={states} />
-          </div>
+          </SectionCard>
         </div>
       )}
     </div>

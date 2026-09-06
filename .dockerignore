@@ -8,11 +8,21 @@ node_modules
 **/.next
 
 # ── Env files ───────────────────────────────────────────────────
-# Ignore every env file except the committed examples.
-# `.env.*` does not match `.env` itself, hence both lines; the negations come
-# last so they win regardless of what appears above.
+# Ignore every env file except the committed example. `.env.*` does not match
+# `.env` itself, hence both lines; the negation comes last so it wins
+# regardless of what appears above. Without the second line `.env.local` /
+# `.env.production` were copied into the build context and `next build`
+# inlined any NEXT_PUBLIC_* value they carried into the published image.
 .env
+.env.*
+!.env.example
 
 # ── Project-specific ────────────────────────────────────────────
 .git
 data
+uploads
+tests
+docs
+playwright-report
+test-results
+coverage

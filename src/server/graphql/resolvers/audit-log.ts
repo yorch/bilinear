@@ -10,7 +10,7 @@ export const auditLogResolvers = {
       if (!entry.userId) {
         return null;
       }
-      return ctx.prisma.user.findUnique({ where: { id: entry.userId } });
+      return ctx.loaders.user.load(entry.userId);
     },
   },
 

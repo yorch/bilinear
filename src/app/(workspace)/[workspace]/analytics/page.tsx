@@ -1,7 +1,9 @@
 'use client';
 
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -104,9 +106,7 @@ export default function WorkspaceAnalyticsPage() {
       />
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
-        {loading && (
-          <p className="text-sm text-muted-foreground">{t('analytics.workspace.loading')}</p>
-        )}
+        {loading && <RowsSkeleton count={6} />}
 
         {error && (
           <InlineRetry message={t('analytics.workspace.failedToLoad')} onRetry={() => refetch()} />
@@ -140,9 +140,11 @@ export default function WorkspaceAnalyticsPage() {
               </div>
 
               {data.teams.length === 0 ? (
-                <p className="px-5 py-8 text-center text-sm text-muted-foreground">
-                  {t('analytics.workspace.noTeamsFound')}
-                </p>
+                <EmptyState
+                  className="m-4"
+                  size="compact"
+                  title={t('analytics.workspace.noTeamsFound')}
+                />
               ) : (
                 <div className="divide-y divide-border">
                   {/* Table header */}

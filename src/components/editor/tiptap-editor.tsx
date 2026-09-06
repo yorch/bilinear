@@ -9,7 +9,6 @@ import { Color } from '@tiptap/extension-color';
 import { Highlight } from '@tiptap/extension-highlight';
 import { HorizontalRule } from '@tiptap/extension-horizontal-rule';
 import { Image } from '@tiptap/extension-image';
-import Link from '@tiptap/extension-link';
 import Mention from '@tiptap/extension-mention';
 import { Placeholder } from '@tiptap/extension-placeholder';
 import { Table } from '@tiptap/extension-table';
@@ -19,7 +18,6 @@ import { TableRow } from '@tiptap/extension-table-row';
 import { TaskItem } from '@tiptap/extension-task-item';
 import { TaskList } from '@tiptap/extension-task-list';
 import { TextStyle } from '@tiptap/extension-text-style';
-import { Underline } from '@tiptap/extension-underline';
 import type { Editor } from '@tiptap/react';
 import { EditorContent, ReactRenderer, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -250,93 +248,46 @@ function positionPopup(
   popup.style.left = `${Math.max(0, left)}px`;
 }
 
-/**
- * Build the Mention extension with a React-rendered floating dropdown.
- *
- * Accepts a **ref** instead of a plain array so the `items` callback always
- * reads the latest users — TipTap extensions are created once and cannot be
- * hot-reloaded when props change.
- */
-function buildMentionExtension(usersRef: React.RefObject<MentionItem[]>) {
-  return Mention.configure({
-    HTMLAttributes: { class: 'mention' },
-    renderLabel: ({ node }) => `@${node.attrs.label ?? node.attrs.id}`,
-    suggestion: {
-      char: '@',
-      items: ({ query }: { query: string }) => {
-        const q = query.toLowerCase();
-        return (usersRef.current ?? []).filter(u => u.label.toLowerCase().includes(q)).slice(0, 8);
-      },
-      render: () => {
-        let component: ReactRenderer<MentionListHandle> | null = null;
-        let popup: HTMLDivElement | null = null;
-
-        return {
-          onExit() {
-            component?.destroy();
-            popup?.remove();
-            popup = null;
-            component = null;
-          },
-          onKeyDown({ event }: { event: KeyboardEvent }) {
-            if (event.key === 'Escape') {
-              popup?.remove();
-              popup = null;
-              component?.destroy();
-              component = null;
-              return true;
-            }
-            return component?.ref?.onKeyDown(event) ?? false;
-          },
-          onStart(props: {
-            editor: unknown;
-            items: MentionItem[];
-            command: (item: MentionItem) => void;
-            clientRect?: (() => DOMRect | null) | null;
-          }) {
-            popup = document.createElement('div');
-            popup.style.cssText = 'position:fixed;z-index:9999;pointer-events:auto;';
-            document.body.appendChild(popup);
-
-            component = new ReactRenderer(MentionList, {
-              editor: props.editor as never,
-              props: { command: props.command, items: props.items },
-            });
-            popup.appendChild(component.element);
-            positionPopup(popup, props.clientRect);
-          },
-          onUpdate(props: {
-            items: MentionItem[];
-            command: (item: MentionItem) => void;
-            clientRect?: (() => DOMRect | null) | null;
-          }) {
-            component?.updateProps({
-              command: props.command,
-              items: props.items,
-            });
-            if (popup) {
-              positionPopup(popup, props.clientRect);
-            }
-          },
-        };
-      },
-    },
-  });
+/** What distinguishes one mention flavour from another. */
+interface MentionKind {
+  /** Trigger character; also the prefix rendered in the node's label. */
+  char: string;
+  /** CSS class on the rendered node (styled in tiptap-editor.css). */
+  className: string;
+  /**
+   * Extension name override so several flavours coexist in one editor. Omitted
+   * for the user mention so its node type stays the stock `mention`.
+   */
+  name?: string;
 }
 
+const USER_MENTION: MentionKind = { char: '@', className: 'mention' };
+const ISSUE_MENTION: MentionKind = { char: '#', className: 'issue-mention', name: 'issueMention' };
+const PROJECT_MENTION: MentionKind = {
+  char: '~',
+  className: 'project-mention',
+  name: 'projectMention',
+};
+
 /**
- * Issue mention extension — triggered by `#`. Items are `{ id, label: identifier, sub: title }`.
- * Uses its own Mention instance with a `name` override so it coexists with the user mention.
+ * Build a Mention extension with a React-rendered floating dropdown.
+ *
+ * Accepts a **ref** instead of a plain array so the `items` callback always
+ * reads the latest list — TipTap extensions are created once and cannot be
+ * hot-reloaded when props change. One builder for users (`@`), issues (`#`)
+ * and projects (`~`): the three copies it replaces differed only in the
+ * fields of `MentionKind`.
  */
-function buildIssueMentionExtension(issuesRef: React.RefObject<MentionItem[]>) {
-  return Mention.extend({ name: 'issueMention' }).configure({
-    HTMLAttributes: { class: 'issue-mention' },
-    renderLabel: ({ node }) => `#${node.attrs.label ?? node.attrs.id}`,
+function buildMentionExtension(kind: MentionKind, itemsRef: React.RefObject<MentionItem[]>) {
+  const Base = kind.name ? Mention.extend({ name: kind.name }) : Mention;
+  return Base.configure({
+    HTMLAttributes: { class: kind.className },
+    renderLabel: ({ node }) => `${kind.char}${node.attrs.label ?? node.attrs.id}`,
     suggestion: {
-      char: '#',
+      char: kind.char,
       items: ({ query }: { query: string }) => {
         const q = query.toLowerCase();
-        return (issuesRef.current ?? [])
+        return (itemsRef.current ?? [])
           .filter(i => i.label.toLowerCase().includes(q) || (i.sub ?? '').toLowerCase().includes(q))
           .slice(0, 8);
       },
@@ -370,71 +321,7 @@ function buildIssueMentionExtension(issuesRef: React.RefObject<MentionItem[]>) {
             popup = document.createElement('div');
             popup.style.cssText = 'position:fixed;z-index:9999;pointer-events:auto;';
             document.body.appendChild(popup);
-            component = new ReactRenderer(MentionList, {
-              editor: props.editor as never,
-              props: { command: props.command, items: props.items },
-            });
-            popup.appendChild(component.element);
-            positionPopup(popup, props.clientRect);
-          },
-          onUpdate(props: {
-            items: MentionItem[];
-            command: (item: MentionItem) => void;
-            clientRect?: (() => DOMRect | null) | null;
-          }) {
-            component?.updateProps({ command: props.command, items: props.items });
-            if (popup) {
-              positionPopup(popup, props.clientRect);
-            }
-          },
-        };
-      },
-    },
-  });
-}
 
-function buildProjectMentionExtension(projectsRef: React.RefObject<MentionItem[]>) {
-  return Mention.extend({ name: 'projectMention' }).configure({
-    HTMLAttributes: { class: 'project-mention' },
-    renderLabel: ({ node }) => `~${node.attrs.label ?? node.attrs.id}`,
-    suggestion: {
-      char: '~',
-      items: ({ query }: { query: string }) => {
-        const q = query.toLowerCase();
-        return (projectsRef.current ?? [])
-          .filter(p => p.label.toLowerCase().includes(q) || (p.sub ?? '').toLowerCase().includes(q))
-          .slice(0, 8);
-      },
-      render: () => {
-        let component: ReactRenderer<MentionListHandle> | null = null;
-        let popup: HTMLDivElement | null = null;
-
-        return {
-          onExit() {
-            component?.destroy();
-            popup?.remove();
-            popup = null;
-            component = null;
-          },
-          onKeyDown({ event }: { event: KeyboardEvent }) {
-            if (event.key === 'Escape') {
-              popup?.remove();
-              popup = null;
-              component?.destroy();
-              component = null;
-              return true;
-            }
-            return component?.ref?.onKeyDown(event) ?? false;
-          },
-          onStart(props: {
-            editor: unknown;
-            items: MentionItem[];
-            command: (item: MentionItem) => void;
-            clientRect?: (() => DOMRect | null) | null;
-          }) {
-            popup = document.createElement('div');
-            popup.style.cssText = 'position:fixed;z-index:9999;pointer-events:auto;';
-            document.body.appendChild(popup);
             component = new ReactRenderer(MentionList, {
               editor: props.editor as never,
               props: { command: props.command, items: props.items },
@@ -627,6 +514,14 @@ export function TipTapEditor({
       StarterKit.configure({
         codeBlock: false,
         horizontalRule: false,
+        // StarterKit 3 bundles Link and Underline. Configure Link here rather
+        // than adding `@tiptap/extension-link` a second time — that duplicate
+        // registration logged `[tiptap warn]: Duplicate extension names found:
+        // ['link', 'underline']` on every editor mount.
+        link: {
+          HTMLAttributes: { rel: 'noopener noreferrer' },
+          openOnClick: false,
+        },
         // Disable StarterKit's UndoRedo when Collaboration is active — Yjs
         // provides its own undo/redo stack via the yUndoPlugin.
         undoRedo: collabEnabled ? false : undefined,
@@ -634,10 +529,6 @@ export function TipTapEditor({
       Placeholder.configure({ placeholder }),
       TaskList,
       TaskItem.configure({ nested: true }),
-      Link.configure({
-        HTMLAttributes: { rel: 'noopener noreferrer' },
-        openOnClick: false,
-      }),
       Image.configure({ inline: true }),
       Table.configure({ resizable: true }),
       TableRow,
@@ -647,7 +538,6 @@ export function TipTapEditor({
       TextStyle,
       Color,
       Highlight.configure({ multicolor: true }),
-      Underline,
       HorizontalRule,
       CharacterCount,
       SlashCommands,
@@ -657,11 +547,13 @@ export function TipTapEditor({
       EmbedNode,
       // Only add the Mention extension when the caller opts in by providing users.
       // The extension reads from mentionUsersRef so suggestions stay current.
-      ...(mentionUsers != null ? [buildMentionExtension(mentionUsersRef)] : []),
+      ...(mentionUsers != null ? [buildMentionExtension(USER_MENTION, mentionUsersRef)] : []),
       // Issue mentions triggered by '#'. Coexists with the user mention via name override.
-      ...(mentionIssues != null ? [buildIssueMentionExtension(mentionIssuesRef)] : []),
+      ...(mentionIssues != null ? [buildMentionExtension(ISSUE_MENTION, mentionIssuesRef)] : []),
       // Project mentions triggered by '~'.
-      ...(mentionProjects != null ? [buildProjectMentionExtension(mentionProjectsRef)] : []),
+      ...(mentionProjects != null
+        ? [buildMentionExtension(PROJECT_MENTION, mentionProjectsRef)]
+        : []),
       // Collaborative editing extensions — only added when a collabDocId is
       // provided and NEXT_PUBLIC_COLLAB_ENABLED=true. Collaboration replaces
       // the Yjs-incompatible StarterKit history (disabled above).

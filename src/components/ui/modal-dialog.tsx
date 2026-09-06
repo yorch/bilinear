@@ -7,10 +7,16 @@ import { Button } from './button';
 interface ModalDialogProps {
   'aria-label': string;
   children: ReactNode;
-  maxWidth?: 'md' | 'lg';
+  maxWidth?: 'md' | 'lg' | 'xl';
   onClose: () => void;
   open: boolean;
 }
+
+const MAX_WIDTH_CLASS = {
+  lg: 'sm:max-w-lg',
+  md: 'sm:max-w-md',
+  xl: 'sm:max-w-xl',
+} as const;
 
 export function ModalDialog(props: ModalDialogProps) {
   if (!props.open) {
@@ -29,10 +35,15 @@ function ModalDialogInner({
 
   // showModal() gives us the native top layer, focus trap, and inert
   // background; closing restores focus to the previously focused element.
+  // A form control marked `data-autofocus` (the same opt-in `usePopoverPanel`
+  // honours) takes focus on open, so a modal never needs its own
+  // `setTimeout(() => ref.current?.focus())` effect — four of them used to
+  // race the dialog's native focus step.
   useEffect(() => {
     const dialog = dialogRef.current;
     const previouslyFocused = document.activeElement as HTMLElement | null;
     dialog?.showModal();
+    dialog?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
     return () => {
       dialog?.close();
       previouslyFocused?.focus();
@@ -78,7 +89,7 @@ function ModalDialogInner({
       <div
         className={cn(
           'max-h-[90vh] w-full overflow-y-auto rounded-t-xl border border-border bg-card shadow-e3 sm:rounded-xl',
-          maxWidth === 'lg' ? 'sm:max-w-lg' : 'sm:max-w-md',
+          MAX_WIDTH_CLASS[maxWidth],
         )}
       >
         {children}

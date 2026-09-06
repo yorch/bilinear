@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { Agent, type Dispatcher } from 'undici';
 import type { PrismaClient, Webhook, WebhookDelivery } from '../../generated/prisma';
 import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { env } from '../lib/env';
@@ -396,17 +397,20 @@ export class WebhookService {
     const attempt = delivery.attempts + 1;
 
     try {
-      // Re-validate the resolved IP at request time. validateUrl screens
-      // the hostname at create-time; this guards against DNS rebinding —
-      // a domain that resolves to a public IP at create and to
-      // 169.254.169.254 (cloud metadata) at delivery.
-      await assertSafeUrl(delivery.webhook.url);
-
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
       try {
-        const res = await fetch(delivery.webhook.url, {
+        // `validateUrl` screened the hostname at create time. At delivery the
+        // guard has to hold against DNS rebinding — a name that resolved to a
+        // public address then and to 169.254.169.254 (cloud metadata) now.
+        // A separate pre-resolve-and-check followed by `fetch` resolving
+        // again was a time-of-check/time-of-use gap a rebinding resolver
+        // could answer differently; the pinned dispatcher resolves once,
+        // inside the connect step, and only the addresses it validated are
+        // ever connected to.
+        const init: RequestInit & { dispatcher: Dispatcher } = {
           body: rawBody,
+          dispatcher: pinnedDispatcher,
           headers: {
             'Content-Type': 'application/json',
             'User-Agent': 'Bilinear-Webhook/1.0',
@@ -422,7 +426,8 @@ export class WebhookService {
           // treated as a failed (non-2xx) delivery.
           redirect: 'manual',
           signal: controller.signal,
-        });
+        };
+        const res = await fetch(delivery.webhook.url, init);
         responseStatus = res.status;
         // Cap response body capture; we only need diagnostic context, not full payloads.
         responseBody = (await res.text().catch(() => '')).slice(0, 1000);
@@ -808,42 +813,59 @@ function isPrivateIp(ip: string): boolean {
   );
 }
 
+type LookupCallback = (
+  err: NodeJS.ErrnoException | null,
+  address: string | Array<{ address: string; family: number }>,
+  family?: number,
+) => void;
+
 /**
- * Resolve `url`'s hostname and throw if it points to a private/internal
- * address. Mitigates DNS rebinding — even if validateUrl passed at create
- * time, the host may resolve differently now.
+ * The one dispatcher every webhook delivery goes through. Its connect step
+ * resolves the hostname itself, rejects the connection if ANY resolved
+ * address is private (a host with mixed public and private records is not
+ * given the benefit of the doubt), and hands the socket only the validated
+ * addresses — so the address that was checked is the address connected to.
+ * A resolver failure fails the delivery closed instead of letting the request
+ * proceed on a second, unchecked resolution.
  *
- * Uses `lookup({ all: true })` so a host with multiple A records (e.g. a
- * mix of public and private IPs) is rejected if ANY resolved address is
- * private. Picking only the first record would let an attacker race the
- * resolver to win an SSRF.
+ * IP-literal hosts never reach a lookup; `validateUrl` screened those at
+ * create time and a literal cannot rebind. `ALLOW_PRIVATE_WEBHOOK_URLS` keeps
+ * its local-testing escape hatch.
  */
-async function assertSafeUrl(url: string): Promise<void> {
-  if (env.ALLOW_PRIVATE_WEBHOOK_URLS) {
-    return;
-  }
-  const parsed = new URL(url);
-  const host = parsed.hostname.toLowerCase();
-  // If the hostname is already an IP literal, validateUrl handled it.
-  // Otherwise resolve and validate every resolved address.
-  if (parseIpLiteral(host)) {
-    return;
-  }
-  try {
-    const addresses = await lookup(host, { all: true });
-    if (addresses.some(a => isPrivateIp(a.address))) {
-      throw new WebhookPrivateUrlError();
-    }
-  } catch (err) {
-    if (err instanceof WebhookPrivateUrlError) {
-      throw err;
-    }
-    // DNS failure — let the fetch attempt surface the network error,
-    // but log so we have a trail when something unexpected happens
-    // (lookup throwing on bad input, resolver outage, etc.).
-    log.warn({ err, host }, 'Webhook DNS pre-check failed');
-  }
-}
+const pinnedDispatcher: Dispatcher = new Agent({
+  connect: {
+    lookup: (hostname, options, callback) => {
+      const cb = callback as unknown as LookupCallback;
+      const family =
+        options.family === 4 || options.family === 'IPv4'
+          ? 4
+          : options.family === 6 || options.family === 'IPv6'
+            ? 6
+            : undefined;
+      lookup(hostname, { all: true, ...(family ? { family } : {}) })
+        .then(addresses => {
+          if (addresses.length === 0) {
+            cb(Object.assign(new Error(`No addresses for ${hostname}`), { code: 'ENOTFOUND' }), []);
+            return;
+          }
+          if (!env.ALLOW_PRIVATE_WEBHOOK_URLS && addresses.some(a => isPrivateIp(a.address))) {
+            cb(new WebhookPrivateUrlError(), []);
+            return;
+          }
+          if (options.all) {
+            cb(null, addresses);
+          } else {
+            const [first] = addresses as [{ address: string; family: number }];
+            cb(null, first.address, first.family);
+          }
+        })
+        .catch((err: NodeJS.ErrnoException) => {
+          log.warn({ err, host: hostname }, 'Webhook DNS lookup failed — delivery refused');
+          cb(err, []);
+        });
+    },
+  },
+});
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
 

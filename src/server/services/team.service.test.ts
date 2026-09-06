@@ -56,6 +56,30 @@ describe('TeamService', () => {
       });
     });
 
+    it('seeds workflow states sequentially inside the transaction', async () => {
+      // Prisma's interactive transaction client serialises commands over
+      // one connection, so the seed must never have two creates in flight.
+      let inFlight = 0;
+      let maxInFlight = 0;
+      let i = 0;
+      prisma.team.create.mockResolvedValue(TEST_TEAM);
+      prisma.teamMembership.create.mockResolvedValue({ id: 'tm-1' });
+      prisma.workflowState.create.mockImplementation(async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await Promise.resolve();
+        inFlight -= 1;
+        return mockStates[i++];
+      });
+      prisma.team.update.mockResolvedValue(TEST_TEAM);
+      prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
+
+      await service.create(TEST_ORG.id, TEST_USER.id, { key: 'ENG', name: 'Engineering' });
+
+      expect(prisma.workflowState.create).toHaveBeenCalledTimes(5);
+      expect(maxInFlight).toBe(1);
+    });
+
     it('creates 6 workflow states when triageEnabled is true', async () => {
       prisma.team.create.mockResolvedValue({
         ...TEST_TEAM,
@@ -165,6 +189,67 @@ describe('TeamService', () => {
       });
 
       expect(result).toEqual(updated);
+    });
+
+    it('rejects numeric knobs outside their bounds before touching the database', async () => {
+      await expect(service.update(TEST_TEAM.id, { cycleDuration: 0 })).rejects.toThrow(
+        /cycleDuration/,
+      );
+      await expect(service.update(TEST_TEAM.id, { cycleStartDay: 7 })).rejects.toThrow(
+        /cycleStartDay/,
+      );
+      await expect(service.update(TEST_TEAM.id, { cycleCooldownTime: -1 })).rejects.toThrow(
+        /cycleCooldownTime/,
+      );
+      await expect(service.update(TEST_TEAM.id, { autoClosePeriod: 0 })).rejects.toThrow(
+        /autoClosePeriod/,
+      );
+      await expect(service.update(TEST_TEAM.id, { timezone: 'Mars/Olympus' })).rejects.toThrow(
+        /timezone/,
+      );
+      expect(prisma.team.update).not.toHaveBeenCalled();
+    });
+
+    it('accepts null to clear an auto period and a valid timezone', async () => {
+      prisma.team.update.mockResolvedValue(TEST_TEAM);
+      await service.update(TEST_TEAM.id, {
+        autoArchivePeriod: null,
+        cycleStartDay: 1,
+        timezone: 'Europe/Madrid',
+      });
+      expect(prisma.team.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            autoArchivePeriod: null,
+            cycleStartDay: 1,
+            timezone: 'Europe/Madrid',
+          }),
+        }),
+      );
+    });
+
+    it("refuses a default state that is not one of the team's own", async () => {
+      prisma.workflowState.findFirst.mockResolvedValue(null);
+      await expect(
+        service.update(TEST_TEAM.id, { defaultIssueStateId: 'state-of-other-team' }),
+      ).rejects.toThrow(/defaultIssueStateId/);
+      expect(prisma.workflowState.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { archivedAt: null, id: 'state-of-other-team', teamId: TEST_TEAM.id },
+        }),
+      );
+      expect(prisma.team.update).not.toHaveBeenCalled();
+    });
+
+    it('writes a default state that belongs to the team', async () => {
+      prisma.workflowState.findFirst.mockResolvedValue({ id: 'state-1' });
+      prisma.team.update.mockResolvedValue(TEST_TEAM);
+      await service.update(TEST_TEAM.id, { defaultIssueStateId: 'state-1' });
+      expect(prisma.team.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ defaultIssueStateId: 'state-1' }),
+        }),
+      );
     });
   });
 
