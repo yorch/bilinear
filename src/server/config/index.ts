@@ -54,8 +54,12 @@ export const config: ConfigService = resolveConfigSingleton();
  * is a no-op, so the Next.js dev server's module reloading cannot stack
  * subscribers.
  *
- * Uses a duplicated connection because a Redis client in subscriber mode can
- * issue no other commands, and the shared client is used for everything else.
+ * Uses a duplicated connection so subscriber traffic stays off the shared
+ * client. Under RESP2 this was mandatory — a client in subscriber mode could
+ * issue no other commands. ioredis 6 speaks RESP3 by default, which lifts that
+ * restriction, but a dedicated connection is still what we want: push messages
+ * no longer interleave with request/response traffic on the busy shared client,
+ * and the subscriber's own reconnect handling stays independent.
  */
 export function startConfigInvalidation(): void {
   if (globalForConfig.configSubscriber) {
