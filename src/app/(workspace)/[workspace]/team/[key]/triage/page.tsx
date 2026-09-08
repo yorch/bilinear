@@ -1,5 +1,5 @@
 'use client';
-import { Inbox } from 'lucide-react';
+import { ArrowLeft, Inbox } from 'lucide-react';
 
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
@@ -164,6 +164,8 @@ const TriagePage = observer(function TriagePage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [duplicatePickerFor, setDuplicatePickerFor] = useState<string | null>(null);
+  // Below md the queue and the preview take turns; at md+ both are always on.
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
@@ -460,7 +462,13 @@ const TriagePage = observer(function TriagePage() {
            without leaving the page and opening the issue. The decision now sits
            beside the thing being decided. */
         <div className="flex min-h-0 flex-1">
-          <div className="w-72 shrink-0 overflow-y-auto border-r border-border lg:w-80">
+          <div
+            className={cn(
+              'overflow-y-auto md:w-72 md:shrink-0 md:border-r md:border-border lg:w-80',
+              // One pane at a time below md: the queue, or the issue.
+              previewOpen ? 'hidden md:block' : 'w-full',
+            )}
+          >
             {queue.map(issue => {
               const creator = issue.creatorId ? userStore.findById(issue.creatorId) : null;
               const focused = issue.id === effectiveFocusedId;
@@ -473,7 +481,10 @@ const TriagePage = observer(function TriagePage() {
                   )}
                   data-testid="triage-row"
                   key={issue.id}
-                  onClick={() => setFocusedId(issue.id)}
+                  onClick={() => {
+                    setFocusedId(issue.id);
+                    setPreviewOpen(true);
+                  }}
                   type="button"
                 >
                   <div className="flex items-center gap-2">
@@ -497,10 +508,23 @@ const TriagePage = observer(function TriagePage() {
           </div>
 
           {focusedIssue ? (
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <div
+              className={cn(
+                'min-w-0 flex-1 flex-col overflow-hidden',
+                previewOpen ? 'flex' : 'hidden md:flex',
+              )}
+            >
               {/* One set of actions, for the issue on screen — not four buttons
                   on every row of the queue. */}
               <Toolbar className="justify-between">
+                <button
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground md:hidden"
+                  onClick={() => setPreviewOpen(false)}
+                  type="button"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  {t('settings.triage.backToQueue')}
+                </button>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     disabled={Boolean(busyId) || !defaultTargetStateId}

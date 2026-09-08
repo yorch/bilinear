@@ -63,7 +63,13 @@ export function SectionHeader({
         {onToggle ? (
           <button
             aria-expanded={!collapsed}
-            className="-ml-1 flex items-center gap-1 rounded px-1 py-0.5 transition-colors hover:text-foreground-secondary"
+            // `uppercase` is repeated here on purpose. Tailwind's preflight
+            // resets form elements with `button { text-transform: none }`, which
+            // beats the heading's inherited `uppercase` — so the one section with
+            // a disclosure button rendered "Sub-issues" beside "RELATIONS" and
+            // "ATTACHMENTS", which is the exact inconsistency this primitive
+            // exists to remove.
+            className="-ml-1 flex items-center gap-1 rounded px-1 py-0.5 uppercase tracking-wider transition-colors hover:text-foreground-secondary"
             onClick={onToggle}
             type="button"
           >

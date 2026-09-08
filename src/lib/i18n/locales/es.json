@@ -1876,6 +1876,7 @@
       "allClear": "Todo despejado — no hay nada por clasificar.",
       "allClearDescription": "No hay nada pendiente de clasificar. Las tareas nuevas llegan aquí antes de pasar al backlog.",
       "allClearTitle": "Todo en orden",
+      "backToQueue": "Cola",
       "cannotMarkDuplicateOfItself": "No se puede marcar un issue como duplicado de sí mismo",
       "decline": "Rechazar",
       "declineFailed": "Error al rechazar el issue",

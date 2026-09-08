@@ -1876,6 +1876,7 @@
       "allClear": "All clear — nothing in triage.",
       "allClearDescription": "Nothing is waiting to be triaged. New issues land here before they reach the backlog.",
       "allClearTitle": "All clear",
+      "backToQueue": "Queue",
       "cannotMarkDuplicateOfItself": "Cannot mark an issue as a duplicate of itself",
       "decline": "Decline",
       "declineFailed": "Failed to decline issue",

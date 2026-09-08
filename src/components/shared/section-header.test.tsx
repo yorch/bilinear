@@ -58,6 +58,15 @@ describe('SectionHeader', () => {
     expect(screen.queryByRole('button', { name: 'Relations' })).not.toBeInTheDocument();
   });
 
+  // Tailwind's preflight resets form elements with `button { text-transform:
+  // none }`, which beats the heading's inherited `uppercase`. The collapsible
+  // section therefore rendered "Sub-issues" next to its siblings' "RELATIONS"
+  // and "ATTACHMENTS" until the button restated it.
+  it('keeps the heading uppercase through the disclosure button', () => {
+    render(<SectionHeader collapsed={false} onToggle={() => {}} title="Sub-issues" />);
+    expect(screen.getByRole('button', { name: 'Sub-issues' })).toHaveClass('uppercase');
+  });
+
   it('reports the collapsed state to assistive tech', () => {
     render(<SectionHeader collapsed onToggle={() => {}} title="Relations" />);
     expect(screen.getByRole('button', { name: 'Relations' })).toHaveAttribute(
