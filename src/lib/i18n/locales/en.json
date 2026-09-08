@@ -1253,10 +1253,13 @@
     "workspaceSettings": "Workspace settings"
   },
   "notifications": {
+    "actorDidThing": "{name} {action}",
     "allNotifications": "All notifications",
     "emptyState": {
       "detail": "No notifications yet. You'll be notified when something needs your attention.",
-      "title": "All caught up"
+      "title": "All caught up",
+      "unreadDetail": "Everything here has been read. Switch to All to see the rest.",
+      "unreadTitle": "Nothing unread"
     },
     "labels": {
       "default": "sent a notification",
@@ -1275,6 +1278,10 @@
       "nextWeek": "Next week",
       "oneHour": "1 hour",
       "tomorrow9am": "Tomorrow 9am"
+    },
+    "tabs": {
+      "all": "All",
+      "unread": "Unread"
     },
     "title": "Inbox",
     "toasts": {

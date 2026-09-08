@@ -1253,10 +1253,13 @@
     "workspaceSettings": "Configuración del espacio de trabajo"
   },
   "notifications": {
+    "actorDidThing": "{name} {action}",
     "allNotifications": "Todas las notificaciones",
     "emptyState": {
       "detail": "Todavía no hay notificaciones. Te avisaremos cuando algo necesite tu atención.",
-      "title": "Todo al día"
+      "title": "Todo al día",
+      "unreadDetail": "Ya has leído todo. Cambia a Todas para ver el resto.",
+      "unreadTitle": "Nada sin leer"
     },
     "labels": {
       "default": "envió una notificación",
@@ -1275,6 +1278,10 @@
       "nextWeek": "La próxima semana",
       "oneHour": "1 hora",
       "tomorrow9am": "Mañana 9am"
+    },
+    "tabs": {
+      "all": "Todas",
+      "unread": "Sin leer"
     },
     "title": "Bandeja de entrada",
     "toasts": {
