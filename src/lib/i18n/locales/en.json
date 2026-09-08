@@ -145,7 +145,6 @@
       "avgTimeInStateSubtitle": "approximation from lifecycle timestamps; full audit log is a follow-up",
       "bucketDaysPlus": "{count}d+",
       "bucketDaysRange": "{from}–{to}d",
-      "completedWeekOf": "{count} completed week of {weekStart}",
       "cycleTime": "Cycle time",
       "cycleTimeSubtitle": "started → completed, in days",
       "leadTime": "Lead time",
@@ -153,11 +152,8 @@
       "loading": "Loading insights…",
       "noCompletedIssuesInRange": "No completed issues in range",
       "noStateTransitionData": "No state-transition data yet",
-      "noThroughputDataInRange": "No throughput data in range",
       "rangeAll": "All",
       "rangeDays": "{count}d",
-      "throughputTrend": "Throughput trend",
-      "throughputTrendSubtitle": "issues completed per week",
       "title": "Insights"
     },
     "team": {

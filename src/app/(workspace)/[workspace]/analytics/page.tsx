@@ -217,15 +217,17 @@ export default function WorkspaceAnalyticsPage() {
               )}
             </div>
 
-            {/* Velocity comparison bar chart */}
-            {data.teams.length > 0 && (
+            {/* Velocity comparison bar chart. Rendered only when some team has
+                actually completed something: a chart of full-width empty tracks
+                each labelled "0" reads as broken data, not as no data. */}
+            {data.teams.length > 0 && maxCompleted > 0 && (
               <div className="mt-5 rounded-lg border border-border bg-card p-5">
                 <h2 className="mb-4 text-sm font-semibold text-foreground">
                   {t('analytics.workspace.issuesCompletedByTeam')}
                 </h2>
                 <div className="flex flex-col gap-2">
                   {data.teams.map(team => {
-                    const pct = maxCompleted > 0 ? (team.completedCount / maxCompleted) * 100 : 0;
+                    const pct = (team.completedCount / maxCompleted) * 100;
                     return (
                       <div className="flex items-center gap-2" key={team.teamId}>
                         <span
@@ -234,16 +236,16 @@ export default function WorkspaceAnalyticsPage() {
                         >
                           {team.teamName}
                         </span>
-                        <div className="flex-1 rounded bg-muted">
+                        <div className="h-5 flex-1 rounded bg-muted">
                           <div
                             className="h-5 rounded transition-all"
                             style={{
                               backgroundColor: 'var(--chart-primary)',
-                              width: `${Math.max(pct, team.completedCount > 0 ? 2 : 0)}%`,
+                              width: `${pct}%`,
                             }}
                           />
                         </div>
-                        <span className="w-10 shrink-0 text-right text-xs font-medium text-muted-foreground">
+                        <span className="w-10 shrink-0 text-right text-xs font-medium tabular-nums text-muted-foreground">
                           {team.completedCount}
                         </span>
                       </div>

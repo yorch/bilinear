@@ -145,7 +145,6 @@
       "avgTimeInStateSubtitle": "aproximación a partir de las marcas de tiempo del ciclo de vida; el registro de auditoría completo llegará después",
       "bucketDaysPlus": "{count} d+",
       "bucketDaysRange": "{from}–{to} d",
-      "completedWeekOf": "{count} completados en la semana del {weekStart}",
       "cycleTime": "Tiempo de ciclo",
       "cycleTimeSubtitle": "iniciado → completado, en días",
       "leadTime": "Tiempo de espera",
@@ -153,11 +152,8 @@
       "loading": "Cargando insights…",
       "noCompletedIssuesInRange": "No hay issues completados en el rango",
       "noStateTransitionData": "Aún no hay datos de transición de estado",
-      "noThroughputDataInRange": "No hay datos de rendimiento en el rango",
       "rangeAll": "Todo",
       "rangeDays": "{count} d",
-      "throughputTrend": "Tendencia de rendimiento",
-      "throughputTrendSubtitle": "issues completados por semana",
       "title": "Insights"
     },
     "team": {

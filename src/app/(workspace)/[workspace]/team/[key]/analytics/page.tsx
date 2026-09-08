@@ -9,6 +9,7 @@ import { InlineRetry } from '@/components/shared/inline-retry';
 import { ColorDot } from '@/components/ui/color-dot';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
@@ -68,6 +69,19 @@ interface BarChartProps {
   unit?: string;
 }
 
+/**
+ * A column chart that actually has columns.
+ *
+ * The previous version put `height: <pct>%` on a bar inside a column whose own
+ * height was `auto` — a percentage height against an auto-height parent
+ * resolves to nothing, so every bar collapsed to its 4px `minHeight` floor and
+ * the chart rendered as a row of numbers floating above thin coloured
+ * underlines, regardless of the values. The fix is structural: the column is
+ * `h-full`, the bar sits in a `flex-1` track that justifies to the end, and the
+ * percentage finally has something to be a percentage of. The 4% floor is gone
+ * with it — a bar's height is now the only thing encoding its value, so a floor
+ * would be a lie about small numbers.
+ */
 function BarChart({ data, maxValue, unit = '', emptyMessage }: BarChartProps) {
   const t = useTranslations();
   const max = maxValue ?? Math.max(...data.map(d => d.value), 1);
@@ -77,22 +91,25 @@ function BarChart({ data, maxValue, unit = '', emptyMessage }: BarChartProps) {
   }
 
   return (
-    <div className="flex items-end gap-2 h-36">
+    <div className="flex h-40 items-stretch gap-2">
       {data.map(item => {
         const pct = max > 0 ? (item.value / max) * 100 : 0;
         return (
-          <div className="flex flex-1 flex-col items-center gap-1" key={item.label}>
-            <span className="text-xs font-medium text-muted-foreground">
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-1" key={item.label}>
+            <span className="text-xs font-medium tabular-nums text-muted-foreground">
               {item.value > 0 ? `${item.value}${unit}` : ''}
             </span>
-            <div
-              className="w-full rounded-t"
-              style={{
-                backgroundColor: item.color ?? 'var(--chart-primary)',
-                height: `${Math.max(pct, item.value > 0 ? 4 : 0)}%`,
-                minHeight: item.value > 0 ? '4px' : '0',
-              }}
-            />
+            {/* The track makes an empty column read as "zero" rather than as a
+                missing bar, and gives the columns a shared baseline. */}
+            <div className="flex w-full flex-1 flex-col justify-end rounded-t bg-muted/60">
+              <div
+                className="w-full rounded-t transition-[height]"
+                style={{
+                  backgroundColor: item.color ?? 'var(--chart-primary)',
+                  height: `${pct}%`,
+                }}
+              />
+            </div>
             <span
               className="max-w-full truncate text-[10px] text-muted-foreground"
               title={item.label}
@@ -102,6 +119,58 @@ function BarChart({ data, maxValue, unit = '', emptyMessage }: BarChartProps) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Team-health stat card
+// ---------------------------------------------------------------------------
+
+/**
+ * One Team Health figure.
+ *
+ * `tone` is deliberately opt-in and defaults to neutral. Only a metric whose
+ * zero has one obvious reading earns a colour: "0 overdue" is good news, but
+ * "0 days oldest open" and "0% unestimated" are ambiguous without a target the
+ * product does not ask the user for. Inventing thresholds for those would make
+ * the card assert something the data cannot support.
+ */
+const HEALTH_TONE = {
+  bad: {
+    label: 'text-danger-subtle-foreground',
+    shell: 'border border-danger/40 bg-danger-subtle',
+    value: 'text-danger-subtle-foreground',
+  },
+  good: {
+    label: 'text-success-subtle-foreground',
+    shell: 'border border-success/40 bg-success-subtle',
+    value: 'text-success-subtle-foreground',
+  },
+  neutral: {
+    label: 'text-muted-foreground',
+    shell: 'border border-border bg-card',
+    value: 'text-foreground',
+  },
+} as const;
+
+function HealthStat({
+  hint,
+  label,
+  tone = 'neutral',
+  value,
+}: {
+  hint?: string;
+  label: string;
+  tone?: keyof typeof HEALTH_TONE;
+  value: number | string;
+}) {
+  const styles = HEALTH_TONE[tone];
+  return (
+    <div className={cn('rounded-lg p-4', styles.shell)}>
+      <p className={cn('text-xs font-medium uppercase tracking-wider', styles.label)}>{label}</p>
+      <p className={cn('mt-1 text-2xl font-semibold tabular-nums', styles.value)}>{value}</p>
+      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -141,16 +210,19 @@ function HBarChart({ data, maxValue, emptyMessage }: HBarChartProps) {
             >
               {item.label}
             </span>
-            <div className="flex-1 rounded bg-muted">
+            {/* The track carries its own height so a zero-value row still
+                reads as an empty bar rather than a missing one; the 2% floor is
+                gone, since a floor makes 1 and 0 look the same. */}
+            <div className="h-5 flex-1 rounded bg-muted">
               <div
-                className="h-5 rounded transition-all"
+                className="h-5 rounded transition-[width]"
                 style={{
                   backgroundColor: item.color ?? 'var(--chart-primary)',
-                  width: `${Math.max(pct, item.value > 0 ? 2 : 0)}%`,
+                  width: `${pct}%`,
                 }}
               />
             </div>
-            <span className="w-8 shrink-0 text-right text-xs font-medium text-muted-foreground">
+            <span className="w-8 shrink-0 text-right text-xs font-medium tabular-nums text-muted-foreground">
               {item.value}
             </span>
           </div>
@@ -454,23 +526,19 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
       {/* Page header */}
       <PageHeader
         actions={
-          <div className="flex shrink-0 rounded-md border border-border p-0.5">
-            {(['30d', '90d', '180d', 'all'] as const).map(p => (
-              <button
-                className={cn(
-                  'rounded px-2.5 py-1 text-xs transition-colors',
-                  preset === p
-                    ? 'bg-surface-raised font-medium text-foreground shadow-e1'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-                key={p}
-                onClick={() => setPreset(p)}
-                type="button"
-              >
-                {p === 'all' ? t('analytics.team.rangeAll') : p}
-              </button>
-            ))}
-          </div>
+          // SegmentedControl, not a hand-rolled copy of it: this was a
+          // pixel-approximation of the same primitive the Insights section
+          // below used, so the page's two range toggles did not even match
+          // each other.
+          <SegmentedControl
+            onChange={setPreset}
+            options={(['30d', '90d', '180d', 'all'] as const).map(p => ({
+              label: p === 'all' ? t('analytics.team.rangeAll') : p,
+              value: p,
+            }))}
+            size="md"
+            value={preset}
+          />
         }
         description={`${team.displayName || team.name}${
           preset !== 'all'
@@ -628,52 +696,32 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
               {t('analytics.team.teamHealth')}
             </h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <div className="rounded-lg border border-border bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {t('analytics.team.openIssues')}
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-foreground">
-                  {teamHealth.openCount}
-                </p>
-              </div>
-              <div className="rounded-lg border border-danger/40 bg-danger-subtle p-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-danger-subtle-foreground">
-                  {t('analytics.team.overdue')}
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-danger-subtle-foreground">
-                  {teamHealth.overdueCount}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {t('analytics.team.unestimated')}
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-foreground">
-                  {teamHealth.unestimatedCount}
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {t('analytics.team.pctOfOpen', { pct: teamHealth.unestimatedPct.toFixed(0) })}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {t('analytics.team.oldestOpen')}
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-foreground">
-                  {teamHealth.oldestOpenAgeDays.toFixed(0)}d
-                </p>
-              </div>
-              <div className="rounded-lg border border-border bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {t('analytics.team.p75Age')}
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-foreground">
-                  {teamHealth.p75AgeDays.toFixed(0)}d
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {t('analytics.team.percentile75')}
-                </p>
-              </div>
+              <HealthStat label={t('analytics.team.openIssues')} value={teamHealth.openCount} />
+              {/* The only card whose tone varies, because it is the only one
+                  whose zero has an unambiguous reading. It used to be painted
+                  danger unconditionally, so "OVERDUE 0" — the best possible
+                  news — arrived as a red alarm. */}
+              <HealthStat
+                label={t('analytics.team.overdue')}
+                tone={teamHealth.overdueCount > 0 ? 'bad' : 'good'}
+                value={teamHealth.overdueCount}
+              />
+              <HealthStat
+                hint={t('analytics.team.pctOfOpen', {
+                  pct: teamHealth.unestimatedPct.toFixed(0),
+                })}
+                label={t('analytics.team.unestimated')}
+                value={teamHealth.unestimatedCount}
+              />
+              <HealthStat
+                label={t('analytics.team.oldestOpen')}
+                value={`${teamHealth.oldestOpenAgeDays.toFixed(0)}d`}
+              />
+              <HealthStat
+                hint={t('analytics.team.percentile75')}
+                label={t('analytics.team.p75Age')}
+                value={`${teamHealth.p75AgeDays.toFixed(0)}d`}
+              />
             </div>
           </div>
         )}
