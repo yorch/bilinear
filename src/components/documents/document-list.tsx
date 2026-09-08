@@ -1,10 +1,10 @@
 'use client';
 
-import { FileText, Plus } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useTranslations } from '@/hooks/use-translations';
@@ -17,26 +17,22 @@ interface DocumentListProps {
   teamId?: string;
 }
 
-export const DocumentList = observer(function DocumentList({
-  teamId,
-  projectId,
-}: DocumentListProps) {
+/**
+ * Create a document and navigate to it.
+ *
+ * Extracted so the *page* can own the "New document" button and put it in its
+ * `PageHeader` action slot. The list used to render its own `<h2>Documents</h2>`
+ * plus a create button, directly under the page's own `PageHeader` — two
+ * stacked headers for one page, with the primary action attached to the
+ * lower one.
+ */
+export function useCreateDocument({ projectId, teamId }: DocumentListProps) {
   const { workspace } = useParams<{ workspace: string }>();
   const router = useRouter();
-  const { documentStore } = useStore();
   const t = useTranslations();
   const [creating, setCreating] = useState(false);
 
-  // Plain selector — observer() picks up the observable reads, so the
-  // selector re-runs on any mutation (rename, archive). Memoizing on
-  // `pool.size` skipped in-place updates.
-  const documents = teamId
-    ? documentStore.getByTeamId(teamId)
-    : projectId
-      ? documentStore.getByProjectId(projectId)
-      : documentStore.all;
-
-  const handleNewDocument = async () => {
+  const create = useCallback(async () => {
     setCreating(true);
     try {
       const result = await createDocument({
@@ -54,71 +50,84 @@ export const DocumentList = observer(function DocumentList({
     } finally {
       setCreating(false);
     }
-  };
+  }, [projectId, router, t, teamId, workspace]);
+
+  return { create, creating };
+}
+
+export const DocumentList = observer(function DocumentList({
+  teamId,
+  projectId,
+}: DocumentListProps) {
+  const { workspace } = useParams<{ workspace: string }>();
+  const { documentStore } = useStore();
+  const t = useTranslations();
+  const { create, creating } = useCreateDocument({ projectId, teamId });
+
+  // Plain selector — observer() picks up the observable reads, so the
+  // selector re-runs on any mutation (rename, archive). Memoizing on
+  // `pool.size` skipped in-place updates.
+  const documents = teamId
+    ? documentStore.getByTeamId(teamId)
+    : projectId
+      ? documentStore.getByProjectId(projectId)
+      : documentStore.all;
+
+  if (documents.length === 0) {
+    // The shared EmptyState, not a bare grey icon over a text link: this was
+    // the fourth distinct empty-state treatment in the app.
+    return (
+      <EmptyState
+        action={
+          <Button disabled={creating} onClick={() => void create()} size="sm">
+            {creating ? t('documents.creating') : t('documents.newDocument')}
+          </Button>
+        }
+        description={t('documents.emptyDescription')}
+        icon={<FileText className="h-5 w-5" />}
+        testId="empty-state"
+        title={t('documents.emptyState')}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-1 p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-foreground">{t('documents.title')}</h2>
-        <Button disabled={creating} onClick={handleNewDocument} size="sm" type="button">
-          <Plus className="h-3 w-3" />
-          {creating ? t('documents.creating') : t('documents.newDocument')}
-        </Button>
-      </div>
-
-      {documents.length === 0 ? (
-        <EmptyState
-          action={
-            <Button
-              disabled={creating}
-              onClick={handleNewDocument}
-              size="sm"
-              type="button"
-              variant="outline"
+      <ul className="flex flex-col gap-0.5">
+        {documents.map(doc => (
+          <li key={doc.id}>
+            <Link
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground-secondary hover:bg-muted"
+              href={`/${workspace}/docs/${doc.id}`}
             >
-              {creating ? t('documents.creating') : t('documents.createFirst')}
-            </Button>
-          }
-          icon={<FileText className="h-5 w-5" />}
-          title={t('documents.emptyState')}
-        />
-      ) : (
-        <ul className="flex flex-col gap-0.5">
-          {documents.map(doc => (
-            <li key={doc.id}>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                {doc.icon ? (
+                  <span className="text-sm">{doc.icon}</span>
+                ) : (
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                )}
+              </span>
+              <span className="truncate">{doc.title || t('documents.untitled')}</span>
+            </Link>
+            {documentStore.getChildren(doc.id).map(child => (
               <Link
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground-secondary hover:bg-muted"
-                href={`/${workspace}/docs/${doc.id}`}
+                className="flex items-center gap-2 rounded-md py-1.5 pl-10 pr-3 text-xs text-muted-foreground hover:bg-muted"
+                href={`/${workspace}/docs/${child.id}`}
+                key={child.id}
               >
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                  {doc.icon ? (
-                    <span className="text-sm">{doc.icon}</span>
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                  {child.icon ? (
+                    <span className="text-xs">{child.icon}</span>
                   ) : (
-                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <FileText className="h-3.5 w-3.5" />
                   )}
                 </span>
-                <span className="truncate">{doc.title || t('documents.untitled')}</span>
+                <span className="truncate">{child.title || t('documents.untitled')}</span>
               </Link>
-              {documentStore.getChildren(doc.id).map(child => (
-                <Link
-                  className="flex items-center gap-2 rounded-md py-1.5 pl-10 pr-3 text-xs text-muted-foreground hover:bg-muted"
-                  href={`/${workspace}/docs/${child.id}`}
-                  key={child.id}
-                >
-                  <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                    {child.icon ? (
-                      <span className="text-xs">{child.icon}</span>
-                    ) : (
-                      <FileText className="h-3 w-3 text-muted-foreground" />
-                    )}
-                  </span>
-                  <span className="truncate">{child.title || t('documents.untitled')}</span>
-                </Link>
-              ))}
-            </li>
-          ))}
-        </ul>
-      )}
+            ))}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 });

@@ -98,7 +98,7 @@ const GlobalCreateIssueModalInner = observer(function GlobalCreateIssueModalInne
             size="sm"
             type="button"
           >
-            {t('teams.createTeam')}
+            {t('teams.newTeam')}
           </Button>
         </div>
       </ModalDialog>

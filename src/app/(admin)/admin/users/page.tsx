@@ -225,7 +225,7 @@ export default function AdminUsersPage() {
                       </button>
                       <button
                         className={cn(
-                          'rounded border px-2 py-1 text-xs disabled:opacity-50',
+                          'rounded border border-border px-2 py-1 text-xs disabled:opacity-50',
                           u.active
                             ? 'border-warning/40 text-warning-subtle-foreground hover:bg-warning-subtle'
                             : 'border-success/40 text-success-subtle-foreground hover:bg-success-subtle',

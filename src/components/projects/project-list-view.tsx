@@ -89,9 +89,9 @@ export const ProjectListView = observer(function ProjectListView({
         {projects.length === 0 ? (
           <EmptyState
             action={
-              <Button onClick={() => uiStore.openCreateProjectModal()} type="button">
-                <Plus className="h-4 w-4" />
-                {t('projects.createProject')}
+              <Button onClick={() => uiStore.openCreateProjectModal()} size="sm" type="button">
+                <Plus className="h-3.5 w-3.5" />
+                {t('projects.newProject')}
               </Button>
             }
             description={t('projects.createProjectPrompt')}

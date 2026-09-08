@@ -429,7 +429,12 @@ const TriagePage = observer(function TriagePage() {
 
       <div className="flex-1 overflow-y-auto">
         {queue.length === 0 ? (
-          <EmptyState icon={<Inbox className="h-5 w-5" />} title={t('settings.triage.allClear')} />
+          <EmptyState
+            description={t('settings.triage.allClearDescription')}
+            icon={<Inbox className="h-5 w-5" />}
+            testId="empty-state"
+            title={t('settings.triage.allClearTitle')}
+          />
         ) : (
           queue.map(issue => {
             const creator = issue.creatorId ? userStore.findById(issue.creatorId) : null;
@@ -496,24 +501,24 @@ const TriagePage = observer(function TriagePage() {
       {queue.length > 0 && (
         <div className="flex items-center gap-3 border-t border-border px-4 py-1.5 text-[10px] text-muted-foreground">
           <span className="flex items-center gap-1">
-            <kbd className="rounded border px-1 font-mono">J</kbd>
-            <kbd className="rounded border px-1 font-mono">K</kbd>
+            <kbd className="rounded border border-border px-1 font-mono">J</kbd>
+            <kbd className="rounded border border-border px-1 font-mono">K</kbd>
             {t('commandPalette.footer.navigate')}
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="rounded border px-1 font-mono">A</kbd>
+            <kbd className="rounded border border-border px-1 font-mono">A</kbd>
             {t('settings.triage.accept')}
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="rounded border px-1 font-mono">D</kbd>
+            <kbd className="rounded border border-border px-1 font-mono">D</kbd>
             {t('settings.triage.decline')}
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="rounded border px-1 font-mono">S</kbd>
+            <kbd className="rounded border border-border px-1 font-mono">S</kbd>
             {t('settings.triage.snooze')}
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="rounded border px-1 font-mono">M</kbd>
+            <kbd className="rounded border border-border px-1 font-mono">M</kbd>
             {t('settings.triage.duplicate')}
           </span>
         </div>

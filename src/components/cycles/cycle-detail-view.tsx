@@ -777,7 +777,9 @@ export const CycleDetailView = observer(function CycleDetailView({
               {cycleIssues.length === 0 ? (
                 <p className="py-8 text-center text-xs text-muted-foreground">
                   {t('cycles.detail.noIssuesBefore')}{' '}
-                  <kbd className="mx-0.5 rounded border px-1 font-mono text-[10px]">Q</kbd>{' '}
+                  <kbd className="mx-0.5 rounded border border-border px-1 font-mono text-[10px]">
+                    Q
+                  </kbd>{' '}
                   {t('cycles.detail.noIssuesAfter')}
                 </p>
               ) : (

@@ -1,5 +1,6 @@
 'use client';
 
+import { Plus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
@@ -12,7 +13,10 @@ import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
+import { Button } from '@/components/ui/button';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { SimpleSelect } from '@/components/ui/select';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useIssueListPage } from '@/hooks/use-issue-list-page';
@@ -25,6 +29,9 @@ import { buildIssueHref } from '@/lib/issue-nav';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
+/** Which relationship to the viewer the list is answering for. */
+type MyIssuesScope = 'assigned' | 'created';
+
 // ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
@@ -32,30 +39,35 @@ import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 const MyIssuesPage = observer(function MyIssuesPage() {
   const { workspace } = useParams<{ workspace: string }>();
   const t = useTranslations();
-  const { issueStore, userStore, workflowStateStore, labelStore, syncStore } = useStore();
+  const { issueStore, userStore, workflowStateStore, labelStore, syncStore, uiStore } = useStore();
 
   useDocumentTitle(t('nav.myIssues'));
 
   // UI state
   const [filterSet, setFilterSet] = useState<FilterSet>(createEmptyFilterSet());
+  const [scope, setScope] = useState<MyIssuesScope>('assigned');
 
   // ── Store-derived values ─────────────────────────────────────────────────
 
   const currentUser = userStore.currentUser;
 
-  // All non-trashed, non-archived issues assigned to the current user,
-  // across every team. Deps: pool.size catches adds/removes; userStore.pool.size
-  // catches the current user resolving after bootstrap.
+  // "My issues" is two different questions — what am I on the hook for, and
+  // what did I file — and the page only ever answered the first. Both are
+  // derivable from the local pool, so both are tabs. Linear also offers
+  // Subscribed; that needs a per-issue server round trip, and a tab that
+  // silently shows the wrong set is worse than one that isn't there.
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
   const allMyIssues: IssueDetail[] = useMemo(() => {
     if (!currentUser) {
       return [];
     }
+    const mine = (i: { assigneeId?: string | null; creatorId?: string | null }) =>
+      scope === 'created' ? i.creatorId === currentUser.id : i.assigneeId === currentUser.id;
     return Array.from(issueStore.pool.values())
-      .filter(i => i.assigneeId === currentUser.id && !i.trashed && !i.archivedAt)
+      .filter(i => mine(i) && !i.trashed && !i.archivedAt)
       .map(i => toIssueDetail(i, labelStore))
       .sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [issueStore.pool.size, userStore.pool.size, currentUser, issueStore, labelStore]);
+  }, [issueStore.pool.size, userStore.pool.size, currentUser, issueStore, labelStore, scope]);
 
   // All active workflow states across all teams (for grouping + filter options).
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
@@ -131,13 +143,25 @@ const MyIssuesPage = observer(function MyIssuesPage() {
               />
             )}
             <ViewToggle mode={viewMode} onChange={setViewMode} />
+            <Button onClick={() => uiStore.openCreateIssueModal()} size="sm" type="button">
+              <Plus className="h-3.5 w-3.5" />
+              {t('issues.newIssue')}
+            </Button>
           </>
         }
         count={issues.length}
         title={t('issues.myIssues')}
       />
 
-      <Toolbar>
+      <Toolbar className="justify-between">
+        <SegmentedControl
+          onChange={setScope}
+          options={[
+            { label: t('issues.scope.assigned'), value: 'assigned' },
+            { label: t('issues.scope.created'), value: 'created' },
+          ]}
+          value={scope}
+        />
         <FilterBuilder
           filterSet={filterSet}
           labels={labels}

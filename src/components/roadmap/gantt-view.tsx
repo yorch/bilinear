@@ -403,7 +403,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                   dayMarkers.map(dm => (
                     <div
                       className={cn(
-                        'absolute top-0 border-l px-0.5 text-[10px] leading-5 text-muted-foreground',
+                        'absolute top-0 border-l border-border px-0.5 text-[10px] leading-5 text-muted-foreground',
                         dm.isMonthStart ? 'border-border font-semibold' : 'border-border',
                       )}
                       key={dm.x}
@@ -481,7 +481,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                   <div
                     aria-label={t('roadmap.gantt.dragBar', { name: item.name })}
                     className={cn(
-                      'absolute flex h-6 items-center gap-1.5 rounded-md border px-2 text-xs font-medium text-white shadow-e1 transition-shadow',
+                      'absolute flex h-6 items-center gap-1.5 rounded-md border border-border px-2 text-xs font-medium text-white shadow-e1 transition-shadow',
                       !isDragging && 'cursor-grab',
                       isDragging && 'cursor-grabbing shadow-e2',
                     )}

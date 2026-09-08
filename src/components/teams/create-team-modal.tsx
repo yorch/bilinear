@@ -119,9 +119,9 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
   const canSubmit = name.trim().length > 0 && KEY_PATTERN.test(key) && !submitting;
 
   return (
-    <ModalDialog aria-label={t('teams.createTeam')} onClose={onClose} open={open}>
+    <ModalDialog aria-label={t('teams.newTeam')} onClose={onClose} open={open}>
       <form className="flex flex-col" onSubmit={handleSubmit}>
-        <ModalHeader title={t('teams.createTeam')} />
+        <ModalHeader title={t('teams.newTeam')} />
 
         <div className="flex flex-col gap-4 px-5 py-4">
           <div className="flex flex-col gap-1">
@@ -147,7 +147,7 @@ export function CreateTeamModal({ open, onClose, onSubmit }: CreateTeamModalProp
             </label>
             <input
               className={cn(
-                'rounded-md border bg-transparent px-3 py-1.5 font-mono text-sm text-foreground placeholder:text-muted-foreground outline-none',
+                'rounded-md border border-input bg-transparent px-3 py-1.5 font-mono text-sm text-foreground placeholder:text-muted-foreground outline-none',
                 keyError
                   ? 'border-danger focus:ring-1 focus:ring-danger'
                   : 'border-border focus:border-brand focus:ring-1 focus:ring-brand',

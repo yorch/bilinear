@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, Flag, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Archive, Flag, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
@@ -366,7 +366,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
             {STATUS_ORDER.map(s => (
               <button
                 className={cn(
-                  'rounded border px-2 py-0.5 text-xs',
+                  'rounded border border-border px-2 py-0.5 text-xs',
                   initiative.status === s
                     ? 'border-brand bg-brand-subtle text-brand-subtle-foreground'
                     : 'border-border',
@@ -447,7 +447,14 @@ const InitiativesPage = observer(function InitiativesPage() {
             type="button"
             variant={creating ? 'outline' : 'default'}
           >
-            {creating ? t('common.cancel') : t('initiatives.page.newInitiative')}
+            {creating ? (
+              t('common.cancel')
+            ) : (
+              <>
+                <Plus className="h-3.5 w-3.5" />
+                {t('initiatives.page.newInitiative')}
+              </>
+            )}
           </Button>
         }
         title={t('initiatives.page.title')}
@@ -478,7 +485,18 @@ const InitiativesPage = observer(function InitiativesPage() {
 
       <div className="flex-1 overflow-y-auto">
         {grouped.length === 0 ? (
-          <EmptyState icon={<Flag className="h-5 w-5" />} title={t('initiatives.page.empty')} />
+          <EmptyState
+            action={
+              <Button onClick={() => setCreating(true)} size="sm" type="button">
+                <Plus className="h-3.5 w-3.5" />
+                {t('initiatives.page.newInitiative')}
+              </Button>
+            }
+            description={t('initiatives.page.emptyDescription')}
+            icon={<Flag className="h-5 w-5" />}
+            testId="empty-state"
+            title={t('initiatives.page.emptyTitle')}
+          />
         ) : (
           grouped.map(({ status, items }) => (
             <div key={status}>

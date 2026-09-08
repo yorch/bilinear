@@ -19,7 +19,7 @@ export const WorkspaceNoTeams = observer(function WorkspaceNoTeams() {
     <EmptyState
       action={
         <Button onClick={() => uiStore.openCreateTeamModal()} size="sm" type="button">
-          {t('teams.createTeam')}
+          {t('teams.newTeam')}
         </Button>
       }
       description={t('layout.workspacePage.noTeams')}

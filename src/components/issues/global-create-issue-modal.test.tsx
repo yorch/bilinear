@@ -50,7 +50,7 @@ describe('GlobalCreateIssueModal no-teams dialog', () => {
     render(<GlobalCreateIssueModal />);
     expect(screen.getByText('issueDetail.createModal.noTeamsTitle')).toBeVisible();
     expect(screen.getByText('issueDetail.createModal.noTeamsDescription')).toBeVisible();
-    expect(screen.getByText('teams.createTeam')).toBeVisible();
+    expect(screen.getByText('teams.newTeam')).toBeVisible();
     expect(screen.getByText('common.cancel')).toBeVisible();
   });
 
@@ -59,7 +59,7 @@ describe('GlobalCreateIssueModal no-teams dialog', () => {
       storeHolder.current.uiStore.createIssueModalOpen = true;
     });
     render(<GlobalCreateIssueModal />);
-    fireEvent.click(screen.getByText('teams.createTeam'));
+    fireEvent.click(screen.getByText('teams.newTeam'));
     expect(storeHolder.current.uiStore.createIssueModalOpen).toBe(false);
     expect(storeHolder.current.uiStore.createTeamModalOpen).toBe(true);
   });

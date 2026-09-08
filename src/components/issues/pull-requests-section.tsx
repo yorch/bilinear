@@ -76,7 +76,7 @@ export function PullRequestsSection({ issueId }: IssuePullRequestsSectionProps) 
         {prs.map(pr => (
           <li key={pr.id}>
             <a
-              className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+              className="flex items-start gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
               href={pr.url}
               rel="noopener noreferrer"
               target="_blank"

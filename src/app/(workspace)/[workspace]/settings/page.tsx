@@ -635,7 +635,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   {t('settings.workspace.noTeamsYet')}
                 </p>
                 <Button onClick={() => uiStore.openCreateTeamModal()} size="sm" type="button">
-                  {t('teams.createTeam')}
+                  {t('teams.newTeam')}
                 </Button>
               </div>
             ) : (

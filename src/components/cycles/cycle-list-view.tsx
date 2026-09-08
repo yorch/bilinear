@@ -10,6 +10,7 @@ import { InlineRetry } from '@/components/shared/inline-retry';
 import { readTeamExtras } from '@/components/teams/team-settings-helpers';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
@@ -134,13 +135,16 @@ export const CycleListView = observer(function CycleListView({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex h-12 items-center justify-between border-b border-border px-4">
-        <h1 className="text-sm font-semibold text-foreground">{t('cycles.list.title')}</h1>
-        <div className="flex items-center gap-3">
-          {!hasNoCycles && disabledHint}
-          {newCycleButton}
-        </div>
-      </div>
+      {/* PageHeader, not a hand-rolled `h-12 border-b` row. */}
+      <PageHeader
+        actions={
+          <div className="flex items-center gap-3">
+            {!hasNoCycles && disabledHint}
+            {newCycleButton}
+          </div>
+        }
+        title={t('cycles.list.title')}
+      />
 
       <CreateCycleModal
         defaultDurationWeeks={readTeamExtras(team).cycleDuration ?? 2}
@@ -165,6 +169,7 @@ export const CycleListView = observer(function CycleListView({
             }
             description={t('cycles.list.emptyDescription')}
             icon={<RefreshCw className="h-5 w-5" />}
+            testId="empty-state"
             title={t('cycles.list.emptyTitle')}
           />
         ) : (

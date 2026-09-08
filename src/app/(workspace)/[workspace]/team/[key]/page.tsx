@@ -1,6 +1,6 @@
 'use client';
 
-import { Bookmark, Settings } from 'lucide-react';
+import { Bookmark, Plus, Settings } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -18,6 +18,7 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
+import { SimpleSelect } from '@/components/ui/select';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -255,6 +256,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
               <Settings className="h-4 w-4" />
             </Link>
             <Button onClick={() => uiStore.openCreateIssueModal()} size="sm" type="button">
+              <Plus className="h-3.5 w-3.5" />
               {t('issues.newIssue')}
             </Button>
           </>

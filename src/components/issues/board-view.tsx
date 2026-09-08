@@ -88,7 +88,7 @@ function BoardCardInner({
   return (
     <button
       className={cn(
-        'w-full cursor-pointer rounded-lg border bg-card p-3 text-left shadow-e1 transition-shadow hover:shadow-e2',
+        'w-full cursor-pointer rounded-lg border border-border bg-card p-3 text-left shadow-e1 transition-shadow hover:shadow-e2',
         selected
           ? 'border-brand ring-1 ring-brand'
           : multiSelected
@@ -268,11 +268,7 @@ function BoardColumn({
           ))}
         </SortableContext>
 
-        {column.issues.length === 0 && (
-          <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
-            {t('issues.noIssues')}
-          </div>
-        )}
+        {column.issues.length === 0 && <EmptyState size="compact" title={t('issues.noIssues')} />}
       </div>
     </div>
   );
@@ -627,7 +623,9 @@ export function BoardView({
     return (
       <EmptyState
         className="flex-1"
+        description={t('issues.noIssuesDescription')}
         icon={<Columns3 className="h-5 w-5" />}
+        testId="empty-state"
         title={t('issues.noIssues')}
       />
     );

@@ -122,7 +122,7 @@ function NotificationItem({
   return (
     <div
       className={cn(
-        'flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors',
+        'flex items-start gap-3 rounded-lg border border-border px-4 py-3 transition-colors',
         read ? 'border-border' : 'border-brand-border bg-brand-subtle/40 dark:bg-brand-subtle',
       )}
     >

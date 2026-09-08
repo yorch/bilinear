@@ -554,7 +554,7 @@ function TemplateForm({
                 return (
                   <button
                     className={cn(
-                      'rounded-full border px-2 py-0.5 text-xs transition-colors',
+                      'rounded-full border border-border px-2 py-0.5 text-xs transition-colors',
                       selected
                         ? 'border-brand bg-brand-subtle text-brand-subtle-foreground dark:border-brand-border'
                         : 'border-border bg-card text-muted-foreground hover:bg-accent',
