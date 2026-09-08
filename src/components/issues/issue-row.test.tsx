@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
@@ -77,6 +77,51 @@ function trackCount(row: HTMLElement): number {
     .trim()
     .split(/\s+/).length;
 }
+
+describe('IssueRow bulk-selection modifier', () => {
+  /**
+   * `onCheck` reports whether Shift was held, and bulk lists use it to extend
+   * the selection from the previous row.
+   *
+   * This was read as `(e.nativeEvent as MouseEvent).shiftKey` inside the
+   * checkbox's `onChange`. A checkbox's change event is a plain `Event` with no
+   * `shiftKey` property at all, so the expression evaluated to `undefined`
+   * forever and shift-range selection never worked anywhere in the app — the
+   * `as MouseEvent` cast is what stopped the type-checker from saying so. The
+   * modifier now comes from the pointer/key event that precedes activation.
+   */
+  it('reports Shift held during a pointer interaction', () => {
+    const onCheck = vi.fn();
+    const { row } = renderRow({ checked: false, onCheck });
+    const box = row.querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+    fireEvent.click(box, { shiftKey: true });
+
+    expect(onCheck).toHaveBeenCalledWith(true);
+  });
+
+  it('reports Shift held for keyboard activation', () => {
+    const onCheck = vi.fn();
+    const { row } = renderRow({ checked: false, onCheck });
+    const box = row.querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+    // Space on a focused checkbox is dispatched by the browser as a click that
+    // carries the current modifier state.
+    fireEvent.click(box, { shiftKey: true });
+
+    expect(onCheck).toHaveBeenCalledWith(true);
+  });
+
+  it('reports no modifier for a plain click', () => {
+    const onCheck = vi.fn();
+    const { row } = renderRow({ checked: false, onCheck });
+    const box = row.querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+    fireEvent.click(box, { shiftKey: false });
+
+    expect(onCheck).toHaveBeenCalledWith(false);
+  });
+});
 
 describe('IssueRow grid alignment', () => {
   /**

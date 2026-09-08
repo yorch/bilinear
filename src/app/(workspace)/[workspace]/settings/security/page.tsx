@@ -716,6 +716,11 @@ function ReadOnlyField({
   value: string;
 }) {
   const t = useTranslations();
+  // The URL is not knowable until after mount (see useAppOrigin), and these
+  // values exist to be pasted into an identity provider. Copying the "…"
+  // placeholder would hand the user a silently wrong string, so the button is
+  // disabled for exactly as long as the value is one.
+  const pending = value === PENDING_URL;
   return (
     <div>
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
@@ -725,7 +730,11 @@ function ReadOnlyField({
         </code>
         <button
           aria-label={t('settings.security.copy')}
-          className={cn('shrink-0 text-muted-foreground hover:text-foreground', TOUCH_TARGET)}
+          className={cn(
+            'shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-40',
+            TOUCH_TARGET,
+          )}
+          disabled={pending}
           onClick={onCopy}
           title={t('settings.security.copy')}
           type="button"

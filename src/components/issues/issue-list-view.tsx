@@ -97,11 +97,21 @@ export function IssueListView({
       return;
     }
     const currentIndex = issues.findIndex(i => i.id === issueId);
+    // `anchor` is read BEFORE setCheckedIds, not inside the updater.
+    //
+    // A `setState(prev => …)` updater does not run synchronously — React defers it
+    // to the next render, by which point the `lastCheckedIndexRef.current =
+    // currentIndex` line below has already executed. Reading the ref inside the
+    // updater therefore always saw `currentIndex`, so `lo === hi` and a
+    // shift-click extended the selection by exactly one row: itself. Together with
+    // the modifier never arriving at all (see IssueRow), that is both halves of
+    // why shift-range selection has never worked in this app.
+    const anchor = lastCheckedIndexRef.current;
     setCheckedIds(prev => {
       const next = new Set(prev);
-      if (shiftKey && lastCheckedIndexRef.current >= 0) {
-        const lo = Math.min(lastCheckedIndexRef.current, currentIndex);
-        const hi = Math.max(lastCheckedIndexRef.current, currentIndex);
+      if (shiftKey && anchor >= 0) {
+        const lo = Math.min(anchor, currentIndex);
+        const hi = Math.max(anchor, currentIndex);
         const willCheck = !prev.has(issueId);
         for (let idx = lo; idx <= hi; idx++) {
           const id = issues[idx]?.id;

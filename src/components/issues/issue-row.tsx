@@ -17,6 +17,9 @@ import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { isIssueSnoozed } from './snooze-presets';
 
+/** React wants an onChange on a controlled checkbox; the work is in onClick. */
+const NOOP = () => {};
+
 export interface IssueRowData {
   assigneeId?: string | null;
   cycleId?: string | null;
@@ -218,10 +221,27 @@ export function IssueRow({
             ? 'opacity-100'
             : 'opacity-0 group-hover:opacity-100 max-md:opacity-100',
         )}
-        onChange={
-          isBulkMode ? e => onCheck(Boolean((e.nativeEvent as MouseEvent).shiftKey)) : onSelect
-        }
-        onClick={e => e.stopPropagation()}
+        // Toggling happens in `onClick`, not `onChange`.
+        //
+        // This read `(e.nativeEvent as MouseEvent).shiftKey` inside `onChange`.
+        // A checkbox's change event is a plain `Event` with no `shiftKey`
+        // property at all, so the expression was `undefined` forever and
+        // shift-range selection had never once worked anywhere in the app; the
+        // `as MouseEvent` cast is what kept the type-checker quiet about it.
+        // `click` is the event that actually carries the modifier — for pointer
+        // activation and for Space on a focused checkbox alike — and using it
+        // directly avoids depending on the relative order of React's change and
+        // click handlers, which is not something a caller should have to reason
+        // about.
+        onChange={NOOP}
+        onClick={e => {
+          e.stopPropagation();
+          if (isBulkMode) {
+            onCheck(e.shiftKey);
+          } else {
+            onSelect();
+          }
+        }}
         type="checkbox"
       />
 

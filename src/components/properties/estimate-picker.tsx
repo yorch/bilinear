@@ -8,8 +8,15 @@ import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
-/** Estimation scale point values per estimation type. */
-const SCALE_OPTIONS: Record<string, Array<{ label: string; value: number }>> = {
+/**
+ * Estimation scale point values per estimation type.
+ *
+ * Exported because `BulkActionBar` offers the same scale for a multi-issue
+ * edit. It briefly kept its own copy, which is the kind of duplication that
+ * agrees on the day it is written and disagrees the first time a scale gains a
+ * point.
+ */
+export const SCALE_OPTIONS: Record<string, Array<{ label: string; value: number }>> = {
   exponential: [
     { label: '1', value: 1 },
     { label: '2', value: 2 },

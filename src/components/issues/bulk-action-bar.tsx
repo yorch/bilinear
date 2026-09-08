@@ -1,6 +1,7 @@
 'use client';
 
 import { Archive, X } from 'lucide-react';
+import { SCALE_OPTIONS } from '@/components/properties/estimate-picker';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
 import { ColorDot } from '@/components/ui/color-dot';
@@ -11,18 +12,6 @@ import { cn, TOUCH_TARGET } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
 const PRIORITIES = [0, 1, 2, 3, 4] as const;
-
-/**
- * Estimate options per scale, mirroring EstimatePicker's SCALE_OPTIONS.
- * Duplicated deliberately narrowly: the picker's copy is coupled to its own
- * free-form numeric fallback, which has no meaning for a bulk edit.
- */
-const ESTIMATE_SCALES: Record<string, Array<{ label: string; value: number }>> = {
-  exponential: [1, 2, 4, 8, 16, 32].map(v => ({ label: String(v), value: v })),
-  fibonacci: [1, 2, 3, 5, 8, 13].map(v => ({ label: String(v), value: v })),
-  linear: [1, 2, 3, 4, 5].map(v => ({ label: String(v), value: v })),
-  tShirt: ['XS', 'S', 'M', 'L', 'XL'].map((label, i) => ({ label, value: i + 1 })),
-};
 
 interface BulkActionBarProps {
   count: number;
@@ -220,7 +209,7 @@ export function BulkActionBar({
               >
                 {t('properties.estimate.noEstimate')}
               </button>
-              {(ESTIMATE_SCALES[estimationType] ?? []).map(opt => (
+              {(SCALE_OPTIONS[estimationType] ?? []).map(opt => (
                 <button
                   className={POPOVER_ITEM_CLASS}
                   key={opt.value}

@@ -105,6 +105,29 @@ export function SubscribeButton({
 }
 
 /**
+ * Is the event target a text-entry surface the user is mid-edit in?
+ *
+ * Escape closes the panel, but the title field and the description editor both
+ * use Escape to *cancel their own edit* — and neither calls
+ * `preventDefault()`, because the title's handler predates this listener and
+ * TipTap does not handle Escape at all. So Escape in either one discarded the
+ * edit and then threw the whole panel away, losing the reader's place. A
+ * contenteditable check covers the editor; `tagName` covers the input.
+ */
+function isEditingText(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) {
+    return false;
+  }
+  return (
+    el.tagName === 'INPUT' ||
+    el.tagName === 'TEXTAREA' ||
+    el.isContentEditable === true ||
+    el.closest?.('[contenteditable="true"]') != null
+  );
+}
+
+/**
  * The issue detail as an OVERLAY, opened from a list or board.
  *
  * This component is only the overlay chrome — backdrop, fixed sheet, header,
@@ -129,7 +152,7 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !e.defaultPrevented) {
+      if (e.key === 'Escape' && !e.defaultPrevented && !isEditingText(e.target)) {
         onClose();
       }
     };

@@ -61,7 +61,9 @@ const PALETTE_HUES = [
 
 const VIOLATION_RE = new RegExp(
   `(?:^|[\\s"'\`:])[\\w-]*(?:${PALETTE_HUES})-\\d{2,3}(?:\\/\\d{1,3})?\\b` +
-    '|#[0-9a-fA-F]{6}\\b' +
+    '|#[0-9a-fA-F]{8}\\b' +
+    '|#[0-9a-fA-F]{6}\\b(?![0-9a-fA-F])' +
+    '|#[0-9a-fA-F]{4}\\b(?![0-9a-fA-F])' +
     '|#[0-9a-fA-F]{3}\\b(?![0-9a-fA-F])',
   'g',
 );
@@ -102,8 +104,30 @@ function scan() {
  * This one is a hard zero rather than a ratchet: the whole tree was fixed in
  * one pass, so there is no legacy population to grandfather.
  */
-const BORDER_WIDTH_ONLY = /^border(-[btlrxy])?(-\d+)?$/;
-const BORDER_COLOUR = /^border-(?![btlrxy]?\d*$)(?![btlrxy]$).+/;
+/** `border`, `border-2`, `border-t`, `border-x-4`, `border-s`, … */
+const BORDER_WIDTH_ONLY = /^border(-[btlrxyse])?(-\d+)?$/;
+
+/**
+ * `border-*` utilities that set a *style*, not a colour.
+ *
+ * Without this, `border border-dashed` counted as coloured — the naive "any
+ * border-<something> that isn't a width is a colour" rule let a whole class of
+ * colourless borders through.
+ */
+const BORDER_STYLE = /^border-(solid|dashed|dotted|double|hidden|none|collapse|separate)$/;
+
+/**
+ * A `border-*` utility that names a colour.
+ *
+ * Defined by exclusion against the two precise regexes above rather than by its
+ * own lookahead. The lookahead version read `border-s-2` — a logical-side width
+ * — as "a colour called s-2", and so silently exempted every class string that
+ * used one.
+ */
+function isBorderColour(cls) {
+  return cls.startsWith('border-') && !BORDER_WIDTH_ONLY.test(cls) && !BORDER_STYLE.test(cls);
+}
+
 const CLASS_STRING_RE = /["'`]([a-zA-Z0-9:@\-[\]/.,%()#& ]{4,})["'`]/g;
 
 /**
@@ -165,10 +189,13 @@ function findColourlessBorders() {
         }
         const classes = match[1].split(/\s+/).map(c => c.split(':').pop());
         const hasWidth = classes.some(c => BORDER_WIDTH_ONLY.test(c) && c !== 'border-0');
-        if (!hasWidth || classes.some(c => BORDER_COLOUR.test(c))) {
+        if (!hasWidth || classes.some(isBorderColour)) {
           continue;
         }
-        const after = text.slice(match.index, match.index + INLINE_STYLE_LOOKAHEAD);
+        // Measured from the END of the class string, so a long className
+        // cannot eat the budget before the style object is reached.
+        const from = match.index + match[0].length;
+        const after = text.slice(from, from + INLINE_STYLE_LOOKAHEAD);
         if (after.includes('borderColor')) {
           continue;
         }
