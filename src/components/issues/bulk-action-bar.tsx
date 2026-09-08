@@ -12,8 +12,26 @@ import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
 const PRIORITIES = [0, 1, 2, 3, 4] as const;
 
+/**
+ * Estimate options per scale, mirroring EstimatePicker's SCALE_OPTIONS.
+ * Duplicated deliberately narrowly: the picker's copy is coupled to its own
+ * free-form numeric fallback, which has no meaning for a bulk edit.
+ */
+const ESTIMATE_SCALES: Record<string, Array<{ label: string; value: number }>> = {
+  exponential: [1, 2, 4, 8, 16, 32].map(v => ({ label: String(v), value: v })),
+  fibonacci: [1, 2, 3, 5, 8, 13].map(v => ({ label: String(v), value: v })),
+  linear: [1, 2, 3, 4, 5].map(v => ({ label: String(v), value: v })),
+  tShirt: ['XS', 'S', 'M', 'L', 'XL'].map((label, i) => ({ label, value: i + 1 })),
+};
+
 interface BulkActionBarProps {
   count: number;
+  /**
+   * The team's estimation scale. Supplying it adds an Estimate action — the
+   * backlog needs one, and maintained a second bulk bar (with a
+   * `window.prompt`) to get it.
+   */
+  estimationType?: string;
   labels: IssueLabel[];
   /** Archive every checked issue. Omitted where the page cannot archive. */
   onArchive?: () => void;
@@ -27,6 +45,7 @@ interface BulkActionBarProps {
 
 export function BulkActionBar({
   count,
+  estimationType,
   states,
   users,
   labels,
@@ -173,6 +192,45 @@ export function BulkActionBar({
                 >
                   <ColorDot color={l.color} />
                   <span className="truncate">{l.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </SelectPopover>
+      )}
+
+      {estimationType && estimationType !== 'notUsed' && (
+        <SelectPopover
+          triggerChildren={
+            <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
+              {t('issues.estimate')}
+            </span>
+          }
+          triggerClassName="rounded border border-border"
+        >
+          {close => (
+            <div className="w-32 py-1">
+              <button
+                className={POPOVER_ITEM_CLASS}
+                onClick={() => {
+                  onUpdate({ estimate: null });
+                  close();
+                }}
+                type="button"
+              >
+                {t('properties.estimate.noEstimate')}
+              </button>
+              {(ESTIMATE_SCALES[estimationType] ?? []).map(opt => (
+                <button
+                  className={POPOVER_ITEM_CLASS}
+                  key={opt.value}
+                  onClick={() => {
+                    onUpdate({ estimate: opt.value });
+                    close();
+                  }}
+                  type="button"
+                >
+                  {opt.label}
                 </button>
               ))}
             </div>

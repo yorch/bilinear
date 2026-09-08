@@ -16,6 +16,8 @@ import { IssueRow } from './issue-row';
 
 interface IssueListViewProps {
   customFields?: DBCustomFieldDefinition[];
+  /** The team's estimation scale; supplying it adds an Estimate action to the bulk bar. */
+  estimationType?: string;
   getCustomFieldValue?: (issueId: string, definitionId: string) => unknown;
   isColumnVisible?: (key: ColumnKey) => boolean;
   issues: IssueRowData[];
@@ -51,6 +53,7 @@ interface ContextMenuState {
 }
 
 export function IssueListView({
+  estimationType,
   issues,
   states,
   users,
@@ -249,6 +252,7 @@ export function IssueListView({
       {onBulkUpdate && checkedIds.size > 0 && (
         <BulkActionBar
           count={checkedIds.size}
+          estimationType={estimationType}
           labels={labels}
           onArchive={
             onArchiveMany || onArchive

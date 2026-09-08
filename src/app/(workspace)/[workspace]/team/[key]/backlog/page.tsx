@@ -227,6 +227,7 @@ const BacklogPage = observer(function BacklogPage() {
         {viewMode === 'list' ? (
           <IssueListView
             customFields={customFieldDefs}
+            estimationType={team.issueEstimationType}
             getCustomFieldValue={(issueId, definitionId) =>
               customFieldStore.findValue(issueId, definitionId)?.value ?? null
             }

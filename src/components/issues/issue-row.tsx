@@ -71,6 +71,15 @@ interface IssueRowProps {
   states: WorkflowState[];
   style?: React.CSSProperties;
   teamId?: string;
+  /**
+   * One page-specific cell rendered after status, with its own reserved track.
+   *
+   * Exists so the backlog can keep its staleness indicator while using this row
+   * instead of the fork it used to maintain. A slot rather than a `variant`
+   * because the row's whole point is that the built-in columns line up
+   * everywhere; a caller adding a cell must not be able to disturb them.
+   */
+  trailing?: React.ReactNode;
   users: IssueUser[];
 }
 
@@ -125,6 +134,7 @@ export function IssueRow({
   customFields,
   getCustomFieldValue,
   style,
+  trailing,
 }: IssueRowProps) {
   const t = useTranslations();
   const { formatDate } = useFormatters();
@@ -169,6 +179,7 @@ export function IssueRow({
     showEstimate ? '2rem' : null,
     ...visibleCustomFields.map(() => '5.5rem'),
     '7rem', // status
+    trailing ? '2rem' : null, // page-specific trailing cell
   ]
     .filter(Boolean)
     .join(' ');
@@ -336,6 +347,8 @@ export function IssueRow({
         states={states}
         value={issue.stateId}
       />
+
+      {trailing && <div className="flex justify-end">{trailing}</div>}
     </div>
   );
 }
