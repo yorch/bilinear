@@ -24,8 +24,16 @@ export interface AnalyticsFilter {
 }
 
 export interface HistogramBucket {
-  /** Exclusive upper bound, in days. */
-  bucketEnd: number;
+  /**
+   * Exclusive upper bound in days, or `null` for the final open-ended bucket.
+   *
+   * `null`, not `Number.POSITIVE_INFINITY`: GraphQL's `Float` serialiser
+   * rejects non-finite numbers, so `Infinity` here threw during response
+   * serialisation. Because the Insights page asks for four fields in one
+   * document, that single unserialisable value failed the whole query and the
+   * section rendered "Failed to load analytics" for every workspace, always.
+   */
+  bucketEnd: number | null;
   /** Inclusive lower bound, in days. */
   bucketStart: number;
   count: number;
@@ -91,12 +99,13 @@ function bucketize(samplesDays: number[]): HistogramBucket[] {
   const buckets: HistogramBucket[] = [];
   for (let i = 0; i < HISTOGRAM_EDGES.length; i++) {
     const start = HISTOGRAM_EDGES[i];
-    const end = HISTOGRAM_EDGES[i + 1] ?? Number.POSITIVE_INFINITY;
+    // `null` for the last edge, meaning unbounded — see HistogramBucket.
+    const end = HISTOGRAM_EDGES[i + 1] ?? null;
     buckets.push({ bucketEnd: end, bucketStart: start, count: 0 });
   }
   for (const days of samplesDays) {
     for (const bucket of buckets) {
-      if (days >= bucket.bucketStart && days < bucket.bucketEnd) {
+      if (days >= bucket.bucketStart && (bucket.bucketEnd === null || days < bucket.bucketEnd)) {
         bucket.count++;
         break;
       }

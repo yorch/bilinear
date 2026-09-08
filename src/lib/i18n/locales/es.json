@@ -871,6 +871,7 @@
       "uploadFailed": "Error al subir el archivo",
       "uploading": "Subiendo…"
     },
+    "backToTeam": "Volver",
     "comments": {
       "cannotConvertTeamUnresolved": "No se puede convertir: no se resolvió el equipo",
       "commentButton": "Comentar",
@@ -895,7 +896,7 @@
       "subIssueFromComment": "Subtarea desde comentario",
       "title": "Comentarios",
       "unresolve": "Marcar como no resuelto",
-      "writePlaceholder": "Escribe un comentario… (admite **markdown**, @menciones, #tareas)"
+      "writePlaceholder": "Escribe un comentario…"
     },
     "createModal": {
       "addDescriptionFirst": "Agrega una descripción primero para sugerir un título",
@@ -903,7 +904,7 @@
       "createIssue": "Crear tarea",
       "createMore": "Crear más",
       "creating": "Creando…",
-      "descriptionPlaceholder": "Agrega una descripción… (opcional, admite **markdown**)",
+      "descriptionPlaceholder": "Agrega una descripción… (opcional)",
       "discard": "Descartar",
       "discardConfirmBody": "Tienes cambios sin guardar que se perderán si cierras esto.",
       "discardConfirmTitle": "¿Descartar esta tarea?",
@@ -917,8 +918,8 @@
     },
     "defaultUserName": "Usuario",
     "description": "Descripción",
-    "descriptionPlaceholder": "Agrega una descripción… (admite **markdown**, comandos /, @menciones)",
-    "descriptionPlaceholderFull": "Agrega una descripción… (admite **markdown**, comandos /, @menciones, #tareas)",
+    "descriptionPlaceholder": "Agrega una descripción…",
+    "descriptionPlaceholderFull": "Agrega una descripción… escribe / para comandos",
     "failedToSubscribe": "No se pudo suscribir",
     "failedToUnsubscribe": "No se pudo cancelar la suscripción",
     "issueNotFound": "No se encontró la tarea.",
@@ -1214,7 +1215,9 @@
     "verify": "Verificar"
   },
   "nav": {
+    "accent": "Color de acento",
     "analytics": "Analítica",
+    "appearance": "Apariencia",
     "backlog": "Pendientes",
     "closeMenu": "Cerrar menú",
     "collapseSidebar": "Contraer barra lateral (⌘B)",
@@ -1229,13 +1232,17 @@
     "inbox": "Bandeja de entrada",
     "initiatives": "Iniciativas",
     "keyboardShortcuts": "Atajos de teclado",
+    "language": "Idioma",
     "myIssues": "Mis tareas",
     "newTeam": "Nuevo equipo",
     "openMenu": "Abrir menú",
     "projects": "Proyectos",
     "removeFromFavorites": "Quitar de favoritos",
     "removeNamedFromFavorites": "Quitar {name} de favoritos",
+    "searchHint": "Buscar…",
     "teams": "Equipos",
+    "triage": "Clasificación",
+    "userMenu": "Cuenta y preferencias",
     "workspaceSettings": "Configuración del espacio de trabajo"
   },
   "notifications": {

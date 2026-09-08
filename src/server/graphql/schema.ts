@@ -1527,7 +1527,12 @@ export const typeDefs = `
 
   type AnalyticsHistogramBucket {
     bucketStart: Float!
-    bucketEnd: Float!
+    """
+    Exclusive upper bound in days. NULL on the final open-ended bucket — a
+    Float cannot carry Infinity, and returning one threw during response
+    serialisation, failing the entire Insights query.
+    """
+    bucketEnd: Float
     count: Int!
   }
 

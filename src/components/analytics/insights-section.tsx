@@ -10,7 +10,8 @@ import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
 
 interface HistogramBucket {
-  bucketEnd: number;
+  /** `null` on the final open-ended bucket — see AnalyticsHistogramBucket. */
+  bucketEnd: number | null;
   bucketStart: number;
   count: number;
 }
@@ -74,7 +75,7 @@ function rangeForPreset(preset: RangePreset): { from?: string; to?: string } {
 }
 
 function fmtBucketLabel(b: HistogramBucket, t: ReturnType<typeof useTranslations>): string {
-  if (b.bucketEnd === Number.POSITIVE_INFINITY || !Number.isFinite(b.bucketEnd)) {
+  if (b.bucketEnd === null || !Number.isFinite(b.bucketEnd)) {
     return t('analytics.insights.bucketDaysPlus', { count: b.bucketStart });
   }
   return t('analytics.insights.bucketDaysRange', { from: b.bucketStart, to: b.bucketEnd });

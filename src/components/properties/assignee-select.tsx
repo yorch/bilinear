@@ -1,5 +1,7 @@
 'use client';
 
+import { UserRound } from 'lucide-react';
+import { PropertyPlaceholder } from '@/components/properties/property-placeholder';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useTranslations } from '@/hooks/use-translations';
@@ -45,7 +47,10 @@ export function AssigneeSelect({
         current ? (
           <UserAvatar size="xs" user={current} />
         ) : (
-          <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border-2 border-dashed border-border" />
+          // A dashed ring used to stand in for "unassigned". A dashed circle is
+          // the universal spinner silhouette, so every unassigned row looked
+          // like it was still loading. A user glyph cannot be misread.
+          <PropertyPlaceholder className="h-4 w-4" icon={UserRound} />
         )
       }
       triggerClassName={cn('px-1 py-1', TOUCH_TARGET)}

@@ -2,6 +2,7 @@
 
 import { RefreshCw, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import { PropertyPlaceholder } from '@/components/properties/property-placeholder';
 import { Badge } from '@/components/ui/badge';
 import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
 import { useTranslations } from '@/hooks/use-translations';
@@ -60,14 +61,14 @@ export const CycleSelect = observer(function CycleSelect({
       )}
       searchPlaceholder={t('properties.cycle.searchPlaceholder')}
       triggerChildren={
-        <>
-          <RefreshCw className="h-3 w-3" />
-          {current ? (
+        current ? (
+          <>
+            <RefreshCw className="h-3 w-3" />
             <span className="max-w-[100px] truncate">{getCycleDisplayName(current)}</span>
-          ) : (
-            <span className="text-muted-foreground">{t('properties.cycle.cycle')}</span>
-          )}
-        </>
+          </>
+        ) : (
+          <PropertyPlaceholder icon={RefreshCw} />
+        )
       }
       triggerTitle={t('properties.cycle.setCycle')}
     />

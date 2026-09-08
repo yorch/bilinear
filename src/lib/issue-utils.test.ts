@@ -20,6 +20,24 @@ describe('priority constants', () => {
     }
   });
 
+  it('gives every level a distinct SHAPE, not just a distinct colour', () => {
+    // PriorityIcon draws `bars` filled bars, or a square when `urgent`. If two
+    // levels share a shape they are told apart by colour alone, which fails
+    // WCAG 1.4.1 and makes the ramp unreadable in greyscale. Note that
+    // urgent(1) and high(2) both carry bars:3 — `urgent` is what separates
+    // them, so dropping the flag from the key must fail this test.
+    const shapes = Object.values(PRIORITY_CONFIG).map(c => `${c.bars}:${c.urgent}`);
+    expect(new Set(shapes).size).toBe(shapes.length);
+  });
+
+  it('carries no glyph string — the icon is drawn, not typed', () => {
+    // ASCII glyphs ('!!!', '·') cannot be sized to a box, so the priority cell
+    // was a different width on every row and re-ragged the whole issue list.
+    for (const config of Object.values(PRIORITY_CONFIG)) {
+      expect(config).not.toHaveProperty('icon');
+    }
+  });
+
   it('PRIORITY_OPTIONS exposes string values for every priority', () => {
     expect(PRIORITY_OPTIONS).toEqual([
       { value: '0' },

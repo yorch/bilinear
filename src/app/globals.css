@@ -331,6 +331,12 @@
   --priority-high: #f97316;
   --priority-medium: #eab308;
   --priority-low: #6b7280;
+  /* Ink for the exclamation inside PriorityIcon's filled urgent square. The
+     square is always --priority-urgent, so this pair is theme-independent —
+     it must NOT be aliased to --card or --background, which would make the
+     glyph vanish on a hovered row (a different surface than the one the
+     square sits on when idle). */
+  --priority-urgent-ink: #ffffff;
 
   /* Fixed entity-colour palette offered by ColorSwatchPicker (team colour,
      labels, workflow states). The chosen value is persisted on the entity as

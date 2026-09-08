@@ -1,6 +1,7 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
+import { SectionHeader } from '@/components/shared/section-header';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -45,8 +46,10 @@ export const CustomFieldsEditor = observer(
     };
 
     return (
-      <div className="mt-6">
-        <p className="mb-2 text-xs font-medium text-muted-foreground">{t('customFields.title')}</p>
+      <div>
+        <div className="mb-2">
+          <SectionHeader title={t('customFields.title')} />
+        </div>
         <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
           {definitions.map(def => {
             const current = customFieldStore.findValue(issueId, def.id);

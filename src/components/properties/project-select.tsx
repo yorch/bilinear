@@ -2,6 +2,7 @@
 
 import { Target, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import { PropertyPlaceholder } from '@/components/properties/property-placeholder';
 import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
@@ -57,14 +58,14 @@ export const ProjectSelect = observer(function ProjectSelect({
       )}
       searchPlaceholder={t('properties.project.searchPlaceholder')}
       triggerChildren={
-        <>
-          <Target className="h-3 w-3" />
-          {current ? (
+        current ? (
+          <>
+            <Target className="h-3 w-3" />
             <span className="max-w-[100px] truncate">{current.name}</span>
-          ) : (
-            <span className="text-muted-foreground">{t('properties.project.project')}</span>
-          )}
-        </>
+          </>
+        ) : (
+          <PropertyPlaceholder icon={Target} />
+        )
       }
       triggerTitle={t('properties.project.setProject')}
     />

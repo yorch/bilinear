@@ -1,12 +1,15 @@
 'use client';
 
+import { ArrowLeft } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useState } from 'react';
-import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
+import { IssueDetailContent } from '@/components/issues/issue-detail-content';
+import { SubscribeButton, useIssueSubscription } from '@/components/issues/issue-detail-panel';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { DetailPanelSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -166,6 +169,9 @@ const IssueDetailPage = observer(function IssueDetailPage() {
     snapshot: snapshotLocal,
   });
 
+  const { subscribed, toggle: toggleSubscription } = useIssueSubscription(issue?.id);
+  useHotkeys('shift+s', toggleSubscription, {}, [subscribed, issue?.id]);
+
   const handleClose = () => {
     if (returnTo) {
       router.push(returnTo);
@@ -199,19 +205,40 @@ const IssueDetailPage = observer(function IssueDetailPage() {
     );
   }
 
+  // A full page, not the overlay panel. This route used to mount
+  // `IssueDetailPanel`, which is a fixed 480px right-hand sheet with its own
+  // backdrop — so opening an issue URL directly showed the issue crammed into a
+  // narrow column with two thirds of the window blank white. The panel is now
+  // overlay-only; both surfaces share `IssueDetailContent`.
+  const breadcrumbLabel = returnTo ? (fromLabel ?? '') : t('issueDetail.backToTeam');
+
   return (
-    <div className="flex flex-1">
-      <LazyIssueDetailPanel
-        breadcrumb={
-          returnTo ? { label: fromLabel ?? '', onNavigate: () => router.push(returnTo) } : null
-        }
-        issue={issue}
-        labels={labels}
-        onClose={handleClose}
-        onUpdate={handleUpdate}
-        states={issue.team.states}
-        users={issue.team.members.map(m => m.user)}
-      />
+    <div className="flex min-w-0 flex-1 flex-col overflow-hidden" data-testid="issue-detail-page">
+      <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <button
+            className="flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground hover:text-foreground"
+            onClick={handleClose}
+            type="button"
+          >
+            <ArrowLeft className="h-3 w-3 shrink-0" />
+            <span className="truncate">{breadcrumbLabel}</span>
+          </button>
+          <span className="text-muted-foreground">/</span>
+          <span className="font-mono text-xs text-muted-foreground">{issue.identifier}</span>
+        </div>
+        <SubscribeButton onToggle={toggleSubscription} subscribed={subscribed} />
+      </header>
+      <div className="min-w-0 flex-1 overflow-y-auto">
+        <IssueDetailContent
+          issue={issue}
+          labels={labels}
+          layout="page"
+          onUpdate={handleUpdate}
+          states={issue.team.states}
+          users={issue.team.members.map(m => m.user)}
+        />
+      </div>
     </div>
   );
 });

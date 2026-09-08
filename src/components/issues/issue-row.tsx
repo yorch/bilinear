@@ -74,26 +74,32 @@ interface IssueRowProps {
   users: IssueUser[];
 }
 
-/** Single-line read-only rendering of a custom-field value for the list row. */
+/**
+ * Single-line read-only rendering of a custom-field value for the list row.
+ *
+ * Returns an empty string, not an em-dash, for an unset value. A column of
+ * em-dashes is a column of noise: the reader scans these cells for the ones
+ * that *have* a value, and every placeholder glyph competes with those.
+ */
 function renderCustomFieldValue(def: DBCustomFieldDefinition, value: unknown): string {
   if (value === null || value === undefined || value === '') {
-    return '—';
+    return '';
   }
   switch (def.type) {
     case 'checkbox':
-      return value === true ? '✓' : '—';
+      return value === true ? '✓' : '';
     case 'select': {
       const opt = def.options?.find(o => o.value === value);
       return opt?.label ?? String(value);
     }
     case 'multi_select': {
       if (!Array.isArray(value)) {
-        return '—';
+        return '';
       }
       return value.map(v => def.options?.find(o => o.value === v)?.label ?? String(v)).join(', ');
     }
     case 'number':
-      return typeof value === 'number' ? String(value) : '—';
+      return typeof value === 'number' ? String(value) : '';
     default:
       return String(value);
   }
@@ -176,6 +182,15 @@ export function IssueRow({
         // set or a long custom-field value blow past its track and re-ragged
         // the columns this template exists to align.
         '[&>*]:min-w-0',
+        // Unset property cells (PropertyPlaceholder) are invisible until the
+        // row is hovered or something inside it takes focus. The cells still
+        // occupy their track, so nothing shifts — but a list of six issues no
+        // longer shows twenty faint icons for properties nobody has set.
+        // Owned here rather than by a prop on each picker so the pickers stay
+        // identical on a form, where the placeholder must always show.
+        '[&_[data-prop-empty]]:opacity-0 hover:[&_[data-prop-empty]]:opacity-100 focus-within:[&_[data-prop-empty]]:opacity-100',
+        // Touch has no hover, so the affordance would never appear.
+        'max-md:[&_[data-prop-empty]]:opacity-100',
         selected && 'bg-brand-subtle',
       )}
       data-selected={selected ? 'true' : undefined}

@@ -1,45 +1,20 @@
 'use client';
 
-import { ArrowLeft, Bell, BellOff, Check, Copy } from 'lucide-react';
+import { ArrowLeft, Bell, BellOff } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CustomFieldsEditor } from '@/components/custom-fields/custom-fields-editor';
-import { TipTapEditor } from '@/components/editor/tiptap-editor.lazy';
-import { AssigneeSelect } from '@/components/properties/assignee-select';
-import { CycleSelect } from '@/components/properties/cycle-select';
-import { DueDatePicker } from '@/components/properties/due-date-picker';
-import { EstimatePicker } from '@/components/properties/estimate-picker';
-import { LabelDot, LabelSelect } from '@/components/properties/label-select';
-import { MilestoneSelect } from '@/components/properties/milestone-select';
-import { priorityLabelKey } from '@/components/properties/priority-icon';
-import { PrioritySelect } from '@/components/properties/priority-select';
-import { ProjectSelect } from '@/components/properties/project-select';
-import { StatusSelect } from '@/components/properties/status-select';
-import { Badge } from '@/components/ui/badge';
-import { useFormatters } from '@/hooks/use-formatters';
+import { useCallback, useEffect, useState } from 'react';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useTranslations } from '@/hooks/use-translations';
-import { getCycleDisplayName } from '@/lib/cycle-utils';
 import { gql } from '@/lib/graphql';
 import {
   ISSUE_SUBSCRIBE_MUTATION,
   ISSUE_SUBSCRIPTION_QUERY,
   ISSUE_UNSUBSCRIBE_MUTATION,
 } from '@/lib/graphql-queries';
-import { getBranchName, getDueDateColor } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
-import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
-import { ActivityTimeline } from './activity-timeline';
-import { AiInsights } from './ai-insights';
-import { CommentThread } from './comment-thread';
-import { FileAttachments } from './file-attachments';
-import { IssueReactionBar } from './issue-reaction-bar';
-import { PullRequestsSection } from './pull-requests-section';
-import { RelationsSection } from './relations-section';
-import { isIssueSnoozed } from './snooze-presets';
-import { SubIssueList } from './sub-issue-list';
+import { IssueDetailContent } from './issue-detail-content';
 
 interface IssueDetailPanelProps {
   breadcrumb?: { label: string; onNavigate: () => void } | null;
@@ -51,98 +26,21 @@ interface IssueDetailPanelProps {
   users: IssueUser[];
 }
 
-export const IssueDetailPanel = observer(function IssueDetailPanel({
-  breadcrumb,
-  issue,
-  states,
-  users,
-  labels,
-  onClose,
-  onUpdate,
-}: IssueDetailPanelProps) {
+/**
+ * Subscription state plus its optimistic toggle, shared by the overlay panel and
+ * the full-page header.
+ */
+export function useIssueSubscription(issueId: string | undefined) {
   const t = useTranslations();
-  const { formatDueDate, formatDate } = useFormatters();
-  const { userStore, teamStore, issueStore, cycleStore } = useStore();
-  const currentUserId = userStore.currentUser?.id;
-  const currentUserName = userStore.currentUser?.displayName ?? t('issueDetail.defaultUserName');
-  const mentionUsers = useMemo(() => users.map(u => ({ id: u.id, label: u.displayName })), [users]);
-  // observer() tracks issueStore.all reads reactively; plain map is correct here.
-  const mentionIssues = issueStore.all.map(i => ({ id: i.id, label: i.identifier, sub: i.title }));
-  // Resolve estimation type from team so the correct scale displays
-  const estimationType = teamStore.findById(issue?.teamId ?? '')?.issueEstimationType ?? 'notUsed';
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState('');
-  const [editingDesc, setEditingDesc] = useState(false);
-  const [descDraft, setDescDraft] = useState('');
-  const [activityKey, setActivityKey] = useState(0);
-  const [branchCopied, setBranchCopied] = useState(false);
-  const titleRef = useRef<HTMLInputElement>(null);
-  // `IssueDetail` is the narrow list-row shape; the fields only the panel shows
-  // (milestone, snooze, branch) come straight off the store row.
-  const storeRow = issue ? issueStore.findById(issue.id) : null;
-
-  // Wrap onUpdate so any mutation triggers an activity re-fetch
-  const handleUpdate = useCallback(
-    (id: string, patch: Record<string, unknown>) => {
-      onUpdate(id, patch);
-      setActivityKey(k => k + 1);
-    },
-    [onUpdate],
-  );
-
-  // Subscription state: null = loading, true = subscribed, false = not subscribed
+  // null = still loading, true = subscribed, false = not subscribed
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
 
-  // Tracks the previously-rendered issue id so the effect below can tell an
-  // actual issue switch apart from an in-place field update on the same
-  // issue (e.g. a collaborator's edit arriving over WS).
-  const prevIssueIdRef = useRef<string | null>(null);
-
-  // Reset title/description drafts when switching issues, and refresh
-  // whichever draft the user ISN'T actively editing when the same issue's
-  // title/description changes underneath us (e.g. a collaborator's edit).
-  // Two failure modes this balances:
-  //  - Resetting on every render of the `issue` object (rebuilt on every
-  //    pool change since callers pass a literal / observer() re-renders on
-  //    any store change) would wipe in-progress typing on every unrelated
-  //    property change — the original bug, fixed by keying off `issue?.id`.
-  //  - But keying ONLY off `issue?.id` means a collaborator's incoming
-  //    title/description change while the panel stays open on the same
-  //    issue never refreshes the draft: clicking to edit later shows a
-  //    stale value, and blurring can stomp the collaborator's change right
-  //    back (`saveTitle`/`saveDesc` compare the stale draft against
-  //    `issue.title`/`issue.description` and "helpfully" re-save it).
-  // Switching issues (by id) always resets both drafts and collapses the
-  // description editor, regardless of any in-flight edit for the issue
-  // being left, so the collab provider remounts for the new document room.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally excludes editingTitle/editingDesc — see comment above; only their freshest value at the moment id/title/description change matters, not a re-run when they toggle on their own
   useEffect(() => {
-    if (!issue) {
-      return;
-    }
-    const switchedIssue = prevIssueIdRef.current !== issue.id;
-    prevIssueIdRef.current = issue.id;
-
-    if (switchedIssue || !editingTitle) {
-      setTitleDraft(issue.title);
-    }
-    if (switchedIssue) {
-      // Collapse the description editor when switching issues so the collab
-      // provider is remounted for the correct document room.
-      setEditingDesc(false);
-    }
-    if (switchedIssue || !editingDesc) {
-      setDescDraft(issue.description ?? '');
-    }
-  }, [issue?.id, issue?.title, issue?.description]);
-
-  // Fetch subscription status when issue changes
-  useEffect(() => {
-    if (!issue?.id) {
+    if (!issueId) {
       return;
     }
     setSubscribed(null);
-    gql(ISSUE_SUBSCRIPTION_QUERY, { issueId: issue.id })
+    gql(ISSUE_SUBSCRIPTION_QUERY, { issueId })
       .then(res => {
         if (res.errors?.length) {
           setSubscribed(false);
@@ -152,17 +50,17 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
         setSubscribed(typeof val === 'boolean' ? val : false);
       })
       .catch(() => setSubscribed(false));
-  }, [issue?.id]);
+  }, [issueId]);
 
-  const handleToggleSubscription = useCallback(async () => {
-    if (!issue?.id || subscribed === null) {
+  const toggle = useCallback(async () => {
+    if (!issueId || subscribed === null) {
       return;
     }
     const prev = subscribed;
     setSubscribed(!prev);
     try {
       const mutation = prev ? ISSUE_UNSUBSCRIBE_MUTATION : ISSUE_SUBSCRIBE_MUTATION;
-      const res = await gql(mutation, { issueId: issue.id });
+      const res = await gql(mutation, { issueId });
       if (res.errors?.length) {
         setSubscribed(prev);
         toast.error(
@@ -173,9 +71,61 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
       setSubscribed(prev);
       toast.error(prev ? t('issueDetail.failedToUnsubscribe') : t('issueDetail.failedToSubscribe'));
     }
-  }, [issue?.id, subscribed, t]);
+  }, [issueId, subscribed, t]);
 
-  useHotkeys('shift+s', handleToggleSubscription, {}, [subscribed, issue?.id]);
+  return { subscribed, toggle };
+}
+
+/** The bell that subscribes/unsubscribes, or nothing while the state loads. */
+export function SubscribeButton({
+  onToggle,
+  subscribed,
+}: {
+  onToggle: () => void;
+  subscribed: boolean | null;
+}) {
+  const t = useTranslations();
+  if (subscribed === null) {
+    return null;
+  }
+  const label = subscribed
+    ? t('issueDetail.unsubscribeShortcut')
+    : t('issueDetail.subscribeShortcut');
+  return (
+    <button
+      aria-label={label}
+      className={cn('rounded p-1 text-muted-foreground hover:bg-accent', TOUCH_TARGET)}
+      onClick={onToggle}
+      title={label}
+      type="button"
+    >
+      {subscribed ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+    </button>
+  );
+}
+
+/**
+ * The issue detail as an OVERLAY, opened from a list or board.
+ *
+ * This component is only the overlay chrome — backdrop, fixed sheet, header,
+ * Escape-to-close. Everything inside it is `IssueDetailContent`, which the
+ * `/issue/[id]` route renders in its `page` layout instead. Before the split
+ * this component *was* the whole feature, so the route mounted a 480px sheet
+ * over an empty canvas.
+ */
+export const IssueDetailPanel = observer(function IssueDetailPanel({
+  breadcrumb,
+  issue,
+  states,
+  users,
+  labels,
+  onClose,
+  onUpdate,
+}: IssueDetailPanelProps) {
+  const t = useTranslations();
+  const { subscribed, toggle } = useIssueSubscription(issue?.id);
+
+  useHotkeys('shift+s', toggle, {}, [subscribed, issue?.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -190,37 +140,6 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
   if (!issue) {
     return null;
   }
-
-  const _state = states.find(s => s.id === issue.stateId);
-  const assignee = users.find(u => u.id === issue.assigneeId);
-  const dueDateColor = getDueDateColor(issue.dueDate);
-  const currentCycle = issue.cycleId ? cycleStore.findById(issue.cycleId) : null;
-  const branchName = storeRow?.branchName ?? getBranchName(issue.identifier, issue.title);
-  const snoozedUntilAt = storeRow?.snoozedUntilAt ?? null;
-
-  const copyBranchName = () => {
-    navigator.clipboard
-      .writeText(branchName)
-      .then(() => {
-        setBranchCopied(true);
-        setTimeout(() => setBranchCopied(false), 1500);
-      })
-      .catch(() => toast.error(t('issueDetail.properties.copyFailed')));
-  };
-
-  const saveTitle = () => {
-    if (titleDraft.trim() && titleDraft.trim() !== issue.title) {
-      handleUpdate(issue.id, { title: titleDraft.trim() });
-    }
-    setEditingTitle(false);
-  };
-
-  const saveDesc = () => {
-    if (descDraft !== (issue.description ?? '')) {
-      handleUpdate(issue.id, { description: descDraft || null });
-    }
-    setEditingDesc(false);
-  };
 
   return (
     <>
@@ -250,36 +169,9 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
               </>
             )}
             <span className="font-mono text-xs text-muted-foreground">{issue.identifier}</span>
-            {isIssueSnoozed(snoozedUntilAt) && (
-              <Badge
-                data-testid="issue-snoozed-badge"
-                title={t('issues.snooze.snoozedUntil', { date: formatDate(snoozedUntilAt ?? '') })}
-                tone="muted"
-              >
-                {t('issues.snooze.snoozedBadge')}
-              </Badge>
-            )}
           </div>
           <div className="flex items-center gap-1">
-            {subscribed !== null && (
-              <button
-                aria-label={
-                  subscribed
-                    ? t('issueDetail.unsubscribeShortcut')
-                    : t('issueDetail.subscribeShortcut')
-                }
-                className={cn('rounded p-1 text-muted-foreground hover:bg-accent', TOUCH_TARGET)}
-                onClick={handleToggleSubscription}
-                title={
-                  subscribed
-                    ? t('issueDetail.unsubscribeShortcut')
-                    : t('issueDetail.subscribeShortcut')
-                }
-                type="button"
-              >
-                {subscribed ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
-              </button>
-            )}
+            <SubscribeButton onToggle={toggle} subscribed={subscribed} />
             <button
               aria-label={t('common.close')}
               className={cn('rounded p-1 text-muted-foreground hover:bg-accent', TOUCH_TARGET)}
@@ -292,277 +184,15 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
         </div>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto p-5">
-          {/* Title */}
-          {editingTitle ? (
-            <input
-              className="w-full bg-transparent text-xl font-semibold tracking-tight text-foreground outline-none"
-              onBlur={saveTitle}
-              onChange={e => setTitleDraft(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  saveTitle();
-                }
-                if (e.key === 'Escape') {
-                  setTitleDraft(issue.title);
-                  setEditingTitle(false);
-                }
-              }}
-              ref={titleRef}
-              type="text"
-              value={titleDraft}
-            />
-          ) : (
-            <button
-              className="cursor-text text-left text-xl font-semibold leading-snug tracking-tight text-foreground"
-              onClick={() => {
-                setEditingTitle(true);
-                setTimeout(() => titleRef.current?.focus(), 20);
-              }}
-              type="button"
-            >
-              {issue.title}
-            </button>
-          )}
-
-          {/* Properties grid */}
-          <div className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-            {/* Status */}
-            <span className="text-muted-foreground">{t('issueDetail.properties.status')}</span>
-            <StatusSelect
-              onChange={stateId => handleUpdate(issue.id, { stateId })}
-              states={states}
-              value={issue.stateId}
-            />
-
-            {/* Priority */}
-            <span className="text-muted-foreground">{t('issueDetail.properties.priority')}</span>
-            <div className="flex items-center gap-1.5">
-              <PrioritySelect
-                onChange={priority => handleUpdate(issue.id, { priority })}
-                value={issue.priority}
-              />
-              <span className="text-xs text-muted-foreground">
-                {t(priorityLabelKey(issue.priority))}
-              </span>
-            </div>
-
-            {/* Assignee */}
-            <span className="text-muted-foreground">{t('issueDetail.properties.assignee')}</span>
-            <div className="flex items-center gap-1.5">
-              <AssigneeSelect
-                onChange={assigneeId => handleUpdate(issue.id, { assigneeId })}
-                users={users}
-                value={issue.assigneeId}
-              />
-              <span className="text-xs text-muted-foreground">
-                {assignee?.displayName ?? t('issueDetail.properties.noAssignee')}
-              </span>
-            </div>
-
-            {/* Labels */}
-            <span className="text-muted-foreground">{t('issueDetail.properties.labels')}</span>
-            <div className="flex items-center gap-1 flex-wrap">
-              <LabelSelect
-                labels={labels}
-                onChange={labelIds => handleUpdate(issue.id, { labelIds })}
-                value={issue.labels.map(l => l.id)}
-              />
-              {issue.labels.map(l => (
-                <span className="flex items-center gap-1 text-xs text-muted-foreground" key={l.id}>
-                  <LabelDot color={l.color} />
-                  {l.name}
-                </span>
-              ))}
-            </div>
-
-            {/* Project */}
-            <span className="text-muted-foreground">{t('issueDetail.properties.project')}</span>
-            <ProjectSelect
-              onChange={projectId =>
-                // A milestone belongs to its project, so moving projects clears it.
-                handleUpdate(issue.id, { projectId, projectMilestoneId: null })
-              }
-              value={issue.projectId ?? null}
-            />
-
-            {/* Milestone — only meaningful once the issue is in a project */}
-            {issue.projectId && (
-              <>
-                <span className="text-muted-foreground">
-                  {t('issueDetail.properties.milestone')}
-                </span>
-                <MilestoneSelect
-                  onChange={projectMilestoneId => handleUpdate(issue.id, { projectMilestoneId })}
-                  projectId={issue.projectId}
-                  value={storeRow?.projectMilestoneId ?? null}
-                />
-              </>
-            )}
-
-            {/* Cycle */}
-            <span className="text-muted-foreground">{t('issueDetail.properties.cycle')}</span>
-            <div className="flex items-center gap-1.5">
-              <CycleSelect
-                onChange={cycleId => handleUpdate(issue.id, { cycleId })}
-                teamId={issue.teamId}
-                value={issue.cycleId ?? null}
-              />
-              {currentCycle && (
-                <span className="text-xs text-muted-foreground">
-                  {getCycleDisplayName(currentCycle)}
-                </span>
-              )}
-            </div>
-
-            {/* Start date */}
-            <span className="text-muted-foreground">{t('issueDetail.properties.startDate')}</span>
-            <DueDatePicker
-              label={t('issueDetail.properties.startDate')}
-              onChange={startDate => handleUpdate(issue.id, { startDate })}
-              value={issue.startDate}
-            />
-
-            {/* Due date */}
-            <span className="text-muted-foreground">{t('issueDetail.properties.dueDate')}</span>
-            <div className="flex items-center gap-1.5">
-              <DueDatePicker
-                onChange={dueDate => handleUpdate(issue.id, { dueDate })}
-                value={issue.dueDate}
-              />
-              {issue.dueDate && (
-                <span className={cn('text-xs', dueDateColor)}>{formatDueDate(issue.dueDate)}</span>
-              )}
-            </div>
-
-            {/* Estimate — only shown when the team uses estimation */}
-            {estimationType !== 'notUsed' && (
-              <>
-                <span className="text-muted-foreground">
-                  {t('issueDetail.properties.estimate')}
-                </span>
-                <EstimatePicker
-                  estimationType={estimationType}
-                  onChange={estimate => handleUpdate(issue.id, { estimate: estimate ?? undefined })}
-                  value={issue.estimate}
-                />
-              </>
-            )}
-
-            {/* Branch name — derived until the server assigns one */}
-            <span className="text-muted-foreground">{t('issueDetail.properties.branch')}</span>
-            <div className="flex min-w-0 items-center gap-1">
-              <code
-                className="min-w-0 truncate font-mono text-xs text-foreground-secondary"
-                data-testid="issue-branch-name"
-                title={branchName}
-              >
-                {branchName}
-              </code>
-              <button
-                aria-label={t('issues.copyBranchName')}
-                className={cn(
-                  'shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground',
-                  TOUCH_TARGET,
-                )}
-                onClick={copyBranchName}
-                title={t('issues.copyBranchName')}
-                type="button"
-              >
-                {branchCopied ? (
-                  <Check className="h-3 w-3 text-success" />
-                ) : (
-                  <Copy className="h-3 w-3" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Custom fields (per-team) */}
-          <CustomFieldsEditor issueId={issue.id} teamId={issue.teamId} />
-
-          {/* Description */}
-          <div className="mt-6">
-            <p className="mb-1 text-xs font-medium text-muted-foreground">
-              {t('issueDetail.description')}
-            </p>
-            {editingDesc ? (
-              <div className="rounded-md border border-brand bg-transparent p-2 transition-colors">
-                <TipTapEditor
-                  className="text-sm"
-                  collabDocId={`issue:${issue.id}`}
-                  collabUserName={currentUserName}
-                  content={descDraft}
-                  mentionIssues={mentionIssues}
-                  mentionUsers={mentionUsers}
-                  onBlur={saveDesc}
-                  onChange={html => setDescDraft(html)}
-                  placeholder={t('issueDetail.descriptionPlaceholderFull')}
-                  readOnly={false}
-                  showToolbar={true}
-                  uploadIssueId={issue.id}
-                />
-              </div>
-            ) : (
-              <button
-                className="w-full cursor-text rounded-md p-2 text-left transition-colors hover:bg-accent/50"
-                onClick={() => setEditingDesc(true)}
-                type="button"
-              >
-                <TipTapEditor
-                  className="text-sm"
-                  content={descDraft}
-                  onBlur={saveDesc}
-                  onChange={html => setDescDraft(html)}
-                  placeholder={t('issueDetail.descriptionPlaceholder')}
-                  readOnly={true}
-                  showToolbar={false}
-                />
-              </button>
-            )}
-          </div>
-
-          {/* Reactions */}
-          <div className="mt-3">
-            <IssueReactionBar currentUserId={currentUserId} issueId={issue.id} />
-          </div>
-
-          {/* AI insights */}
-          <AiInsights issueId={issue.id} />
-
-          {/* Sub-issues */}
-          <SubIssueList parentIssueId={issue.id} />
-
-          {/* Relations */}
-          <RelationsSection issueId={issue.id} />
-
-          {/* Pull Requests */}
-          <PullRequestsSection issueId={issue.id} />
-
-          {/* Attachments */}
-          <FileAttachments issueId={issue.id} />
-
-          {/* Comments */}
-          <div className="mt-6">
-            <p className="mb-3 text-xs font-medium text-muted-foreground">
-              {t('issueDetail.comments.title')}
-            </p>
-            <CommentThread
-              currentUserId={currentUserId}
-              issueId={issue.id}
-              mentionIssues={mentionIssues}
-              mentionUsers={mentionUsers}
-              teamId={issue.teamId}
-            />
-          </div>
-
-          {/* Activity */}
-          <div className="mt-6">
-            <p className="mb-3 text-xs font-medium text-muted-foreground">
-              {t('issueDetail.activity.title')}
-            </p>
-            <ActivityTimeline issueId={issue.id} refetchKey={activityKey} />
-          </div>
+        <div className="flex-1 overflow-y-auto">
+          <IssueDetailContent
+            issue={issue}
+            labels={labels}
+            layout="panel"
+            onUpdate={onUpdate}
+            states={states}
+            users={users}
+          />
         </div>
       </div>
     </>

@@ -8,13 +8,20 @@ import { differenceInCalendarDays, format, isToday } from 'date-fns';
  * and was one: the issue context menu rendered it straight to screen, so the
  * priority submenu stayed English in every locale while every other priority UI
  * translated correctly.
+ *
+ * `bars` (0–3) and `urgent` describe the *shape* `PriorityIcon` draws, which is
+ * what makes the levels distinguishable without colour (WCAG 1.4.1). This
+ * replaced ASCII glyph strings (`'!!!'`, `'·'`, `'-'`): a text glyph cannot be
+ * sized to a box, so the priority cell was a different width on every row and
+ * re-ragged the whole list. `urgent` is its own shape rather than a fourth bar
+ * because "urgent" is a category break, not one more step on the ramp.
  */
 export const PRIORITY_CONFIG = {
-  0: { color: 'var(--priority-none)', icon: '-' },
-  1: { color: 'var(--priority-urgent)', icon: '!!!' },
-  2: { color: 'var(--priority-high)', icon: '!!' },
-  3: { color: 'var(--priority-medium)', icon: '!' },
-  4: { color: 'var(--priority-low)', icon: '·' },
+  0: { bars: 0, color: 'var(--priority-none)', urgent: false },
+  1: { bars: 3, color: 'var(--priority-urgent)', urgent: true },
+  2: { bars: 3, color: 'var(--priority-high)', urgent: false },
+  3: { bars: 2, color: 'var(--priority-medium)', urgent: false },
+  4: { bars: 1, color: 'var(--priority-low)', urgent: false },
 } as const;
 
 export type Priority = keyof typeof PRIORITY_CONFIG;

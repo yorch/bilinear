@@ -4,6 +4,7 @@ import { FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { SectionAddButton, SectionHeader } from '@/components/shared/section-header';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -102,24 +103,30 @@ export function FileAttachments({ issueId }: FileAttachmentsProps) {
   };
 
   return (
-    <div className="mt-4">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-medium text-muted-foreground">
-          {t('issueDetail.attachments.title')}
-        </p>
-        <button
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground-secondary disabled:opacity-50"
-          disabled={uploading}
-          onClick={() => inputRef.current?.click()}
-          type="button"
-        >
-          {uploading ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <Paperclip className="h-3 w-3" />
-          )}
-          {uploading ? t('issueDetail.attachments.uploading') : t('issueDetail.attachments.attach')}
-        </button>
+    <div>
+      <div className="mb-2">
+        <SectionHeader
+          action={
+            <SectionAddButton
+              disabled={uploading}
+              icon={
+                uploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Paperclip className="h-3.5 w-3.5" />
+                )
+              }
+              label={
+                uploading
+                  ? t('issueDetail.attachments.uploading')
+                  : t('issueDetail.attachments.attach')
+              }
+              onClick={() => inputRef.current?.click()}
+            />
+          }
+          count={attachments.length}
+          title={t('issueDetail.attachments.title')}
+        />
       </div>
       <input
         aria-label={t('issueDetail.attachments.attachFile')}

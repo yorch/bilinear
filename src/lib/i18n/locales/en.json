@@ -871,6 +871,7 @@
       "uploadFailed": "Upload failed",
       "uploading": "Uploading…"
     },
+    "backToTeam": "Back",
     "comments": {
       "cannotConvertTeamUnresolved": "Cannot convert — team not resolved",
       "commentButton": "Comment",
@@ -895,7 +896,7 @@
       "subIssueFromComment": "Sub-issue from comment",
       "title": "Comments",
       "unresolve": "Unresolve",
-      "writePlaceholder": "Write a comment… (supports **markdown**, @mentions, #issues)"
+      "writePlaceholder": "Leave a comment…"
     },
     "createModal": {
       "addDescriptionFirst": "Add a description first to suggest a title",
@@ -903,7 +904,7 @@
       "createIssue": "Create issue",
       "createMore": "Create more",
       "creating": "Creating…",
-      "descriptionPlaceholder": "Add description… (optional, supports **markdown**)",
+      "descriptionPlaceholder": "Add a description… (optional)",
       "discard": "Discard",
       "discardConfirmBody": "You have unsaved changes that will be lost if you close this.",
       "discardConfirmTitle": "Discard this issue?",
@@ -917,8 +918,8 @@
     },
     "defaultUserName": "User",
     "description": "Description",
-    "descriptionPlaceholder": "Add a description… (supports **markdown**, /slash commands, @mentions)",
-    "descriptionPlaceholderFull": "Add a description… (supports **markdown**, /slash commands, @mentions, #issues)",
+    "descriptionPlaceholder": "Add a description…",
+    "descriptionPlaceholderFull": "Add a description… type / for commands",
     "failedToSubscribe": "Failed to subscribe",
     "failedToUnsubscribe": "Failed to unsubscribe",
     "issueNotFound": "Issue not found.",
@@ -1214,7 +1215,9 @@
     "verify": "Verify"
   },
   "nav": {
+    "accent": "Accent",
     "analytics": "Analytics",
+    "appearance": "Appearance",
     "backlog": "Backlog",
     "closeMenu": "Close menu",
     "collapseSidebar": "Collapse sidebar (⌘B)",
@@ -1229,13 +1232,17 @@
     "inbox": "Inbox",
     "initiatives": "Initiatives",
     "keyboardShortcuts": "Keyboard shortcuts",
+    "language": "Language",
     "myIssues": "My Issues",
     "newTeam": "New team",
     "openMenu": "Open menu",
     "projects": "Projects",
     "removeFromFavorites": "Remove from favorites",
     "removeNamedFromFavorites": "Remove {name} from favorites",
+    "searchHint": "Search…",
     "teams": "Teams",
+    "triage": "Triage",
+    "userMenu": "Account and preferences",
     "workspaceSettings": "Workspace settings"
   },
   "notifications": {

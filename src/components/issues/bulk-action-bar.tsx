@@ -1,13 +1,12 @@
 'use client';
 
 import { Archive, X } from 'lucide-react';
-import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
 import { ColorDot } from '@/components/ui/color-dot';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useTranslations } from '@/hooks/use-translations';
-import { getPriorityConfig } from '@/lib/issue-utils';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
@@ -92,23 +91,20 @@ export function BulkActionBar({
       >
         {close => (
           <div className="w-40 py-1">
-            {PRIORITIES.map(p => {
-              const cfg = getPriorityConfig(p);
-              return (
-                <button
-                  className={POPOVER_ITEM_CLASS}
-                  key={p}
-                  onClick={() => {
-                    onUpdate({ priority: p });
-                    close();
-                  }}
-                  type="button"
-                >
-                  <ColorDot color={cfg.color} size="sm" />
-                  <span>{t(priorityLabelKey(p))}</span>
-                </button>
-              );
-            })}
+            {PRIORITIES.map(p => (
+              <button
+                className={POPOVER_ITEM_CLASS}
+                key={p}
+                onClick={() => {
+                  onUpdate({ priority: p });
+                  close();
+                }}
+                type="button"
+              >
+                <PriorityIcon className="h-3.5 w-3.5" priority={p} />
+                <span>{t(priorityLabelKey(p))}</span>
+              </button>
+            ))}
           </div>
         )}
       </SelectPopover>

@@ -1,6 +1,8 @@
 'use client';
 
+import { Gauge } from 'lucide-react';
 import { useState } from 'react';
+import { PropertyPlaceholder } from '@/components/properties/property-placeholder';
 import { Badge } from '@/components/ui/badge';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
@@ -58,7 +60,9 @@ function EstimateBadge({
   estimationType?: string;
 }) {
   if (!value) {
-    return <span className="text-xs text-muted-foreground">–</span>;
+    // An en-dash per row is the same noise as the word "Estimate" was: it
+    // reports absence in a column the reader already scans for presence.
+    return <PropertyPlaceholder icon={Gauge} />;
   }
 
   if (estimationType === 'tShirt') {
