@@ -1877,6 +1877,8 @@
       "markDuplicateFailed": "Failed to mark duplicate",
       "markDuplicateTitle": "Mark as duplicate of another issue",
       "markedAsDuplicate": "Marked as duplicate of {identifier}",
+      "noDescription": "No description",
+      "openFullIssue": "Open full issue",
       "pageTitle": "{name} — Triage",
       "snooze": "Snooze",
       "snooze1Day": "1 day",

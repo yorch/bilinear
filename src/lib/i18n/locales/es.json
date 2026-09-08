@@ -1877,6 +1877,8 @@
       "markDuplicateFailed": "Error al marcar como duplicado",
       "markDuplicateTitle": "Marcar como duplicado de otro issue",
       "markedAsDuplicate": "Marcado como duplicado de {identifier}",
+      "noDescription": "Sin descripción",
+      "openFullIssue": "Abrir la tarea completa",
       "pageTitle": "{name} — Clasificación",
       "snooze": "Posponer",
       "snooze1Day": "1 día",
