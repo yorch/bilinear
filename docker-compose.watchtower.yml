@@ -1,3 +1,12 @@
+# WARNING: with the default `:main` image tag, Watchtower auto-pulls and
+# restarts the app tier on every push to main — and the app's entrypoint runs
+# `prisma migrate deploy` on start, so schema migrations reach production
+# unattended, with no gate and no rollback. Two safer options:
+#   1. Pin APP_IMAGE to an immutable `<timestamp>-<sha>` tag (produced by the
+#      docker workflow). Immutable tags never move, so Watchtower no-ops and
+#      deploys become deliberate: bump APP_IMAGE, then redeploy.
+#   2. Set WATCHTOWER_MONITOR_ONLY=true to be notified of new images instead of
+#      having them deployed for you.
 services:
   watchtower:
     # containrrr/watchtower was archived December 17, 2025 (last release
@@ -13,6 +22,9 @@ services:
       WATCHTOWER_LABEL_ENABLE: "true"
       WATCHTOWER_SCOPE: ${WATCHTOWER_SCOPE:-bilinear}
       WATCHTOWER_CLEANUP: "true"
+      # When true, Watchtower reports available updates but does NOT pull or
+      # restart anything — see the migration warning above.
+      WATCHTOWER_MONITOR_ONLY: ${WATCHTOWER_MONITOR_ONLY:-false}
       WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-300}
 
   # All three app-tier services share the same image, so watchtower must

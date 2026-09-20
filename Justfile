@@ -2,12 +2,21 @@
 
 set shell := ["bash", "-cu"]
 
-infra := "docker compose -f docker-compose.infra.yml"
-dev := "docker compose -f docker-compose.app.yml -f docker-compose.infra.yml"
+# Mailpit (SMTP sink) is behind a Compose profile so it cannot start in a
+# production stack, which layers the same infra file. The local recipes opt in.
+local := "--profile mailpit"
+
+infra := "docker compose " + local + " -f docker-compose.infra.yml"
+dev := "docker compose " + local + " -f docker-compose.app.yml -f docker-compose.infra.yml"
 prod := "docker compose -f docker-compose.prod.yml -f docker-compose.infra.yml"
 prod_traefik := prod + " -f docker-compose.traefik.yml"
 prod_watchtower := prod + " -f docker-compose.watchtower.yml"
 prod_full := prod_traefik + " -f docker-compose.watchtower.yml"
+
+# Teardown names every profile so that `down` actually removes profile-gated
+# containers: Compose does not treat a profile-disabled service as an orphan,
+# so without these a running mailpit or yjs survives every `down`.
+prod_down := prod + " --profile mailpit --profile collab"
 
 # List available recipes.
 default:
@@ -61,9 +70,15 @@ prod-pull:
 prod-up: prod-pull
     {{ prod }} up -d
 
-# Stop the direct production stack.
+# Stop the production stack, whichever overlays started it.
+#
+# Deliberately built from the base files only: docker-compose.traefik.yml
+# carries a `${DOMAIN_APP:?}` guard, so reusing it here would make tearing a
+# stack down require the deploy variables that started it. `--remove-orphans`
+# catches services defined only in an overlay (watchtower), and the profile
+# flags catch mailpit and yjs.
 prod-down:
-    {{ prod }} down
+    {{ prod_down }} down --remove-orphans
 
 # Follow production logs. Pass a service name to filter them.
 prod-logs service="":
@@ -82,24 +97,12 @@ prod-traefik-up:
     {{ prod_traefik }} pull
     {{ prod_traefik }} up -d
 
-# Stop the production stack running with the Traefik overlay.
-prod-traefik-down:
-    {{ prod_traefik }} down
-
 # Pull and start production with opt-in Watchtower updates.
 prod-watchtower-up:
     {{ prod_watchtower }} pull
     {{ prod_watchtower }} up -d
 
-# Stop the production stack running with the Watchtower overlay.
-prod-watchtower-down:
-    {{ prod_watchtower }} down
-
 # Pull and start production behind Traefik with Watchtower updates enabled.
 prod-full-up:
     {{ prod_full }} pull
     {{ prod_full }} up -d
-
-# Stop the production stack running with Traefik and Watchtower.
-prod-full-down:
-    {{ prod_full }} down
