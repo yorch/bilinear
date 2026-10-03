@@ -1,13 +1,25 @@
+# Backing services for native development (`yarn dev` against these), and the
+# infra half of the Docker stacks — this file is layered under
+# docker-compose.app.yml (local) and docker-compose.prod.yml (deploy).
+#
+# Because it is layered under the PRODUCTION stack too, anything here without a
+# Compose profile runs in production. Dev-only services must be profile-gated.
 services:
   postgres:
     image: postgres:18-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pass}
       POSTGRES_DB: ${POSTGRES_DB:-bilinear}
     ports:
-      - "5432:5432"
+      # Loopback-bound: the app reaches this over the compose network, so the
+      # published port exists only for host tooling (psql, Prisma Studio).
+      - 127.0.0.1:${POSTGRES_PORT_PUBLISHED:-5432}:5432
     volumes:
+      # postgres:18 stores data in a version-specific subdirectory
+      # (/var/lib/postgresql/18/docker), so the mount target is the PARENT
+      # directory — not /var/lib/postgresql/data as on pg17 and earlier.
       - ./data/postgres:/var/lib/postgresql
     healthcheck:
       test:
@@ -21,8 +33,9 @@ services:
 
   redis:
     image: redis:8-alpine
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - 127.0.0.1:${REDIS_PORT_PUBLISHED:-6379}:6379
     volumes:
       - ./data/redis:/data
     healthcheck:
@@ -31,8 +44,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # Local SMTP sink: catches outbound mail in development instead of delivering
+  # it. Web UI → http://localhost:8025
+  #
+  # Behind the `mailpit` profile because this file is layered under
+  # docker-compose.prod.yml. Unprofiled, it ran in production and published an
+  # unauthenticated archive of every message the app had sent — password-reset
+  # and magic links included — on 0.0.0.0:8025. `just infra-up` and
+  # `just dev-up` enable the profile; no prod recipe does.
   mailpit:
     image: axllent/mailpit:latest
+    profiles: ["mailpit"]
+    restart: unless-stopped
     ports:
-      - "1025:1025" # SMTP
-      - "8025:8025" # Web UI → http://localhost:8025
+      - 127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025 # SMTP
+      - 127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025 # Web UI
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5

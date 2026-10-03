@@ -1,9 +1,19 @@
+# Cap container log growth so a chatty or looping process can't fill the host
+# disk. Applied to every app-tier service below via the `*default-logging`
+# anchor. Docker's json-file driver is unbounded by default.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-10m}
+    max-file: ${LOG_MAX_FILE:-5}
+
 services:
   app:
     image: ${APP_IMAGE:-ghcr.io/yorch/bilinear:main}
     pull_policy: always
     restart: unless-stopped
     init: true
+    logging: *default-logging
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,6 +53,7 @@ services:
     pull_policy: always
     restart: unless-stopped
     init: true
+    logging: *default-logging
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,6 +97,7 @@ services:
     pull_policy: always
     restart: unless-stopped
     init: true
+    logging: *default-logging
     profiles: ["collab"]
     depends_on:
       postgres:

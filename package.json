@@ -19,7 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "docker:infra": "docker compose -f docker-compose.infra.yml",
+    "docker:infra": "docker compose --profile mailpit -f docker-compose.infra.yml",
     "docker:infra:up": "run docker:infra up -d",
     "docker:infra:down": "run docker:infra down",
     "db:generate": "DATABASE_URL=dummy prisma generate",

@@ -44,7 +44,13 @@ yarn docker:infra:up
 
 This starts PostgreSQL on port `5432`, Redis on port `6379`, and Mailpit using
 `docker-compose.infra.yml`. Mailpit catches all outbound mail in development —
-SMTP on `1025`, inbox at [http://localhost:8025](http://localhost:8025).
+SMTP on `1025`, inbox at [http://localhost:8025](http://localhost:8025). All
+three are bound to `127.0.0.1` only.
+
+Mailpit sits behind the `mailpit` Compose profile, because
+`docker-compose.infra.yml` is layered under the production stack as well. The
+`infra-*` and `dev-*` recipes (and `yarn docker:infra:*`) enable it; no `prod-*`
+recipe does.
 
 ### 3. Configure environment
 
@@ -159,6 +165,13 @@ every recipe. Common commands:
 | `just prod-traefik-up`    | Pull and start production behind Traefik         |
 | `just prod-watchtower-up` | Start production with Watchtower updates         |
 | `just prod-full-up`       | Start production with Traefik and Watchtower     |
+| `just prod-down`          | Stop production, whichever overlays started it   |
+
+There is one `prod-down` rather than one per overlay. The Traefik overlay
+carries a `${DOMAIN_APP:?}` guard, so a teardown built from it would demand the
+deploy variables that started the stack; `prod-down` uses the base files with
+`--remove-orphans` and names both profiles, so it also removes Watchtower,
+`yjs`, and any Mailpit container left over from before it was profile-gated.
 
 Set `COMPOSE_PROFILES=collab` together with `COLLAB_ENABLED=true` and the
 appropriate `YJS_PUBLIC_URL` to include the optional YJS service in any recipe.
