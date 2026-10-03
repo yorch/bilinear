@@ -1588,7 +1588,7 @@ ones; "all issues in a cycle" may be intentional and should say so.
   restore, `webhookArchive`, custom-view icon/colour, the public roadmap URL
   on `/projects`, gating `/design` out of production.
 
-## 9. Dependency upgrade holds and traps (2026-09-06)
+## 9. Dependency upgrade holds and traps (2026-10-03)
 
 Everything else is on its latest version. These are the exceptions and the
 things the upgrade exposed. See the 2026-09-06 `CHANGELOG.md` entry for the
@@ -1610,20 +1610,29 @@ and the gate suite green.
 
 ### 9.2 `@xmldom/xmldom` pinned to 0.8 by xml-crypto
 
-0.9.12 is out; we hold 0.8.13. `xml-crypto` 6.1.2 (latest) depends on
-`@xmldom/xmldom: ^0.8.10`, so bumping our direct dependency does not replace
+0.9.12 is out; we hold 0.8.15. `xml-crypto` 6.3.2 (latest) depends on
+`@xmldom/xmldom: ^0.8.15`, so bumping our direct dependency does not replace
 xml-crypto's copy — it *adds a second one*. `saml.service.ts` deliberately
 parses with xml-crypto's own parser so the `<ds:Signature>` node it passes over
 resolves namespaces the same way xml-crypto does, which is what makes Exclusive
 C14N canonicalize to what the IdP signed. Two parser copies silently reintroduce
 that hazard while looking like an upgrade.
 
+**This pin needs re-checking on every xml-crypto bump, in both directions.**
+xml-crypto 6.1.2 -> 6.3.2 raised its floor from `^0.8.10` to `^0.8.15`, above
+the 0.8.13 we had pinned to avoid a duplicate — so taking that minor bump alone
+would have split the tree just as surely as moving to 0.9 would. The invariant
+to assert is "exactly one resolved copy", not "this version":
+`yarn why @xmldom/xmldom` should list a single resolution serving both our
+direct range and xml-crypto's.
+
 **Effort:** Small. **Risk:** High — a silent SAML signature-verification
 regression is the failure mode, and it will not show up in unit tests.
 **Why it's deferred:** blocked on xml-crypto; upgrading alone makes things worse.
 **First-touch:** bump only when `xml-crypto` moves to `@xmldom/xmldom` ^0.9, and
-bump both together. 0.9 also changes `DOMParser` error handling (`onError`) and
-wants an explicit mimeType, so `saml.service.ts:179` needs a look at that point.
+bump both together; on any other xml-crypto bump, match its new floor. 0.9 also
+changes `DOMParser` error handling (`onError`) and wants an explicit mimeType, so
+the `parseFromString` call in `saml.service.ts` needs a look at that point.
 **Acceptance signal:** exactly one `@xmldom/xmldom` in the tree
 (`yarn why @xmldom/xmldom`), and a real IdP assertion still verifies.
 
@@ -1651,3 +1660,24 @@ behaviour, not Redis. Either way the suite stops depending on ambient Redis stat
 un-flushed Redis, and the two `emailLogin` tests fail for the right reason when
 the limiter is genuinely tripped.
 
+### 9.4 Sentry's `dataCollection` posture is deny-by-default and hand-maintained
+
+`src/lib/sentry-data-collection.ts` names every field of the SDK's
+`dataCollection` option and turns it off, because SDK v11 made an *unset*
+`dataCollection` mean "collect everything" where v10's unset `sendDefaultPii`
+meant the opposite. Naming each field is what makes a newly-added collection
+category show up as a diff here rather than as a change in what leaves the
+process.
+
+The cost is that the list does not maintain itself: a new SDK category defaults
+to on and will not appear in this object until someone adds it.
+
+**Effort:** Small. **Risk:** Low to add, High to forget.
+**Why it's deferred:** there is nothing to fix yet — this is a standing
+maintenance note, not a defect.
+**First-touch:** on each `@sentry/*` major, diff the `DataCollection` interface
+in `@sentry/core`'s types against the keys in `SENTRY_DATA_COLLECTION` and add
+any new ones explicitly. A test asserting the two key sets match would make this
+enforced rather than remembered, and is the better fix if this recurs.
+**Acceptance signal:** every field of the SDK's `DataCollection` type appears in
+the constant.
