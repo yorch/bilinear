@@ -35,11 +35,34 @@ export default defineConfig({
       },
       {
         extends: true,
+        // jsdom tests are browser code, so isomorphic packages must resolve to
+        // their browser build. Vitest transforms through Vite's SSR pipeline,
+        // whose default conditions are node-first, so `@sentry/nextjs` would
+        // otherwise resolve to `index.server.js` — these tests would exercise a
+        // different Sentry than the browser loads.
+        //
+        // This started as a crash fix: Sentry 10.73's server build reached a
+        // vendored webpack plugin that picked its browser branch on `typeof
+        // document !== 'undefined'` and then called `fileURLToPath` on a
+        // non-file URL, so importing it under jsdom threw outright. Sentry 11
+        // no longer does that — verified by removing this block, after which the
+        // dom project passes. It stays for the reason above, which does not
+        // depend on the bug: a browser test should load the browser build.
+        resolve: {
+          alias,
+          conditions: ['browser', 'module', 'development|production'],
+        },
         test: {
           environment: 'jsdom',
           globals: true,
           include: ['src/**/*.test.tsx'],
           name: 'dom',
+          // Transform `@sentry/nextjs` rather than externalising it: its browser
+          // build still imports `next/router` extensionlessly, which Node's ESM
+          // resolver rejects but Vite's resolves. Still load-bearing under
+          // Sentry 11 — without it the dom project fails to resolve
+          // `next/router` from `pagesRouterNavigationInstrumentation`.
+          server: { deps: { inline: ['@sentry/nextjs'] } },
           setupFiles: ['./src/test/setup.ts', './src/test/setup-dom.ts'],
         },
       },

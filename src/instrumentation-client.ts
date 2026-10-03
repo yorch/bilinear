@@ -4,8 +4,10 @@
 // Next 16's default Turbopack build the browser SDK never initialised — no
 // client errors, replays or traces reached Sentry even with a DSN set.
 import * as Sentry from '@sentry/nextjs';
+import { SENTRY_DATA_COLLECTION } from '@/lib/sentry-data-collection';
 
 Sentry.init({
+  dataCollection: SENTRY_DATA_COLLECTION,
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
   enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN && process.env.NODE_ENV === 'production',
   environment: process.env.NODE_ENV,

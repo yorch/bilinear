@@ -19,7 +19,21 @@ function loadMermaid() {
     // straight into `dangerouslySetInnerHTML` below. 'strict' is Mermaid's
     // current default, so this changes nothing today — it stops a future
     // upstream default from silently turning that sink into stored XSS.
-    m.default.initialize({ securityLevel: 'strict', startOnLoad: false, theme: 'neutral' });
+    //
+    // `layout` and `look` are pinned for the same reason, one rung down in
+    // severity: Mermaid 12 switched the default layout engine from dagre to
+    // ELK and the default look from 'classic' to 'neo'. Both are global
+    // defaults, so inheriting them would silently restyle every diagram users
+    // have already authored and saved — a dependency bump is the wrong place
+    // for that. Adopting ELK/neo is a deliberate visual change; make it on its
+    // own, where the before/after is the point of the diff.
+    m.default.initialize({
+      layout: 'dagre',
+      look: 'classic',
+      securityLevel: 'strict',
+      startOnLoad: false,
+      theme: 'neutral',
+    });
     return m.default;
   });
 }

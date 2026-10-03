@@ -1565,9 +1565,13 @@ ones; "all issues in a cycle" may be intentional and should say so.
   notification, project): one happy-path `it` per mutation asserting the
   service spy args and `lastSyncId`.
 - Coverage is configured but has no thresholds and CI never runs it.
-- `prosemirror-model`/`prosemirror-view` are installed twice
-  (`@tiptap/pm` 3.28 vs `y-prosemirror`); `yarn dedupe` plus a
-  `yarn dedupe --check` CI step before collab is enabled by default.
+- ~~`prosemirror-model`/`prosemirror-view` are installed twice
+  (`@tiptap/pm` 3.28 vs `y-prosemirror`)~~ — the duplication is resolved
+  (2026-09-06): `yarn dedupe` during the dependency upgrade collapsed 41
+  packages, `prosemirror-view` among them, and `yarn dedupe --check` is now
+  clean. **The `yarn dedupe --check` CI step is still not added**, which is the
+  part that stops it recurring — still wanted before collab is enabled by
+  default.
 
 ### 8.8 Smaller UI items (frontend)
 
@@ -1583,3 +1587,110 @@ ones; "all issues in a cycle" may be intentional and should say so.
 - Not built: SLA fields (§8.4 of LINEAR_FEATURE_GAPS), a trash view /
   restore, `webhookArchive`, custom-view icon/colour, the public roadmap URL
   on `/projects`, gating `/design` out of production.
+
+## 9. Dependency upgrade holds and traps (2026-10-03)
+
+Everything else is on its latest version. These are the exceptions and the
+things the upgrade exposed. See the 2026-09-06 `CHANGELOG.md` entry for the
+full reasoning.
+
+### 9.1 `graphql` pinned to 16 by Apollo Server
+
+`graphql` 17.0.2 is out; we are on 16.14.2 because `@apollo/server` 5.5.1 (the
+latest) declares `peerDependencies: { graphql: "^16.11.0" }`. Nothing in this
+repo needs graphql 17, so this is a wait, not a workaround.
+
+**Effort:** Small. **Risk:** Medium (every resolver runs on it).
+**Why it's deferred:** blocked upstream, not by design work here.
+**First-touch:** watch `@apollo/server` releases for a graphql 17 peer range.
+`graphql-scalars` 2.x and `graphql-query-complexity` 2.x already accept
+`^16 || ^17`, so when Apollo moves, the core bump should be the only change.
+**Acceptance signal:** `graphql` at 17.x with no `yarn install` peer warnings,
+and the gate suite green.
+
+### 9.2 `@xmldom/xmldom` pinned to 0.8 by xml-crypto
+
+0.9.12 is out; we hold 0.8.15. `xml-crypto` 6.3.2 (latest) depends on
+`@xmldom/xmldom: ^0.8.15`, so bumping our direct dependency does not replace
+xml-crypto's copy — it *adds a second one*. `saml.service.ts` deliberately
+parses with xml-crypto's own parser so the `<ds:Signature>` node it passes over
+resolves namespaces the same way xml-crypto does, which is what makes Exclusive
+C14N canonicalize to what the IdP signed. Two parser copies silently reintroduce
+that hazard while looking like an upgrade.
+
+**This pin needs re-checking on every xml-crypto bump, in both directions.**
+xml-crypto 6.1.2 -> 6.3.2 raised its floor from `^0.8.10` to `^0.8.15`, above
+the 0.8.13 we had pinned to avoid a duplicate — so taking that minor bump alone
+would have split the tree just as surely as moving to 0.9 would. The invariant
+to assert is "exactly one resolved copy", not "this version":
+`yarn why @xmldom/xmldom` should list a single resolution serving both our
+direct range and xml-crypto's.
+
+**Effort:** Small. **Risk:** High — a silent SAML signature-verification
+regression is the failure mode, and it will not show up in unit tests.
+**Why it's deferred:** blocked on xml-crypto; upgrading alone makes things worse.
+**First-touch:** bump only when `xml-crypto` moves to `@xmldom/xmldom` ^0.9, and
+bump both together; on any other xml-crypto bump, match its new floor. 0.9 also
+changes `DOMParser` error handling (`onError`) and wants an explicit mimeType, so
+the `parseFromString` call in `saml.service.ts` needs a look at that point.
+**Acceptance signal:** exactly one `@xmldom/xmldom` in the tree
+(`yarn why @xmldom/xmldom`), and a real IdP assertion still verifies.
+
+### 9.3 Unit tests reaching the real Redis singleton — ✅ fixed for auth.test.ts (2026-10-03)
+
+`src/server/graphql/resolvers/auth.test.ts` exercised `checkAuthMutationLimit`
+against the real redis singleton, which made it depend on ambient Redis in two
+ways: it counted attempts in whatever Redis happened to be running (so repeated
+local runs eventually failed with `RATELIMITED`), and when none was running it
+depended on how fast the connection gave up.
+
+The second one broke CI on this branch. The `ci` job that runs `yarn test`
+provisions **no** service containers — the postgres and redis services in
+`ci.yml` belong to the `e2e` job — so `yarn test` has never had Redis. ioredis 5
+surfaced ECONNREFUSED in ~100ms and the limiter's fail-open branch kept the
+tests inside the 5s budget; ioredis 6 retries ~850ms per command and the two
+"user does not exist" paths make enough serial calls to exceed it.
+
+Fixed by mocking `../../lib/redis` in that file (via `vi.hoisted`, since
+`src/server/config/index.ts` imports the singleton eagerly), matching what
+`rate-limit.test.ts` already does. Both tests dropped from 20.2s / 6.2s to
+8ms / 23ms, and the full suite passes with Redis stopped.
+
+**What is left:** this was fixed in one file, not as a rule. Any future test
+reaching a resolver that touches the limiter, or any other code path holding the
+redis singleton, reacquires the same hidden dependency — and the symptom (a 5s
+timeout, in CI only) points nowhere near the cause.
+
+**Effort:** Small. **Risk:** Low.
+**Why it's deferred:** the acute failure is fixed; generalising it is a
+test-infrastructure change worth doing on its own.
+**First-touch:** add a default redis mock to `src/test/setup.ts` next to the
+nodemailer one, and check it does not fight the files that mock redis themselves
+(`rate-limit`, `sync.service`, `saml.service`, `github.service`, `ws/index`).
+Failing that, a check that no unit test opens a socket would catch this earlier
+than a timeout does.
+**Acceptance signal:** `yarn test` passes with Redis stopped *and* against a
+persistent Redis that has already served several runs, with no suite taking
+seconds to do it.
+
+### 9.4 Sentry's `dataCollection` posture is deny-by-default and hand-maintained
+
+`src/lib/sentry-data-collection.ts` names every field of the SDK's
+`dataCollection` option and turns it off, because SDK v11 made an *unset*
+`dataCollection` mean "collect everything" where v10's unset `sendDefaultPii`
+meant the opposite. Naming each field is what makes a newly-added collection
+category show up as a diff here rather than as a change in what leaves the
+process.
+
+The cost is that the list does not maintain itself: a new SDK category defaults
+to on and will not appear in this object until someone adds it.
+
+**Effort:** Small. **Risk:** Low to add, High to forget.
+**Why it's deferred:** there is nothing to fix yet — this is a standing
+maintenance note, not a defect.
+**First-touch:** on each `@sentry/*` major, diff the `DataCollection` interface
+in `@sentry/core`'s types against the keys in `SENTRY_DATA_COLLECTION` and add
+any new ones explicitly. A test asserting the two key sets match would make this
+enforced rather than remembered, and is the better fix if this recurs.
+**Acceptance signal:** every field of the SDK's `DataCollection` type appears in
+the constant.

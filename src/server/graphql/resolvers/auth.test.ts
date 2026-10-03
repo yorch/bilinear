@@ -1,8 +1,49 @@
 import { GraphQLError } from 'graphql';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
 import { TEST_USER } from '../../../test/fixtures';
-import { authResolvers } from './auth';
+
+// These resolvers call `checkAuthMutationLimit`, which reaches the real Redis
+// singleton. Without a mock these tests depend on how fast an *unreachable*
+// Redis gives up: ioredis 5 surfaced ECONNREFUSED in ~100ms, so the limiter
+// fell through to its fail-open branch well inside the 5s test budget and
+// nobody noticed the dependency. ioredis 6 retries for ~850ms per command, and
+// the two "user does not exist" paths make enough serial calls to blow past
+// 5s — `emailVerify` takes over 20s. The `ci` job that runs `yarn test`
+// provisions no service containers at all (only `e2e` does), so this is CI's
+// normal state, not a local quirk.
+//
+// Mocking the singleton is also just correct: these tests assert resolver
+// guard behaviour (no email enumeration, INVALID_CODE), and the limiter is
+// incidental machinery on the way there. `rate-limit.test.ts` is where the
+// limiter's own behaviour is pinned, against this same mock shape. A pipeline
+// replying `[null, 1]` is one request in the window — under every cap, so the
+// limiter reports not-exceeded, which is what these tests want and what they
+// were accidentally getting from the fail-open path before.
+//
+// Declared through `vi.hoisted` rather than as plain consts: `vi.mock` is
+// hoisted above the imports, and `src/server/config/index.ts` imports the
+// redis singleton eagerly, so a plain const would still be uninitialised when
+// the factory first runs.
+const { multi } = vi.hoisted(() => {
+  const runPipeline = vi.fn().mockResolvedValue([
+    [null, 1],
+    [null, 1],
+  ]);
+  const chain = {
+    exec: runPipeline,
+    expire: vi.fn().mockReturnThis(),
+    incr: vi.fn().mockReturnThis(),
+    incrby: vi.fn().mockReturnThis(),
+  };
+  return { multi: vi.fn(() => chain) };
+});
+
+vi.mock('../../lib/redis', () => ({
+  redis: { multi },
+}));
+
+const { authResolvers } = await import('./auth');
 
 describe('authResolvers', () => {
   let ctx: MockGraphQLContext;
