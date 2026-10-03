@@ -1636,29 +1636,42 @@ the `parseFromString` call in `saml.service.ts` needs a look at that point.
 **Acceptance signal:** exactly one `@xmldom/xmldom` in the tree
 (`yarn why @xmldom/xmldom`), and a real IdP assertion still verifies.
 
-### 9.3 The auth resolver tests are stateful against Redis
+### 9.3 Unit tests reaching the real Redis singleton — ✅ fixed for auth.test.ts (2026-10-03)
 
-`src/server/graphql/resolvers/auth.test.ts` exercises `checkAuthMutationLimit`,
-which counts attempts in real Redis keyed by email. Nothing clears those keys
-between runs, so against a persistent local Redis the third or fourth
-`yarn test` fails with `RATELIMITED` — `redis-cli flushall` in between is the
-current workaround. CI provisions a fresh `redis:8` service per run and never
-sees it.
+`src/server/graphql/resolvers/auth.test.ts` exercised `checkAuthMutationLimit`
+against the real redis singleton, which made it depend on ambient Redis in two
+ways: it counted attempts in whatever Redis happened to be running (so repeated
+local runs eventually failed with `RATELIMITED`), and when none was running it
+depended on how fast the connection gave up.
 
-Related: `ioredis` 6 no longer fails fast when Redis is unreachable, so these
-two tests now hang to a 5s timeout on a machine with no Redis instead of
-passing. They previously passed *for the wrong reason* — the limiter they test
-was silently unreachable and failing open.
+The second one broke CI on this branch. The `ci` job that runs `yarn test`
+provisions **no** service containers — the postgres and redis services in
+`ci.yml` belong to the `e2e` job — so `yarn test` has never had Redis. ioredis 5
+surfaced ECONNREFUSED in ~100ms and the limiter's fail-open branch kept the
+tests inside the 5s budget; ioredis 6 retries ~850ms per command and the two
+"user does not exist" paths make enough serial calls to exceed it.
+
+Fixed by mocking `../../lib/redis` in that file (via `vi.hoisted`, since
+`src/server/config/index.ts` imports the singleton eagerly), matching what
+`rate-limit.test.ts` already does. Both tests dropped from 20.2s / 6.2s to
+8ms / 23ms, and the full suite passes with Redis stopped.
+
+**What is left:** this was fixed in one file, not as a rule. Any future test
+reaching a resolver that touches the limiter, or any other code path holding the
+redis singleton, reacquires the same hidden dependency — and the symptom (a 5s
+timeout, in CI only) points nowhere near the cause.
 
 **Effort:** Small. **Risk:** Low.
-**Why it's deferred:** it is a test-isolation change, out of scope for a
-dependency bump.
-**First-touch:** either give the limiter keys a per-test prefix and flush them in
-`beforeEach`, or mock the limiter in this suite — it is testing resolver guard
-behaviour, not Redis. Either way the suite stops depending on ambient Redis state.
-**Acceptance signal:** `yarn test` passes twice in a row against the same
-un-flushed Redis, and the two `emailLogin` tests fail for the right reason when
-the limiter is genuinely tripped.
+**Why it's deferred:** the acute failure is fixed; generalising it is a
+test-infrastructure change worth doing on its own.
+**First-touch:** add a default redis mock to `src/test/setup.ts` next to the
+nodemailer one, and check it does not fight the files that mock redis themselves
+(`rate-limit`, `sync.service`, `saml.service`, `github.service`, `ws/index`).
+Failing that, a check that no unit test opens a socket would catch this earlier
+than a timeout does.
+**Acceptance signal:** `yarn test` passes with Redis stopped *and* against a
+persistent Redis that has already served several runs, with no suite taking
+seconds to do it.
 
 ### 9.4 Sentry's `dataCollection` posture is deny-by-default and hand-maintained
 
