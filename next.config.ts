@@ -1,5 +1,5 @@
 import bundleAnalyzer from '@next/bundle-analyzer';
-import { withSentryConfig } from '@sentry/nextjs';
+import { withSentryConfig } from '@sentry/nextjs/config';
 import type { NextConfig } from 'next';
 
 const withBundleAnalyzer = bundleAnalyzer({
@@ -25,8 +25,16 @@ const sentryDsn = process.env.SENTRY_DSN ?? process.env.NEXT_PUBLIC_SENTRY_DSN;
 
 export default sentryDsn
   ? withSentryConfig(baseConfig, {
-      automaticVercelMonitors: true,
-      disableLogger: true,
+      // `automaticVercelMonitors` was dropped from the build options in SDK
+      // v11. It only ever created cron monitors from a `vercel.json`, which
+      // this repo does not have and never will — it deploys as containers
+      // behind Traefik — so it was a no-op flag, not a lost capability.
+      //
+      // `disableLogger: true` was also dropped. Its job was to tree-shake the
+      // SDK's own debug logging out of the client bundle; v11 spells that
+      // `bundleSizeOptimizations.excludeDebugStatements`, so the intent moves
+      // rather than disappears.
+      bundleSizeOptimizations: { excludeDebugStatements: true },
       org: process.env.SENTRY_ORG ?? 'your-org',
       project: process.env.SENTRY_PROJECT ?? 'bilinear',
       silent: true,
