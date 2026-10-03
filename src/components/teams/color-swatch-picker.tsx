@@ -35,6 +35,13 @@ interface ColorSwatchPickerProps {
  * off-palette. Emits a hex string. Highlights the swatch whose resolved value
  * matches `value` (case-insensitive) so a saved palette colour reads as
  * "selected" when the form reopens.
+ *
+ * A swatch whose custom property cannot be resolved is rendered disabled and
+ * emits nothing. It previously fell back to emitting `var(--entity-swatch-N)`
+ * — 22 characters into `VarChar(7)` colour columns, so the write failed at
+ * Postgres rather than degrading — and that also broke this component's own
+ * `hex` contract. Failing visibly beats persisting a value the column cannot
+ * hold.
  */
 export function ColorSwatchPicker({
   'aria-label': ariaLabel,
@@ -59,8 +66,13 @@ export function ColorSwatchPicker({
               'flex h-5 w-5 items-center justify-center rounded-full border border-transparent transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               selected && 'border-foreground',
             )}
+            disabled={resolved === null}
             key={varName}
-            onClick={() => onChange(resolved ?? `var(${varName})`)}
+            onClick={() => {
+              if (resolved !== null) {
+                onChange(resolved);
+              }
+            }}
             style={{ backgroundColor: `var(${varName})` }}
             type="button"
           >
