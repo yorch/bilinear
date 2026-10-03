@@ -3140,16 +3140,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tiptap/extension-code-block-lowlight@npm:3.28.0":
-  version: 3.28.0
-  resolution: "@tiptap/extension-code-block-lowlight@npm:3.28.0"
+"@tiptap/extension-code-block-lowlight@npm:3.31.2":
+  version: 3.31.2
+  resolution: "@tiptap/extension-code-block-lowlight@npm:3.31.2"
   peerDependencies:
-    "@tiptap/core": 3.28.0
-    "@tiptap/extension-code-block": 3.28.0
-    "@tiptap/pm": 3.28.0
+    "@tiptap/core": 3.31.2
+    "@tiptap/extension-code-block": 3.31.2
+    "@tiptap/pm": 3.31.2
     highlight.js: ^11
     lowlight: ^2 || ^3
-  checksum: 10c0/b07cd02c73e97d0f0c434ab46bfe74d943591ed6e075ebc187bd1d4d6725dab2b8a20aaf9068caddc5b40cfb2ec5c428eb1b2d00a77aef9606846fbb44814422
+  checksum: 10c0/08a5d9b950812191e0a36e290825b98c215420fdd2bb63a14ef455e67906ad56f7f825e3fb71781dc74d7107aec330ae452013ffa694829d52407433ebc73606
   languageName: node
   linkType: hard
 
@@ -4612,7 +4612,7 @@ __metadata:
     "@testing-library/react": "npm:16.3.2"
     "@tiptap/extension-character-count": "npm:3.28.0"
     "@tiptap/extension-code-block": "npm:3.28.0"
-    "@tiptap/extension-code-block-lowlight": "npm:3.28.0"
+    "@tiptap/extension-code-block-lowlight": "npm:3.31.2"
     "@tiptap/extension-collaboration": "npm:3.28.0"
     "@tiptap/extension-collaboration-caret": "npm:3.28.0"
     "@tiptap/extension-color": "npm:3.28.0"
