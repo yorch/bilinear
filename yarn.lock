@@ -3297,7 +3297,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tiptap/extension-link@npm:3.28.0, @tiptap/extension-link@npm:^3.28.0":
+"@tiptap/extension-link@npm:3.31.2":
+  version: 3.31.2
+  resolution: "@tiptap/extension-link@npm:3.31.2"
+  dependencies:
+    linkifyjs: "npm:^4.3.3"
+  peerDependencies:
+    "@tiptap/core": 3.31.2
+    "@tiptap/pm": 3.31.2
+  checksum: 10c0/0662d9de00e44fee95f3c237493a608b7d19190a9996844da7c6e51bd5d8b902f6ef286855583b079a4312562f5a14aba0bdb96f89bbffbfbcaf7673a90fcf87
+  languageName: node
+  linkType: hard
+
+"@tiptap/extension-link@npm:^3.28.0":
   version: 3.28.0
   resolution: "@tiptap/extension-link@npm:3.28.0"
   dependencies:
@@ -4619,7 +4631,7 @@ __metadata:
     "@tiptap/extension-highlight": "npm:3.28.0"
     "@tiptap/extension-horizontal-rule": "npm:3.28.0"
     "@tiptap/extension-image": "npm:3.28.0"
-    "@tiptap/extension-link": "npm:3.28.0"
+    "@tiptap/extension-link": "npm:3.31.2"
     "@tiptap/extension-mention": "npm:3.28.0"
     "@tiptap/extension-placeholder": "npm:3.28.0"
     "@tiptap/extension-table": "npm:3.28.0"
