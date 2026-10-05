@@ -214,12 +214,12 @@ export const IssueDetailContent = observer(function IssueDetailContent({
   const snoozedBadge = isIssueSnoozed(snoozedUntilAt) ? (
     <div>
       <Badge
-      data-testid="issue-snoozed-badge"
-      title={t('issues.snooze.snoozedUntil', { date: formatDate(snoozedUntilAt ?? '') })}
-      tone="muted"
-    >
-      {t('issues.snooze.snoozedBadge')}
-    </Badge>
+        data-testid="issue-snoozed-badge"
+        title={t('issues.snooze.snoozedUntil', { date: formatDate(snoozedUntilAt ?? '') })}
+        tone="muted"
+      >
+        {t('issues.snooze.snoozedBadge')}
+      </Badge>
     </div>
   ) : null;
 
@@ -361,11 +361,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
           title={t('issues.copyBranchName')}
           type="button"
         >
-          {branchCopied ? (
-            <Check className="h-3 w-3 text-success" />
-          ) : (
-            <Copy className="h-3 w-3" />
-          )}
+          {branchCopied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
         </button>
       </div>
     </div>

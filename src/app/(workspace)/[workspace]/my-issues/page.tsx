@@ -16,7 +16,6 @@ import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
-import { SimpleSelect } from '@/components/ui/select';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useIssueListPage } from '@/hooks/use-issue-list-page';

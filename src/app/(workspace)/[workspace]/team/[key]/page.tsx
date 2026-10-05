@@ -18,7 +18,6 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
-import { SimpleSelect } from '@/components/ui/select';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
 import { useDocumentTitle } from '@/hooks/use-document-title';
