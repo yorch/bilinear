@@ -63,7 +63,7 @@ test.describe('Comments + Activity', () => {
     // Navigate directly to the issue page so the detail panel mounts and
     // CommentThread fetches the freshly-posted comment via gql().
     await page.goto(`/${ws}/issue/${created.id}`);
-    const panel = page.locator('[data-testid="issue-detail-panel"]');
+    const panel = page.locator('[data-testid="issue-detail-page"]');
     await expect(panel).toBeVisible({ timeout: 15_000 });
 
     // The comment body is rendered via TipTap so the literal HTML doesn't

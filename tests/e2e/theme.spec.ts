@@ -4,13 +4,20 @@ import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 test.use({ storageState: ADMIN_STATE });
 
 /**
- * Theme toggle: the sidebar exposes a Light/Dark/System fieldset whose
+ * Theme toggle: the sidebar's account menu (the footer button titled with the
+ * viewer's email) exposes a Light/Dark/System fieldset whose
  * buttons report their state via aria-pressed. Selecting Dark adds the
  * "dark" class to the `<html>` element (next-themes class strategy).
  */
 test.describe('Theme Toggle', () => {
   test.beforeEach(async ({ page }) => {
     await openWorkspace(page);
+    // The toggle lives in the account menu, not the sidebar rail. The menu
+    // stays open while a preference is changed.
+    await page
+      .locator('aside')
+      .getByRole('button', { name: /E2E Tester/ })
+      .click();
   });
 
   test('selecting the Dark theme button applies the dark class to <html>', async ({ page }) => {

@@ -36,12 +36,18 @@ test.describe('Initiatives', () => {
   });
 
   test('toolbar New Initiative button reveals the inline name input', async ({ page }) => {
-    await page.getByRole('button', { name: /new initiative/i }).click();
+    await page
+      .getByRole('button', { name: /new initiative/i })
+      .first()
+      .click();
     await expect(page.getByPlaceholder(/initiative name/i)).toBeVisible();
   });
 
   test('escape from inline input cancels create form', async ({ page }) => {
-    await page.getByRole('button', { name: /new initiative/i }).click();
+    await page
+      .getByRole('button', { name: /new initiative/i })
+      .first()
+      .click();
     const input = page.getByPlaceholder(/initiative name/i);
     await input.fill('Will be cancelled');
     await input.press('Escape');
@@ -50,7 +56,10 @@ test.describe('Initiatives', () => {
 
   test('creating an initiative shows it in the planned group', async ({ page }) => {
     const name = `E2E Initiative ${Date.now()}`;
-    await page.getByRole('button', { name: /new initiative/i }).click();
+    await page
+      .getByRole('button', { name: /new initiative/i })
+      .first()
+      .click();
     const input = page.getByPlaceholder(/initiative name/i);
     await input.fill(name);
     await input.press('Enter');
@@ -66,7 +75,10 @@ test.describe('Initiatives', () => {
    */
   test('clicking an initiative row expands its inline detail panel', async ({ page }) => {
     const name = `E2E Detail ${Date.now()}`;
-    await page.getByRole('button', { name: /new initiative/i }).click();
+    await page
+      .getByRole('button', { name: /new initiative/i })
+      .first()
+      .click();
     const input = page.getByPlaceholder(/initiative name/i);
     await input.fill(name);
     await input.press('Enter');
@@ -98,8 +110,8 @@ test.describe('Initiatives', () => {
     // Step 1: create a project via the projects page modal flow.
     await page.goto(`/${ws}/projects`);
     await expect(page.getByRole('heading', { name: /projects/i })).toBeVisible();
-    await page.getByRole('button', { exact: true, name: 'New Project' }).click();
-    const projectDialog = page.getByRole('dialog', { name: /create project/i });
+    await page.getByRole('button', { exact: true, name: 'New project' }).first().click();
+    const projectDialog = page.getByRole('dialog', { name: /new project/i });
     await expect(projectDialog).toBeVisible();
     await page.getByLabel(/^name$/i).fill(projectName);
     await projectDialog.getByRole('button', { exact: true, name: 'Create project' }).click();
@@ -109,7 +121,10 @@ test.describe('Initiatives', () => {
     // Step 2: navigate to initiatives, create one, expand it.
     await page.goto(`/${ws}/initiatives`);
     await expect(page.getByRole('heading', { name: /initiatives/i })).toBeVisible();
-    await page.getByRole('button', { name: /new initiative/i }).click();
+    await page
+      .getByRole('button', { name: /new initiative/i })
+      .first()
+      .click();
     const input = page.getByPlaceholder(/initiative name/i);
     await input.fill(initiativeName);
     await input.press('Enter');
@@ -160,7 +175,10 @@ test.describe('Initiatives', () => {
    */
   test('changing initiative status to Active persists across reload', async ({ page }) => {
     const name = `E2E Status ${Date.now()}`;
-    await page.getByRole('button', { name: /new initiative/i }).click();
+    await page
+      .getByRole('button', { name: /new initiative/i })
+      .first()
+      .click();
     const input = page.getByPlaceholder(/initiative name/i);
     await input.fill(name);
     await input.press('Enter');

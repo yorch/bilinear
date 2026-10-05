@@ -131,7 +131,9 @@ test.describe('Bulk Actions', () => {
 
     // Priority is a popover on the bar; pick Urgent (priority 1).
     await page.getByRole('button', { name: /^priority$/i }).click();
-    await page.getByRole('button', { name: /^urgent$/i }).click();
+    // The option's accessible name is the glyph's label plus the visible label
+    // ("Urgent Urgent"); the row priority buttons are named just "Urgent".
+    await page.getByRole('button', { exact: true, name: 'Urgent Urgent' }).click();
 
     // The bar clears once the bulk operation is enqueued.
     await expect(page.getByText(/\d+ selected/i)).toHaveCount(0, { timeout: 10_000 });

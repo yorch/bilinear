@@ -29,7 +29,10 @@ test.describe('Documents', () => {
     });
 
     // Clicking "New Document" creates a doc and routes to /docs/<id>.
-    await page.getByRole('button', { name: /^new document/i }).click();
+    await page
+      .getByRole('button', { name: /^new document/i })
+      .first()
+      .click();
     await page.waitForURL(`**/${ws}/docs/**`, { timeout: 10_000 });
 
     // Editor renders with the default Untitled placeholder.
@@ -46,7 +49,10 @@ test.describe('Documents', () => {
       timeout: 15_000,
     });
 
-    await page.getByRole('button', { name: /^new document/i }).click();
+    await page
+      .getByRole('button', { name: /^new document/i })
+      .first()
+      .click();
     await page.waitForURL(`**/${ws}/docs/**`, { timeout: 10_000 });
 
     const titleInput = page.locator('input[placeholder="Untitled"]');
