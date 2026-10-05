@@ -21,7 +21,7 @@ test.describe('Team Creation', () => {
       .locator('aside')
       .getByRole('button', { name: /^new team$/i })
       .click();
-    await expect(page.getByRole('dialog', { name: /create team/i })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: /new team/i })).toBeVisible();
     await expect(page.getByLabel(/^name$/i)).toBeVisible();
   });
 
@@ -40,7 +40,7 @@ test.describe('Team Creation', () => {
       .locator('aside')
       .getByRole('button', { name: /^new team$/i })
       .click();
-    const dialog = page.getByRole('dialog', { name: /create team/i });
+    const dialog = page.getByRole('dialog', { name: /new team/i });
     await expect(dialog).toBeVisible();
     // Press Escape from the dialog so its onKeyDown handler receives the
     // event no matter which descendant currently has focus.
