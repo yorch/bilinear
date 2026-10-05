@@ -15,6 +15,7 @@ import {
   PanelLeft,
   Plus,
   RefreshCw,
+  Search,
   Settings,
   Star,
   Target,
@@ -32,6 +33,8 @@ import { ConnectionStatus } from '@/components/layouts/connection-status';
 import { WorkspaceSwitcher } from '@/components/layouts/workspace-switcher';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useAuth } from '@/hooks/use-auth';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -382,6 +385,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                 const cyclesHref = `${href}/cycles`;
                 const backlogHref = `${href}/backlog`;
                 const docsHref = `${href}/docs`;
+                const triageHref = `${href}/triage`;
                 const viewHrefPrefix = `${href}/view/`;
                 const analyticsHref = `${href}/analytics`;
                 const isActive =
@@ -389,11 +393,13 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                   !pathname.startsWith(cyclesHref) &&
                   !pathname.startsWith(backlogHref) &&
                   !pathname.startsWith(docsHref) &&
+                  !pathname.startsWith(triageHref) &&
                   !pathname.startsWith(analyticsHref) &&
                   !pathname.startsWith(viewHrefPrefix);
                 const isCyclesActive = pathname.startsWith(cyclesHref);
                 const isBacklogActive = pathname.startsWith(backlogHref);
                 const isDocsActive = pathname.startsWith(docsHref);
+                const isTriageActive = pathname.startsWith(triageHref);
                 const isAnalyticsActive = pathname.startsWith(analyticsHref);
                 const expanded = isExpanded(team.key);
                 return (
@@ -447,6 +453,19 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
                     </div>
                     {expanded && (
                       <>
+                        {/* Triage first, and only for teams that have it on.
+                            The route existed with no link to it anywhere in the
+                            app: a team could turn triage on in settings and
+                            then have no way to reach the queue. */}
+                        {team.triageEnabled && (
+                          <TeamSubLink
+                            active={isTriageActive}
+                            href={triageHref}
+                            icon={<Inbox className="h-3 w-3" />}
+                            label={t('nav.triage')}
+                            onNavigate={onNavigate}
+                          />
+                        )}
                         <TeamSubLink
                           active={isBacklogActive}
                           href={backlogHref}
@@ -548,7 +567,7 @@ export const Sidebar = observer(function Sidebar({
   onMobileClose,
   workspaceKey,
 }: SidebarProps) {
-  const { syncStore } = useStore();
+  const { syncStore, uiStore } = useStore();
   const pathname = usePathname();
   const t = useTranslations();
   const appName = useAppName();
@@ -573,6 +592,8 @@ export const Sidebar = observer(function Sidebar({
       icon: <Target className="h-4 w-4" />,
       label: t('nav.projects'),
     },
+    // Initiatives shipped as a reachable-by-URL-only page: the route rendered
+    // fine but nothing in the app linked to it, so the feature was invisible.
     {
       href: `${base}/initiatives`,
       icon: <Flag className="h-4 w-4" />,
@@ -627,6 +648,32 @@ export const Sidebar = observer(function Sidebar({
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-2">
+        {/* Search. The command palette was reachable only by ⌘K, which nobody
+            discovers without being told; a search-shaped affordance is how
+            every comparable product exposes it. Opens the same palette. */}
+        <div className={cn('px-1.5 pb-2', effectiveCollapsed && 'px-1.5')}>
+          <button
+            aria-keyshortcuts="Meta+K Control+K"
+            className={cn(
+              'flex w-full items-center gap-2 rounded-md border border-border bg-surface-sunken px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+              effectiveCollapsed && 'justify-center border-transparent bg-transparent px-0',
+            )}
+            onClick={() => uiStore.openCommandPalette()}
+            title={t('common.search')}
+            type="button"
+          >
+            <Search className="h-4 w-4 shrink-0" />
+            {!effectiveCollapsed && (
+              <>
+                <span className="truncate">{t('nav.searchHint')}</span>
+                <kbd className="ml-auto shrink-0 rounded border border-border px-1 font-sans text-[10px] text-muted-foreground">
+                  ⌘K
+                </kbd>
+              </>
+            )}
+          </button>
+        </div>
+
         {/* Global nav */}
         <ul className="flex flex-col gap-0.5 px-1.5">
           {globalNavItems.map(item => (
@@ -677,7 +724,17 @@ export const Sidebar = observer(function Sidebar({
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
-function SidebarFooter({
+/**
+ * One account menu, not a control dump.
+ *
+ * The footer used to render, inline in a 240px rail: a connection pill, a
+ * Settings link, a cycling accent swatch, an EN|ES toggle, a three-way theme
+ * toggle, the user's name and a Sign out button — across two rows that
+ * collided, with the Settings label truncated to a single clipped letter. None
+ * of those are navigation; they are preferences, and preferences belong behind
+ * a menu. The rail now shows the viewer and nothing else.
+ */
+const SidebarFooter = observer(function SidebarFooter({
   base,
   collapsed,
   onNavigate,
@@ -689,103 +746,132 @@ function SidebarFooter({
   pathname: string;
 }) {
   const { logout, user } = useAuth();
-  const { uiStore } = useStore();
+  const { uiStore, userStore } = useStore();
   const t = useTranslations();
+  const settingsActive = pathname.startsWith(`${base}/settings`);
+  // `useAuth().user` carries only id/email/displayName; the avatar fields live
+  // on the synced user record, so the menu reads both.
+  const profile = userStore.currentUser;
+
+  const avatar = profile ? (
+    <UserAvatar
+      size="sm"
+      user={{
+        avatarBackgroundColor: profile.avatarBgColor,
+        avatarUrl: profile.avatarUrl ?? null,
+        displayName: profile.displayName,
+        initials: profile.initials,
+      }}
+    />
+  ) : (
+    <User className="h-4 w-4" />
+  );
+
   return (
     <div className="border-t border-border p-1.5">
-      {collapsed ? (
-        <div className="flex flex-col items-center gap-1">
-          <ConnectionStatus compact />
-          <button
-            aria-label={t('nav.keyboardShortcuts')}
-            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            onClick={() => uiStore.openShortcutHelp()}
-            title={t('nav.keyboardShortcuts')}
-            type="button"
-          >
-            <Keyboard className="h-4 w-4" />
-          </button>
-          <Link
-            className={cn(
-              'flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-              pathname.startsWith(`${base}/settings`) && 'bg-muted text-foreground',
+      <SelectPopover
+        align="left"
+        className="w-full"
+        panelClassName="bottom-full mb-1 left-0 w-56 p-1"
+        triggerChildren={
+          <>
+            {avatar}
+            {!collapsed && (
+              <>
+                <span className="min-w-0 flex-1 truncate text-left text-sm text-foreground-secondary">
+                  {user?.displayName ?? t('nav.userMenu')}
+                </span>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 -rotate-90 text-muted-foreground" />
+              </>
             )}
-            href={`${base}/settings`}
-            onClick={onNavigate}
-            title={t('common.settings')}
-          >
-            <Settings className="h-4 w-4" />
-          </Link>
-          <ThemeToggle compact />
-          <AccentToggle compact />
-          <LanguageToggle compact />
-          <button
-            aria-label={t('common.signOut')}
-            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            onClick={() => void logout()}
-            title={t('common.signOut')}
-            type="button"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1">
-          <ConnectionStatus />
-          <div className="flex items-center justify-between gap-1">
+          </>
+        }
+        triggerClassName={cn(
+          'w-full gap-2 px-2 py-1.5',
+          collapsed && 'justify-center px-0',
+          TOUCH_TARGET,
+        )}
+        triggerTitle={user?.email ?? t('nav.userMenu')}
+      >
+        {close => (
+          <>
+            {user && (
+              <div className="border-b border-border px-2 pb-2 pt-1">
+                <p className="truncate text-sm font-medium text-foreground">{user.displayName}</p>
+                <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+              </div>
+            )}
+
             <Link
               className={cn(
-                'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-                pathname.startsWith(`${base}/settings`) && 'bg-muted text-foreground',
+                POPOVER_ITEM_CLASS,
+                'rounded',
+                settingsActive && 'bg-muted text-foreground',
               )}
               href={`${base}/settings`}
-              onClick={onNavigate}
-              title={t('nav.workspaceSettings')}
+              onClick={() => {
+                close();
+                onNavigate?.();
+              }}
             >
               <Settings className="h-4 w-4 shrink-0" />
-              <span className="truncate">{t('common.settings')}</span>
+              {t('nav.workspaceSettings')}
             </Link>
-            {/* Compact (cycling) accent swatch here rather than the full
-                three-swatch picker — the expanded rail is only 240px and
-                already carries the language and theme controls. The full
-                picker lives in workspace settings. */}
-            <div className="flex shrink-0 items-center gap-1">
-              <AccentToggle compact />
-              <LanguageToggle />
+
+            <button
+              className={cn(POPOVER_ITEM_CLASS, 'rounded')}
+              onClick={() => {
+                close();
+                uiStore.openShortcutHelp();
+              }}
+              type="button"
+            >
+              <Keyboard className="h-4 w-4 shrink-0" />
+              {t('nav.keyboardShortcuts')}
+              <kbd className="ml-auto rounded border border-border bg-surface-sunken px-1 font-mono text-[10px]">
+                ?
+              </kbd>
+            </button>
+
+            <div className="my-1 border-t border-border" />
+
+            {/* Preference rows: label on the left, the existing toggle on the
+                right. The toggles are unchanged — only their home moved. */}
+            <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
+              <span className="text-muted-foreground">{t('nav.appearance')}</span>
               <ThemeToggle />
             </div>
-          </div>
-          <button
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            onClick={() => uiStore.openShortcutHelp()}
-            title={t('nav.keyboardShortcuts')}
-            type="button"
-          >
-            <Keyboard className="h-4 w-4 shrink-0" />
-            <span className="truncate">{t('nav.keyboardShortcuts')}</span>
-            <kbd className="ml-auto rounded border border-border bg-surface-sunken px-1 font-mono text-[10px]">
-              ?
-            </kbd>
-          </button>
-          {user && (
-            <div className="flex items-center justify-between gap-2 px-2 py-1 text-xs text-muted-foreground">
-              <span className="min-w-0 flex-1 truncate" title={user.email}>
-                {user.displayName}
-              </span>
-              <button
-                aria-label={t('common.signOut')}
-                className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                onClick={() => void logout()}
-                title={t('common.signOut')}
-                type="button"
-              >
-                <LogOut className="h-3 w-3" />
-                <span className="truncate">{t('common.signOut')}</span>
-              </button>
+            <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
+              <span className="text-muted-foreground">{t('nav.accent')}</span>
+              <AccentToggle />
             </div>
-          )}
-        </div>
-      )}
+            <div className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
+              <span className="text-muted-foreground">{t('nav.language')}</span>
+              <LanguageToggle />
+            </div>
+
+            <div className="my-1 border-t border-border" />
+
+            {/* Connection state stays in the menu rather than the rail: it is
+                worth finding when something is wrong and worth nothing when it
+                is fine, which is the definition of a menu row, not a fixture. */}
+            <div className="px-2 py-1">
+              <ConnectionStatus />
+            </div>
+
+            <div className="my-1 border-t border-border" />
+
+            <button
+              className={cn(POPOVER_ITEM_CLASS, 'rounded text-danger-subtle-foreground')}
+              onClick={() => void logout()}
+              type="button"
+            >
+              <LogOut className="h-4 w-4 shrink-0" />
+              {t('common.signOut')}
+            </button>
+          </>
+        )}
+      </SelectPopover>
     </div>
   );
-}
+});

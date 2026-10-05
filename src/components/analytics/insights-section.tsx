@@ -10,14 +10,10 @@ import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
 
 interface HistogramBucket {
-  bucketEnd: number;
+  /** `null` on the final open-ended bucket — see AnalyticsHistogramBucket. */
+  bucketEnd: number | null;
   bucketStart: number;
   count: number;
-}
-
-interface ThroughputPoint {
-  count: number;
-  weekStart: string;
 }
 
 interface TimeInStateRow {
@@ -29,7 +25,6 @@ interface TimeInStateRow {
 interface InsightsData {
   cycle: HistogramBucket[];
   lead: HistogramBucket[];
-  throughput: ThroughputPoint[];
   timeInState: TimeInStateRow[];
 }
 
@@ -44,7 +39,6 @@ const INSIGHTS_QUERY = `
   query Insights($input: AnalyticsInput) {
     analyticsLeadTimeHistogram(input: $input) { bucketStart bucketEnd count }
     analyticsCycleTimeHistogram(input: $input) { bucketStart bucketEnd count }
-    analyticsThroughputByWeek(input: $input) { weekStart count }
     analyticsTimeInState(input: $input) { stateId avgHours sampleSize }
   }
 `;
@@ -74,7 +68,7 @@ function rangeForPreset(preset: RangePreset): { from?: string; to?: string } {
 }
 
 function fmtBucketLabel(b: HistogramBucket, t: ReturnType<typeof useTranslations>): string {
-  if (b.bucketEnd === Number.POSITIVE_INFINITY || !Number.isFinite(b.bucketEnd)) {
+  if (b.bucketEnd === null || !Number.isFinite(b.bucketEnd)) {
     return t('analytics.insights.bucketDaysPlus', { count: b.bucketStart });
   }
   return t('analytics.insights.bucketDaysRange', { from: b.bucketStart, to: b.bucketEnd });
@@ -91,62 +85,30 @@ function Histogram({ buckets, color }: { buckets: HistogramBucket[]; color: stri
     );
   }
   return (
-    <div className="flex h-32 items-end gap-1.5">
+    // `items-stretch` + a `flex-1` track inside each column: a percentage height
+    // needs a resolved parent height, and `items-end` on an auto-height column
+    // does not give it one — every bar collapsed to its 4px floor, so the
+    // histogram was nine identical hairlines whatever the distribution was.
+    <div className="flex h-32 items-stretch gap-1.5">
       {buckets.map(b => {
         const pct = (b.count / max) * 100;
         return (
           <div
-            className="flex flex-1 flex-col items-center gap-1"
+            className="flex min-w-0 flex-1 flex-col items-center gap-1"
             key={`${b.bucketStart}-${b.bucketEnd}`}
           >
-            <span className="text-[10px] font-medium text-muted-foreground">
+            <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
               {b.count > 0 ? b.count : ''}
             </span>
-            <div
-              className="w-full rounded-t transition-all"
-              style={{
-                backgroundColor: color,
-                height: `${Math.max(pct, b.count > 0 ? 4 : 0)}%`,
-                minHeight: b.count > 0 ? '4px' : '0',
-              }}
-            />
-            <span className="truncate text-[10px] text-muted-foreground">
+            <div className="flex w-full flex-1 flex-col justify-end rounded-t bg-muted/60">
+              <div
+                className="w-full rounded-t transition-[height]"
+                style={{ backgroundColor: color, height: `${pct}%` }}
+              />
+            </div>
+            <span className="w-full truncate text-center text-[10px] text-muted-foreground">
               {fmtBucketLabel(b, t)}
             </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function ThroughputChart({ points }: { points: ThroughputPoint[] }) {
-  const t = useTranslations();
-  if (points.length === 0) {
-    return (
-      <p className="py-4 text-center text-xs text-muted-foreground">
-        {t('analytics.insights.noThroughputDataInRange')}
-      </p>
-    );
-  }
-  const max = Math.max(...points.map(p => p.count), 1);
-  return (
-    <div className="flex h-32 items-end gap-1">
-      {points.map(p => {
-        const pct = (p.count / max) * 100;
-        return (
-          <div className="flex flex-1 flex-col items-center gap-1" key={p.weekStart}>
-            <div
-              className="w-full rounded-t bg-brand transition-all"
-              style={{
-                height: `${Math.max(pct, 4)}%`,
-                minHeight: '4px',
-              }}
-              title={t('analytics.insights.completedWeekOf', {
-                count: p.count,
-                weekStart: p.weekStart,
-              })}
-            />
           </div>
         );
       })}
@@ -190,13 +152,12 @@ function TimeInStateChart({
             >
               {state.name}
             </span>
-            <div className="flex-1 rounded bg-muted">
+            {/* No 2% floor: it painted a visible sliver for a state whose
+                average is 0.0h, so the chart contradicted its own label. */}
+            <div className="h-4 flex-1 rounded bg-muted">
               <div
-                className="h-4 rounded transition-all"
-                style={{
-                  backgroundColor: state.color,
-                  width: `${Math.max(pct, 2)}%`,
-                }}
+                className="h-4 rounded transition-[width]"
+                style={{ backgroundColor: state.color, width: `${pct}%` }}
               />
             </div>
             <span className="w-14 shrink-0 text-right text-xs font-medium text-muted-foreground">
@@ -233,13 +194,11 @@ export function InsightsSection({
       const d = await gqlQuery<{
         analyticsCycleTimeHistogram: HistogramBucket[];
         analyticsLeadTimeHistogram: HistogramBucket[];
-        analyticsThroughputByWeek: ThroughputPoint[];
         analyticsTimeInState: TimeInStateRow[];
       }>(INSIGHTS_QUERY, { input });
       return {
         cycle: d.analyticsCycleTimeHistogram,
         lead: d.analyticsLeadTimeHistogram,
-        throughput: d.analyticsThroughputByWeek,
         timeInState: d.analyticsTimeInState,
       };
     },
@@ -249,19 +208,27 @@ export function InsightsSection({
 
   return (
     <div className="mt-5">
+      {/* No range control here. The page header already owns one, wired to this
+          same state, so the screen showed two identical 30d/90d/180d/All
+          toggles that always moved together — which reads as a bug either way:
+          if they are linked the second is redundant, and if they are not, one of
+          them is lying. Only the standalone case (no `preset` prop) renders its
+          own, since then there is no header control to defer to. */}
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-foreground">{t('analytics.insights.title')}</h2>
-        <SegmentedControl
-          onChange={setPreset}
-          options={PRESETS.map(p => ({
-            label:
-              p.days === null
-                ? t('analytics.insights.rangeAll')
-                : t('analytics.insights.rangeDays', { count: p.days }),
-            value: p.value,
-          }))}
-          value={preset}
-        />
+        {presetProp === undefined && (
+          <SegmentedControl
+            onChange={setPreset}
+            options={PRESETS.map(p => ({
+              label:
+                p.days === null
+                  ? t('analytics.insights.rangeAll')
+                  : t('analytics.insights.rangeDays', { count: p.days }),
+              value: p.value,
+            }))}
+            value={preset}
+          />
+        )}
       </div>
 
       {loading ? (
@@ -282,13 +249,6 @@ export function InsightsSection({
             title={t('analytics.insights.cycleTime')}
           >
             <Histogram buckets={data?.cycle ?? []} color="var(--chart-actual)" />
-          </SectionCard>
-
-          <SectionCard
-            description={t('analytics.insights.throughputTrendSubtitle')}
-            title={t('analytics.insights.throughputTrend')}
-          >
-            <ThroughputChart points={data?.throughput ?? []} />
           </SectionCard>
 
           <SectionCard

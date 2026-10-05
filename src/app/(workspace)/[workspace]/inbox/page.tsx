@@ -8,9 +8,7 @@ import { titleMetadata } from '@/lib/page-metadata';
 export const generateMetadata = () => titleMetadata('nav.inbox', '·');
 
 export default function InboxPage() {
-  return (
-    <div className="flex-1 overflow-auto">
-      <NotificationInbox />
-    </div>
-  );
+  // No scroll container here: NotificationInbox owns its PageHeader and its own
+  // scroll region, so wrapping it in one would scroll the header away.
+  return <NotificationInbox />;
 }

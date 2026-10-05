@@ -344,7 +344,7 @@ export default function SecuritySettingsPage() {
       />
       <div className="mx-auto w-full max-w-2xl space-y-8 p-8">
         {/* SCIM Provisioning Section */}
-        <section className="rounded-lg border p-6 space-y-6">
+        <section className="rounded-lg border-border p-6 space-y-6">
           <div>
             <h2 className="font-medium">{t('settings.security.scimHeading')}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -389,7 +389,7 @@ export default function SecuritySettingsPage() {
                   <div className="space-y-2">
                     {scimTokens.map(tok => (
                       <div
-                        className="flex items-center justify-between rounded-md border px-3 py-2"
+                        className="flex items-center justify-between rounded-md border-border px-3 py-2"
                         key={tok.id}
                       >
                         <div className="min-w-0">
@@ -451,7 +451,7 @@ export default function SecuritySettingsPage() {
                 ) : (
                   <div className="flex items-center gap-2">
                     <input
-                      className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="flex-1 rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       onChange={e => setScimNewLabel(e.target.value)}
                       placeholder={t('settings.security.tokenLabelPlaceholder')}
                       type="text"
@@ -475,7 +475,7 @@ export default function SecuritySettingsPage() {
         </section>
 
         {/* SAML SSO Section */}
-        <section className="rounded-lg border p-6 space-y-6">
+        <section className="rounded-lg border-border p-6 space-y-6">
           <div>
             <h2 className="font-medium">{t('settings.security.samlHeading')}</h2>
             <p className="text-sm text-muted-foreground mt-1">
@@ -530,7 +530,7 @@ export default function SecuritySettingsPage() {
                     {t('settings.security.idpSsoUrl')} <span className="text-destructive">*</span>
                   </label>
                   <input
-                    className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     id="idpSsoUrl"
                     onChange={e => setField('idpSsoUrl', e.target.value)}
                     placeholder="https://your-idp.example.com/sso/saml"
@@ -544,7 +544,7 @@ export default function SecuritySettingsPage() {
                     {t('settings.security.idpEntityId')} <span className="text-destructive">*</span>
                   </label>
                   <input
-                    className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     id="idpEntityId"
                     onChange={e => setField('idpEntityId', e.target.value)}
                     placeholder="https://your-idp.example.com/entity"
@@ -559,7 +559,7 @@ export default function SecuritySettingsPage() {
                     {config ? ` — ${t('settings.security.leaveBlankToKeepExisting')}` : ' *'}
                   </label>
                   <textarea
-                    className="w-full rounded-md border bg-background px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
                     id="idpCert"
                     onChange={e => setField('idpCert', e.target.value)}
                     placeholder={'-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'}
@@ -573,7 +573,7 @@ export default function SecuritySettingsPage() {
                     {t('settings.security.idpMetadataUrlOptional')}
                   </label>
                   <input
-                    className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     id="idpMetadataUrl"
                     onChange={e => setField('idpMetadataUrl', e.target.value)}
                     placeholder="https://your-idp.example.com/metadata"
@@ -588,7 +588,7 @@ export default function SecuritySettingsPage() {
                       {t('settings.security.emailAttribute')}
                     </label>
                     <input
-                      className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       id="emailAttribute"
                       onChange={e => setField('emailAttribute', e.target.value)}
                       type="text"
@@ -600,7 +600,7 @@ export default function SecuritySettingsPage() {
                       {t('settings.security.nameAttribute')}
                     </label>
                     <input
-                      className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       id="nameAttribute"
                       onChange={e => setField('nameAttribute', e.target.value)}
                       type="text"
@@ -643,7 +643,7 @@ export default function SecuritySettingsPage() {
                   {config && (
                     <>
                       <a
-                        className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+                        className="flex items-center gap-1.5 rounded-md border-border px-3 py-1.5 text-sm hover:bg-muted"
                         href={`/api/auth/saml/initiate?org=${orgKey}&redirect=/settings/security`}
                         rel="noreferrer"
                         target="_blank"
@@ -716,6 +716,12 @@ function ReadOnlyField({
   value: string;
 }) {
   const t = useTranslations();
+  // The origin is not knowable until after mount (`useOrigin` returns '' on the
+  // server and for the hydration pass), and these values exist to be pasted into
+  // an identity provider. Copying the host-less `/api/...` path would hand the
+  // user a silently wrong string, so the button is disabled for exactly as long
+  // as the value has no host.
+  const pending = value.startsWith('/');
   return (
     <div>
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
@@ -725,7 +731,11 @@ function ReadOnlyField({
         </code>
         <button
           aria-label={t('settings.security.copy')}
-          className={cn('shrink-0 text-muted-foreground hover:text-foreground', TOUCH_TARGET)}
+          className={cn(
+            'shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-40',
+            TOUCH_TARGET,
+          )}
+          disabled={pending}
           onClick={onCopy}
           title={t('settings.security.copy')}
           type="button"

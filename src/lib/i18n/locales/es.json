@@ -145,7 +145,6 @@
       "avgTimeInStateSubtitle": "aproximación a partir de las marcas de tiempo del ciclo de vida; el registro de auditoría completo llegará después",
       "bucketDaysPlus": "{count} d+",
       "bucketDaysRange": "{from}–{to} d",
-      "completedWeekOf": "{count} completados en la semana del {weekStart}",
       "cycleTime": "Tiempo de ciclo",
       "cycleTimeSubtitle": "iniciado → completado, en días",
       "leadTime": "Tiempo de espera",
@@ -153,11 +152,8 @@
       "loading": "Cargando insights…",
       "noCompletedIssuesInRange": "No hay issues completados en el rango",
       "noStateTransitionData": "Aún no hay datos de transición de estado",
-      "noThroughputDataInRange": "No hay datos de rendimiento en el rango",
       "rangeAll": "Todo",
       "rangeDays": "{count} d",
-      "throughputTrend": "Tendencia de rendimiento",
-      "throughputTrendSubtitle": "issues completados por semana",
       "title": "Insights"
     },
     "team": {
@@ -607,6 +603,7 @@
     "documentArchived": "Documento archivado",
     "documentDeleted": "Documento eliminado",
     "documentNotFound": "Documento no encontrado.",
+    "emptyDescription": "Los documentos son notas extensas que viven junto a tus tareas: especificaciones, retros, guías.",
     "emptyState": "Aún no hay documentos",
     "loadFailed": "No se pudieron cargar los datos. Actualiza la página.",
     "moreActions": "Más acciones",
@@ -768,8 +765,10 @@
       "createdSuccess": "Iniciativa creada",
       "createFailed": "No se pudo crear la iniciativa",
       "empty": "Aún no hay iniciativas. Crea una para empezar a agrupar proyectos.",
+      "emptyDescription": "Las iniciativas agrupan proyectos relacionados bajo un objetivo, para seguir un trimestre sin revisar cada proyecto.",
+      "emptyTitle": "Aún no hay iniciativas",
       "namePlaceholder": "Nombre de la iniciativa",
-      "newInitiative": "+ Nueva iniciativa",
+      "newInitiative": "Nueva iniciativa",
       "title": "Iniciativas"
     },
     "row": {
@@ -871,6 +870,7 @@
       "uploadFailed": "Error al subir el archivo",
       "uploading": "Subiendo…"
     },
+    "backToTeam": "Volver",
     "comments": {
       "cannotConvertTeamUnresolved": "No se puede convertir: no se resolvió el equipo",
       "commentButton": "Comentar",
@@ -895,7 +895,7 @@
       "subIssueFromComment": "Subtarea desde comentario",
       "title": "Comentarios",
       "unresolve": "Marcar como no resuelto",
-      "writePlaceholder": "Escribe un comentario… (admite **markdown**, @menciones, #tareas)"
+      "writePlaceholder": "Escribe un comentario…"
     },
     "createModal": {
       "addDescriptionFirst": "Agrega una descripción primero para sugerir un título",
@@ -903,7 +903,7 @@
       "createIssue": "Crear tarea",
       "createMore": "Crear más",
       "creating": "Creando…",
-      "descriptionPlaceholder": "Agrega una descripción… (opcional, admite **markdown**)",
+      "descriptionPlaceholder": "Agrega una descripción… (opcional)",
       "discard": "Descartar",
       "discardConfirmBody": "Tienes cambios sin guardar que se perderán si cierras esto.",
       "discardConfirmTitle": "¿Descartar esta tarea?",
@@ -917,8 +917,8 @@
     },
     "defaultUserName": "Usuario",
     "description": "Descripción",
-    "descriptionPlaceholder": "Agrega una descripción… (admite **markdown**, comandos /, @menciones)",
-    "descriptionPlaceholderFull": "Agrega una descripción… (admite **markdown**, comandos /, @menciones, #tareas)",
+    "descriptionPlaceholder": "Agrega una descripción…",
+    "descriptionPlaceholderFull": "Agrega una descripción… escribe / para comandos",
     "failedToSubscribe": "No se pudo suscribir",
     "failedToUnsubscribe": "No se pudo cancelar la suscripción",
     "issueNotFound": "No se encontró la tarea.",
@@ -1078,6 +1078,7 @@
     "false": "Falso",
     "filter": "Filtro",
     "ganttEmptyMessage": "No hay tareas con fechas de inicio o entrega. Agrega fechas a las tareas para completar el cronograma.",
+    "groupBy": "Agrupar por",
     "groupByAssignee": "Agrupar por responsable",
     "groupByLabel": "Agrupar por",
     "groupByPriority": "Agrupar por prioridad",
@@ -1094,7 +1095,9 @@
     "myIssues": "Mis tareas",
     "newIssue": "Nueva tarea",
     "noBacklogIssues": "Sin tareas pendientes",
+    "noBacklogIssuesDescription": "El backlog contiene el trabajo aceptado que todavía no está planificado en un ciclo.",
     "noIssues": "Sin tareas",
+    "noIssuesDescription": "Nada coincide con esta vista. Crea una tarea o amplía los filtros.",
     "noIssuesFoundPrefix": "No se encontraron tareas. Presiona",
     "noIssuesFoundSuffix": "para crear una.",
     "noSwimlanes": "Sin carriles",
@@ -1117,6 +1120,10 @@
     "restoreFailed": "Error al restaurar la tarea",
     "saveCurrentFiltersAsView": "Guardar filtros actuales como vista",
     "saveView": "Guardar vista",
+    "scope": {
+      "assigned": "Asignadas",
+      "created": "Creadas"
+    },
     "selectAllCount": "Seleccionar las {count}",
     "selectEllipsis": "Seleccionar…",
     "selectedCount": "{count} seleccionadas",
@@ -1137,6 +1144,7 @@
       "unsnoozeFailed": "Error al reactivar el issue"
     },
     "status": "Estado",
+    "swimlaneBy": "Carriles",
     "swimlaneByAssignee": "Carriles por responsable",
     "swimlaneByLabel": "Carriles",
     "swimlaneByPriority": "Carriles por prioridad",
@@ -1214,12 +1222,14 @@
     "verify": "Verificar"
   },
   "nav": {
+    "accent": "Color de acento",
     "analytics": "Analítica",
+    "appearance": "Apariencia",
     "backlog": "Pendientes",
     "closeMenu": "Cerrar menú",
     "collapseSidebar": "Contraer barra lateral (⌘B)",
     "collapseTeam": "Contraer {team}",
-    "createTeam": "Crear un equipo",
+    "createTeam": "Nuevo equipo",
     "cycles": "Ciclos",
     "docs": "Documentos",
     "expandSidebar": "Expandir barra lateral (⌘B)",
@@ -1229,20 +1239,27 @@
     "inbox": "Bandeja de entrada",
     "initiatives": "Iniciativas",
     "keyboardShortcuts": "Atajos de teclado",
+    "language": "Idioma",
     "myIssues": "Mis tareas",
     "newTeam": "Nuevo equipo",
     "openMenu": "Abrir menú",
     "projects": "Proyectos",
     "removeFromFavorites": "Quitar de favoritos",
     "removeNamedFromFavorites": "Quitar {name} de favoritos",
+    "searchHint": "Buscar…",
     "teams": "Equipos",
+    "triage": "Clasificación",
+    "userMenu": "Cuenta y preferencias",
     "workspaceSettings": "Configuración del espacio de trabajo"
   },
   "notifications": {
+    "actorDidThing": "{name} {action}",
     "allNotifications": "Todas las notificaciones",
     "emptyState": {
       "detail": "Todavía no hay notificaciones. Te avisaremos cuando algo necesite tu atención.",
-      "title": "Todo al día"
+      "title": "Todo al día",
+      "unreadDetail": "Ya has leído todo. Cambia a Todas para ver el resto.",
+      "unreadTitle": "Nada sin leer"
     },
     "labels": {
       "default": "envió una notificación",
@@ -1261,6 +1278,10 @@
       "nextWeek": "La próxima semana",
       "oneHour": "1 hora",
       "tomorrow9am": "Mañana 9am"
+    },
+    "tabs": {
+      "all": "Todas",
+      "unread": "Sin leer"
     },
     "title": "Bandeja de entrada",
     "toasts": {
@@ -1853,6 +1874,9 @@
       "accept": "Aceptar",
       "acceptFailed": "Error al aceptar el issue",
       "allClear": "Todo despejado — no hay nada por clasificar.",
+      "allClearDescription": "No hay nada pendiente de clasificar. Las tareas nuevas llegan aquí antes de pasar al backlog.",
+      "allClearTitle": "Todo en orden",
+      "backToQueue": "Cola",
       "cannotMarkDuplicateOfItself": "No se puede marcar un issue como duplicado de sí mismo",
       "decline": "Rechazar",
       "declineFailed": "Error al rechazar el issue",
@@ -1861,6 +1885,8 @@
       "markDuplicateFailed": "Error al marcar como duplicado",
       "markDuplicateTitle": "Marcar como duplicado de otro issue",
       "markedAsDuplicate": "Marcado como duplicado de {identifier}",
+      "noDescription": "Sin descripción",
+      "openFullIssue": "Abrir la tarea completa",
       "pageTitle": "{name} — Clasificación",
       "snooze": "Posponer",
       "snooze1Day": "1 día",
@@ -2063,6 +2089,7 @@
     "memberRole": "Rol",
     "name": "Nombre",
     "namePlaceholder": "p. ej. Ingeniería",
+    "newTeam": "Nuevo equipo",
     "noMatches": "Sin coincidencias",
     "optional": "opcional",
     "owner": "Propietario",

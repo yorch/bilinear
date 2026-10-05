@@ -56,6 +56,24 @@ async function createFreshTriageIssue(page: Page, teamKey: string): Promise<stri
 }
 
 /**
+ * Select a queue row and return the preview pane's action toolbar.
+ *
+ * Triage is a two-pane review: clicking a row focuses that issue, and the
+ * single Accept / Decline / Duplicate / Snooze group acts on whatever the
+ * preview is showing. These specs used to click a button inside the row itself,
+ * back when every row carried its own copy of all four.
+ */
+async function focusTriageRow(page: Page, title: string) {
+  const row = page.getByTestId('triage-row').filter({ hasText: title }).first();
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.click();
+  // The preview renders the focused issue's title as a heading, so waiting on
+  // it proves the click landed before any action is taken.
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 10_000 });
+  return row;
+}
+
+/**
  * Triage queue page.
  *
  * The seed enables triage on the ENG team and creates three inbound issues
@@ -103,10 +121,10 @@ test.describe('Triage', () => {
     // Header counter "{n} to triage".
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    // The Accept button is the most stable per-row signal: one per queued issue.
-    const acceptButtons = page.getByRole('button', { name: 'Accept' });
-    await expect(acceptButtons.first()).toBeVisible();
-    expect(await acceptButtons.count()).toBeGreaterThanOrEqual(1);
+    // One Accept button, in the preview pane, acting on the focused issue.
+    await expect(page.getByRole('button', { name: 'Accept' })).toBeVisible();
+    // …and one row per queued issue.
+    expect(await page.getByTestId('triage-row').count()).toBeGreaterThanOrEqual(1);
 
     // At least one issue identifier should appear.
     await expect(page.getByText(/ENG-\d+/).first()).toBeVisible();
@@ -148,11 +166,10 @@ test.describe('Triage', () => {
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
     // Wait for the new row (delivered via bootstrap) to appear.
-    const freshRow = page.getByTestId('triage-row').filter({ hasText: freshTitle }).first();
-    await expect(freshRow).toBeVisible({ timeout: 15_000 });
+    // Focus THAT issue, not whatever the queue happens to show first.
+    const freshRow = await focusTriageRow(page, freshTitle);
 
-    // Click the Accept button on THAT row, not the first row of the queue.
-    await freshRow.getByRole('button', { name: 'Accept' }).click();
+    await page.getByRole('button', { name: 'Accept' }).click();
 
     // The accepted row leaves the active queue. Assert against `freshRow` (a
     // queue-scoped locator) rather than `getByText(freshTitle)` page-wide,
@@ -176,10 +193,9 @@ test.describe('Triage', () => {
     await page.goto(`/${ws}/team/${team}/triage`);
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    const freshRow = page.getByTestId('triage-row').filter({ hasText: freshTitle }).first();
-    await expect(freshRow).toBeVisible({ timeout: 15_000 });
+    const freshRow = await focusTriageRow(page, freshTitle);
 
-    await freshRow.getByRole('button', { name: 'Decline' }).click();
+    await page.getByRole('button', { name: 'Decline' }).click();
 
     await expect(freshRow).not.toBeVisible({ timeout: 10_000 });
   });
@@ -202,8 +218,7 @@ test.describe('Triage', () => {
     await page.goto(`/${ws}/team/${team}/triage`);
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    const freshRow = page.getByTestId('triage-row').filter({ hasText: freshTitle }).first();
-    await expect(freshRow).toBeVisible({ timeout: 15_000 });
+    const freshRow = await focusTriageRow(page, freshTitle);
 
     // Find an arbitrary non-triage issue identifier to use as the duplicate
     // target; ENG-1/2/3 are seeded but ENG-1 may have been archived. Pick
@@ -247,8 +262,8 @@ test.describe('Triage', () => {
 
     // The Duplicate flow opens a searchable issue picker — search by
     // identifier and pick the matching result.
-    await freshRow.getByRole('button', { name: 'Duplicate' }).click();
-    await freshRow.getByRole('combobox').fill(canonicalIdentifier);
+    await page.getByRole('button', { name: 'Duplicate' }).click();
+    await page.getByRole('combobox').fill(canonicalIdentifier);
     await page
       .getByRole('option', { name: new RegExp(canonicalIdentifier) })
       .first()
@@ -270,12 +285,11 @@ test.describe('Triage', () => {
     await page.goto(`/${ws}/team/${team}/triage`);
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
-    const freshRow = page.getByTestId('triage-row').filter({ hasText: freshTitle }).first();
-    await expect(freshRow).toBeVisible({ timeout: 15_000 });
+    const freshRow = await focusTriageRow(page, freshTitle);
 
-    // Click the row-scoped Snooze button to open the preset popover, then
-    // pick "1 day" (the page exposes 4 hours / 1 day / 1 week presets).
-    await freshRow.getByRole('button', { name: 'Snooze' }).click();
+    // Open the preset popover from the preview toolbar, then pick "1 day"
+    // (the page exposes 4 hours / 1 day / 1 week presets).
+    await page.getByRole('button', { name: 'Snooze' }).click();
     await page.getByRole('menuitem', { name: '1 day' }).click();
 
     // The snoozed row leaves the active queue.

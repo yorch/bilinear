@@ -1,6 +1,6 @@
 'use client';
 
-import { Bookmark, Settings } from 'lucide-react';
+import { Bookmark, Plus, Settings } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -255,6 +255,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
               <Settings className="h-4 w-4" />
             </Link>
             <Button onClick={() => uiStore.openCreateIssueModal()} size="sm" type="button">
+              <Plus className="h-3.5 w-3.5" />
               {t('issues.newIssue')}
             </Button>
           </>

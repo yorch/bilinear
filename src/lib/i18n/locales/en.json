@@ -145,7 +145,6 @@
       "avgTimeInStateSubtitle": "approximation from lifecycle timestamps; full audit log is a follow-up",
       "bucketDaysPlus": "{count}d+",
       "bucketDaysRange": "{from}–{to}d",
-      "completedWeekOf": "{count} completed week of {weekStart}",
       "cycleTime": "Cycle time",
       "cycleTimeSubtitle": "started → completed, in days",
       "leadTime": "Lead time",
@@ -153,11 +152,8 @@
       "loading": "Loading insights…",
       "noCompletedIssuesInRange": "No completed issues in range",
       "noStateTransitionData": "No state-transition data yet",
-      "noThroughputDataInRange": "No throughput data in range",
       "rangeAll": "All",
       "rangeDays": "{count}d",
-      "throughputTrend": "Throughput trend",
-      "throughputTrendSubtitle": "issues completed per week",
       "title": "Insights"
     },
     "team": {
@@ -607,10 +603,11 @@
     "documentArchived": "Document archived",
     "documentDeleted": "Document deleted",
     "documentNotFound": "Document not found.",
+    "emptyDescription": "Documents are long-form notes that live beside your issues — specs, retros, runbooks.",
     "emptyState": "No documents yet",
     "loadFailed": "Failed to load data. Please refresh.",
     "moreActions": "More actions",
-    "newDocument": "New Document",
+    "newDocument": "New document",
     "startWriting": "Start writing...",
     "teamDocsTitle": "{teamName} — Docs",
     "teamNotFound": "Team not found.",
@@ -768,8 +765,10 @@
       "createdSuccess": "Initiative created",
       "createFailed": "Failed to create initiative",
       "empty": "No initiatives yet. Create one to start grouping projects.",
+      "emptyDescription": "Initiatives group related projects under one goal, so you can track a quarter without reading every project.",
+      "emptyTitle": "No initiatives yet",
       "namePlaceholder": "Initiative name",
-      "newInitiative": "+ New initiative",
+      "newInitiative": "New initiative",
       "title": "Initiatives"
     },
     "row": {
@@ -871,6 +870,7 @@
       "uploadFailed": "Upload failed",
       "uploading": "Uploading…"
     },
+    "backToTeam": "Back",
     "comments": {
       "cannotConvertTeamUnresolved": "Cannot convert — team not resolved",
       "commentButton": "Comment",
@@ -895,7 +895,7 @@
       "subIssueFromComment": "Sub-issue from comment",
       "title": "Comments",
       "unresolve": "Unresolve",
-      "writePlaceholder": "Write a comment… (supports **markdown**, @mentions, #issues)"
+      "writePlaceholder": "Leave a comment…"
     },
     "createModal": {
       "addDescriptionFirst": "Add a description first to suggest a title",
@@ -903,7 +903,7 @@
       "createIssue": "Create issue",
       "createMore": "Create more",
       "creating": "Creating…",
-      "descriptionPlaceholder": "Add description… (optional, supports **markdown**)",
+      "descriptionPlaceholder": "Add a description… (optional)",
       "discard": "Discard",
       "discardConfirmBody": "You have unsaved changes that will be lost if you close this.",
       "discardConfirmTitle": "Discard this issue?",
@@ -917,8 +917,8 @@
     },
     "defaultUserName": "User",
     "description": "Description",
-    "descriptionPlaceholder": "Add a description… (supports **markdown**, /slash commands, @mentions)",
-    "descriptionPlaceholderFull": "Add a description… (supports **markdown**, /slash commands, @mentions, #issues)",
+    "descriptionPlaceholder": "Add a description…",
+    "descriptionPlaceholderFull": "Add a description… type / for commands",
     "failedToSubscribe": "Failed to subscribe",
     "failedToUnsubscribe": "Failed to unsubscribe",
     "issueNotFound": "Issue not found.",
@@ -1078,6 +1078,7 @@
     "false": "False",
     "filter": "Filter",
     "ganttEmptyMessage": "No issues with start or due dates. Add dates to issues to populate the timeline.",
+    "groupBy": "Group by",
     "groupByAssignee": "Group by assignee",
     "groupByLabel": "Group by",
     "groupByPriority": "Group by priority",
@@ -1094,7 +1095,9 @@
     "myIssues": "My Issues",
     "newIssue": "New issue",
     "noBacklogIssues": "No backlog issues",
+    "noBacklogIssuesDescription": "The backlog holds work you have accepted but not scheduled into a cycle yet.",
     "noIssues": "No issues",
+    "noIssuesDescription": "Nothing matches this view. Create an issue or widen the filters.",
     "noIssuesFoundPrefix": "No issues found. Press",
     "noIssuesFoundSuffix": "to create one.",
     "noSwimlanes": "No swimlanes",
@@ -1117,6 +1120,10 @@
     "restoreFailed": "Failed to restore issue",
     "saveCurrentFiltersAsView": "Save current filters as a view",
     "saveView": "Save view",
+    "scope": {
+      "assigned": "Assigned",
+      "created": "Created"
+    },
     "selectAllCount": "Select all {count}",
     "selectEllipsis": "Select…",
     "selectedCount": "{count} selected",
@@ -1137,6 +1144,7 @@
       "unsnoozeFailed": "Failed to unsnooze issue"
     },
     "status": "Status",
+    "swimlaneBy": "Swimlanes",
     "swimlaneByAssignee": "Swimlane by assignee",
     "swimlaneByLabel": "Swimlanes",
     "swimlaneByPriority": "Swimlane by priority",
@@ -1214,12 +1222,14 @@
     "verify": "Verify"
   },
   "nav": {
+    "accent": "Accent",
     "analytics": "Analytics",
+    "appearance": "Appearance",
     "backlog": "Backlog",
     "closeMenu": "Close menu",
     "collapseSidebar": "Collapse sidebar (⌘B)",
     "collapseTeam": "Collapse {team}",
-    "createTeam": "Create a team",
+    "createTeam": "New team",
     "cycles": "Cycles",
     "docs": "Docs",
     "expandSidebar": "Expand sidebar (⌘B)",
@@ -1229,20 +1239,27 @@
     "inbox": "Inbox",
     "initiatives": "Initiatives",
     "keyboardShortcuts": "Keyboard shortcuts",
+    "language": "Language",
     "myIssues": "My Issues",
     "newTeam": "New team",
     "openMenu": "Open menu",
     "projects": "Projects",
     "removeFromFavorites": "Remove from favorites",
     "removeNamedFromFavorites": "Remove {name} from favorites",
+    "searchHint": "Search…",
     "teams": "Teams",
+    "triage": "Triage",
+    "userMenu": "Account and preferences",
     "workspaceSettings": "Workspace settings"
   },
   "notifications": {
+    "actorDidThing": "{name} {action}",
     "allNotifications": "All notifications",
     "emptyState": {
       "detail": "No notifications yet. You'll be notified when something needs your attention.",
-      "title": "All caught up"
+      "title": "All caught up",
+      "unreadDetail": "Everything here has been read. Switch to All to see the rest.",
+      "unreadTitle": "Nothing unread"
     },
     "labels": {
       "default": "sent a notification",
@@ -1261,6 +1278,10 @@
       "nextWeek": "Next week",
       "oneHour": "1 hour",
       "tomorrow9am": "Tomorrow 9am"
+    },
+    "tabs": {
+      "all": "All",
+      "unread": "Unread"
     },
     "title": "Inbox",
     "toasts": {
@@ -1316,7 +1337,7 @@
     "moreActions": "More actions",
     "name": "Name",
     "namePlaceholder": "e.g. Q2 Launch",
-    "newProject": "New Project",
+    "newProject": "New project",
     "noIssuesAssigned": "No issues assigned to this project yet. Use Shift+P on any issue to assign it.",
     "noMilestonesYet": "No milestones yet. Add one to track key checkpoints.",
     "noProjectsYet": "No projects yet",
@@ -1853,6 +1874,9 @@
       "accept": "Accept",
       "acceptFailed": "Failed to accept issue",
       "allClear": "All clear — nothing in triage.",
+      "allClearDescription": "Nothing is waiting to be triaged. New issues land here before they reach the backlog.",
+      "allClearTitle": "All clear",
+      "backToQueue": "Queue",
       "cannotMarkDuplicateOfItself": "Cannot mark an issue as a duplicate of itself",
       "decline": "Decline",
       "declineFailed": "Failed to decline issue",
@@ -1861,6 +1885,8 @@
       "markDuplicateFailed": "Failed to mark duplicate",
       "markDuplicateTitle": "Mark as duplicate of another issue",
       "markedAsDuplicate": "Marked as duplicate of {identifier}",
+      "noDescription": "No description",
+      "openFullIssue": "Open full issue",
       "pageTitle": "{name} — Triage",
       "snooze": "Snooze",
       "snooze1Day": "1 day",
@@ -2063,6 +2089,7 @@
     "memberRole": "Role",
     "name": "Name",
     "namePlaceholder": "e.g. Engineering",
+    "newTeam": "New team",
     "noMatches": "No matches",
     "optional": "optional",
     "owner": "Owner",

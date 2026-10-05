@@ -41,7 +41,23 @@ describe('AnalyticsService', () => {
       expect(result[1]).toEqual({ bucketEnd: 2, bucketStart: 1, count: 1 });
       expect(result[3]).toEqual({ bucketEnd: 5, bucketStart: 3, count: 1 });
       expect(result[5]).toEqual({ bucketEnd: 13, bucketStart: 8, count: 1 });
-      expect(result[8]).toEqual({ bucketEnd: Number.POSITIVE_INFINITY, bucketStart: 34, count: 1 });
+      expect(result[8]).toEqual({ bucketEnd: null, bucketStart: 34, count: 1 });
+    });
+
+    it('never emits a non-finite bucketEnd', async () => {
+      // GraphQL Float rejects Infinity/NaN, so an unserialisable bound here
+      // failed the whole Insights query — four fields in one document, all
+      // lost to one number. This asserts the boundary is representable, which
+      // is the actual contract; the `null` above only pins today's spelling.
+      prisma.$queryRaw.mockResolvedValue([{ days: 0 }, { days: 999 }]);
+
+      const result = await service.leadTimeHistogram({ orgId: ORG_ID });
+
+      for (const bucket of result) {
+        expect(bucket.bucketEnd === null || Number.isFinite(bucket.bucketEnd)).toBe(true);
+      }
+      // …and the open-ended bucket still counts the long tail it is there for.
+      expect(result[8].count).toBe(1);
     });
 
     it('coerces string/numeric day values via Number()', async () => {

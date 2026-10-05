@@ -1,5 +1,7 @@
 'use client';
 
+import { Tag } from 'lucide-react';
+import { PropertyPlaceholder } from '@/components/properties/property-placeholder';
 import { ColorDot } from '@/components/ui/color-dot';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
@@ -51,7 +53,7 @@ export function LabelSelect({
         selected.length > 0 ? (
           selected.slice(0, 3).map(l => <LabelDot color={l.color} key={l.id} />)
         ) : (
-          <span className="text-xs text-muted-foreground">{t('properties.label.labels')}</span>
+          <PropertyPlaceholder icon={Tag} />
         )
       }
       triggerClassName="gap-0.5 px-1.5 py-1"

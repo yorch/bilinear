@@ -174,7 +174,7 @@ export const RelationsSection = observer(function RelationsSection({
   }, [relations]);
 
   return (
-    <div className="mt-6">
+    <div>
       <SectionHeader
         action={
           !showAddForm && (
@@ -184,11 +184,8 @@ export const RelationsSection = observer(function RelationsSection({
             />
           )
         }
-        title={
-          <>
-            {t('issueDetail.relations.title')} {relations.length > 0 && `(${relations.length})`}
-          </>
-        }
+        count={relations.length}
+        title={t('issueDetail.relations.title')}
       />
 
       {loading && (

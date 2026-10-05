@@ -44,8 +44,8 @@ test.describe('Search — issue ID instant jump', () => {
 
     // Routed to the issue page; URL should match /<ws>/issue/<uuid>.
     await page.waitForURL(`**/${ws}/issue/**`, { timeout: 10_000 });
-    const panel = page.locator('[data-testid="issue-detail-panel"]');
-    await expect(panel).toBeVisible();
-    await expect(panel.getByText(identifier).first()).toBeVisible();
+    const detail = page.locator('[data-testid="issue-detail-page"]');
+    await expect(detail).toBeVisible();
+    await expect(detail.getByText(identifier).first()).toBeVisible();
   });
 });

@@ -121,16 +121,19 @@ test.describe('Comments + Activity', () => {
       throw new Error(`issueUpdate failed: ${JSON.stringify(updateRes)}`);
     }
 
-    // Activity timeline fetches on panel mount; the change above produced
-    // a row in `issueActivities` server-side. Navigate to the detail page
-    // so the timeline runs its initial fetch and renders the entry.
+    // The change above produced a row in `issueActivities` server-side.
+    // Navigate to the full-page issue view and select the Activity tab —
+    // activity shares a tab strip with comments rather than trailing the
+    // scroll, so the timeline mounts (and fetches) when it is selected.
     await page.goto(`/${ws}/issue/${issueId}`);
-    const panel = page.locator('[data-testid="issue-detail-panel"]');
-    await expect(panel).toBeVisible({ timeout: 15_000 });
+    const detail = page.locator('[data-testid="issue-detail-page"]');
+    await expect(detail).toBeVisible({ timeout: 15_000 });
+
+    await detail.getByRole('button', { exact: true, name: 'Activity' }).click();
 
     // Entries are formatted "<actor> set status to <Done>" or
     // "<actor> changed status from <X> to <Done>" — match flexibly.
-    await expect(panel.getByText(/status.*Done|Done.*status/i).first()).toBeVisible({
+    await expect(detail.getByText(/status.*Done|Done.*status/i).first()).toBeVisible({
       timeout: 15_000,
     });
   });

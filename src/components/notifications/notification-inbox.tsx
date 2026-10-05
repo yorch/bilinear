@@ -2,10 +2,15 @@
 
 import { Bell, Check, CheckCheck, Clock, MessageSquare, RefreshCw, User } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SectionHeader } from '@/components/shared/section-header';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader, Toolbar } from '@/components/ui/page-header';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
@@ -105,28 +110,50 @@ interface NotificationItemProps {
   onMarkRead: (id: string) => void;
   onSnooze: (id: string, until: Date) => void;
   snoozingId: string | null;
+  workspace: string;
 }
 
-function NotificationItem({
+/**
+ * One inbox row.
+ *
+ * It used to render the notification's *type* ("New comment") and a relative
+ * timestamp — and nothing else. Both `actorId` and `issueId` were already
+ * fetched and simply unused, so the inbox could tell you that something had
+ * happened without telling you who did it or what to. The row is now a link to
+ * the issue, titled with the issue itself and attributed to the actor.
+ */
+const NotificationItem = observer(function NotificationItem({
   notification,
   onMarkRead,
   onSnooze,
   markingId,
   snoozingId,
+  workspace,
 }: NotificationItemProps) {
   const t = useTranslations();
   const { formatRelativeTime } = useFormatters();
-  const { type, read, createdAt, id } = notification;
+  const { issueStore, userStore } = useStore();
+  const { type, read, createdAt, id, actorId, issueId } = notification;
   const isMarkingThis = markingId === id;
   const isSnoozingThis = snoozingId === id;
+  const actor = actorId ? userStore.findById(actorId) : null;
+  const issue = issueId ? issueStore.findById(issueId) : null;
+
   return (
     <div
       className={cn(
-        'flex items-start gap-3 rounded-lg border px-4 py-3 transition-colors',
-        read ? 'border-border' : 'border-brand-border bg-brand-subtle/40 dark:bg-brand-subtle',
+        'group flex items-start gap-3 border-b border-border px-4 py-3 transition-colors',
+        read
+          ? 'hover:bg-accent/50'
+          : 'bg-brand-subtle/40 hover:bg-brand-subtle dark:bg-brand-subtle',
       )}
     >
-      {/* Type icon */}
+      {/* Unread marker in its own reserved slot, so read and unread rows keep
+          the same text alignment down the list. */}
+      <span className="mt-2 flex h-2 w-2 shrink-0 items-center justify-center">
+        {!read && <span className="h-2 w-2 rounded-full bg-brand" />}
+      </span>
+
       <div
         className={cn(
           'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
@@ -136,21 +163,37 @@ function NotificationItem({
         {getNotificationIcon(type)}
       </div>
 
-      {/* Content */}
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-1 text-sm">
-          <span className={cn('font-medium', read ? 'text-muted-foreground' : 'text-foreground')}>
-            {t(getNotificationLabelKey(type))}
-          </span>
-        </div>
-
+        <p className="text-xs text-muted-foreground">
+          {actor
+            ? t('notifications.actorDidThing', {
+                action: t(getNotificationLabelKey(type)).toLowerCase(),
+                name: actor.displayName,
+              })
+            : t(getNotificationLabelKey(type))}
+        </p>
+        {issue ? (
+          <Link
+            className="mt-0.5 flex min-w-0 items-baseline gap-2 text-sm hover:underline"
+            href={`/${workspace}/issue/${issue.id}`}
+          >
+            <span className="shrink-0 font-mono text-xs text-muted-foreground">
+              {issue.identifier}
+            </span>
+            <span
+              className={cn('truncate', read ? 'text-foreground-secondary' : 'text-foreground')}
+            >
+              {issue.title}
+            </span>
+          </Link>
+        ) : null}
         <p className="mt-0.5 text-xs text-muted-foreground">{formatRelativeTime(createdAt)}</p>
       </div>
 
-      {/* Action buttons (unread only) */}
+      {/* Revealed on hover at pointer sizes, always present on touch — the row
+          is a link, so permanently-visible per-row buttons competed with it. */}
       {!read && (
-        <div className="flex shrink-0 items-center gap-1">
-          {/* Snooze button with dropdown */}
+        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100">
           <SelectPopover
             align="right"
             disabled={isSnoozingThis}
@@ -181,7 +224,6 @@ function NotificationItem({
             )}
           </SelectPopover>
 
-          {/* Mark read button */}
           <button
             className={cn(
               'rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand disabled:opacity-50',
@@ -198,15 +240,20 @@ function NotificationItem({
       )}
     </div>
   );
-}
+});
 
 // ─── Main component ───────────────────────────────────────────────────────────
+
+/** Which slice of the inbox the list is showing. */
+type InboxTab = 'all' | 'unread';
 
 export const NotificationInbox = observer(function NotificationInbox() {
   const store = useStore();
   const { notificationStore } = store;
   const t = useTranslations();
+  const { workspace } = useParams<{ workspace: string }>();
 
+  const [tab, setTab] = useState<InboxTab>('all');
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [snoozingId, setSnoozingId] = useState<string | null>(null);
@@ -315,105 +362,148 @@ export const NotificationInbox = observer(function NotificationInbox() {
     }
   };
 
-  const unread = notifications.filter(n => !n.read && !isSnoozed(n));
-  const read = notifications.filter(n => n.read && !isSnoozed(n));
+  const active = notifications.filter(n => !isSnoozed(n));
+  const unread = active.filter(n => !n.read);
+  const read = active.filter(n => n.read);
   const hasUnread = unread.length > 0;
+  const visible = tab === 'unread' ? unread : active;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Bell className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold text-foreground">{t('notifications.title')}</h1>
-          {hasUnread && (
-            <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
-              {unread.length}
-            </span>
-          )}
-        </div>
+    <div className="flex h-full min-h-0 flex-col">
+      {/* PageHeader, not a centred `<h1>` with a bell beside it: the inbox was
+          the one workspace route that did not look like the rest of the app. */}
+      <PageHeader
+        actions={
+          hasUnread && (
+            <Button disabled={markingAll} onClick={handleMarkAllRead} size="sm" variant="secondary">
+              <CheckCheck className="h-3.5 w-3.5" />
+              {markingAll ? t('notifications.marking') : t('notifications.markAllRead')}
+            </Button>
+          )
+        }
+        count={unread.length}
+        title={t('notifications.title')}
+      />
 
-        {hasUnread && (
-          <button
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-            disabled={markingAll}
-            onClick={handleMarkAllRead}
-            type="button"
-          >
-            <CheckCheck className="h-3.5 w-3.5" />
-            {markingAll ? t('notifications.marking') : t('notifications.markAllRead')}
-          </button>
-        )}
-      </div>
-
-      {/* Loading state */}
-      {loading && (
-        <div className="flex items-center justify-center py-16">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-brand" />
-        </div>
-      )}
-
-      {/* Load failure — never render the empty state for a rejected read */}
-      {!loading && loadError && (
-        <InlineRetry message={t('notifications.toasts.loadFailed')} onRetry={retryLoad} />
-      )}
-
-      {/* Empty state */}
-      {!loading && !loadError && notifications.length === 0 && (
-        <EmptyState
-          description={t('notifications.emptyState.detail')}
-          icon={<Bell className="h-5 w-5" />}
-          title={t('notifications.emptyState.title')}
+      <Toolbar>
+        <SegmentedControl
+          onChange={setTab}
+          options={[
+            { label: t('notifications.tabs.all'), value: 'all' },
+            { label: t('notifications.tabs.unread'), value: 'unread' },
+          ]}
+          value={tab}
         />
-      )}
+      </Toolbar>
 
-      {/* Unread section */}
-      {!loading && unread.length > 0 && (
-        <section className="mb-6">
-          <div className="mb-2">
-            <SectionHeader
-              as="h2"
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {loading && (
+          <div className="flex items-center justify-center py-16">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-brand" />
+          </div>
+        )}
+
+        {/* Load failure — never render the empty state for a rejected read */}
+        {!loading && loadError && (
+          <InlineRetry message={t('notifications.toasts.loadFailed')} onRetry={retryLoad} />
+        )}
+
+        {!loading && !loadError && visible.length === 0 && (
+          <EmptyState
+            description={
+              tab === 'unread'
+                ? t('notifications.emptyState.unreadDetail')
+                : t('notifications.emptyState.detail')
+            }
+            icon={<Bell className="h-5 w-5" />}
+            testId="empty-state"
+            title={
+              tab === 'unread'
+                ? t('notifications.emptyState.unreadTitle')
+                : t('notifications.emptyState.title')
+            }
+          />
+        )}
+
+        {!loading &&
+          (tab === 'unread' ? (
+            <NotificationGroup
+              markingId={markingId}
+              notifications={unread}
+              onMarkRead={handleMarkRead}
+              onSnooze={handleSnooze}
+              snoozingId={snoozingId}
               title={t('notifications.unreadCount', { count: unread.length })}
+              workspace={workspace}
             />
-          </div>
-          <div className="flex flex-col gap-2">
-            {unread.map(notification => (
-              <NotificationItem
-                key={notification.id}
-                markingId={markingId}
-                notification={notification}
-                onMarkRead={handleMarkRead}
-                onSnooze={handleSnooze}
-                snoozingId={snoozingId}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Read section */}
-      {!loading && read.length > 0 && (
-        <section>
-          <div className="mb-2">
-            <SectionHeader
-              as="h2"
-              title={hasUnread ? t('notifications.read') : t('notifications.allNotifications')}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            {read.map(notification => (
-              <NotificationItem
-                key={notification.id}
-                markingId={markingId}
-                notification={notification}
-                onMarkRead={handleMarkRead}
-                onSnooze={handleSnooze}
-                snoozingId={snoozingId}
-              />
-            ))}
-          </div>
-        </section>
-      )}
+          ) : (
+            <>
+              {unread.length > 0 && (
+                <NotificationGroup
+                  markingId={markingId}
+                  notifications={unread}
+                  onMarkRead={handleMarkRead}
+                  onSnooze={handleSnooze}
+                  snoozingId={snoozingId}
+                  title={t('notifications.unreadCount', { count: unread.length })}
+                  workspace={workspace}
+                />
+              )}
+              {read.length > 0 && (
+                <NotificationGroup
+                  markingId={markingId}
+                  notifications={read}
+                  onMarkRead={handleMarkRead}
+                  onSnooze={handleSnooze}
+                  snoozingId={snoozingId}
+                  title={hasUnread ? t('notifications.read') : t('notifications.allNotifications')}
+                  workspace={workspace}
+                />
+              )}
+            </>
+          ))}
+      </div>
     </div>
   );
 });
+
+/** Unread / read grouping, with the shared uppercase section header. */
+function NotificationGroup({
+  markingId,
+  notifications,
+  onMarkRead,
+  onSnooze,
+  snoozingId,
+  title,
+  workspace,
+}: {
+  markingId: string | null;
+  notifications: DBNotification[];
+  onMarkRead: (id: string) => void;
+  onSnooze: (id: string, until: Date) => void;
+  snoozingId: string | null;
+  title: string;
+  workspace: string;
+}) {
+  if (notifications.length === 0) {
+    return null;
+  }
+  return (
+    <section>
+      <div className="border-b border-border bg-surface-sunken px-4 py-1.5">
+        <SectionHeader as="h2" title={title} />
+      </div>
+      {notifications.map(notification => (
+        <NotificationItem
+          key={notification.id}
+          markingId={markingId}
+          notification={notification}
+          onMarkRead={onMarkRead}
+          onSnooze={onSnooze}
+          snoozingId={snoozingId}
+          workspace={workspace}
+        />
+      ))}
+    </section>
+  );
+}

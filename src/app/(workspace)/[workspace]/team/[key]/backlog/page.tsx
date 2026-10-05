@@ -1,5 +1,6 @@
 'use client';
 
+import { Plus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
@@ -170,6 +171,7 @@ const BacklogPage = observer(function BacklogPage() {
             )}
             <ViewToggle mode={viewMode} onChange={setViewMode} />
             <Button onClick={() => uiStore.openCreateIssueModal()} size="sm" type="button">
+              <Plus className="h-3.5 w-3.5" />
               {t('issues.newIssue')}
             </Button>
           </>
@@ -225,6 +227,7 @@ const BacklogPage = observer(function BacklogPage() {
         {viewMode === 'list' ? (
           <IssueListView
             customFields={customFieldDefs}
+            estimationType={team.issueEstimationType}
             getCustomFieldValue={(issueId, definitionId) =>
               customFieldStore.findValue(issueId, definitionId)?.value ?? null
             }

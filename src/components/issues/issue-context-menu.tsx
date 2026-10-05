@@ -5,9 +5,8 @@ import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { LabelDot } from '@/components/properties/label-select';
-import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
-import { ColorDot } from '@/components/ui/color-dot';
 import { POPOVER_ITEM_CLASS } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useFavoriteToggle } from '@/hooks/use-favorite-toggle';
@@ -15,7 +14,7 @@ import { useFormatters } from '@/hooks/use-formatters';
 import { useIssueSnooze } from '@/hooks/use-issue-snooze';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
-import { getBranchName, getPriorityConfig, PRIORITY_OPTIONS } from '@/lib/issue-utils';
+import { getBranchName, PRIORITY_OPTIONS } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
@@ -291,7 +290,6 @@ export const IssueContextMenu = observer(function IssueContextMenu({
             {submenu === 'priority' &&
               PRIORITY_OPTIONS.map(p => {
                 const value = Number(p.value);
-                const cfg = getPriorityConfig(value);
                 return (
                   <button
                     className={cn(POPOVER_ITEM_CLASS, value === currentPriority && 'bg-accent/50')}
@@ -302,7 +300,10 @@ export const IssueContextMenu = observer(function IssueContextMenu({
                     }}
                     type="button"
                   >
-                    <ColorDot color={cfg.color} size="sm" />
+                    {/* PriorityIcon, not a ColorDot: a dot encodes the level by
+                        colour alone, so this menu disagreed with the icon on
+                        every row it was opened from. */}
+                    <PriorityIcon className="h-3.5 w-3.5" priority={value} />
                     <span>{t(priorityLabelKey(value))}</span>
                   </button>
                 );

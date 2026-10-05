@@ -1,5 +1,7 @@
 'use client';
 
+import { CalendarDays } from 'lucide-react';
+import { PropertyPlaceholder } from '@/components/properties/property-placeholder';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
@@ -35,7 +37,9 @@ export function DueDatePicker({
       forceOpen={forceOpen}
       onClose={onClose}
       panelClassName="p-2"
-      triggerChildren={value ? formatDueDate(value) : (label ?? t('properties.dueDate.dueDate'))}
+      triggerChildren={
+        value ? formatDueDate(value) : (label ?? <PropertyPlaceholder icon={CalendarDays} />)
+      }
       triggerClassName={cn('px-1.5 py-1 text-xs', value ? colorClass : 'text-muted-foreground')}
       triggerTitle={
         value

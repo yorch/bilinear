@@ -2,6 +2,7 @@
 
 import { ExternalLink, GitMerge, GitPullRequest, GitPullRequestClosed } from 'lucide-react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { SectionHeader } from '@/components/shared/section-header';
 import { Badge } from '@/components/ui/badge';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -70,14 +71,12 @@ export function PullRequestsSection({ issueId }: IssuePullRequestsSectionProps) 
 
   return (
     <div className="space-y-1.5">
-      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-        {t('issueDetail.pullRequests.title')}
-      </h3>
+      <SectionHeader count={prs.length} title={t('issueDetail.pullRequests.title')} />
       <ul className="space-y-1.5">
         {prs.map(pr => (
           <li key={pr.id}>
             <a
-              className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+              className="flex items-start gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
               href={pr.url}
               rel="noopener noreferrer"
               target="_blank"

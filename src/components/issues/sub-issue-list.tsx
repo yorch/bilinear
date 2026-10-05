@@ -1,15 +1,12 @@
 'use client';
 
-import { ChevronDown, ChevronRight } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useMemo, useRef, useState } from 'react';
-import { priorityLabelKey } from '@/components/properties/priority-icon';
-import { SectionAddButton } from '@/components/shared/section-header';
-import { ColorDot } from '@/components/ui/color-dot';
+import { PriorityIcon } from '@/components/properties/priority-icon';
+import { SectionAddButton, SectionHeader } from '@/components/shared/section-header';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useTranslations } from '@/hooks/use-translations';
 import { CREATE_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
-import { getPriorityConfig } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
@@ -87,39 +84,35 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
   const completionPct = subIssues.length > 0 ? (completedCount / subIssues.length) * 100 : 0;
 
   return (
-    <div className="mt-6">
-      <div className="flex items-center justify-between">
-        <button
-          className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground-secondary"
-          onClick={() => setCollapsed(c => !c)}
-          type="button"
-        >
-          {collapsed ? (
-            <ChevronRight className="h-3.5 w-3.5" />
-          ) : (
-            <ChevronDown className="h-3.5 w-3.5" />
-          )}
-          {t('issueDetail.subIssues.title')} ({subIssues.length})
-        </button>
-        {subIssues.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {completedCount}/{subIssues.length}
-            </span>
-            <ProgressBar
-              className="h-1 w-20"
-              fillClassName="bg-success duration-300"
-              value={completionPct}
+    <div>
+      <SectionHeader
+        action={
+          !showCreateForm && (
+            <SectionAddButton
+              label={t('issueDetail.subIssues.addSubIssue')}
+              onClick={() => setShowCreateForm(true)}
             />
-          </div>
-        )}
-        {!showCreateForm && (
-          <SectionAddButton
-            label={t('issueDetail.subIssues.addSubIssue')}
-            onClick={() => setShowCreateForm(true)}
-          />
-        )}
-      </div>
+          )
+        }
+        collapsed={collapsed}
+        count={subIssues.length}
+        meta={
+          subIssues.length > 0 && (
+            <>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {completedCount}/{subIssues.length}
+              </span>
+              <ProgressBar
+                className="h-1 w-20"
+                fillClassName="bg-success duration-300"
+                value={completionPct}
+              />
+            </>
+          )
+        }
+        onToggle={() => setCollapsed(c => !c)}
+        title={t('issueDetail.subIssues.title')}
+      />
 
       {showCreateForm && (
         <CreateSubIssueForm
@@ -146,19 +139,15 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
                 </p>
                 <ul className="space-y-0.5">
                   {issues.map(issue => {
-                    const priorityCfg = getPriorityConfig(issue.priority);
                     const state = workflowStateStore.findById(issue.stateId);
                     return (
                       <li
                         className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
                         key={issue.id}
                       >
-                        {/* Priority dot */}
-                        <ColorDot
-                          color={priorityCfg.color}
-                          size="sm"
-                          title={t(priorityLabelKey(issue.priority))}
-                        />
+                        {/* Priority — the same icon the parent issue and every
+                            list row use, not a colour-only dot. */}
+                        <PriorityIcon className="h-3.5 w-3.5" priority={issue.priority} />
                         {/* State color dot */}
                         <span
                           className="h-3 w-3 shrink-0 rounded-sm border"

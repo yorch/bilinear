@@ -101,9 +101,9 @@ export const CreateProjectModal = observer(function CreateProjectModal({
   const canSubmit = name.trim().length > 0 && !submitting;
 
   return (
-    <ModalDialog aria-label={t('projects.createProject')} onClose={onClose} open={open}>
+    <ModalDialog aria-label={t('projects.newProject')} onClose={onClose} open={open}>
       <form className="flex flex-col" onSubmit={handleSubmit}>
-        <ModalHeader title={t('projects.createProject')} />
+        <ModalHeader title={t('projects.newProject')} />
 
         <div className="flex flex-col gap-4 px-5 py-4">
           <div className="flex flex-col gap-1">
@@ -159,7 +159,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
               {teams.map(team => (
                 <button
                   className={cn(
-                    'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+                    'rounded-md border border-border px-2.5 py-1 text-xs font-medium transition-colors',
                     selectedTeamIds.includes(team.id)
                       ? 'border-brand bg-brand-subtle text-brand-subtle-foreground'
                       : 'border-border text-muted-foreground hover:bg-muted',

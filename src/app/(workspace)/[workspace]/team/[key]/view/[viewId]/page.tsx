@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, MoreHorizontal } from 'lucide-react';
+import { Eye, MoreHorizontal, Plus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -14,6 +14,7 @@ import { FavoriteToggle } from '@/components/layouts/favorite-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { PromptDialog } from '@/components/shared/prompt-dialog';
+import { Button } from '@/components/ui/button';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
@@ -90,6 +91,7 @@ const CustomViewPage = observer(function CustomViewPage() {
     labelStore,
     syncStore,
     teamStore,
+    uiStore,
     userStore,
     workflowStateStore,
   } = useStore();
@@ -314,6 +316,10 @@ const CustomViewPage = observer(function CustomViewPage() {
                 </>
               )}
             </SelectPopover>
+            <Button onClick={() => uiStore.openCreateIssueModal()} size="sm" type="button">
+              <Plus className="h-3.5 w-3.5" />
+              {t('issues.newIssue')}
+            </Button>
           </>
         }
         count={issues.length}

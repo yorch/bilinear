@@ -190,7 +190,7 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
       />
       <div className="mx-auto w-full max-w-2xl space-y-8 p-8">
         {/* Import */}
-        <section className="rounded-lg border p-6 space-y-4">
+        <section className="rounded-lg border-border p-6 space-y-4">
           <h2 className="font-medium">{t('settings.import.importHeading')}</h2>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -283,7 +283,7 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
         </section>
 
         {/* Export */}
-        <section className="rounded-lg border p-6 space-y-3">
+        <section className="rounded-lg border-border p-6 space-y-3">
           <h2 className="font-medium">{t('settings.import.exportHeading')}</h2>
           <p className="text-sm text-muted-foreground">{t('settings.import.exportDescription')}</p>
           <Button onClick={() => void runExport()} size="sm" type="button" variant="outline">

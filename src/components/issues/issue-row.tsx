@@ -17,6 +17,9 @@ import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { isIssueSnoozed } from './snooze-presets';
 
+/** React wants an onChange on a controlled checkbox; the work is in onClick. */
+const NOOP = () => {};
+
 export interface IssueRowData {
   assigneeId?: string | null;
   cycleId?: string | null;
@@ -71,29 +74,44 @@ interface IssueRowProps {
   states: WorkflowState[];
   style?: React.CSSProperties;
   teamId?: string;
+  /**
+   * One page-specific cell rendered after status, with its own reserved track.
+   *
+   * Exists so the backlog can keep its staleness indicator while using this row
+   * instead of the fork it used to maintain. A slot rather than a `variant`
+   * because the row's whole point is that the built-in columns line up
+   * everywhere; a caller adding a cell must not be able to disturb them.
+   */
+  trailing?: React.ReactNode;
   users: IssueUser[];
 }
 
-/** Single-line read-only rendering of a custom-field value for the list row. */
+/**
+ * Single-line read-only rendering of a custom-field value for the list row.
+ *
+ * Returns an empty string, not an em-dash, for an unset value. A column of
+ * em-dashes is a column of noise: the reader scans these cells for the ones
+ * that *have* a value, and every placeholder glyph competes with those.
+ */
 function renderCustomFieldValue(def: DBCustomFieldDefinition, value: unknown): string {
   if (value === null || value === undefined || value === '') {
-    return '—';
+    return '';
   }
   switch (def.type) {
     case 'checkbox':
-      return value === true ? '✓' : '—';
+      return value === true ? '✓' : '';
     case 'select': {
       const opt = def.options?.find(o => o.value === value);
       return opt?.label ?? String(value);
     }
     case 'multi_select': {
       if (!Array.isArray(value)) {
-        return '—';
+        return '';
       }
       return value.map(v => def.options?.find(o => o.value === v)?.label ?? String(v)).join(', ');
     }
     case 'number':
-      return typeof value === 'number' ? String(value) : '—';
+      return typeof value === 'number' ? String(value) : '';
     default:
       return String(value);
   }
@@ -119,6 +137,7 @@ export function IssueRow({
   customFields,
   getCustomFieldValue,
   style,
+  trailing,
 }: IssueRowProps) {
   const t = useTranslations();
   const { formatDate } = useFormatters();
@@ -163,6 +182,7 @@ export function IssueRow({
     showEstimate ? '2rem' : null,
     ...visibleCustomFields.map(() => '5.5rem'),
     '7rem', // status
+    trailing ? '2rem' : null, // page-specific trailing cell
   ]
     .filter(Boolean)
     .join(' ');
@@ -176,6 +196,15 @@ export function IssueRow({
         // set or a long custom-field value blow past its track and re-ragged
         // the columns this template exists to align.
         '[&>*]:min-w-0',
+        // Unset property cells (PropertyPlaceholder) are invisible until the
+        // row is hovered or something inside it takes focus. The cells still
+        // occupy their track, so nothing shifts — but a list of six issues no
+        // longer shows twenty faint icons for properties nobody has set.
+        // Owned here rather than by a prop on each picker so the pickers stay
+        // identical on a form, where the placeholder must always show.
+        '[&_[data-prop-empty]]:opacity-0 hover:[&_[data-prop-empty]]:opacity-100 focus-within:[&_[data-prop-empty]]:opacity-100',
+        // Touch has no hover, so the affordance would never appear.
+        'max-md:[&_[data-prop-empty]]:opacity-100',
         selected && 'bg-brand-subtle',
       )}
       data-selected={selected ? 'true' : undefined}
@@ -192,10 +221,27 @@ export function IssueRow({
             ? 'opacity-100'
             : 'opacity-0 group-hover:opacity-100 max-md:opacity-100',
         )}
-        onChange={
-          isBulkMode ? e => onCheck(Boolean((e.nativeEvent as MouseEvent).shiftKey)) : onSelect
-        }
-        onClick={e => e.stopPropagation()}
+        // Toggling happens in `onClick`, not `onChange`.
+        //
+        // This read `(e.nativeEvent as MouseEvent).shiftKey` inside `onChange`.
+        // A checkbox's change event is a plain `Event` with no `shiftKey`
+        // property at all, so the expression was `undefined` forever and
+        // shift-range selection had never once worked anywhere in the app; the
+        // `as MouseEvent` cast is what kept the type-checker quiet about it.
+        // `click` is the event that actually carries the modifier — for pointer
+        // activation and for Space on a focused checkbox alike — and using it
+        // directly avoids depending on the relative order of React's change and
+        // click handlers, which is not something a caller should have to reason
+        // about.
+        onChange={NOOP}
+        onClick={e => {
+          e.stopPropagation();
+          if (isBulkMode) {
+            onCheck(e.shiftKey);
+          } else {
+            onSelect();
+          }
+        }}
         type="checkbox"
       />
 
@@ -321,6 +367,8 @@ export function IssueRow({
         states={states}
         value={issue.stateId}
       />
+
+      {trailing && <div className="flex justify-end">{trailing}</div>}
     </div>
   );
 }

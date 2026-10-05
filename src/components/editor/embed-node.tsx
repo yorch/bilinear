@@ -76,7 +76,7 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
     <NodeViewWrapper>
       <div
         className={cn(
-          'embed-block group relative my-2 overflow-hidden rounded-md border',
+          'embed-block group relative my-2 overflow-hidden rounded-md border border-border',
           selected ? 'border-brand' : 'border-border',
         )}
         style={{ paddingBottom: '56.25%' }}

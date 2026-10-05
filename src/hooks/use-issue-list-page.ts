@@ -1,7 +1,6 @@
 'use client';
 
 import { runInAction } from 'mobx';
-import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import type { BoardGroupBy, BoardSwimlaneBy } from '@/components/issues/board-view';
 import type { OpenProperty } from '@/components/issues/issue-row';
@@ -41,6 +40,26 @@ interface UseIssueListPageOptions {
 }
 
 /**
+ * Point the address bar at the open issue without leaving the list.
+ *
+ * `router.replace` was used here, which is a real navigation: now that
+ * `/issue/[id]` renders a full page rather than the same overlay panel the list
+ * shows, replacing the URL unmounted the list and every list interaction ended
+ * up on the standalone page. That was invisible before only because the route
+ * and the overlay rendered identical markup.
+ *
+ * The URL still has to change — the whole point is that an open issue is
+ * copyable, and reloading it lands on the full page. `history.replaceState` is
+ * what does that without asking the router to render anything; Next integrates
+ * with the native History API, so back/forward keep working.
+ */
+function syncUrl(href: string): void {
+  if (typeof window !== 'undefined') {
+    window.history.replaceState(null, '', href);
+  }
+}
+
+/**
  * Shared selection/detail-panel/view-mode state, keyboard shortcuts and the
  * archive / delete actions for an issue list page (team issues, backlog, my
  * issues, saved views). Archive is optimistic with an Undo toast; delete is
@@ -55,8 +74,8 @@ export function useIssueListPage({
   initialViewMode,
   onOpen,
 }: UseIssueListPageOptions) {
-  const router = useRouter();
   const t = useTranslations();
+
   const { issueStore, labelStore } = useStore();
   const txQueue = useMemo(() => new TransactionQueue(), []);
 
@@ -75,8 +94,8 @@ export function useIssueListPage({
 
   const closeDetail = useCallback(() => {
     setDetailIssueId(null);
-    router.replace(basePath, { scroll: false });
-  }, [basePath, router]);
+    syncUrl(basePath);
+  }, [basePath]);
 
   // ── Archive / delete ───────────────────────────────────────────────────────
 
@@ -285,10 +304,10 @@ export function useIssueListPage({
   const handleOpen = useCallback(
     (id: string) => {
       setDetailIssueId(id);
-      router.replace(buildHref(id), { scroll: false });
+      syncUrl(buildHref(id));
       onOpen?.(id);
     },
-    [buildHref, onOpen, router],
+    [buildHref, onOpen],
   );
 
   const detailIssue: IssueDetail | null = (() => {

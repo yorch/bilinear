@@ -1,20 +1,30 @@
 'use client';
-import { Inbox } from 'lucide-react';
+import { ArrowLeft, Inbox } from 'lucide-react';
 
 import { observer } from 'mobx-react-lite';
-import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { useParams, usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { TipTapEditor } from '@/components/editor/tiptap-editor.lazy';
 import { IssuePicker } from '@/components/issues/issue-picker';
+import { AssigneeSelect } from '@/components/properties/assignee-select';
+import { LabelSelect } from '@/components/properties/label-select';
+import { PriorityIcon } from '@/components/properties/priority-icon';
+import { PrioritySelect } from '@/components/properties/priority-select';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
 import { gql } from '@/lib/graphql';
+import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
+import { buildIssueHref } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -144,13 +154,18 @@ function SnoozeButton({
 }
 
 const TriagePage = observer(function TriagePage() {
-  const { key: teamKey } = useParams<{ workspace: string; key: string }>();
-  const { issueStore, teamStore, workflowStateStore, userStore, syncStore } = useStore();
+  const { key: teamKey, workspace } = useParams<{ workspace: string; key: string }>();
+  const pathname = usePathname();
+  const { issueStore, teamStore, workflowStateStore, userStore, labelStore, syncStore } =
+    useStore();
+  const handleUpdate = useIssueUpdate();
   const t = useTranslations();
   const { formatDate } = useFormatters();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [duplicatePickerFor, setDuplicatePickerFor] = useState<string | null>(null);
+  // Below md the queue and the preview take turns; at md+ both are always on.
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const team = teamStore.findByKey(teamKey);
   const teamId = team?.id ?? null;
@@ -198,6 +213,11 @@ const TriagePage = observer(function TriagePage() {
   // left the queue (accepted/declined/snoozed elsewhere, or on first load).
   const focusedIndex = queue.findIndex(i => i.id === focusedId);
   const effectiveFocusedId = focusedIndex >= 0 ? focusedId : (queue[0]?.id ?? null);
+  const focusedIssue = queue.find(i => i.id === effectiveFocusedId) ?? null;
+
+  // Picker options for the preview pane. Plain reads — observer() tracks them.
+  const users = toIssueUsers(userStore.all);
+  const labels = toIssueLabels(labelStore.all);
 
   /** Snapshot the issue so we can roll back optimistic edits on error. */
   const handleAccept = useCallback(
@@ -427,93 +447,193 @@ const TriagePage = observer(function TriagePage() {
         title={t('settings.triage.pageTitle', { name: team.displayName ?? team.name })}
       />
 
-      <div className="flex-1 overflow-y-auto">
-        {queue.length === 0 ? (
-          <EmptyState icon={<Inbox className="h-5 w-5" />} title={t('settings.triage.allClear')} />
-        ) : (
-          queue.map(issue => {
-            const creator = issue.creatorId ? userStore.findById(issue.creatorId) : null;
-            const busy = busyId === issue.id;
-            const focused = issue.id === effectiveFocusedId;
-            return (
-              <div
-                className={cn(
-                  'flex items-center gap-3 border-b border-border px-4 py-3',
-                  focused && 'bg-accent/50',
-                )}
-                data-testid="triage-row"
-                key={issue.id}
-              >
-                <span className="w-16 flex-shrink-0 text-xs text-muted-foreground">
-                  {issue.identifier}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-foreground">{issue.title}</div>
+      {queue.length === 0 ? (
+        <EmptyState
+          description={t('settings.triage.allClearDescription')}
+          icon={<Inbox className="h-5 w-5" />}
+          testId="empty-state"
+          title={t('settings.triage.allClearTitle')}
+        />
+      ) : (
+        /* Two panes: the queue on the left, the focused issue on the right.
+           Triage used to be a flat list where every row carried four
+           always-visible buttons and showed nothing but a title — so the one
+           decision the page exists for (is this real work?) could not be made
+           without leaving the page and opening the issue. The decision now sits
+           beside the thing being decided. */
+        <div className="flex min-h-0 flex-1">
+          <div
+            className={cn(
+              'overflow-y-auto md:w-72 md:shrink-0 md:border-r md:border-border lg:w-80',
+              // One pane at a time below md: the queue, or the issue.
+              previewOpen ? 'hidden md:block' : 'w-full',
+            )}
+          >
+            {queue.map(issue => {
+              const creator = issue.creatorId ? userStore.findById(issue.creatorId) : null;
+              const focused = issue.id === effectiveFocusedId;
+              return (
+                <button
+                  aria-current={focused ? 'true' : undefined}
+                  className={cn(
+                    'flex w-full flex-col gap-0.5 border-b border-border px-4 py-3 text-left transition-colors',
+                    focused ? 'bg-brand-subtle' : 'hover:bg-accent/50',
+                  )}
+                  data-testid="triage-row"
+                  key={issue.id}
+                  onClick={() => {
+                    setFocusedId(issue.id);
+                    setPreviewOpen(true);
+                  }}
+                  type="button"
+                >
+                  <div className="flex items-center gap-2">
+                    <PriorityIcon className="h-3.5 w-3.5" priority={issue.priority} />
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {issue.identifier}
+                    </span>
+                  </div>
+                  <span className="line-clamp-2 text-sm text-foreground">{issue.title}</span>
                   {creator ? (
-                    <div className="text-xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {t('settings.triage.fromCreator', {
                         date: formatDate(issue.createdAt),
                         name: creator.displayName,
                       })}
-                    </div>
+                    </span>
                   ) : null}
-                </div>
-                <div className="flex flex-shrink-0 gap-1">
-                  <button
-                    className="rounded bg-primary px-2.5 py-1 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                    disabled={busy || !defaultTargetStateId}
-                    onClick={() => handleAccept(issue.id)}
+                </button>
+              );
+            })}
+          </div>
+
+          {focusedIssue ? (
+            <div
+              className={cn(
+                'min-w-0 flex-1 flex-col overflow-hidden',
+                previewOpen ? 'flex' : 'hidden md:flex',
+              )}
+            >
+              {/* One set of actions, for the issue on screen — not four buttons
+                  on every row of the queue. */}
+              <Toolbar className="justify-between">
+                <button
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground md:hidden"
+                  onClick={() => setPreviewOpen(false)}
+                  type="button"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  {t('settings.triage.backToQueue')}
+                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    disabled={Boolean(busyId) || !defaultTargetStateId}
+                    onClick={() => handleAccept(focusedIssue.id)}
+                    size="sm"
                     type="button"
                   >
                     {t('settings.triage.accept')}
-                  </button>
-                  <button
-                    className="rounded border border-border px-2.5 py-1 text-xs text-foreground-secondary hover:bg-muted disabled:opacity-50"
-                    disabled={busy}
-                    onClick={() => handleDecline(issue.id)}
+                  </Button>
+                  <Button
+                    disabled={Boolean(busyId)}
+                    onClick={() => handleDecline(focusedIssue.id)}
+                    size="sm"
                     type="button"
+                    variant="outline"
                   >
                     {t('settings.triage.decline')}
-                  </button>
+                  </Button>
                   <IssuePicker
-                    disabled={busy}
-                    excludeId={issue.id}
-                    forceOpen={duplicatePickerFor === issue.id}
+                    disabled={Boolean(busyId)}
+                    excludeId={focusedIssue.id}
+                    forceOpen={duplicatePickerFor === focusedIssue.id}
                     onClose={() => setDuplicatePickerFor(null)}
-                    onSelect={canonical => submitMarkDuplicate(issue.id, canonical)}
+                    onSelect={canonical => submitMarkDuplicate(focusedIssue.id, canonical)}
                     triggerChildren={t('settings.triage.duplicate')}
-                    triggerClassName="rounded border border-border px-2.5 py-1 text-xs text-foreground-secondary hover:bg-muted"
+                    triggerClassName="rounded-md border border-border px-2.5 py-1 text-xs text-foreground-secondary hover:bg-muted"
                     triggerTitle={t('settings.triage.markDuplicateTitle')}
                   />
-                  <SnoozeButton disabled={busy} onSelect={hours => handleSnooze(issue.id, hours)} />
+                  <SnoozeButton
+                    disabled={Boolean(busyId)}
+                    onSelect={hours => handleSnooze(focusedIssue.id, hours)}
+                  />
+                </div>
+                <Link
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                  href={buildIssueHref(workspace, focusedIssue.id, {
+                    label: t('nav.triage'),
+                    path: pathname,
+                  })}
+                >
+                  {t('settings.triage.openFullIssue')}
+                </Link>
+              </Toolbar>
+
+              <div className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
+                <h2 className="text-xl font-semibold leading-snug tracking-tight text-foreground">
+                  {focusedIssue.title}
+                </h2>
+
+                {/* The properties worth setting *while* triaging. Status is
+                    absent on purpose: Accept is the status change. */}
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <PrioritySelect
+                    onChange={priority => handleUpdate(focusedIssue.id, { priority })}
+                    value={focusedIssue.priority}
+                  />
+                  <AssigneeSelect
+                    onChange={assigneeId => handleUpdate(focusedIssue.id, { assigneeId })}
+                    users={users}
+                    value={focusedIssue.assigneeId}
+                  />
+                  <LabelSelect
+                    labels={labels}
+                    onChange={labelIds => handleUpdate(focusedIssue.id, { labelIds })}
+                    value={focusedIssue.labelIds ?? []}
+                  />
+                </div>
+
+                <div className="mt-5">
+                  {focusedIssue.description ? (
+                    <TipTapEditor
+                      className="text-sm"
+                      content={focusedIssue.description}
+                      readOnly
+                      showToolbar={false}
+                    />
+                  ) : (
+                    <p className="text-sm italic text-muted-foreground">
+                      {t('settings.triage.noDescription')}
+                    </p>
+                  )}
                 </div>
               </div>
-            );
-          })
-        )}
-      </div>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {queue.length > 0 && (
         <div className="flex items-center gap-3 border-t border-border px-4 py-1.5 text-[10px] text-muted-foreground">
           <span className="flex items-center gap-1">
-            <kbd className="rounded border px-1 font-mono">J</kbd>
-            <kbd className="rounded border px-1 font-mono">K</kbd>
+            <kbd className="rounded border border-border px-1 font-mono">J</kbd>
+            <kbd className="rounded border border-border px-1 font-mono">K</kbd>
             {t('commandPalette.footer.navigate')}
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="rounded border px-1 font-mono">A</kbd>
+            <kbd className="rounded border border-border px-1 font-mono">A</kbd>
             {t('settings.triage.accept')}
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="rounded border px-1 font-mono">D</kbd>
+            <kbd className="rounded border border-border px-1 font-mono">D</kbd>
             {t('settings.triage.decline')}
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="rounded border px-1 font-mono">S</kbd>
+            <kbd className="rounded border border-border px-1 font-mono">S</kbd>
             {t('settings.triage.snooze')}
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="rounded border px-1 font-mono">M</kbd>
+            <kbd className="rounded border border-border px-1 font-mono">M</kbd>
             {t('settings.triage.duplicate')}
           </span>
         </div>

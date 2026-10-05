@@ -61,7 +61,9 @@ const PALETTE_HUES = [
 
 const VIOLATION_RE = new RegExp(
   `(?:^|[\\s"'\`:])[\\w-]*(?:${PALETTE_HUES})-\\d{2,3}(?:\\/\\d{1,3})?\\b` +
-    '|#[0-9a-fA-F]{6}\\b' +
+    '|#[0-9a-fA-F]{8}\\b' +
+    '|#[0-9a-fA-F]{6}\\b(?![0-9a-fA-F])' +
+    '|#[0-9a-fA-F]{4}\\b(?![0-9a-fA-F])' +
     '|#[0-9a-fA-F]{3}\\b(?![0-9a-fA-F])',
   'g',
 );
@@ -86,6 +88,140 @@ function scan() {
     }
   }
   return counts;
+}
+
+/**
+ * A border width with no border colour anywhere in the same class string.
+ *
+ * Tailwind v4's preflight resets borders to `border: 0 solid` and sets no
+ * colour, so `border-color` keeps its CSS initial value — `currentColor`. A
+ * bare `className="rounded-lg border p-6"` therefore draws the border in the
+ * element's TEXT colour, which is `--foreground`: the settings cards rendered
+ * with near-black hairlines while every other card in the app used
+ * `--border`. It reads as a different design system on the same screen, and
+ * neither the palette guard above nor the type-checker can see it.
+ *
+ * This one is a hard zero rather than a ratchet: the whole tree was fixed in
+ * one pass, so there is no legacy population to grandfather.
+ */
+/** `border`, `border-2`, `border-t`, `border-x-4`, `border-s`, … */
+const BORDER_WIDTH_ONLY = /^border(-[btlrxyse])?(-\d+)?$/;
+
+/**
+ * `border-*` utilities that set a *style*, not a colour.
+ *
+ * Without this, `border border-dashed` counted as coloured — the naive "any
+ * border-<something> that isn't a width is a colour" rule let a whole class of
+ * colourless borders through.
+ */
+const BORDER_STYLE = /^border-(solid|dashed|dotted|double|hidden|none|collapse|separate)$/;
+
+/**
+ * A `border-*` utility that names a colour.
+ *
+ * Defined by exclusion against the two precise regexes above rather than by its
+ * own lookahead. The lookahead version read `border-s-2` — a logical-side width
+ * — as "a colour called s-2", and so silently exempted every class string that
+ * used one.
+ */
+function isBorderColour(cls) {
+  return cls.startsWith('border-') && !BORDER_WIDTH_ONLY.test(cls) && !BORDER_STYLE.test(cls);
+}
+
+const CLASS_STRING_RE = /["'`]([a-zA-Z0-9:@\-[\]/.,%()#& ]{4,})["'`]/g;
+
+/**
+ * How far after a class string to look for an inline `style={{ borderColor }}`.
+ *
+ * Some borders are coloured from per-row data — a workflow state's own colour —
+ * which is a legitimate inline style, not a token bypass. Detecting that from
+ * the source beats an allowlist of `file:line` pairs, which silently goes stale
+ * the moment anyone inserts a line above one of them.
+ *
+ * Generous on purpose: a `style` object that also sets backgroundColor pushes
+ * borderColor several lines down. The cost of over-reaching is missing a bare
+ * `border` that happens to sit near an unrelated borderColor, which is a far
+ * cheaper failure than a stale allowlist.
+ */
+const INLINE_STYLE_LOOKAHEAD = 600;
+
+/**
+ * Comments, so a class string quoted inside one is not mistaken for markup.
+ * (The comment explaining this very fix quoted `h-12 border-b`, and the guard
+ * flagged it.)
+ */
+function stripComments(text) {
+  // Blanked, not deleted: newlines are preserved so reported line numbers still
+  // match the file the reader will open.
+  const blank = m => m.replace(/[^\n]/g, ' ');
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, blank)
+    .replace(/(^|[^:])(\/\/[^\n]*)/gm, (_m, prefix, comment) => prefix + blank(comment));
+}
+
+/**
+ * Whether a string plausibly IS a class list rather than prose that happens to
+ * contain the word "border".
+ *
+ * `contrast.test.ts` names a case "control border vs card", which the naive
+ * check flagged. Real class lists carry at least one hyphenated or prefixed
+ * utility; a lone `"border"` is kept because that spelling is itself the bug.
+ */
+function looksLikeClassList(raw) {
+  const tokens = raw.split(/\s+/).filter(Boolean);
+  if (tokens.length === 1) {
+    return BORDER_WIDTH_ONLY.test(tokens[0]);
+  }
+  return tokens.some(t => t.includes('-') || t.includes(':'));
+}
+
+function findColourlessBorders() {
+  const found = [];
+  for (const root of ROOTS) {
+    for (const file of globSync(`${root}/**/*.{ts,tsx}`, { cwd: ROOT })) {
+      if (/\.test\.tsx?$/.test(file)) {
+        continue;
+      }
+      const text = stripComments(readFileSync(path.join(ROOT, file), 'utf8'));
+      for (const match of text.matchAll(CLASS_STRING_RE)) {
+        if (!looksLikeClassList(match[1])) {
+          continue;
+        }
+        const classes = match[1].split(/\s+/).map(c => c.split(':').pop());
+        const hasWidth = classes.some(c => BORDER_WIDTH_ONLY.test(c) && c !== 'border-0');
+        if (!hasWidth || classes.some(isBorderColour)) {
+          continue;
+        }
+        // Measured from the END of the class string, so a long className
+        // cannot eat the budget before the style object is reached.
+        const from = match.index + match[0].length;
+        const after = text.slice(from, from + INLINE_STYLE_LOOKAHEAD);
+        if (after.includes('borderColor')) {
+          continue;
+        }
+        const line = text.slice(0, match.index).split('\n').length;
+        found.push({ classes: match[1].slice(0, 80), file, line });
+      }
+    }
+  }
+  return found;
+}
+
+function checkColourlessBorders() {
+  const found = findColourlessBorders();
+  if (found.length === 0) {
+    return;
+  }
+  console.error(
+    'Border width with no border colour. Tailwind v4 resets borders to ' +
+      '`border: 0 solid` without a colour, so these render in currentColor ' +
+      '(the text colour) instead of a token.',
+  );
+  console.error('Add `border-border` (surfaces) or `border-input` (control boundaries).\n');
+  for (const { file, line, classes } of found) {
+    console.error(`  ${file}:${line}  ${classes}`);
+  }
+  process.exit(1);
 }
 
 function main() {
@@ -151,8 +287,11 @@ function main() {
     process.exit(1);
   }
 
+  checkColourlessBorders();
+
   const total = Object.values(current).reduce((a, b) => a + b, 0);
   console.log(`Design tokens OK: ${total} pre-existing raw-color usages at or below baseline.`);
+  console.log('Border colours OK: every border width names a token.');
 }
 
 main();

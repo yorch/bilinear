@@ -1,13 +1,13 @@
 'use client';
 
 import { Archive, X } from 'lucide-react';
-import { priorityLabelKey } from '@/components/properties/priority-icon';
+import { SCALE_OPTIONS } from '@/components/properties/estimate-picker';
+import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
 import { ColorDot } from '@/components/ui/color-dot';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useTranslations } from '@/hooks/use-translations';
-import { getPriorityConfig } from '@/lib/issue-utils';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
@@ -15,6 +15,12 @@ const PRIORITIES = [0, 1, 2, 3, 4] as const;
 
 interface BulkActionBarProps {
   count: number;
+  /**
+   * The team's estimation scale. Supplying it adds an Estimate action — the
+   * backlog needs one, and maintained a second bulk bar (with a
+   * `window.prompt`) to get it.
+   */
+  estimationType?: string;
   labels: IssueLabel[];
   /** Archive every checked issue. Omitted where the page cannot archive. */
   onArchive?: () => void;
@@ -28,6 +34,7 @@ interface BulkActionBarProps {
 
 export function BulkActionBar({
   count,
+  estimationType,
   states,
   users,
   labels,
@@ -92,23 +99,20 @@ export function BulkActionBar({
       >
         {close => (
           <div className="w-40 py-1">
-            {PRIORITIES.map(p => {
-              const cfg = getPriorityConfig(p);
-              return (
-                <button
-                  className={POPOVER_ITEM_CLASS}
-                  key={p}
-                  onClick={() => {
-                    onUpdate({ priority: p });
-                    close();
-                  }}
-                  type="button"
-                >
-                  <ColorDot color={cfg.color} size="sm" />
-                  <span>{t(priorityLabelKey(p))}</span>
-                </button>
-              );
-            })}
+            {PRIORITIES.map(p => (
+              <button
+                className={POPOVER_ITEM_CLASS}
+                key={p}
+                onClick={() => {
+                  onUpdate({ priority: p });
+                  close();
+                }}
+                type="button"
+              >
+                <PriorityIcon className="h-3.5 w-3.5" priority={p} />
+                <span>{t(priorityLabelKey(p))}</span>
+              </button>
+            ))}
           </div>
         )}
       </SelectPopover>
@@ -177,6 +181,45 @@ export function BulkActionBar({
                 >
                   <ColorDot color={l.color} />
                   <span className="truncate">{l.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </SelectPopover>
+      )}
+
+      {estimationType && estimationType !== 'notUsed' && (
+        <SelectPopover
+          triggerChildren={
+            <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
+              {t('issues.estimate')}
+            </span>
+          }
+          triggerClassName="rounded border border-border"
+        >
+          {close => (
+            <div className="w-32 py-1">
+              <button
+                className={POPOVER_ITEM_CLASS}
+                onClick={() => {
+                  onUpdate({ estimate: null });
+                  close();
+                }}
+                type="button"
+              >
+                {t('properties.estimate.noEstimate')}
+              </button>
+              {(SCALE_OPTIONS[estimationType] ?? []).map(opt => (
+                <button
+                  className={POPOVER_ITEM_CLASS}
+                  key={opt.value}
+                  onClick={() => {
+                    onUpdate({ estimate: opt.value });
+                    close();
+                  }}
+                  type="button"
+                >
+                  {opt.label}
                 </button>
               ))}
             </div>

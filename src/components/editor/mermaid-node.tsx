@@ -102,7 +102,7 @@ function MermaidView({ node, updateAttributes, selected }: NodeViewProps) {
     <NodeViewWrapper>
       <button
         className={cn(
-          'mermaid-block relative my-2 w-full cursor-pointer rounded-md border p-3 text-left',
+          'mermaid-block relative my-2 w-full cursor-pointer rounded-md border border-border p-3 text-left',
           selected
             ? 'border-brand bg-brand-subtle/30 dark:bg-brand-subtle'
             : 'border-border bg-card',

@@ -208,7 +208,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
       />
       <div className="mx-auto w-full max-w-2xl space-y-8 p-8">
         {/* GitHub */}
-        <section className="rounded-lg border p-6 space-y-4">
+        <section className="rounded-lg border-border p-6 space-y-4">
           <div className="flex items-center gap-3">
             {/* GitHub mark SVG */}
             <svg aria-hidden="true" className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
@@ -251,7 +251,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
 
               <div className="flex gap-2">
                 <button
-                  className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+                  className="rounded-md border-border px-3 py-1.5 text-sm hover:bg-muted"
                   onClick={() => setShowRotate(v => !v)}
                   type="button"
                 >
@@ -270,7 +270,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
               {showRotate && (
                 <div className="flex gap-2">
                   <input
-                    className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="flex-1 rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     onChange={e => setRotateSecret(e.target.value)}
                     placeholder={t('settings.integrations.newWebhookSecretPlaceholder')}
                     type="text"
@@ -289,7 +289,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
               </p>
               <div className="flex gap-2">
                 <input
-                  className="flex-1 rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="flex-1 rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   onChange={e => setConnectSecret(e.target.value)}
                   placeholder={t('settings.integrations.webhookSecretPlaceholder')}
                   type="text"
@@ -309,7 +309,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
         </section>
 
         {/* Slack */}
-        <section className="rounded-lg border p-6 space-y-4">
+        <section className="rounded-lg border-border p-6 space-y-4">
           <div className="flex items-center gap-3">
             <svg aria-hidden="true" className="h-6 w-6" viewBox="0 0 24 24">
               <path
@@ -350,7 +350,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
                   {t('settings.integrations.defaultTeamForNewIssues')}
                 </label>
                 <select
-                  className="w-full rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   id="slack-default-team"
                   onChange={e => void handleSetDefaultTeam(e.target.value)}
                   value={slack.defaultTeamId ?? ''}
