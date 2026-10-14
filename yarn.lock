@@ -1296,12 +1296,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@next/bundle-analyzer@npm:16.3.8":
-  version: 16.3.8
-  resolution: "@next/bundle-analyzer@npm:16.3.8"
+"@next/bundle-analyzer@npm:16.4.0":
+  version: 16.4.0
+  resolution: "@next/bundle-analyzer@npm:16.4.0"
   dependencies:
     webpack-bundle-analyzer: "npm:4.10.1"
-  checksum: 10c0/f036a1b55d5d82d98ea6ac4f0c3b23126364393c55ba8ad2f0334532ba74fc5d8374b65a45f312503e12246368a0099f4e90c0450b96c38c8d5e13a0ca88fb16
+  checksum: 10c0/cf50f3cbbeae0cc911688f6f030b817ddba2717a1490fd4c67277d091f4a08b27ca579f8d7c9ae711dbe8e741095492ffe509e2bc1b91933263d31d5ecd7e834
   languageName: node
   linkType: hard
 
@@ -4282,7 +4282,7 @@ __metadata:
     "@dnd-kit/utilities": "npm:3.2.2"
     "@hocuspocus/provider": "npm:4.7.0"
     "@hocuspocus/server": "npm:4.7.0"
-    "@next/bundle-analyzer": "npm:16.3.8"
+    "@next/bundle-analyzer": "npm:16.4.0"
     "@playwright/test": "npm:1.63.0"
     "@prisma/adapter-pg": "npm:7.10.0"
     "@prisma/client": "npm:7.10.0"
