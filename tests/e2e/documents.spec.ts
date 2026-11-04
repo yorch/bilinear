@@ -1,8 +1,32 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
 
 test.use({ storageState: ADMIN_STATE });
+
+/**
+ * Click the team docs page's one create control.
+ *
+ * The page offers exactly one at a time: the header "New document" button
+ * once the team has documents, otherwise only the empty state's "Create your
+ * first document" button. Which one a run sees depends on whether earlier
+ * runs left documents behind (CI starts from a fresh seed; a reused local DB
+ * does not), so wait for whichever has rendered, assert the other is absent,
+ * and click the visible one.
+ */
+async function clickCreateDocument(page: Page) {
+  const emptyStateCta = page.getByTestId('empty-state').getByRole('button');
+  const headerCta = page.getByRole('button', { name: /^new document/i });
+
+  await expect(emptyStateCta.or(headerCta)).toBeVisible({ timeout: 15_000 });
+
+  if (await emptyStateCta.isVisible()) {
+    await expect(headerCta).toHaveCount(0);
+    await emptyStateCta.click();
+  } else {
+    await headerCta.click();
+  }
+}
 
 /**
  * Documents — team-scoped doc creation and edit roundtrip.
@@ -29,10 +53,7 @@ test.describe('Documents', () => {
     });
 
     // Clicking "New Document" creates a doc and routes to /docs/<id>.
-    await page
-      .getByRole('button', { name: /^new document/i })
-      .first()
-      .click();
+    await clickCreateDocument(page);
     await page.waitForURL(`**/${ws}/docs/**`, { timeout: 10_000 });
 
     // Editor renders with the default Untitled placeholder.
@@ -49,10 +70,7 @@ test.describe('Documents', () => {
       timeout: 15_000,
     });
 
-    await page
-      .getByRole('button', { name: /^new document/i })
-      .first()
-      .click();
+    await clickCreateDocument(page);
     await page.waitForURL(`**/${ws}/docs/**`, { timeout: 10_000 });
 
     const titleInput = page.getByLabel('Document title');

@@ -68,9 +68,21 @@ export function useIssueCreate(
         updatedAt: now,
       } as DBIssue);
 
+      // Client-generated id makes the create idempotent: the queue is
+      // at-least-once (a row is only unpersisted after the response, so a
+      // reload while the request is in flight replays it), and the server
+      // returns the existing issue for a repeated id instead of numbering a
+      // second one.
       txQueue.enqueue(
         ISSUE_CREATE_MUTATION,
-        { input: { ...input, stateId: effectiveStateId || undefined, teamId: team.id } },
+        {
+          input: {
+            ...input,
+            id: crypto.randomUUID(),
+            stateId: effectiveStateId || undefined,
+            teamId: team.id,
+          },
+        },
         {
           onError: err => {
             console.error('[useIssueCreate] issueCreate failed:', err);
