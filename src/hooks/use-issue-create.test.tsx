@@ -51,4 +51,17 @@ describe('useIssueCreate', () => {
     action.onClick();
     expect(pushMock).toHaveBeenCalledWith('/demo/issue/iss_9');
   });
+
+  it('stamps each create with its own client id so a replayed send is idempotent server-side', async () => {
+    const { result } = renderHook(() => useIssueCreate(TEAM, []));
+    await act(async () => {
+      await result.current({ labelIds: [], priority: 0, title: 'a' });
+      await result.current({ labelIds: [], priority: 0, title: 'b' });
+    });
+    const ids = enqueueMock.mock.calls.map(c => c[1].input.id);
+    expect(ids[0]).toEqual(expect.any(String));
+    expect(ids[0]).not.toMatch(/^temp-/);
+    expect(ids[1]).toEqual(expect.any(String));
+    expect(ids[1]).not.toBe(ids[0]);
+  });
 });

@@ -343,6 +343,17 @@ export class IssueService {
     });
   }
 
+  /**
+   * The issue a previous `create` call with this client-supplied id produced,
+   * or null. Scoped to the same org AND creator so another user's (or org's)
+   * id can never be read back through a replay.
+   */
+  async findOwnCreate(orgId: string, creatorId: string, id: string): Promise<Issue | null> {
+    return this.prisma.issue.findFirst({
+      where: { creatorId, id, organizationId: orgId },
+    });
+  }
+
   async findById(id: string): Promise<Issue | null> {
     return this.prisma.issue.findUnique({
       include: { labelAssignments: { include: { label: true } } },

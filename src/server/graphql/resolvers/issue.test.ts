@@ -58,6 +58,30 @@ describe('issueResolvers', () => {
       expect(result.lastSyncId).toBe('1');
     });
 
+    it('replays a create with an already-used client id as a no-op returning the existing issue', async () => {
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
+        teamId: TEST_TEAM.id,
+        userId: TEST_USER.id,
+      });
+      ctx.prisma.issue.findFirst.mockResolvedValue(TEST_ISSUE);
+
+      const result = await issueResolvers.Mutation.issueCreate(
+        null,
+        { input: { id: TEST_ISSUE.id, teamId: TEST_TEAM.id, title: 'Test issue' } },
+        ctx as never,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.issue).toEqual(TEST_ISSUE);
+      // Scoped to the caller's org + creator, and nothing was numbered/created.
+      expect(ctx.prisma.issue.findFirst).toHaveBeenCalledWith({
+        where: { creatorId: TEST_USER.id, id: TEST_ISSUE.id, organizationId: TEST_ORG.id },
+      });
+      expect(ctx.prisma.team.update).not.toHaveBeenCalled();
+      expect(ctx.prisma.issue.create).not.toHaveBeenCalled();
+    });
+
     it('auto-subscribes the creator', async () => {
       ctx.prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
       ctx.prisma.issue.create.mockResolvedValue(TEST_ISSUE);

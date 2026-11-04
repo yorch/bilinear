@@ -218,6 +218,19 @@ export const issueResolvers = {
       // too, otherwise a guest can create issues (incl. sub-issues) on a team.
       await requireTeamMemberNotGuest(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
 
+      // Idempotent replay: the client's TransactionQueue is at-least-once, so
+      // a create it already delivered (response lost to a reload/disconnect)
+      // arrives again with the same client-supplied id. Return the issue that
+      // already exists rather than numbering a duplicate or re-firing the
+      // webhooks/notifications. No new SyncAction — the original is already
+      // in the stream.
+      if (input.id) {
+        const replayed = await ctx.services.issue.findOwnCreate(ctx.orgId, ctx.userId, input.id);
+        if (replayed) {
+          return { issue: replayed, lastSyncId: '0', success: true };
+        }
+      }
+
       try {
         // Record the SyncAction inside the create transaction so a crash can
         // never leave a persisted issue without its replication marker.

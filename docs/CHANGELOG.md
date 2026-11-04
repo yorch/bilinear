@@ -17,6 +17,14 @@ Conventions elsewhere live in [`PATTERNS.md`](PATTERNS.md); open findings live i
 
 ---
 
+## Recently shipped (2026-11-04, CI follow-up — fresh-database e2e and an idempotent issue create)
+
+- **The two post-merge CI failures were one cause: CI starts from an empty database and local runs never did.** The docs page shows its header "New document" button only once the team has documents, and its empty state otherwise offers "Create your first document" — an intentional one-create-control-at-a-time design. Two specs targeted the header button, passed locally because earlier runs had left documents behind, and timed out for 30s × 3 attempts in CI. The specs now wait for whichever control rendered and assert the other is absent. **A suite that passes against a database earlier runs have dirtied is not evidence about a fresh one — reproduce against `migrate deploy && seed` into a new database, as the CI job does.**
+- **Doing exactly that surfaced a real, older bug the dirty-database runs had been hiding: the first offline-queued issue could be created twice.** `TransactionQueue` is at-least-once — a row is unpersisted only after the response arrives — so a reload while the request is in flight replays it on hydrate, and the replay carried no identity, so the server numbered a second issue. The offline spec reloads straight after reconnecting, which is why "Queue 1" duplicated on every run, *including the passing ones*: they passed only because the duplicate had not rendered when the assertion ran. It predates the UX remediation (`transaction-queue.ts` is unchanged across it).
+- **The fix makes the create idempotent rather than making the queue exactly-once.** `IssueCreateInput.id` was already accepted by the service but nothing sent it, so no schema change: `useIssueCreate` now sends a client-generated id that is stored in the persisted transaction, and `issueCreate` returns the existing issue when that id was already created by the same user in the same org — before numbering, webhooks or notifications, and with no new SyncAction (the original is already in the stream). The lookup is scoped to caller and org, so a replay can never read another user's issue. Known limit: two *concurrent* requests with the same id can still collide on the primary key and surface as a create failure; a serialised replay (the real case) cannot.
+
+---
+
 ## Recently shipped (2026-11-04, UX/UI review and remediation — ~160 findings, one PR)
 
 - **Seven reviewers drove the live app and read the source; eight implementers fixed what they found; three adversaries tried to break the result.** The full review is `docs/UX_REVIEW_2026-11.md`. The shape of what they found matters more than the count: the visual system was sound, and almost every serious problem was a *correctness bug presenting as UX* — a screen showing wrong data without saying so, a rich-text surface whose headings and lists didn't render, mobile layouts never carried across the app.
