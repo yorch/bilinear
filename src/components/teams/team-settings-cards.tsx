@@ -1,6 +1,8 @@
 'use client';
 
+import { ChevronDown } from 'lucide-react';
 import { useMemo } from 'react';
+import { SectionHeader } from '@/components/shared/section-header';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { ColorSwatchPicker } from '@/components/teams/color-swatch-picker';
 import { ColorDot } from '@/components/ui/color-dot';
@@ -15,6 +17,7 @@ import {
   ESTIMATION_TYPES,
   type EstimationType,
   listTimezones,
+  type TeamNumberField,
   WEEKDAY_INDEXES,
 } from './team-settings-helpers';
 
@@ -26,9 +29,39 @@ import {
 
 const FIELD_LABEL = 'text-xs font-medium text-muted-foreground';
 const CARD = 'rounded-lg border border-border bg-card p-5 flex flex-col gap-4';
-const SECTION_HEADING = 'mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground';
 const NATIVE_SELECT =
-  'rounded-md border border-input bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-ring focus:shadow-[0_0_0_3px_var(--brand-subtle)] dark:bg-card';
+  'w-full appearance-none rounded-md border border-input bg-transparent py-1.5 pr-8 pl-3 text-sm text-foreground outline-none focus:border-ring focus:shadow-[0_0_0_3px_var(--brand-subtle)] dark:bg-card';
+
+type NumberErrors = Partial<Record<TeamNumberField, true>>;
+
+function CardHeading({ children }: { children: string }) {
+  return (
+    <div className="mb-4">
+      <SectionHeader as="h2" title={children} />
+    </div>
+  );
+}
+
+/** Attached to its field by `aria-describedby`, and names the valid range. */
+function NumberFieldError({
+  id,
+  range,
+  show,
+}: {
+  id: string;
+  range: { max: number; min: number };
+  show?: boolean;
+}) {
+  const t = useTranslations();
+  if (!show) {
+    return null;
+  }
+  return (
+    <p className="text-xs text-danger-subtle-foreground" id={id} role="alert">
+      {t('settings.team.invalidNumberRange', { max: String(range.max), min: String(range.min) })}
+    </p>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Estimation
@@ -52,7 +85,7 @@ export function EstimationCard({
   );
   return (
     <section>
-      <h2 className={SECTION_HEADING}>{t('settings.team.estimation.title')}</h2>
+      <CardHeading>{t('settings.team.estimation.title')}</CardHeading>
       <div className={CARD}>
         <div className="flex flex-col gap-1">
           <label className={FIELD_LABEL} htmlFor="settings-estimation">
@@ -82,6 +115,7 @@ export function CyclesCard({
   cycleDuration,
   cycleStartDay,
   cyclesEnabled,
+  errors = {},
   onCycleCooldownTimeChange,
   onCycleDurationChange,
   onCycleStartDayChange,
@@ -91,6 +125,7 @@ export function CyclesCard({
   cycleDuration: string;
   cycleStartDay: number;
   cyclesEnabled: boolean;
+  errors?: NumberErrors;
   onCycleCooldownTimeChange: (value: string) => void;
   onCycleDurationChange: (value: string) => void;
   onCycleStartDayChange: (value: number) => void;
@@ -107,7 +142,7 @@ export function CyclesCard({
   );
   return (
     <section>
-      <h2 className={SECTION_HEADING}>{t('settings.team.cycles.title')}</h2>
+      <CardHeading>{t('settings.team.cycles.title')}</CardHeading>
       <div className={CARD}>
         <SettingToggleRow
           checked={cyclesEnabled}
@@ -121,6 +156,8 @@ export function CyclesCard({
               {t('settings.team.cycles.duration')}
             </label>
             <Input
+              aria-describedby={errors.cycleDuration ? 'settings-cycle-duration-error' : undefined}
+              aria-invalid={errors.cycleDuration ? true : undefined}
               className="w-28"
               id="settings-cycle-duration"
               inputMode="numeric"
@@ -129,6 +166,11 @@ export function CyclesCard({
               onChange={e => onCycleDurationChange(e.target.value)}
               type="number"
               value={cycleDuration}
+            />
+            <NumberFieldError
+              id="settings-cycle-duration-error"
+              range={CYCLE_DURATION_RANGE}
+              show={errors.cycleDuration}
             />
             <p className="text-xs text-muted-foreground">
               {t('settings.team.cycles.durationHint')}
@@ -156,6 +198,10 @@ export function CyclesCard({
                 {t('settings.team.cycles.cooldown')}
               </label>
               <Input
+                aria-describedby={
+                  errors.cycleCooldownTime ? 'settings-cycle-cooldown-error' : undefined
+                }
+                aria-invalid={errors.cycleCooldownTime ? true : undefined}
                 className="w-28"
                 id="settings-cycle-cooldown"
                 inputMode="numeric"
@@ -164,6 +210,11 @@ export function CyclesCard({
                 onChange={e => onCycleCooldownTimeChange(e.target.value)}
                 type="number"
                 value={cycleCooldownTime}
+              />
+              <NumberFieldError
+                id="settings-cycle-cooldown-error"
+                range={CYCLE_COOLDOWN_RANGE}
+                show={errors.cycleCooldownTime}
               />
               <p className="text-xs text-muted-foreground">
                 {t('settings.team.cycles.cooldownHint')}
@@ -185,6 +236,7 @@ export function AutoCloseCard({
   autoCloseChildIssues,
   autoCloseParentIssues,
   autoClosePeriod,
+  errors = {},
   onAutoArchivePeriodChange,
   onAutoCloseChildIssuesChange,
   onAutoCloseParentIssuesChange,
@@ -194,6 +246,7 @@ export function AutoCloseCard({
   autoCloseChildIssues: boolean;
   autoCloseParentIssues: boolean;
   autoClosePeriod: string;
+  errors?: NumberErrors;
   onAutoArchivePeriodChange: (value: string) => void;
   onAutoCloseChildIssuesChange: (value: boolean) => void;
   onAutoCloseParentIssuesChange: (value: boolean) => void;
@@ -202,13 +255,15 @@ export function AutoCloseCard({
   const t = useTranslations();
   return (
     <section>
-      <h2 className={SECTION_HEADING}>{t('settings.team.autoClose.title')}</h2>
+      <CardHeading>{t('settings.team.autoClose.title')}</CardHeading>
       <div className={CARD}>
         <div className="flex flex-col gap-1">
           <label className={FIELD_LABEL} htmlFor="settings-auto-close">
             {t('settings.team.autoClose.closePeriod')}
           </label>
           <Input
+            aria-describedby={errors.autoClosePeriod ? 'settings-auto-close-error' : undefined}
+            aria-invalid={errors.autoClosePeriod ? true : undefined}
             className="w-28"
             id="settings-auto-close"
             inputMode="numeric"
@@ -219,6 +274,11 @@ export function AutoCloseCard({
             type="number"
             value={autoClosePeriod}
           />
+          <NumberFieldError
+            id="settings-auto-close-error"
+            range={AUTO_PERIOD_RANGE}
+            show={errors.autoClosePeriod}
+          />
           <p className="text-xs text-muted-foreground">
             {t('settings.team.autoClose.closePeriodHint')}
           </p>
@@ -228,6 +288,8 @@ export function AutoCloseCard({
             {t('settings.team.autoClose.archivePeriod')}
           </label>
           <Input
+            aria-describedby={errors.autoArchivePeriod ? 'settings-auto-archive-error' : undefined}
+            aria-invalid={errors.autoArchivePeriod ? true : undefined}
             className="w-28"
             id="settings-auto-archive"
             inputMode="numeric"
@@ -237,6 +299,11 @@ export function AutoCloseCard({
             placeholder={t('settings.team.autoClose.off')}
             type="number"
             value={autoArchivePeriod}
+          />
+          <NumberFieldError
+            id="settings-auto-archive-error"
+            range={AUTO_PERIOD_RANGE}
+            show={errors.autoArchivePeriod}
           />
           <p className="text-xs text-muted-foreground">
             {t('settings.team.autoClose.archivePeriodHint')}
@@ -358,18 +425,24 @@ export function TeamIdentityFields({
         </label>
         {/* Native <select>: ~400 IANA zones need the browser's type-ahead,
             which the SimpleSelect listbox does not provide. */}
-        <select
-          className={NATIVE_SELECT}
-          id="settings-timezone"
-          onChange={e => onTimezoneChange(e.target.value)}
-          value={timezone}
-        >
-          {zones.map(z => (
-            <option key={z} value={z}>
-              {z}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            className={NATIVE_SELECT}
+            id="settings-timezone"
+            onChange={e => onTimezoneChange(e.target.value)}
+            value={timezone}
+          >
+            {zones.map(z => (
+              <option key={z} value={z}>
+                {z}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          />
+        </div>
         <p className="text-xs text-muted-foreground">{t('settings.team.identity.timezoneHint')}</p>
       </div>
     </>

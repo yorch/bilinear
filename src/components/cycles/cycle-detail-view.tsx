@@ -10,9 +10,11 @@ import { BurnupChart } from '@/components/cycles/burnup-chart';
 import { isValidCycleRange } from '@/components/cycles/create-cycle-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { IssueStateDot, IssueTrailing } from '@/components/shared/planning-issue-parts';
 import { fromDateInputValue, toDateInputValue } from '@/components/teams/team-settings-helpers';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PageHeader } from '@/components/ui/page-header';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
@@ -33,6 +35,7 @@ import {
   CYCLE_UPDATE_MUTATION,
   CYCLE_VELOCITY_QUERY,
 } from '@/lib/graphql-queries';
+import { sortIssuesByState } from '@/lib/planning-utils';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn, getErrorMessage, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
@@ -102,11 +105,11 @@ function VelocityBarChart({ cycles }: VelocityBarChartProps) {
   }
 
   return (
-    <div className="flex items-end gap-2 h-24 mt-2">
+    <div className="mt-2 flex h-24 items-end gap-2 border-b border-border">
       {cycles.map(c => {
         const pct = max > 0 ? (c.completedIssues / max) * 100 : 0;
         return (
-          <div className="flex flex-1 flex-col items-center gap-1" key={c.cycleId}>
+          <div className="flex max-w-12 flex-1 flex-col items-center gap-1" key={c.cycleId}>
             <span className="text-[10px] font-medium text-muted-foreground">
               {c.completedIssues > 0 ? c.completedIssues : ''}
             </span>
@@ -118,7 +121,7 @@ function VelocityBarChart({ cycles }: VelocityBarChartProps) {
               }}
             />
             <span
-              className="max-w-full truncate text-[9px] text-muted-foreground"
+              className="max-w-full truncate text-[10px] text-muted-foreground"
               title={t('cycles.defaultName', { number: c.cycleNumber })}
             >
               #{c.cycleNumber}
@@ -300,7 +303,9 @@ export const CycleDetailView = observer(function CycleDetailView({
   // see the `serverProgress` fetch above. Until it lands the bar reads 0,
   // which is the same thing the (never-written) `cycles.progress` column used
   // to report forever.
-  const cycleIssues = issueStore.findByCycleId(cycle.id);
+  const cycleIssues = sortIssuesByState(issueStore.findByCycleId(cycle.id), id =>
+    workflowStateStore.findById(id),
+  );
   const scopeCount = serverProgress?.scope ?? 0;
   const completedCount = Math.round((serverProgress?.progress ?? 0) * scopeCount);
   const progress = Math.round((serverProgress?.progress ?? 0) * 100);
@@ -417,99 +422,111 @@ export const CycleDetailView = observer(function CycleDetailView({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex h-12 items-center gap-3 border-b border-border px-4">
-        <Link
-          className={cn(
-            'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
-            TOUCH_TARGET_SQUARE,
-          )}
-          href={`/${workspaceKey}/team/${teamKey}/cycles`}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <RefreshCw className="h-4 w-4 text-muted-foreground" />
-        {editingName ? (
-          <input
-            className="flex-1 rounded border border-brand bg-transparent px-1 text-sm font-semibold text-foreground outline-none"
-            onBlur={handleSaveName}
-            onChange={e => setNameValue(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                handleSaveName();
-              }
-              if (e.key === 'Escape') {
-                setEditingName(false);
-              }
-            }}
-            ref={nameInputRef}
-            type="text"
-            value={nameValue}
-          />
-        ) : (
-          <button
-            className="text-sm font-semibold text-foreground hover:text-brand"
-            onClick={() => {
-              setNameValue(cycle.name ?? '');
-              setEditingName(true);
-            }}
-            title={t('cycles.detail.clickToEditName')}
-            type="button"
-          >
-            {displayName}
-          </button>
-        )}
-
-        <div className="ml-auto flex items-center gap-2">
-          {/* Roll over button — only for active / past cycles */}
-          {showRollover && (
+      <PageHeader
+        actions={
+          <>
+            {/* Roll over button — only for active / past cycles */}
+            {showRollover && (
+              <Button
+                aria-label={t('cycles.detail.rollOver')}
+                disabled={rollingOver}
+                onClick={handleRollover}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {/* Icon-only below md: the label wrapped to two lines in a 390px header. */}
+                <span className="hidden md:inline">
+                  {rollingOver ? t('cycles.detail.rollingOver') : t('cycles.detail.rollOver')}
+                </span>
+              </Button>
+            )}
+            <SelectPopover
+              align="right"
+              disabled={acting}
+              panelClassName="min-w-[160px] py-1"
+              triggerChildren={<MoreHorizontal className="h-4 w-4" />}
+              triggerClassName={cn(
+                'rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+                TOUCH_TARGET,
+              )}
+              triggerTitle={t('cycles.detail.moreActions')}
+            >
+              {close => (
+                <>
+                  <button
+                    className={POPOVER_ITEM_CLASS}
+                    onClick={() => {
+                      setConfirmAction('archive');
+                      close();
+                    }}
+                    type="button"
+                  >
+                    {t('cycles.detail.archive')}
+                  </button>
+                  <button
+                    className={cn(POPOVER_ITEM_CLASS, 'text-danger-subtle-foreground')}
+                    onClick={() => {
+                      setConfirmAction('delete');
+                      close();
+                    }}
+                    type="button"
+                  >
+                    {t('cycles.detail.delete')}
+                  </button>
+                </>
+              )}
+            </SelectPopover>
+          </>
+        }
+        leading={
+          <>
+            <Link
+              className={cn(
+                'flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+                TOUCH_TARGET_SQUARE,
+              )}
+              href={`/${workspaceKey}/team/${teamKey}/cycles`}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+            <RefreshCw className="h-4 w-4 text-muted-foreground" />
+          </>
+        }
+        title={
+          editingName ? (
+            <input
+              className="flex-1 rounded border border-brand bg-transparent px-1 text-sm font-semibold text-foreground outline-none"
+              onBlur={handleSaveName}
+              onChange={e => setNameValue(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  handleSaveName();
+                }
+                if (e.key === 'Escape') {
+                  setEditingName(false);
+                }
+              }}
+              ref={nameInputRef}
+              type="text"
+              value={nameValue}
+            />
+          ) : (
             <button
-              className="flex items-center gap-1.5 rounded border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
-              disabled={rollingOver}
-              onClick={handleRollover}
+              className="text-sm font-semibold text-foreground hover:text-brand"
+              onClick={() => {
+                setNameValue(cycle.name ?? '');
+                setEditingName(true);
+              }}
+              title={t('cycles.detail.clickToEditName')}
               type="button"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
-              {rollingOver ? t('cycles.detail.rollingOver') : t('cycles.detail.rollOver')}
+              {displayName}
             </button>
-          )}
-          <SelectPopover
-            align="right"
-            disabled={acting}
-            panelClassName="min-w-[160px] py-1"
-            triggerChildren={<MoreHorizontal className="h-4 w-4" />}
-            triggerClassName={cn(
-              'rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
-              TOUCH_TARGET,
-            )}
-            triggerTitle={t('cycles.detail.moreActions')}
-          >
-            {close => (
-              <>
-                <button
-                  className={POPOVER_ITEM_CLASS}
-                  onClick={() => {
-                    setConfirmAction('archive');
-                    close();
-                  }}
-                  type="button"
-                >
-                  {t('cycles.detail.archive')}
-                </button>
-                <button
-                  className={cn(POPOVER_ITEM_CLASS, 'text-danger-subtle-foreground')}
-                  onClick={() => {
-                    setConfirmAction('delete');
-                    close();
-                  }}
-                  type="button"
-                >
-                  {t('cycles.detail.delete')}
-                </button>
-              </>
-            )}
-          </SelectPopover>
-        </div>
-      </div>
+          )
+        }
+      />
 
       <ConfirmDialog
         confirmLabel={t('cycles.detail.archive')}
@@ -606,10 +623,7 @@ export const CycleDetailView = observer(function CycleDetailView({
             />
           ) : (
             <button
-              className={cn(
-                'mt-4 block w-full rounded px-1 py-0.5 text-left text-sm hover:bg-muted',
-                cycle.description ? 'text-muted-foreground' : 'text-foreground-faint',
-              )}
+              className="mt-4 block w-full rounded px-1 py-0.5 text-left text-sm text-muted-foreground hover:bg-muted"
               onClick={() => {
                 setDescriptionValue(cycle.description ?? '');
                 setEditingDescription(true);
@@ -784,19 +798,13 @@ export const CycleDetailView = observer(function CycleDetailView({
                 </p>
               ) : (
                 cycleIssues.map(issue => {
-                  const state = workflowStateStore.findById(issue.stateId);
                   const team = teamStore.findById(issue.teamId);
                   return (
                     <div
                       className="group flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
                       key={issue.id}
                     >
-                      {state && (
-                        <span
-                          className="h-3 w-3 shrink-0 rounded-full border-2"
-                          style={{ borderColor: state.color }}
-                        />
-                      )}
+                      <IssueStateDot stateId={issue.stateId} />
                       <span className="shrink-0 font-mono text-xs text-muted-foreground">
                         {issue.identifier}
                       </span>
@@ -806,6 +814,7 @@ export const CycleDetailView = observer(function CycleDetailView({
                       >
                         {issue.title}
                       </Link>
+                      <IssueTrailing issue={issue} />
                       <button
                         className="hidden rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary group-hover:block"
                         onClick={() => handleRemoveIssue(issue.id)}

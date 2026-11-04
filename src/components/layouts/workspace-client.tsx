@@ -7,6 +7,7 @@ import { useCallback } from 'react';
 import { GlobalCreateIssueModal } from '@/components/issues/global-create-issue-modal';
 import { ConnectionToasts } from '@/components/layouts/connection-toasts';
 import { ShortcutHelpModal } from '@/components/layouts/shortcut-help-modal';
+import { useNotificationSync } from '@/components/notifications/use-notification-sync';
 import { CreateTeamModal } from '@/components/teams/create-team-modal';
 import { useChord, useHotkeys } from '@/hooks/use-hotkeys';
 import { useRecentItems } from '@/hooks/use-recent-items';
@@ -42,6 +43,8 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   const workspaceKey = params.workspace;
   const { items: recentItems } = useRecentItems(workspaceKey);
   const router = useRouter();
+
+  useNotificationSync();
 
   useHotkeys(['meta+k', 'ctrl+k'], () => uiStore.toggleCommandPalette(), { allowInInput: true }, [
     uiStore,

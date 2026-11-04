@@ -22,8 +22,10 @@ import { MembersSection } from '@/components/settings/members-section';
 import { WorkspaceCustomFieldsCard } from '@/components/settings/workspace-custom-fields-card';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { SectionHeader } from '@/components/shared/section-header';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
 import { SimpleSelect } from '@/components/ui/select';
@@ -35,7 +37,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { type OrganizationPlanLimits, PLAN_LIMIT_FIELDS } from '@/lib/plan-limits';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_ROW, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 // ---------------------------------------------------------------------------
@@ -171,7 +173,7 @@ interface Viewer {
 
 const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const { workspace } = useParams<{ workspace: string }>();
-  const { organizationMemberStore, teamStore, uiStore, userStore } = useStore();
+  const { organizationMemberStore, syncStore, teamStore, uiStore, userStore } = useStore();
   const t = useTranslations();
   useDocumentTitle(t('settings.workspace.title'));
   const { formatDate, intlLocale } = useFormatters();
@@ -182,6 +184,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     ? organizationMemberStore.rolesByUserId[userStore.currentUser.id]
     : undefined;
   const canManageOrg = viewerRole === 'owner' || viewerRole === 'admin';
+  // Until the first bootstrap lands the stores are empty, and "0 teams / no
+  // members" would read as fact. Gate list sections (and the org form's
+  // editable-vs-readonly decision) on this.
+  const hydrated = syncStore.status !== 'idle' && syncStore.status !== 'bootstrapping';
+  const roleResolved = viewerRole !== undefined || hydrated;
 
   const [orgName, setOrgName] = useState('');
   const [savingOrg, setSavingOrg] = useState(false);
@@ -200,6 +207,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
   const [confirmingRevokeToken, setConfirmingRevokeToken] = useState<ApiToken | null>(null);
   const [savingAi, setSavingAi] = useState(false);
+  const [confirmingRotate, setConfirmingRotate] = useState(false);
 
   async function toggleAi(enabled: boolean) {
     setSavingAi(true);
@@ -396,7 +404,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
     } catch {
       setEmailNotificationsEnabled(!enabled);
       toast.error(t('settings.workspace.notificationPrefsError'));
+      return;
     }
+    toast.success(t('settings.workspace.notificationPrefsSaved'));
   }
 
   const allTeams = teamStore.all;
@@ -416,15 +426,18 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <PageHeader title={t('settings.workspace.title')} />
+      <PageHeader
+        description={t('settings.workspace.description')}
+        title={t('settings.workspace.title')}
+      />
 
-      <div className="mx-auto w-full max-w-2xl px-6 py-8 flex flex-col gap-8">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-6 md:px-6 md:py-8">
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('settings.workspace.organization')}
-          </h2>
+          <div className="mb-4">
+            <SectionHeader as="h2" title={t('settings.workspace.organization')} />
+          </div>
           <div className="rounded-lg border border-border bg-card p-5">
-            {loading ? (
+            {loading || (org && !roleResolved) ? (
               <RowsSkeleton count={2} />
             ) : org ? (
               <dl className="flex flex-col gap-4">
@@ -560,16 +573,16 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         </section>
 
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('customFields.title')}
-          </h2>
+          <div className="mb-4">
+            <SectionHeader as="h2" title={t('customFields.title')} />
+          </div>
           <WorkspaceCustomFieldsCard canManage={canManageOrg} />
         </section>
 
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('settings.workspace.planLimitsTitle')}
-          </h2>
+          <div className="mb-4">
+            <SectionHeader as="h2" title={t('settings.workspace.planLimitsTitle')} />
+          </div>
           <div className="rounded-lg border border-border bg-card p-5">
             <p className="mb-4 text-xs text-muted-foreground">
               {t('settings.workspace.planLimitsDescription')}
@@ -601,9 +614,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
         {isPlatformAdmin && (
           <section>
-            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {t('settings.workspace.platform')}
-            </h2>
+            <div className="mb-4">
+              <SectionHeader as="h2" title={t('settings.workspace.platform')} />
+            </div>
             <Link
               className="flex items-center justify-between rounded-lg border border-brand-border bg-brand-subtle px-5 py-4 transition-colors hover:bg-brand/15"
               href="/admin"
@@ -622,15 +635,18 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
         )}
 
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('settings.workspace.teams')}
-            <span className="ml-2 font-normal normal-case text-muted-foreground">
-              {teams.length}
-            </span>
-          </h2>
+          <div className="mb-4">
+            <SectionHeader
+              as="h2"
+              count={hydrated ? teams.length : undefined}
+              title={t('settings.workspace.teams')}
+            />
+          </div>
           <div className="rounded-lg border border-border bg-card overflow-hidden">
-            {teams.length === 0 ? (
-              <div className="flex items-center justify-between px-5 py-4">
+            {!hydrated ? (
+              <RowsSkeleton count={2} />
+            ) : teams.length === 0 ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4">
                 <p className="text-sm text-muted-foreground">
                   {t('settings.workspace.noTeamsYet')}
                 </p>
@@ -693,9 +709,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
         {/* Personal preferences */}
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('settings.workspace.myPreferences')}
-          </h2>
+          <div className="mb-4">
+            <SectionHeader as="h2" title={t('settings.workspace.myPreferences')} />
+          </div>
           <div className="rounded-lg border border-border bg-card divide-y divide-border">
             {/* Language — also available in the sidebar footer, surfaced here too
                 since the sidebar collapses to a drawer on small screens. */}
@@ -748,10 +764,11 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   </p>
                   {calendarFeedUrl && (
                     <div className="mt-2 flex items-center gap-2">
-                      <code className="truncate max-w-xs text-xs bg-muted px-2 py-1 rounded text-muted-foreground">
+                      <code className="min-w-0 max-w-xs truncate rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
                         {calendarFeedUrl}
                       </code>
                       <button
+                        aria-label={t('settings.workspace.copyUrl')}
                         className={cn(
                           'shrink-0 text-muted-foreground hover:text-foreground',
                           TOUCH_TARGET,
@@ -768,21 +785,27 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                     </div>
                   )}
                 </div>
-                <button
-                  className={cn(
-                    'shrink-0 flex items-center gap-1.5 rounded-md border border-border',
-                    'px-3 py-1.5 text-xs font-medium text-foreground-secondary',
-                    'hover:bg-accent disabled:opacity-50',
-                  )}
+                <Button
+                  className="shrink-0"
                   disabled={rotatingToken}
-                  onClick={rotateCalendarToken}
+                  onClick={() => {
+                    // Rotating invalidates every calendar app already subscribed
+                    // to the old URL, so an existing feed asks first.
+                    if (calendarFeedUrl) {
+                      setConfirmingRotate(true);
+                    } else {
+                      void rotateCalendarToken();
+                    }
+                  }}
+                  size="sm"
                   type="button"
+                  variant="outline"
                 >
                   <RefreshCw className={cn('h-3 w-3', rotatingToken && 'animate-spin')} />
                   {calendarFeedUrl
                     ? t('settings.workspace.rotate')
                     : t('settings.workspace.generate')}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -790,9 +813,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
         {/* API tokens */}
         <section>
-          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('settings.workspace.apiTokens')}
-          </h2>
+          <div className="mb-1">
+            <SectionHeader as="h2" title={t('settings.workspace.apiTokens')} />
+          </div>
           {/* Keys are bound to the workspace they were created in, so this
               list changes when you switch. Said out loud because otherwise
               a multi-workspace user switches over and reads the empty list
@@ -812,6 +835,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                     {newPlaintext}
                   </code>
                   <button
+                    aria-label={t('settings.workspace.copyToken')}
                     className={cn(
                       'shrink-0 rounded p-1 text-warning-subtle-foreground hover:bg-warning/35',
                       TOUCH_TARGET,
@@ -843,12 +867,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                 {t('settings.workspace.createToken')}
               </p>
               <div className="flex items-center gap-2">
-                <input
-                  className={cn(
-                    'flex-1 rounded-md border border-border bg-transparent',
-                    'px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground',
-                    'focus:outline-none focus:ring-1 focus:ring-brand',
-                  )}
+                <Input
+                  aria-label={t('settings.workspace.tokenLabel')}
+                  className="flex-1"
                   disabled={creatingToken}
                   onChange={e => setNewTokenLabel(e.target.value)}
                   onKeyDown={e => {
@@ -857,7 +878,6 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                     }
                   }}
                   placeholder={t('settings.workspace.tokenLabel')}
-                  type="text"
                   value={newTokenLabel}
                 />
                 <Button
@@ -873,13 +893,15 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               </div>
               {/* Scope + expiry controls */}
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-                <label className="flex items-center gap-1.5">
-                  <input
+                <label
+                  className={cn('flex items-center gap-1.5', TOUCH_ROW)}
+                  htmlFor="new-token-writable"
+                >
+                  <Checkbox
                     checked={newTokenWritable}
-                    className="h-3.5 w-3.5 rounded border-border text-brand focus:ring-brand"
                     disabled={creatingToken}
+                    id="new-token-writable"
                     onChange={e => setNewTokenWritable(e.target.checked)}
-                    type="checkbox"
                   />
                   {t('settings.workspace.allowWrite')}
                 </label>
@@ -919,14 +941,14 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
             ) : (
               <ul className="divide-y divide-border">
                 {apiTokens.map(token => (
-                  <li className="flex items-start gap-3 px-5 py-3" key={token.id}>
+                  <li className="flex items-start gap-3 px-4 py-3 md:px-5" key={token.id}>
                     <Key className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate flex items-center gap-2">
                         {token.label}
                         <span
                           className={cn(
-                            'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+                            'shrink-0 rounded px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide',
                             token.scopes.length === 0 || token.scopes.includes('write')
                               ? 'bg-brand-subtle text-brand-subtle-foreground'
                               : 'bg-muted text-muted-foreground',
@@ -964,6 +986,7 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                       </p>
                     </div>
                     <button
+                      aria-label={t('settings.workspace.revokeToken')}
                       className={cn(
                         'shrink-0 text-muted-foreground hover:text-danger-subtle-foreground disabled:opacity-40',
                         TOUCH_TARGET,
@@ -980,6 +1003,17 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               </ul>
             )}
           </div>
+          <ConfirmDialog
+            confirmLabel={t('settings.workspace.rotate')}
+            message={t('settings.workspace.rotateCalendarConfirm')}
+            onCancel={() => setConfirmingRotate(false)}
+            onConfirm={() => {
+              setConfirmingRotate(false);
+              void rotateCalendarToken();
+            }}
+            open={confirmingRotate}
+            title={t('settings.workspace.rotateCalendarTitle')}
+          />
           <ConfirmDialog
             confirmLabel={t('settings.workspace.revokeToken')}
             message={t('settings.workspace.revokeTokenConfirm', {
@@ -999,9 +1033,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
         {/* AI assistant */}
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('settings.workspace.ai')}
-          </h2>
+          <div className="mb-4">
+            <SectionHeader as="h2" title={t('settings.workspace.ai')} />
+          </div>
           <div className="rounded-lg border border-border bg-card px-5 py-4">
             <SettingToggleRow
               checked={org?.aiEnabled ?? false}
@@ -1010,67 +1044,6 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               label={t('settings.workspace.aiAssistant')}
               onCheckedChange={checked => void toggleAi(checked)}
             />
-          </div>
-        </section>
-
-        {/* Quick links to sub-settings */}
-        <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('settings.workspace.configuration')}
-          </h2>
-          <div className="rounded-lg border border-border bg-card overflow-hidden">
-            <ul className="divide-y divide-border">
-              {[
-                {
-                  description: t('settings.workspace.integrationsDescription'),
-                  href: `/${workspace}/settings/integrations`,
-                  label: t('settings.workspace.integrations'),
-                },
-                {
-                  description: t('settings.workspace.securityDescription'),
-                  href: `/${workspace}/settings/security`,
-                  label: t('settings.workspace.security'),
-                },
-                {
-                  description: t('settings.workspace.webhooksDescription'),
-                  href: `/${workspace}/settings/webhooks`,
-                  label: t('settings.workspace.webhooks'),
-                },
-                {
-                  description: t('settings.workspace.importExportDescription'),
-                  href: `/${workspace}/settings/import`,
-                  label: t('settings.workspace.importExport'),
-                },
-                {
-                  description: t('settings.workspace.publicRoadmapDescription'),
-                  href: `/${workspace}/settings/roadmap`,
-                  label: t('settings.workspace.publicRoadmap'),
-                },
-                {
-                  description: t('settings.workspace.automationsDescription'),
-                  href: `/${workspace}/settings/automations`,
-                  label: t('settings.workspace.automations'),
-                },
-                {
-                  description: t('settings.workspace.auditLogDescription'),
-                  href: `/${workspace}/settings/audit-log`,
-                  label: t('settings.workspace.auditLog'),
-                },
-              ].map(item => (
-                <li key={item.href}>
-                  <Link
-                    className="flex items-center justify-between px-5 py-3 hover:bg-accent/50 transition-colors"
-                    href={item.href}
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{item.label}</p>
-                      <p className="text-xs text-muted-foreground">{item.description}</p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  </Link>
-                </li>
-              ))}
-            </ul>
           </div>
         </section>
       </div>

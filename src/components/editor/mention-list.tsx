@@ -31,7 +31,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
 ) {
   const t = useTranslations();
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const listRef = useRef<HTMLUListElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Reset selection when the items array changes (items is the trigger, not read inside)
   // biome-ignore lint/correctness/useExhaustiveDependencies: items triggers reset
@@ -79,13 +79,16 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
   }
 
   return (
-    <ul
+    <div
+      aria-label={t('editor.suggestions')}
       className="mention-popup max-h-48 w-48 overflow-y-auto rounded-md border border-border bg-card py-1 shadow-e2"
       ref={listRef}
+      role="listbox"
     >
       {items.map((item, index) => (
-        <li key={item.id}>
+        <div key={item.id} role="presentation">
           <button
+            aria-selected={index === selectedIndex}
             className={cn(
               'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors',
               index === selectedIndex
@@ -96,6 +99,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
               e.preventDefault();
               command(item);
             }}
+            role="option"
             type="button"
           >
             <span className="flex-1 truncate">{item.label}</span>
@@ -103,8 +107,8 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(funct
               <span className="shrink-0 font-mono text-xs text-muted-foreground">{item.sub}</span>
             )}
           </button>
-        </li>
+        </div>
       ))}
-    </ul>
+    </div>
   );
 });

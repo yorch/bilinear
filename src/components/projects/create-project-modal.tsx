@@ -2,11 +2,14 @@
 
 import { observer } from 'mobx-react-lite';
 import { useEffect, useState } from 'react';
+import { AssigneeSelect } from '@/components/properties/assignee-select';
 import { Input } from '@/components/ui/input';
 import { ModalDialog, ModalFooter, ModalHeader } from '@/components/ui/modal-dialog';
 import { SimpleSelect } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useTranslations } from '@/hooks/use-translations';
+import { toIssueUsers } from '@/lib/issue-mappers';
+import { isValidProjectRange } from '@/lib/project-dates';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -31,17 +34,21 @@ export const CreateProjectModal = observer(function CreateProjectModal({
   onSubmit,
 }: CreateProjectModalProps) {
   const t = useTranslations();
-  const { teamStore } = useStore();
+  const { teamStore, userStore } = useStore();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [statusType, setStatusType] = useState('planned');
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+  const [leadId, setLeadId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState('');
   const [targetDate, setTargetDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
   const teams = teamStore.all;
+  const users = toIssueUsers(userStore.all.filter(u => u.active));
+  const lead = users.find(u => u.id === leadId);
+  const rangeValid = isValidProjectRange(startDate, targetDate);
 
   const STATUS_OPTIONS = [
     { label: t('projects.status.backlog'), value: 'backlog' },
@@ -60,6 +67,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
     setDescription('');
     setStatusType('planned');
     setSelectedTeamIds([]);
+    setLeadId(null);
     setStartDate('');
     setTargetDate('');
     setSubmitting(false);
@@ -74,7 +82,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || submitting) {
+    if (!name.trim() || submitting || !rangeValid) {
       return;
     }
 
@@ -83,6 +91,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
     try {
       await onSubmit({
         description: description.trim() || undefined,
+        leadId: leadId ?? undefined,
         name: name.trim(),
         startDate: startDate || undefined,
         statusType,
@@ -98,7 +107,7 @@ export const CreateProjectModal = observer(function CreateProjectModal({
     }
   };
 
-  const canSubmit = name.trim().length > 0 && !submitting;
+  const canSubmit = name.trim().length > 0 && rangeValid && !submitting;
 
   return (
     <ModalDialog aria-label={t('projects.newProject')} onClose={onClose} open={open}>
@@ -151,13 +160,14 @@ export const CreateProjectModal = observer(function CreateProjectModal({
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="text-xs font-medium text-muted-foreground" id="project-teams-label">
               {t('projects.teams')}{' '}
               <span className="font-normal text-muted-foreground">({t('projects.optional')})</span>
             </span>
-            <div className="flex flex-wrap gap-2">
+            <fieldset aria-labelledby="project-teams-label" className="flex flex-wrap gap-2">
               {teams.map(team => (
                 <button
+                  aria-pressed={selectedTeamIds.includes(team.id)}
                   className={cn(
                     'rounded-md border border-border px-2.5 py-1 text-xs font-medium transition-colors',
                     selectedTeamIds.includes(team.id)
@@ -172,10 +182,23 @@ export const CreateProjectModal = observer(function CreateProjectModal({
                   {team.name}
                 </button>
               ))}
-            </div>
+            </fieldset>
             {teams.length === 0 && (
               <p className="text-xs text-muted-foreground">{t('projects.noTeamsAvailable')}</p>
             )}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">
+              {t('projects.lead')}{' '}
+              <span className="font-normal text-muted-foreground">({t('projects.optional')})</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <AssigneeSelect onChange={setLeadId} users={users} value={leadId} />
+              <span className="text-sm text-foreground-secondary">
+                {lead?.displayName ?? t('projects.noLead')}
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -201,13 +224,21 @@ export const CreateProjectModal = observer(function CreateProjectModal({
                 </span>
               </label>
               <Input
+                aria-describedby={rangeValid ? undefined : 'project-range-error'}
+                aria-invalid={!rangeValid}
                 id="project-target"
+                min={startDate || undefined}
                 onChange={e => setTargetDate(e.target.value)}
                 type="date"
                 value={targetDate}
               />
             </div>
           </div>
+          {!rangeValid && (
+            <p className="text-xs text-danger-subtle-foreground" id="project-range-error">
+              {t('projects.invalidRange')}
+            </p>
+          )}
         </div>
 
         <ModalFooter

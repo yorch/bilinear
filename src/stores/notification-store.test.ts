@@ -105,4 +105,39 @@ describe('NotificationStore', () => {
       expect(store.pool.size).toBe(1);
     });
   });
+
+  describe('hasMore / loadState', () => {
+    it('flags a full page as truncated and a short page as complete', () => {
+      store.reconcile([makeNotification({ id: 'a' }), makeNotification({ id: 'b' })], 2);
+      expect(store.hasMore).toBe(true);
+      store.reconcile([makeNotification({ id: 'a' })], 2);
+      expect(store.hasMore).toBe(false);
+    });
+
+    it('starts idle and records load state', () => {
+      expect(store.loadState).toBe('idle');
+      store.setLoadState('error');
+      expect(store.loadState).toBe('error');
+    });
+  });
+
+  describe('reconcile', () => {
+    it('drops pooled rows the server no longer returns (short page = whole list)', () => {
+      store.upsertMany([makeNotification({ id: 'snoozed' }), makeNotification({ id: 'kept' })]);
+      store.reconcile([makeNotification({ id: 'kept' })], 50);
+      expect([...store.pool.keys()]).toEqual(['kept']);
+      expect(store.unreadCount).toBe(1);
+    });
+
+    it('on a full page only judges rows at least as new as the oldest returned', () => {
+      store.upsertMany([
+        makeNotification({ createdAt: '2025-01-01T00:00:00Z', id: 'beyond-page' }),
+        makeNotification({ createdAt: '2026-02-01T00:00:00Z', id: 'gone' }),
+      ]);
+      store.reconcile([makeNotification({ createdAt: '2026-01-01T00:00:00Z', id: 'a' })], 1);
+      expect(store.pool.has('beyond-page')).toBe(true);
+      expect(store.pool.has('gone')).toBe(false);
+      expect(store.pool.has('a')).toBe(true);
+    });
+  });
 });

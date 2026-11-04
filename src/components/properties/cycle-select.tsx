@@ -7,9 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import { getCycleDisplayName, isActiveCycle } from '@/lib/cycle-utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 interface CycleSelectProps {
+  /** Text shown beside the icon while no cycle is set. */
+  label?: string;
   onChange: (cycleId: string | null) => void;
   onClose?: () => void;
   open?: boolean;
@@ -20,6 +23,7 @@ interface CycleSelectProps {
 export const CycleSelect = observer(function CycleSelect({
   value,
   teamId,
+  label,
   onChange,
   open,
   onClose,
@@ -67,9 +71,10 @@ export const CycleSelect = observer(function CycleSelect({
             <span className="max-w-[100px] truncate">{getCycleDisplayName(current)}</span>
           </>
         ) : (
-          <PropertyPlaceholder icon={RefreshCw} />
+          <PropertyPlaceholder icon={RefreshCw} label={label} />
         )
       }
+      triggerClassName={cn(TOUCH_TARGET, 'max-md:justify-start')}
       triggerTitle={t('properties.cycle.setCycle')}
     />
   );

@@ -1,15 +1,16 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
+import { SimpleSelect } from '@/components/ui/select';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 const PREVIEW_QUERY = `
@@ -62,7 +63,12 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
   const teams = teamStore.all;
 
   const [csv, setCsv] = useState('');
+  // Import has NO default team: silently filing a CSV into whichever team
+  // happens to be first is how issues end up in the wrong place.
   const [teamId, setTeamId] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [exportTeamId, setExportTeamId] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [rowCount, setRowCount] = useState(0);
   const [mapping, setMapping] = useState<Partial<Record<FieldKey, string>>>({});
@@ -72,7 +78,7 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
   const [previewing, setPreviewing] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
 
-  const activeTeamId = teamId || teams[0]?.id || '';
+  const activeTeamId = teamId;
 
   // Best-effort auto-map by case-insensitive header name match.
   function autoMap(hdrs: string[]) {
@@ -90,7 +96,19 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
     return next;
   }
 
+  function downloadTemplate() {
+    const header = MAPPABLE_FIELDS.map(f => MAPPABLE_FIELD_MATCH_LABELS[f.key]).join(',');
+    const blob = new Blob([`${header}\n`], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.download = 'bilinear-import-template.csv';
+    a.href = url;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleFile(file: File) {
+    setFileName(file.name);
     const text = await file.text();
     setCsv(text);
     await runPreview(text);
@@ -157,7 +175,7 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
       // FORBIDDEN error, which used to bail out silently (no download, no toast).
       const json = await gqlQuery<string | null>(
         EXPORT_QUERY,
-        { teamId: activeTeamId || null },
+        { teamId: exportTeamId || null },
         'organizationExport',
       );
       if (!json) {
@@ -176,47 +194,71 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
     }
   }
 
-  const inputCls = cn(
-    'rounded-md border border-border bg-transparent',
-    'px-2 py-1 text-sm text-foreground',
-    'focus:outline-none focus:ring-1 focus:ring-brand',
-  );
-
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <PageHeader
         description={t('settings.import.description')}
         title={t('settings.import.title')}
       />
-      <div className="mx-auto w-full max-w-2xl space-y-8 p-8">
+      <div className="mx-auto w-full max-w-2xl space-y-8 px-4 py-6 md:p-8">
         {/* Import */}
-        <section className="rounded-lg border-border p-6 space-y-4">
+        <section className="space-y-4 rounded-lg border border-border bg-card p-4 md:p-6">
           <h2 className="font-medium">{t('settings.import.importHeading')}</h2>
+          <p className="text-xs text-muted-foreground">{t('settings.import.columnsHint')}</p>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <input
-              accept=".csv,text/csv"
-              className="text-sm"
-              onChange={e => {
-                const f = e.target.files?.[0];
-                if (f) {
-                  void handleFile(f);
+          <div className="space-y-3">
+            <div>
+              <span className="mb-1 block text-sm font-medium">
+                {t('settings.import.importIntoTeam')} <span className="text-danger">*</span>
+              </span>
+              <SimpleSelect
+                ariaLabel={t('settings.import.importIntoTeam')}
+                onChange={setTeamId}
+                options={teams.map(team => ({ label: team.name, value: team.id }))}
+                placeholder={
+                  teams.length === 0
+                    ? t('settings.import.noTeams')
+                    : t('settings.import.chooseTeam')
                 }
-              }}
-              type="file"
-            />
-            <select
-              className={inputCls}
-              onChange={e => setTeamId(e.target.value)}
-              value={activeTeamId}
-            >
-              {teams.length === 0 && <option value="">{t('settings.import.noTeams')}</option>}
-              {teams.map(team => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
+                value={activeTeamId}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                accept=".csv,text/csv"
+                aria-label={t('settings.import.csvFile')}
+                className="sr-only"
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    void handleFile(f);
+                  }
+                }}
+                ref={fileInputRef}
+                tabIndex={-1}
+                type="file"
+              />
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {t('settings.import.chooseCsv')}
+              </Button>
+              <span className="min-w-0 truncate text-sm text-muted-foreground">
+                {fileName || t('settings.import.noFileChosen')}
+              </span>
+              <Button
+                className="ml-auto"
+                onClick={downloadTemplate}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {t('settings.import.downloadTemplate')}
+              </Button>
+            </div>
           </div>
 
           {previewing && <RowsSkeleton count={3} />}
@@ -228,30 +270,26 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
               </p>
               <div className="space-y-2">
                 {MAPPABLE_FIELDS.map(f => (
-                  <label className="flex items-center justify-between gap-3" key={f.key}>
+                  <div className="flex items-center justify-between gap-3" key={f.key}>
                     <span className="text-sm">
                       {t(f.labelKey)}
-                      {f.required && <span className="text-destructive"> *</span>}
+                      {f.required && <span className="text-danger"> *</span>}
                     </span>
-                    <select
-                      className={inputCls}
-                      onChange={e =>
-                        setMapping(m => ({ ...m, [f.key]: e.target.value || undefined }))
-                      }
+                    <SimpleSelect
+                      ariaLabel={t(f.labelKey)}
+                      className="w-48 max-w-[55%]"
+                      onChange={value => setMapping(m => ({ ...m, [f.key]: value || undefined }))}
+                      options={[
+                        { label: t('settings.import.noneOption'), value: '' },
+                        ...headers.map(h => ({ label: h, value: h })),
+                      ]}
                       value={mapping[f.key] ?? ''}
-                    >
-                      <option value="">{t('settings.import.noneOption')}</option>
-                      {headers.map(h => (
-                        <option key={h} value={h}>
-                          {h}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    />
+                  </div>
                 ))}
               </div>
               <Button
-                disabled={importing || !mapping.title}
+                disabled={importing || !mapping.title || !activeTeamId}
                 onClick={() => void runImport()}
                 size="sm"
                 type="button"
@@ -272,7 +310,7 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
                 })}
               </p>
               {result.errors.length > 0 && (
-                <ul className="mt-2 max-h-40 list-disc overflow-auto pl-5 text-xs text-destructive">
+                <ul className="mt-2 max-h-40 list-disc overflow-auto pl-5 text-xs text-danger-subtle-foreground">
                   {result.errors.map(e => (
                     <li key={e}>{e}</li>
                   ))}
@@ -283,9 +321,23 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
         </section>
 
         {/* Export */}
-        <section className="rounded-lg border-border p-6 space-y-3">
+        <section className="space-y-3 rounded-lg border border-border bg-card p-4 md:p-6">
           <h2 className="font-medium">{t('settings.import.exportHeading')}</h2>
           <p className="text-sm text-muted-foreground">{t('settings.import.exportDescription')}</p>
+          <div>
+            <span className="mb-1 block text-sm font-medium">
+              {t('settings.import.exportTeam')}
+            </span>
+            <SimpleSelect
+              ariaLabel={t('settings.import.exportTeam')}
+              onChange={setExportTeamId}
+              options={[
+                { label: t('settings.import.allTeams'), value: '' },
+                ...teams.map(team => ({ label: team.name, value: team.id })),
+              ]}
+              value={exportTeamId}
+            />
+          </div>
           <Button onClick={() => void runExport()} size="sm" type="button" variant="outline">
             {t('settings.import.exportJson')}
           </Button>

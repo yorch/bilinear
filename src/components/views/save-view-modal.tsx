@@ -31,6 +31,8 @@ interface SaveViewModalProps {
   onClose: () => void;
   onSubmit: (input: SaveViewInput) => Promise<void>;
   open: boolean;
+  /** One line saying what will be captured (e.g. "2 filters · List"). */
+  summary?: string;
   teamId?: string;
 }
 
@@ -43,6 +45,7 @@ export function SaveViewModal({
   initialSort,
   initialGroupBy,
   initialLayout,
+  summary,
 }: SaveViewModalProps) {
   const t = useTranslations();
   const [name, setName] = useState('');
@@ -97,6 +100,7 @@ export function SaveViewModal({
         <ModalHeader title={t('properties.saveView.title')} />
 
         <div className="flex flex-col gap-4 px-5 py-4">
+          {summary && <p className="text-xs text-muted-foreground">{summary}</p>}
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground" htmlFor="view-name">
               {t('properties.saveView.name')}

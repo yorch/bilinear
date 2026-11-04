@@ -3,7 +3,7 @@
 import { ArrowLeft } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { LabelDot } from '@/components/properties/label-select';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
@@ -15,6 +15,7 @@ import { useIssueSnooze } from '@/hooks/use-issue-snooze';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
 import { getBranchName, PRIORITY_OPTIONS } from '@/lib/issue-utils';
+import { isRovingFocusKey, nextRovingIndex } from '@/lib/roving-focus';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
@@ -90,6 +91,49 @@ export const IssueContextMenu = observer(function IssueContextMenu({
   const snoozePresets = getSnoozePresets();
 
   useOutsideClick(menuRef, onClose, true, true);
+
+  // Opened at the pointer, which can be anywhere: measure the real menu and pull
+  // it back inside the viewport (flip up/left rather than clip "Delete" off the
+  // bottom edge). Re-measured per submenu because each has a different height.
+  const [pos, setPos] = useState({ x, y });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `submenu` is the re-measure trigger — each panel has a different height
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!el) {
+      return;
+    }
+    const margin = 8;
+    const { height, width } = el.getBoundingClientRect();
+    const maxX = window.innerWidth - width - margin;
+    const maxY = window.innerHeight - height - margin;
+    setPos({
+      x: Math.max(margin, Math.min(x, maxX)),
+      y: Math.max(margin, Math.min(y, maxY)),
+    });
+  }, [x, y, submenu]);
+
+  // Keyboard: focus lands inside the menu on open (and when a submenu swaps the
+  // content), then Arrow/Home/End rove between the items.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `submenu` re-focuses the first item of the new panel
+  useLayoutEffect(() => {
+    menuRef.current?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
+  }, [submenu]);
+
+  const handleMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!isRovingFocusKey(e.key)) {
+      return;
+    }
+    const buttons = Array.from(
+      menuRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? [],
+    );
+    if (buttons.length === 0) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const current = buttons.indexOf(document.activeElement as HTMLElement);
+    buttons[nextRovingIndex(e.key, current, buttons.length)]?.focus();
+  };
 
   // Build the issue URL for clipboard operations
   const issueUrl =
@@ -221,12 +265,13 @@ export const IssueContextMenu = observer(function IssueContextMenu({
     <div
       aria-label={t('issues.actionsFor', { title })}
       className="min-w-[200px] overflow-hidden rounded-lg border border-border bg-card py-1 shadow-e2"
+      onKeyDown={handleMenuKeyDown}
       ref={menuRef}
       role="menu"
       style={{
-        left: x,
+        left: pos.x,
         position: 'fixed',
-        top: y,
+        top: pos.y,
         zIndex: 9999,
       }}
     >
@@ -245,7 +290,7 @@ export const IssueContextMenu = observer(function IssueContextMenu({
           return (
             <button
               className={cn(
-                'flex w-full items-center justify-between px-3 py-1.5 text-sm hover:bg-accent',
+                'flex w-full items-center justify-between px-3 py-1.5 text-sm hover:bg-accent focus-visible:bg-accent',
                 item.danger && 'text-danger-subtle-foreground',
               )}
               key={item.label}

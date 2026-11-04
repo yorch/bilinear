@@ -9,6 +9,7 @@ import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBProjectMilestone } from '@/lib/db';
 import { gql } from '@/lib/graphql';
+import { formatDateOnly, toDateOnly } from '@/lib/project-dates';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -136,7 +137,7 @@ interface MilestoneRowProps {
 
 function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
   const t = useTranslations();
-  const { formatDate } = useFormatters();
+  const { intlLocale } = useFormatters();
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -163,7 +164,7 @@ function MilestoneRow({ milestone, onDelete, onEdit }: MilestoneRowProps) {
       </div>
       {milestone.targetDate && (
         <span className="shrink-0 text-xs text-muted-foreground">
-          {formatDate(milestone.targetDate, { day: 'numeric', month: 'short', year: 'numeric' })}
+          {formatDateOnly(milestone.targetDate, intlLocale)}
         </span>
       )}
       <div className="flex shrink-0 items-center gap-0.5">
@@ -207,7 +208,15 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
 }: ProjectMilestonesSectionProps) {
   const t = useTranslations();
   const { projectStore } = useStore();
-  const milestones = projectStore.getMilestones(projectId);
+  // The store sorts by `sortOrder` alone, which ties for milestones created
+  // before ordering existed, so rows shuffled as the pool filled in. Break ties
+  // by date, then name, so the order is deterministic.
+  const milestones = [...projectStore.getMilestones(projectId)].sort(
+    (a, b) =>
+      a.sortOrder - b.sortOrder ||
+      (toDateOnly(a.targetDate) ?? '9999').localeCompare(toDateOnly(b.targetDate) ?? '9999') ||
+      a.name.localeCompare(b.name),
+  );
 
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);

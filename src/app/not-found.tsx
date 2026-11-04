@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { buttonVariants } from '@/components/ui/button';
 import { getServerTranslations } from '@/lib/i18n/server';
 
 /**
@@ -13,10 +14,7 @@ export default async function NotFound() {
       <p className="font-mono text-xs text-muted-foreground">404</p>
       <h1 className="text-xl font-semibold text-foreground">{t('errors.notFoundTitle')}</h1>
       <p className="max-w-md text-sm text-muted-foreground">{t('errors.notFoundDetail')}</p>
-      <Link
-        className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground shadow-e1 hover:bg-primary/90"
-        href="/"
-      >
+      <Link className={buttonVariants()} href="/">
         {t('errors.goHome')}
       </Link>
     </div>

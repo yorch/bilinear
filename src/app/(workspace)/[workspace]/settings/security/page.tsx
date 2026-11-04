@@ -2,12 +2,16 @@
 
 import { Copy, ExternalLink } from 'lucide-react';
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { LoadError } from '@/components/shared/load-error';
+import { ReadOnlyField } from '@/components/shared/read-only-field';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useOrigin } from '@/hooks/use-origin';
@@ -150,8 +154,16 @@ export default function SecuritySettingsPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [pendingAction, setPendingAction] = useState<
-    { tokenId: string; type: 'revokeScim' } | { type: 'removeSaml' } | null
+    { tokenId: string; type: 'revokeScim' } | { type: 'enforceSso' } | { type: 'removeSaml' } | null
   >(null);
+  const [errors, setErrors] = useState<{
+    idpCert?: string;
+    idpEntityId?: string;
+    idpSsoUrl?: string;
+  }>({});
+  const ssoUrlRef = useRef<HTMLInputElement>(null);
+  const entityIdRef = useRef<HTMLInputElement>(null);
+  const certRef = useRef<HTMLTextAreaElement>(null);
 
   // SCIM state
   const [scimCreating, setScimCreating] = useState(false);
@@ -268,20 +280,27 @@ export default function SecuritySettingsPage() {
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(prev => ({ ...prev, [key]: value }));
+    if (key === 'idpSsoUrl' || key === 'idpEntityId' || key === 'idpCert') {
+      setErrors(prev => ({ ...prev, [key]: undefined }));
+    }
   }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    // Inline, field-attached errors; focus lands on the first invalid field.
+    const next: typeof errors = {};
     if (!form.idpSsoUrl.trim()) {
-      toast.error(t('settings.security.idpSsoUrlRequired'));
-      return;
+      next.idpSsoUrl = t('settings.security.idpSsoUrlRequired');
     }
     if (!form.idpEntityId.trim()) {
-      toast.error(t('settings.security.idpEntityIdRequired'));
-      return;
+      next.idpEntityId = t('settings.security.idpEntityIdRequired');
     }
     if (!form.idpCert.trim() && !config) {
-      toast.error(t('settings.security.idpCertRequired'));
+      next.idpCert = t('settings.security.idpCertRequired');
+    }
+    setErrors(next);
+    if (next.idpSsoUrl || next.idpEntityId || next.idpCert) {
+      (next.idpSsoUrl ? ssoUrlRef : next.idpEntityId ? entityIdRef : certRef).current?.focus();
       return;
     }
     setSaving(true);
@@ -342,9 +361,9 @@ export default function SecuritySettingsPage() {
         description={t('settings.security.description')}
         title={t('settings.security.title')}
       />
-      <div className="mx-auto w-full max-w-2xl space-y-8 p-8">
+      <div className="mx-auto w-full max-w-2xl space-y-8 px-4 py-6 md:p-8">
         {/* SCIM Provisioning Section */}
-        <section className="rounded-lg border-border p-6 space-y-6">
+        <section className="space-y-6 rounded-lg border border-border bg-card p-4 md:p-6">
           <div>
             <h2 className="font-medium">{t('settings.security.scimHeading')}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -389,7 +408,7 @@ export default function SecuritySettingsPage() {
                   <div className="space-y-2">
                     {scimTokens.map(tok => (
                       <div
-                        className="flex items-center justify-between rounded-md border-border px-3 py-2"
+                        className="flex items-center justify-between rounded-md border border-border px-3 py-2"
                         key={tok.id}
                       >
                         <div className="min-w-0">
@@ -403,13 +422,15 @@ export default function SecuritySettingsPage() {
                               : ` · ${t('settings.security.neverUsed')}`}
                           </p>
                         </div>
-                        <button
-                          className="ml-3 shrink-0 rounded-md border border-destructive/50 px-2.5 py-1 text-xs text-destructive hover:bg-destructive/10"
+                        <Button
+                          className="ml-3 shrink-0 border-danger/40 text-danger-subtle-foreground"
                           onClick={() => setPendingAction({ tokenId: tok.id, type: 'revokeScim' })}
+                          size="xs"
                           type="button"
+                          variant="outline"
                         >
                           {t('settings.security.revoke')}
-                        </button>
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -422,7 +443,7 @@ export default function SecuritySettingsPage() {
                       {t('settings.security.copyTokenNowWarning')}
                     </p>
                     <div className="flex items-center gap-2">
-                      <code className="flex-1 truncate rounded bg-white/70 px-2 py-1 font-mono text-xs dark:bg-black/30">
+                      <code className="flex-1 truncate rounded bg-card px-2 py-1 font-mono text-xs">
                         {scimNewPlaintext}
                       </code>
                       <button
@@ -450,23 +471,24 @@ export default function SecuritySettingsPage() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <input
-                      className="flex-1 rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    <Input
+                      aria-label={t('settings.security.tokenLabel')}
+                      className="flex-1"
                       onChange={e => setScimNewLabel(e.target.value)}
                       placeholder={t('settings.security.tokenLabelPlaceholder')}
-                      type="text"
                       value={scimNewLabel}
                     />
-                    <button
-                      className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    <Button
+                      className="shrink-0"
                       disabled={scimCreating || !scimNewLabel.trim()}
                       onClick={handleScimCreate}
+                      size="sm"
                       type="button"
                     >
                       {scimCreating
                         ? t('settings.security.creatingEllipsis')
                         : t('settings.security.createToken')}
-                    </button>
+                    </Button>
                   </div>
                 )}
               </>
@@ -475,7 +497,7 @@ export default function SecuritySettingsPage() {
         </section>
 
         {/* SAML SSO Section */}
-        <section className="rounded-lg border-border p-6 space-y-6">
+        <section className="space-y-6 rounded-lg border border-border bg-card p-4 md:p-6">
           <div>
             <h2 className="font-medium">{t('settings.security.samlHeading')}</h2>
             <p className="text-sm text-muted-foreground mt-1">
@@ -524,56 +546,71 @@ export default function SecuritySettingsPage() {
               </div>
 
               {/* Configuration form */}
-              <form className="space-y-4" onSubmit={handleSave}>
+              <form className="space-y-4" noValidate onSubmit={handleSave}>
                 <div>
-                  <label className="block text-sm font-medium mb-1" htmlFor="idpSsoUrl">
-                    {t('settings.security.idpSsoUrl')} <span className="text-destructive">*</span>
+                  <label className="mb-1 block text-sm font-medium" htmlFor="idpSsoUrl">
+                    {t('settings.security.idpSsoUrl')} <span className="text-danger">*</span>
                   </label>
-                  <input
-                    className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  <Input
+                    aria-describedby={errors.idpSsoUrl ? 'idpSsoUrl-error' : undefined}
+                    aria-invalid={errors.idpSsoUrl ? true : undefined}
+                    aria-required
                     id="idpSsoUrl"
                     onChange={e => setField('idpSsoUrl', e.target.value)}
                     placeholder="https://your-idp.example.com/sso/saml"
+                    ref={ssoUrlRef}
                     type="url"
                     value={form.idpSsoUrl}
                   />
+                  <FieldError id="idpSsoUrl-error" message={errors.idpSsoUrl} />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1" htmlFor="idpEntityId">
-                    {t('settings.security.idpEntityId')} <span className="text-destructive">*</span>
+                  <label className="mb-1 block text-sm font-medium" htmlFor="idpEntityId">
+                    {t('settings.security.idpEntityId')} <span className="text-danger">*</span>
                   </label>
-                  <input
-                    className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  <Input
+                    aria-describedby={errors.idpEntityId ? 'idpEntityId-error' : undefined}
+                    aria-invalid={errors.idpEntityId ? true : undefined}
+                    aria-required
                     id="idpEntityId"
                     onChange={e => setField('idpEntityId', e.target.value)}
                     placeholder="https://your-idp.example.com/entity"
-                    type="text"
+                    ref={entityIdRef}
                     value={form.idpEntityId}
                   />
+                  <FieldError id="idpEntityId-error" message={errors.idpEntityId} />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1" htmlFor="idpCert">
+                  <label className="mb-1 block text-sm font-medium" htmlFor="idpCert">
                     {t('settings.security.idpCertificate')}
-                    {config ? ` — ${t('settings.security.leaveBlankToKeepExisting')}` : ' *'}
+                    {config ? (
+                      ` — ${t('settings.security.leaveBlankToKeepExisting')}`
+                    ) : (
+                      <span className="text-danger"> *</span>
+                    )}
                   </label>
-                  <textarea
-                    className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                  <Textarea
+                    aria-describedby={errors.idpCert ? 'idpCert-error' : undefined}
+                    aria-invalid={errors.idpCert ? true : undefined}
+                    aria-required={!config}
+                    className="font-mono"
                     id="idpCert"
                     onChange={e => setField('idpCert', e.target.value)}
                     placeholder={'-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'}
+                    ref={certRef}
                     rows={4}
                     value={form.idpCert}
                   />
+                  <FieldError id="idpCert-error" message={errors.idpCert} />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1" htmlFor="idpMetadataUrl">
+                  <label className="mb-1 block text-sm font-medium" htmlFor="idpMetadataUrl">
                     {t('settings.security.idpMetadataUrlOptional')}
                   </label>
-                  <input
-                    className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  <Input
                     id="idpMetadataUrl"
                     onChange={e => setField('idpMetadataUrl', e.target.value)}
                     placeholder="https://your-idp.example.com/metadata"
@@ -582,28 +619,24 @@ export default function SecuritySettingsPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium mb-1" htmlFor="emailAttribute">
+                    <label className="mb-1 block text-sm font-medium" htmlFor="emailAttribute">
                       {t('settings.security.emailAttribute')}
                     </label>
-                    <input
-                      className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    <Input
                       id="emailAttribute"
                       onChange={e => setField('emailAttribute', e.target.value)}
-                      type="text"
                       value={form.emailAttribute}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1" htmlFor="nameAttribute">
+                    <label className="mb-1 block text-sm font-medium" htmlFor="nameAttribute">
                       {t('settings.security.nameAttribute')}
                     </label>
-                    <input
-                      className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    <Input
                       id="nameAttribute"
                       onChange={e => setField('nameAttribute', e.target.value)}
-                      type="text"
                       value={form.nameAttribute}
                     />
                   </div>
@@ -627,41 +660,48 @@ export default function SecuritySettingsPage() {
                     checked={form.ssoEnforced}
                     description={t('settings.security.enforceSsoDescription')}
                     label={t('settings.security.enforceSso')}
-                    onCheckedChange={v => setField('ssoEnforced', v)}
+                    onCheckedChange={v => {
+                      // Turning enforcement ON can lock every member out if the
+                      // IdP details are wrong, so it is the one toggle that asks
+                      // first. Turning it off is always safe.
+                      if (v) {
+                        setPendingAction({ type: 'enforceSso' });
+                      } else {
+                        setField('ssoEnforced', false);
+                      }
+                    }}
                   />
                 </div>
 
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                    disabled={saving}
-                    type="submit"
-                  >
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <Button disabled={saving} type="submit">
                     {saving ? t('common.saving') : t('settings.security.saveConfiguration')}
-                  </button>
+                  </Button>
 
                   {config && (
                     <>
-                      <a
-                        className="flex items-center gap-1.5 rounded-md border-border px-3 py-1.5 text-sm hover:bg-muted"
-                        href={`/api/auth/saml/initiate?org=${orgKey}&redirect=/settings/security`}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        {t('settings.security.testSso')}
-                      </a>
+                      <Button asChild variant="outline">
+                        <a
+                          href={`/api/auth/saml/initiate?org=${encodeURIComponent(orgKey)}&redirect=${encodeURIComponent(`/${orgKey}/settings/security`)}`}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          {t('settings.security.testSso')}
+                        </a>
+                      </Button>
 
-                      <button
-                        className="rounded-md border border-destructive/50 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                      <Button
+                        className="border-danger/40 text-danger-subtle-foreground"
                         disabled={deleting}
                         onClick={() => setPendingAction({ type: 'removeSaml' })}
                         type="button"
+                        variant="outline"
                       >
                         {deleting
                           ? t('settings.security.removingEllipsis')
                           : t('settings.security.remove')}
-                      </button>
+                      </Button>
                     </>
                   )}
                 </div>
@@ -674,17 +714,23 @@ export default function SecuritySettingsPage() {
           confirmLabel={
             pendingAction?.type === 'revokeScim'
               ? t('settings.security.revoke')
-              : t('settings.security.remove')
+              : pendingAction?.type === 'enforceSso'
+                ? t('settings.security.enforceSso')
+                : t('settings.security.remove')
           }
           message={
             pendingAction?.type === 'revokeScim'
               ? t('settings.security.revokeScimTokenConfirm')
-              : t('settings.security.removeSamlConfirm')
+              : pendingAction?.type === 'enforceSso'
+                ? t('settings.security.enforceSsoConfirm')
+                : t('settings.security.removeSamlConfirm')
           }
           onCancel={() => setPendingAction(null)}
           onConfirm={() => {
             if (pendingAction?.type === 'revokeScim') {
               void handleScimRevoke(pendingAction.tokenId);
+            } else if (pendingAction?.type === 'enforceSso') {
+              setField('ssoEnforced', true);
             } else if (pendingAction?.type === 'removeSaml') {
               void handleDelete();
             }
@@ -694,7 +740,9 @@ export default function SecuritySettingsPage() {
           title={
             pendingAction?.type === 'revokeScim'
               ? t('settings.security.revoke')
-              : t('settings.security.remove')
+              : pendingAction?.type === 'enforceSso'
+                ? t('settings.security.enforceSsoTitle')
+                : t('settings.security.remove')
           }
         />
       </div>
@@ -706,43 +754,13 @@ export default function SecuritySettingsPage() {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function ReadOnlyField({
-  label,
-  onCopy,
-  value,
-}: {
-  label: string;
-  onCopy: () => void;
-  value: string;
-}) {
-  const t = useTranslations();
-  // The origin is not knowable until after mount (`useOrigin` returns '' on the
-  // server and for the hydration pass), and these values exist to be pasted into
-  // an identity provider. Copying the host-less `/api/...` path would hand the
-  // user a silently wrong string, so the button is disabled for exactly as long
-  // as the value has no host.
-  const pending = value.startsWith('/');
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) {
+    return null;
+  }
   return (
-    <div>
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <div className="flex items-center gap-2">
-        <code className="flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-xs">
-          {value}
-        </code>
-        <button
-          aria-label={t('settings.security.copy')}
-          className={cn(
-            'shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-40',
-            TOUCH_TARGET,
-          )}
-          disabled={pending}
-          onClick={onCopy}
-          title={t('settings.security.copy')}
-          type="button"
-        >
-          <Copy className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </div>
+    <p className="mt-1 text-xs text-danger-subtle-foreground" id={id} role="alert">
+      {message}
+    </p>
   );
 }

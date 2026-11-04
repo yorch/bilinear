@@ -7,12 +7,16 @@ import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import type { BuiltInColumn, ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
+import { cn, TOUCH_ROW } from '@/lib/utils';
 
 export function ColumnPicker({
   isVisible,
   onToggle,
   customFields,
+  estimationType,
 }: {
+  /** The team's estimation scale; the Estimate column is offered only when the team uses one. */
+  estimationType?: string;
   isVisible: (key: ColumnKey) => boolean;
   onToggle: (key: ColumnKey) => void;
   customFields?: DBCustomFieldDefinition[];
@@ -24,7 +28,9 @@ export function ColumnPicker({
     { key: 'dueDate', label: t('issues.dueDate') },
     { key: 'assignee', label: t('issues.assignee') },
     { key: 'cycle', label: t('issues.cycle') },
-    { key: 'estimate', label: t('issues.estimate') },
+    ...(estimationType && estimationType !== 'notUsed'
+      ? [{ key: 'estimate' as const, label: t('issues.estimate') }]
+      : []),
   ];
 
   return (
@@ -42,6 +48,9 @@ export function ColumnPicker({
     >
       {() => (
         <>
+          <p className="px-2 py-1 text-xs text-muted-foreground lg:hidden">
+            {t('issues.columnsWideOnly')}
+          </p>
           <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {t('issues.builtIn')}
           </p>
@@ -89,7 +98,10 @@ function CheckRow({
   const id = useId();
   return (
     <label
-      className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-foreground-secondary hover:bg-muted"
+      className={cn(
+        'flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-foreground-secondary hover:bg-muted',
+        TOUCH_ROW,
+      )}
       htmlFor={id}
     >
       <Checkbox checked={checked} id={id} onChange={onToggle} />

@@ -11,6 +11,7 @@ import {
   PLOT_WIDTH,
   toPath,
   xAxisLabels,
+  xAxisStep,
 } from './chart-geometry';
 
 /**
@@ -60,6 +61,14 @@ describe('makeScales', () => {
     // An odd max rounds rather than emitting a fractional tick label.
     expect(makeScales(3, 7).yTicks).toEqual([0, 4, 7]);
   });
+
+  it('never repeats a tick (a max of 1 used to give [0, 1, 1] and duplicate keys)', () => {
+    expect(makeScales(3, 1).yTicks).toEqual([0, 1]);
+  });
+
+  it('scales x to the width it is given', () => {
+    expect(makeScales(2, 10, 300).xScale(1)).toBe(300 - PADDING_RIGHT);
+  });
 });
 
 describe('toPath', () => {
@@ -80,8 +89,14 @@ describe('toPath', () => {
 describe('xAxisLabels', () => {
   const data = Array.from({ length: 8 }, (_, i) => ({ date: `day-${i}` }));
 
-  it('labels every third point plus the last, so labels cannot collide', () => {
-    expect(xAxisLabels(data, d => d).map(l => l.i)).toEqual([0, 3, 6, 7]);
+  it('labels every third point plus the last, dropping a stepped label that would touch it', () => {
+    // 6 sits one point from the last (7): "Nov 3 Nov 4" overprinted before.
+    expect(xAxisLabels(data, d => d).map(l => l.i)).toEqual([0, 3, 7]);
+  });
+
+  it('honours a wider step for narrow charts', () => {
+    const ten = Array.from({ length: 10 }, (_, i) => ({ date: `day-${i}` }));
+    expect(xAxisLabels(ten, d => d, 5).map(l => l.i)).toEqual([0, 9]);
   });
 
   it('carries the original index through for positioning', () => {
@@ -92,5 +107,14 @@ describe('xAxisLabels', () => {
     const seven = Array.from({ length: 7 }, (_, i) => ({ date: `day-${i}` }));
 
     expect(xAxisLabels(seven, d => d).map(l => l.i)).toEqual([0, 3, 6]);
+  });
+});
+
+describe('xAxisStep', () => {
+  it('widens the step as the chart narrows', () => {
+    expect(xAxisStep(14, 300)).toBeGreaterThan(xAxisStep(14, 800));
+  });
+  it('never returns less than 1', () => {
+    expect(xAxisStep(1, 800)).toBe(1);
   });
 });

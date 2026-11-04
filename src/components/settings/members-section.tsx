@@ -6,10 +6,13 @@ import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { RoleSelect } from '@/components/shared/role-select';
+import { SectionHeader } from '@/components/shared/section-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SimpleSelect } from '@/components/ui/select';
+import { RowsSkeleton } from '@/components/ui/skeleton';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useFormatters } from '@/hooks/use-formatters';
 import { pendingWriteCount, useOrganizationLeave } from '@/hooks/use-organization-switch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -66,7 +69,8 @@ interface MembersSectionProps {
  * whether it may be offered at all depends on the owner count in that roster.
  */
 export const MembersSection = observer(function MembersSection({ orgName }: MembersSectionProps) {
-  const { organizationMemberStore, userStore } = useStore();
+  const { organizationMemberStore, syncStore, userStore } = useStore();
+  const hydrated = syncStore.status !== 'idle' && syncStore.status !== 'bootstrapping';
   const t = useTranslations();
   const { formatDate } = useFormatters();
 
@@ -210,14 +214,17 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
   return (
     <>
       <section>
-        <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {t('settings.workspace.members')}
-          <span className="ml-2 font-normal normal-case text-muted-foreground">
-            {members.length}
-          </span>
-        </h2>
+        <div className="mb-4">
+          <SectionHeader
+            as="h2"
+            count={hydrated ? members.length : undefined}
+            title={t('settings.workspace.members')}
+          />
+        </div>
         <div className="rounded-lg border border-border bg-card overflow-hidden">
-          {members.length === 0 ? (
+          {!hydrated ? (
+            <RowsSkeleton className="px-5 py-4" count={2} />
+          ) : members.length === 0 ? (
             <p className="px-5 py-4 text-sm text-muted-foreground">
               {t('settings.workspace.noMembersFound')}
             </p>
@@ -243,12 +250,14 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
                         width={28}
                       />
                     ) : (
-                      <span
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white"
-                        style={{ backgroundColor: user.avatarBgColor }}
-                      >
-                        {user.initials}
-                      </span>
+                      <UserAvatar
+                        size="md"
+                        user={{
+                          avatarBackgroundColor: user.avatarBgColor,
+                          displayName: user.displayName,
+                          initials: user.initials,
+                        }}
+                      />
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">
@@ -296,9 +305,9 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
 
       {canManage && (
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('settings.workspace.inviteMember')}
-          </h2>
+          <div className="mb-4">
+            <SectionHeader as="h2" title={t('settings.workspace.inviteMember')} />
+          </div>
           <div className="rounded-lg border border-border bg-card divide-y divide-border">
             <form className="flex flex-wrap items-center gap-2 px-5 py-4" onSubmit={sendInvite}>
               <Input
@@ -379,15 +388,15 @@ export const MembersSection = observer(function MembersSection({ orgName }: Memb
       */}
       {currentUserId && !isLastOwner && (
         <section>
-          <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('settings.workspace.leaveTitle')}
-          </h2>
+          <div className="mb-4">
+            <SectionHeader as="h2" title={t('settings.workspace.leaveTitle')} />
+          </div>
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger/40 bg-card px-5 py-4">
             <p className="min-w-0 flex-1 text-xs text-muted-foreground">
               {t('settings.workspace.leaveDescription')}
             </p>
             <Button
-              className="shrink-0 border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="shrink-0 border-danger/40 text-danger-subtle-foreground hover:bg-danger-subtle"
               disabled={leaving}
               // The count is read when the dialog opens, not when it is
               // confirmed, so the warning matches what the user was shown.

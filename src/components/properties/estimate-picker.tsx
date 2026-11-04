@@ -6,7 +6,7 @@ import { PropertyPlaceholder } from '@/components/properties/property-placeholde
 import { Badge } from '@/components/ui/badge';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 
 /**
  * Estimation scale point values per estimation type.
@@ -107,7 +107,7 @@ export function EstimatePicker({
       onClose={onClose}
       panelClassName="min-w-[120px] py-1"
       triggerChildren={<EstimateBadge estimationType={estimationType} value={value} />}
-      triggerClassName="gap-1 px-1 py-0.5"
+      triggerClassName={cn('gap-1 px-1 py-0.5', TOUCH_TARGET, 'max-md:justify-start')}
       triggerTitle={t('properties.estimate.setEstimate')}
     >
       {close => (

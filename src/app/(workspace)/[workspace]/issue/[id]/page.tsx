@@ -2,10 +2,12 @@
 
 import { ArrowLeft } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { IssueDetailContent } from '@/components/issues/issue-detail-content';
 import { SubscribeButton, useIssueSubscription } from '@/components/issues/issue-detail-panel';
+import { WorkspaceNotFound } from '@/components/layouts/workspace-not-found';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { DetailPanelSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -14,18 +16,15 @@ import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, isGqlErrorCode } from '@/lib/graphql';
-import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
+import { toIssueDetail, toIssueLabels, toIssueSyncRow, toIssueUsers } from '@/lib/issue-mappers';
 import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
-/** One page load: the issue plus the workspace label set its picker offers. */
-interface LoadedIssue {
-  issue: IssueWithTeam;
+/** What a cold-miss fetch returns: the issue row plus the team data the store may not have yet. */
+interface FetchedIssue {
+  issue: Record<string, unknown>;
   labels: IssueLabel[];
-}
-
-interface IssueWithTeam extends IssueDetail {
   team: {
     id: string;
     key: string;
@@ -37,7 +36,9 @@ interface IssueWithTeam extends IssueDetail {
 const ISSUE_QUERY = `
   query Issue($id: ID!) {
     issue(id: $id) {
-      id identifier title description priority estimate stateId teamId assigneeId projectId cycleId dueDate createdAt updatedAt
+      id identifier number title description priority estimate stateId teamId organizationId
+      assigneeId projectId cycleId parentId dueDate startDate snoozedUntilAt projectMilestoneId
+      branchName sortOrder prioritySortOrder trashed createdAt updatedAt
       labels { id name color }
       team {
         id key
@@ -66,34 +67,21 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   const fromLabel = searchParams.get('fromLabel');
   const returnTo = fromPath?.startsWith(`/${workspace}/`) && fromLabel ? fromPath : null;
 
-  const [issue, setIssue] = useState<IssueWithTeam | null>(null);
-  const [labels, setLabels] = useState<IssueLabel[]>([]);
+  // The page renders from the shared `issueStore` — the same pool the list and
+  // the overlay panel read — so a remote edit (WS SyncAction), a start date or a
+  // parent link shows up here exactly as it does there. It used to hold a
+  // one-shot GraphQL snapshot in `useState`, which never saw either.
+  const storeIssue = issueStore.findById(id);
 
-  useDocumentTitle(issue ? `${issue.identifier} ${issue.title}` : null);
+  // The server is only asked on a cold miss (a deep link before bootstrap has
+  // filled the store). The fetched row is written into the store, after which
+  // the page reads it from there like any other issue.
+  const [fetched, setFetched] = useState<FetchedIssue | null>(null);
 
-  const loadIssue = useCallback(async (): Promise<LoadedIssue | null> => {
-    // If the issue is only in the local store (e.g. optimistic or temp id),
-    // build the detail view from store data instead of fetching from server.
-    const storeIssue = issueStore.findById(id);
-    if (storeIssue && id.startsWith('temp-')) {
-      const team = teamStore.findById(storeIssue.teamId);
-      const states = team ? workflowStateStore.findByTeamId(team.id) : [];
-      const members = toIssueUsers(userStore.all).map(user => ({ user }));
-      const localIssue: IssueWithTeam = {
-        ...toIssueDetail(storeIssue, labelStore),
-        team: {
-          id: team?.id ?? storeIssue.teamId,
-          key: team?.key ?? '',
-          members,
-          states,
-        },
-      };
-      return {
-        issue: localIssue,
-        labels: toIssueLabels(labelStore.all),
-      };
+  const loadIssue = useCallback(async (): Promise<FetchedIssue | null> => {
+    if (issueStore.findById(id)) {
+      return null;
     }
-
     // `gqlMutate` rather than raw `gql`: a missing issue comes back as a
     // NOT_FOUND *error* alongside `data.issue === null`, so reading `data`
     // alone cannot tell "this issue does not exist" from "the request failed".
@@ -103,71 +91,60 @@ const IssueDetailPage = observer(function IssueDetailPage() {
     if (!data.issue) {
       return null;
     }
+    const issue = data.issue as Record<string, unknown> & { team: FetchedIssue['team'] };
+    const { team, ...row } = issue;
     return {
-      issue: data.issue as IssueWithTeam,
+      issue: row,
       labels: (data.labels as { nodes: IssueLabel[] } | undefined)?.nodes ?? [],
+      team,
     };
-  }, [id, issueStore, teamStore, workflowStateStore, labelStore, userStore]);
+  }, [id, issueStore]);
 
   const {
     cause,
     error: loadFailed,
     loading,
     refetch: reloadIssue,
-  } = useRetryableFetch<LoadedIssue | null>(loadIssue, [loadIssue], null, {
+  } = useRetryableFetch<FetchedIssue | null>(loadIssue, [loadIssue], null, {
     onData: loaded => {
-      if (loaded) {
-        setIssue(loaded.issue);
-        setLabels(loaded.labels);
+      if (!loaded) {
+        return;
+      }
+      setFetched(loaded);
+      const syncRow = toIssueSyncRow(loaded.issue);
+      if (syncRow && !issueStore.findById(id)) {
+        issueStore.applySyncAction('U', id, syncRow);
       }
     },
   });
+
+  const team = storeIssue ? teamStore.findById(storeIssue.teamId) : null;
+  const parentIssue = storeIssue?.parentId ? issueStore.findById(storeIssue.parentId) : null;
+
+  const issue: IssueDetail | null = storeIssue ? toIssueDetail(storeIssue, labelStore) : null;
+
+  // Prefer the stores for team data (live); fall back to what the cold-miss
+  // fetch brought with it for a store that has not bootstrapped yet.
+  const storeStates = storeIssue ? workflowStateStore.findByTeamId(storeIssue.teamId) : [];
+  const states: WorkflowState[] =
+    storeStates.length > 0 ? storeStates : (fetched?.team.states ?? []);
+  const storeUsers = toIssueUsers(userStore.all);
+  const users: IssueUser[] =
+    storeUsers.length > 0 ? storeUsers : (fetched?.team.members.map(m => m.user) ?? []);
+  const storeLabels = toIssueLabels(labelStore.all);
+  const labels: IssueLabel[] = storeLabels.length > 0 ? storeLabels : (fetched?.labels ?? []);
+  const teamKey = team?.key ?? fetched?.team.key ?? '';
+
+  useDocumentTitle(issue ? `${issue.identifier} ${issue.title}` : null);
 
   // A NOT_FOUND is an answer, not a failure — it renders as "no such issue"
-  // rather than as something worth retrying.
-  const notFound = !loading && (isGqlErrorCode(cause, 'NOT_FOUND') || (!loadFailed && !issue));
+  // rather than as something worth retrying. An issue deleted remotely while
+  // open leaves the store and lands here too.
+  const notFound = !storeIssue && !loading && (isGqlErrorCode(cause, 'NOT_FOUND') || !loadFailed);
 
-  // This route renders from its own local `issue` useState rather than the
-  // shared issueStore (it can show an issue the store hasn't hydrated yet —
-  // see the temp-id branch above), so the default issueStore-backed
-  // `useIssueUpdate()` behavior would optimistically write to state this
-  // page doesn't read from. `useIssueUpdate`'s override hooks let this route
-  // share the exact same TransactionQueue enqueue / offline-queue / rollback
-  // / reconcile implementation as every other issue surface, just pointed at
-  // this page's local `issue` state instead of the store.
-  const snapshotLocal = useCallback(() => issue, [issue]);
-
-  const applyLocal = useCallback(
-    (_issueId: string, patch: unknown) => {
-      const p = patch as Record<string, unknown>;
-      // Convert labelIds to label objects for optimistic display in this
-      // page's own issue snapshot (a plain useState, not the shared
-      // issueStore — this route can render an issue the store hasn't
-      // hydrated yet, so it keeps its own copy for immediate feedback).
-      // Rollback (re-applying a full prior snapshot) has no `labelIds` key,
-      // so it skips this branch and merges the snapshot's own `labels` as-is.
-      let optimisticPatch: Record<string, unknown> = p;
-      if (Array.isArray(p.labelIds)) {
-        const { labelIds, ...rest } = p;
-        optimisticPatch = {
-          ...rest,
-          labels: labels.filter(l => (labelIds as string[]).includes(l.id)),
-        };
-      }
-      setIssue(prev => (prev ? { ...prev, ...optimisticPatch } : prev));
-    },
-    [labels],
-  );
-
-  const reconcileLocal = useCallback((_issueId: string, updated: Record<string, unknown>) => {
-    setIssue(prev => (prev ? { ...prev, ...updated } : prev));
-  }, []);
-
-  const handleUpdate = useIssueUpdate({
-    apply: applyLocal,
-    reconcile: reconcileLocal,
-    snapshot: snapshotLocal,
-  });
+  // The default (store-backed) updater: optimistic write, queue, rollback and
+  // reconcile all land in the pool this page now reads.
+  const handleUpdate = useIssueUpdate();
 
   const { subscribed, toggle: toggleSubscription } = useIssueSubscription(issue?.id);
   useHotkeys('shift+s', toggleSubscription, {}, [subscribed, issue?.id]);
@@ -175,23 +152,19 @@ const IssueDetailPage = observer(function IssueDetailPage() {
   const handleClose = () => {
     if (returnTo) {
       router.push(returnTo);
-    } else if (issue) {
-      router.push(`/${workspace}/team/${issue.team.key}`);
+    } else if (teamKey) {
+      router.push(`/${workspace}/team/${teamKey}`);
     } else {
       router.push(`/${workspace}`);
     }
   };
 
-  if (loading) {
+  if (!issue && loading) {
     return <DetailPanelSkeleton />;
   }
 
   if (notFound) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        {t('issueDetail.issueNotFound')}
-      </div>
-    );
+    return <WorkspaceNotFound title={t('issueDetail.issueNotFound')} />;
   }
 
   if (!issue) {
@@ -224,8 +197,34 @@ const IssueDetailPage = observer(function IssueDetailPage() {
             <ArrowLeft className="h-3 w-3 shrink-0" />
             <span className="truncate">{breadcrumbLabel}</span>
           </button>
+          {team && (
+            <>
+              <span className="text-muted-foreground">/</span>
+              <Link
+                className="truncate text-xs text-muted-foreground hover:text-foreground"
+                href={`/${workspace}/team/${team.key}`}
+              >
+                {team.name}
+              </Link>
+            </>
+          )}
+          {parentIssue && (
+            <>
+              <span className="text-muted-foreground">/</span>
+              <Link
+                className="shrink-0 font-mono text-xs text-muted-foreground hover:text-foreground"
+                data-testid="issue-parent-link"
+                href={`/${workspace}/issue/${parentIssue.id}`}
+                title={parentIssue.title}
+              >
+                {parentIssue.identifier}
+              </Link>
+            </>
+          )}
           <span className="text-muted-foreground">/</span>
-          <span className="font-mono text-xs text-muted-foreground">{issue.identifier}</span>
+          <span className="shrink-0 font-mono text-xs text-foreground-secondary">
+            {issue.identifier}
+          </span>
         </div>
         <SubscribeButton onToggle={toggleSubscription} subscribed={subscribed} />
       </header>
@@ -235,8 +234,8 @@ const IssueDetailPage = observer(function IssueDetailPage() {
           labels={labels}
           layout="page"
           onUpdate={handleUpdate}
-          states={issue.team.states}
-          users={issue.team.members.map(m => m.user)}
+          states={states}
+          users={users}
         />
       </div>
     </div>

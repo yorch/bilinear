@@ -13,7 +13,6 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
-import { toast } from '@/lib/toast';
 import { useStore } from '@/providers/store-provider';
 
 type ProjectsLayout = 'list' | 'roadmap';
@@ -38,7 +37,7 @@ export default observer(function ProjectsPage() {
   const t = useTranslations();
   useDocumentTitle(t('nav.projects'));
   const { workspace } = useParams<{ workspace: string }>();
-  const { uiStore } = useStore();
+  const { projectStore, uiStore } = useStore();
   const [layout, setLayout] = useState<ProjectsLayout>(() => {
     if (typeof window === 'undefined') {
       return 'list';
@@ -70,7 +69,7 @@ export default observer(function ProjectsPage() {
           (res.errors[0] as { message: string }).message ?? t('projects.failedToCreate'),
         );
       }
-      toast.success(t('projects.projectCreated'));
+      // No toast here: CreateProjectModal toasts once after this resolves.
     },
     [t],
   );
@@ -113,6 +112,7 @@ export default observer(function ProjectsPage() {
             </Button>
           </>
         }
+        count={projectStore.all.length}
         title={t('projects.title')}
       />
       {layout === 'list' ? (

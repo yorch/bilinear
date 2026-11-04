@@ -8,9 +8,23 @@ import { useRestoreFocus } from '@/hooks/use-restore-focus';
 import { cn } from '@/lib/utils';
 
 interface SearchableSelectPopoverProps<T> {
+  /** Which edge of the trigger the panel hugs. Defaults to the left edge. */
+  align?: 'left' | 'right';
+  /** Class for the wrapper (the positioning context), e.g. layout tweaks from a parent row. */
+  className?: string;
   clearLabel?: ReactNode;
+  /**
+   * Keep the panel open after a pick — for multi-select lists (labels), where
+   * the reader toggles several rows. Defaults to true (single-select).
+   */
+  closeOnSelect?: boolean;
   disabled?: boolean;
   emptyText: string;
+  /**
+   * Rendered under the list with the live query, e.g. a "Create label “x”" row.
+   * Receives `close` so the action can dismiss the panel.
+   */
+  footer?: (ctx: { close: () => void; search: string }) => ReactNode;
   forceOpen?: boolean;
   getKey: (item: T) => string;
   isSelected?: (item: T) => boolean;
@@ -19,6 +33,8 @@ interface SearchableSelectPopoverProps<T> {
   listClassName?: string;
   /** Local filter predicate, used against `items`. Required when `items` is passed. */
   matchesSearch?: (item: T, search: string) => boolean;
+  /** Marks the listbox `aria-multiselectable` (pair with `closeOnSelect={false}`). */
+  multiple?: boolean;
   onClear?: () => void;
   onClose?: () => void;
   /**
@@ -31,6 +47,7 @@ interface SearchableSelectPopoverProps<T> {
   onSelect: (item: T) => void;
   open?: boolean;
   panelClassName?: string;
+  panelDataTestId?: string;
   renderItem: (item: T) => ReactNode;
   searchPlaceholder: string;
   triggerChildren: ReactNode;
@@ -39,6 +56,12 @@ interface SearchableSelectPopoverProps<T> {
 }
 
 export function SearchableSelectPopover<T>({
+  align = 'left',
+  className,
+  closeOnSelect = true,
+  footer,
+  multiple,
+  panelDataTestId,
   open: controlledOpen,
   disabled,
   forceOpen,
@@ -125,13 +148,15 @@ export function SearchableSelectPopover<T>({
       const item = activeIndex >= 0 ? filtered[activeIndex] : filtered[0];
       if (item) {
         onSelect(item);
-        close();
+        if (closeOnSelect) {
+          close();
+        }
       }
     }
   };
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className={cn('relative', className)} ref={containerRef}>
       <button
         aria-controls={isOpen ? listboxId : undefined}
         aria-expanded={isOpen}
@@ -141,7 +166,22 @@ export function SearchableSelectPopover<T>({
           triggerClassName,
         )}
         disabled={disabled}
-        onClick={() => (isOpen ? close() : setOpen(true))}
+        // Stops the click reaching a clickable row (issue rows open the detail
+        // panel on click); SelectPopover's trigger does the same.
+        onClick={e => {
+          e.stopPropagation();
+          if (isOpen) {
+            close();
+          } else {
+            setOpen(true);
+          }
+        }}
+        onKeyDown={e => {
+          if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !isOpen) {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
         ref={triggerRef}
         title={triggerTitle}
         type="button"
@@ -150,12 +190,23 @@ export function SearchableSelectPopover<T>({
       </button>
 
       {isOpen && (
+        // biome-ignore lint/a11y/noStaticElementInteractions: the handlers only stop events reaching a clickable parent row (and its hotkeys); the controls inside are the interactive elements
         <div
           className={cn(
-            'absolute left-0 z-50 w-56 rounded-lg border border-border bg-popover p-1 shadow-e2',
+            'absolute z-50 w-56 rounded-lg border border-border bg-popover p-1 shadow-e2',
+            align === 'right' ? 'right-0' : 'left-0',
             openUpward ? 'bottom-full mb-1' : 'top-full mt-1',
             panelClassName,
           )}
+          data-testid={panelDataTestId}
+          onClick={e => e.stopPropagation()}
+          onKeyDown={e => {
+            // Typed characters stay inside the panel; modified chords (⌘K) must
+            // still reach window listeners such as the palette hotkey.
+            if (!(e.metaKey || e.ctrlKey)) {
+              e.stopPropagation();
+            }
+          }}
         >
           <input
             aria-activedescendant={activeOptionId}
@@ -189,6 +240,7 @@ export function SearchableSelectPopover<T>({
           )}
 
           <div
+            aria-multiselectable={multiple || undefined}
             className={cn('max-h-48 overflow-y-auto', listClassName)}
             id={listboxId}
             role="listbox"
@@ -210,7 +262,9 @@ export function SearchableSelectPopover<T>({
                   key={getKey(item)}
                   onClick={() => {
                     onSelect(item);
-                    close();
+                    if (closeOnSelect) {
+                      close();
+                    }
                   }}
                   role="option"
                   type="button"
@@ -220,6 +274,7 @@ export function SearchableSelectPopover<T>({
               ))
             )}
           </div>
+          {footer?.({ close, search })}
         </div>
       )}
     </div>

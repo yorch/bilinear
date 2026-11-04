@@ -17,12 +17,12 @@ test.describe('Cycles', () => {
   });
 
   test('cycles heading is visible', async ({ page }) => {
-    await expect(page.getByRole('heading', { name: /^cycles$/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /cycles$/i })).toBeVisible();
   });
 
   test('shows empty state or one of the cycle groups', async ({ page }) => {
     const empty = page.getByText(/no cycles yet/i);
-    const group = page.getByText(/^(active|upcoming|completed)$/i).first();
+    const group = page.getByRole('button', { name: /^(active|upcoming|completed)\b/i }).first();
     await expect(empty.or(group)).toBeVisible({ timeout: 15_000 });
   });
 });

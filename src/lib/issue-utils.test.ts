@@ -86,7 +86,7 @@ describe('getDueDateColor', () => {
 
   it('returns a distinct, less urgent warning when due within three days', () => {
     // Must not equal the "due today" class — these are separate urgency levels.
-    expect(getDueDateColor('2026-06-17T12:00:00')).toBe('text-warning');
+    expect(getDueDateColor('2026-06-17T12:00:00')).toBe('text-warning-text');
     expect(getDueDateColor('2026-06-17T12:00:00')).not.toBe(getDueDateColor('2026-06-15T12:00:00'));
   });
 

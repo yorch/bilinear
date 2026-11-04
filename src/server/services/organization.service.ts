@@ -1,9 +1,8 @@
-import {
-  type Organization,
-  type OrganizationMember,
-  type OrganizationRole,
-  Prisma,
-  type PrismaClient,
+import type {
+  Organization,
+  OrganizationMember,
+  OrganizationRole,
+  PrismaClient,
 } from '../../generated/prisma';
 import { assertMaxLength, MAX_LOGO_URL_LENGTH, MAX_ORGANIZATION_NAME_LENGTH } from '../lib/limits';
 
@@ -36,6 +35,17 @@ export class InvalidLogoUrlError extends Error {
     super(`Logo URL must be an http(s) URL of at most ${MAX_LOGO_URL_LENGTH} characters`);
     this.name = 'InvalidLogoUrlError';
   }
+}
+
+/**
+ * Matches on the error's `code`, not `instanceof Prisma.PrismaClientKnownRequestError`.
+ * The bundler can load the Prisma runtime into more than one chunk (always in
+ * dev after a hot reload), and an error thrown by one copy is not an instance
+ * of the class the other one exports — the check then silently fails and a
+ * taken URL key surfaces as "Internal server error".
+ */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2002';
 }
 
 export class UrlKeyTakenError extends Error {
@@ -131,7 +141,7 @@ export class OrganizationService {
         where: { id: orgId },
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      if (isUniqueViolation(err)) {
         throw new UrlKeyTakenError();
       }
       throw err;
@@ -166,7 +176,7 @@ export class OrganizationService {
         return org;
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      if (isUniqueViolation(err)) {
         throw new UrlKeyTakenError();
       }
       throw err;

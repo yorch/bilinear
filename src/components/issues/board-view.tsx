@@ -21,7 +21,9 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronRight, Columns3 } from 'lucide-react';
 import { useState } from 'react';
+import { LabelDot } from '@/components/properties/label-select';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
+import { Badge } from '@/components/ui/badge';
 import { ColorDot } from '@/components/ui/color-dot';
 import { EmptyState } from '@/components/ui/empty-state';
 import { UserAvatar } from '@/components/ui/user-avatar';
@@ -121,15 +123,26 @@ function BoardCardInner({
 
       {/* Footer: labels + assignee */}
       <div className="flex items-center justify-between">
-        <div className="flex flex-wrap gap-1">
-          {issue.labels.slice(0, 3).map(label => (
-            <span
-              className="inline-block h-1.5 w-1.5 rounded-full"
-              key={label.id}
-              style={{ backgroundColor: label.color }}
-              title={label.name}
-            />
+        {/* Named chips, not bare colour dots: colour alone can't tell two labels apart. */}
+        <div className="flex min-w-0 flex-wrap gap-1">
+          {issue.labels.slice(0, 2).map(label => (
+            <Badge className="max-w-28 gap-1" key={label.id} tone="outline" variant="pill">
+              <LabelDot color={label.color} />
+              <span className="truncate">{label.name}</span>
+            </Badge>
           ))}
+          {issue.labels.length > 2 && (
+            <Badge
+              title={issue.labels
+                .slice(2)
+                .map(l => l.name)
+                .join(', ')}
+              tone="muted"
+              variant="pill"
+            >
+              +{issue.labels.length - 2}
+            </Badge>
+          )}
         </div>
 
         {assignee && <UserAvatar size="sm" user={assignee} />}
@@ -178,7 +191,9 @@ function SortableCard({
       e.preventDefault();
       onMultiSelect(e, issue.id, columnIssueIds);
     } else {
+      // Same model as the list: one click selects and opens the issue.
       onSelect();
+      onOpen();
     }
   };
 
@@ -207,7 +222,6 @@ function SortableCard({
         aria-label={t('issues.openIssue')}
         className="absolute inset-0 cursor-pointer bg-transparent"
         onClick={handleClick}
-        onDoubleClick={onOpen}
         type="button"
       />
     </div>

@@ -26,7 +26,7 @@ test.describe('Authentication', () => {
   });
 
   test('verify page renders code input', async ({ page }) => {
-    await page.goto('/verify');
+    await page.goto('/verify?email=e2e@test.local');
     await expect(page.getByLabel(/code/i)).toBeVisible();
   });
 

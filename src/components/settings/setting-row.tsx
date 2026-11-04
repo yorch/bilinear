@@ -9,6 +9,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { SettingScope } from '@/lib/config';
 import type { ResolvedSettingDto } from '@/lib/settings-api';
 import { cn, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
+import { parseNumberDraft } from './number-draft';
 
 /** A resolved value in the form a text field holds it. */
 function toDraft(value: ResolvedSettingDto['value']): string {
@@ -60,6 +61,7 @@ function SettingControl({ disabled, label, onCommit, setting }: SettingControlPr
   // concurrent write arriving mid-edit silently discards whatever the admin has
   // typed, which is the classic "sync state from props in an effect" bug.
   const focusedRef = useRef(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
 
   // Re-seed when the resolved value changes underneath us (another admin's
   // write, or our own save returning the re-resolved row) — but never while the
@@ -88,6 +90,20 @@ function SettingControl({ disabled, label, onCommit, setting }: SettingControlPr
       }
     });
   };
+
+  // Fields the registry marks locked (an environment variable supplies the
+  // value) can never be edited here, so they read as plain text rather than as
+  // a disabled, often empty, box that looks like an editable field that broke.
+  if (setting.locked && !setting.redacted) {
+    const shown = toDraft(setting.value);
+    return shown === '' ? (
+      <span className="text-muted-foreground text-xs">{t('config.secretUnset')}</span>
+    ) : (
+      <span className="max-w-full break-all font-mono text-foreground-secondary text-sm">
+        {shown}
+      </span>
+    );
+  }
 
   if (setting.redacted) {
     // Never render a value for a secret — only whether the variable is set.
@@ -123,27 +139,85 @@ function SettingControl({ disabled, label, onCommit, setting }: SettingControlPr
     );
   }
 
+  const isNumber = setting.type !== 'string';
+
+  // Number knobs commit on blur or Enter, but only a valid number: an emptied
+  // field is rejected (not stored as 0) and an out-of-range one is explained
+  // inline instead of surfacing later as a server toast.
+  const commitDraft = () => {
+    if (draft === serverValue) {
+      setDraftError(null);
+      return;
+    }
+    if (!isNumber) {
+      commit(draft);
+      return;
+    }
+    const parsed = parseNumberDraft(draft, { max: setting.max, min: setting.min });
+    if (!parsed.ok) {
+      setDraftError(
+        parsed.reason === 'range'
+          ? t('config.numberRange', {
+              max: String(setting.max ?? '∞'),
+              min: String(setting.min ?? '-∞'),
+            })
+          : t('config.numberRequired'),
+      );
+      return;
+    }
+    setDraftError(null);
+    commit(parsed.value);
+  };
+
   return (
-    <Input
-      aria-label={label}
-      className={cn('w-32 text-right font-mono tabular-nums', TOUCH_TARGET)}
-      disabled={disabled}
-      inputMode={setting.type === 'string' ? 'text' : 'numeric'}
-      max={setting.max ?? undefined}
-      min={setting.min ?? undefined}
-      onBlur={() => {
-        focusedRef.current = false;
-        if (draft !== serverValue) {
-          commit(setting.type === 'string' ? draft : Number(draft));
-        }
-      }}
-      onChange={e => setDraft(e.target.value)}
-      onFocus={() => {
-        focusedRef.current = true;
-      }}
-      type={setting.type === 'string' ? 'text' : 'number'}
-      value={draft}
-    />
+    <div className="flex flex-col items-end gap-1">
+      <Input
+        aria-describedby={draftError ? `${setting.key}-error` : undefined}
+        aria-invalid={draftError ? true : undefined}
+        aria-label={label}
+        className={cn(
+          'text-right font-mono tabular-nums',
+          isNumber ? 'w-32' : 'w-40 sm:w-56',
+          TOUCH_TARGET,
+        )}
+        disabled={disabled}
+        inputMode={isNumber ? 'numeric' : 'text'}
+        max={setting.max ?? undefined}
+        min={setting.min ?? undefined}
+        onBlur={() => {
+          focusedRef.current = false;
+          commitDraft();
+        }}
+        onChange={e => {
+          setDraft(e.target.value);
+          setDraftError(null);
+        }}
+        onFocus={() => {
+          focusedRef.current = true;
+        }}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commitDraft();
+          } else if (e.key === 'Escape') {
+            setDraft(serverValue);
+            setDraftError(null);
+          }
+        }}
+        placeholder={isNumber ? undefined : t('config.usingDefault')}
+        type={isNumber ? 'number' : 'text'}
+        value={draft}
+      />
+      {draftError && (
+        <p
+          className="max-w-48 text-right text-danger-subtle-foreground text-xs"
+          id={`${setting.key}-error`}
+          role="alert"
+        >
+          {draftError}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -199,7 +273,7 @@ export function SettingRow({ onChange, scope, setting, writable }: SettingRowPro
 
   return (
     <div
-      className="flex items-start justify-between gap-4 border-border border-b py-3 last:border-b-0"
+      className="flex flex-col gap-2 border-border border-b py-3 last:border-b-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
       // Addressable by knob, so an e2e spec targets a row by its key rather
       // than by a Tailwind utility list — the locator that broke the triage
       // specs when one `cn()` edit made it match nothing.
@@ -210,16 +284,21 @@ export function SettingRow({ onChange, scope, setting, writable }: SettingRowPro
           <p className="font-medium text-foreground text-sm">
             {label === setting.labelKey ? setting.key : label}
           </p>
-          {setting.locked && <Lock aria-hidden className="h-3 w-3 text-muted-foreground" />}
+          {setting.locked && (
+            <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-muted-foreground text-xs">
+              <Lock aria-hidden className="h-3 w-3" />
+              {t('config.readOnlyChip')}
+            </span>
+          )}
         </div>
-        <p className="font-mono text-muted-foreground text-xs">{setting.key}</p>
+        <p className="break-all font-mono text-muted-foreground text-xs">{setting.key}</p>
         <p className="mt-0.5 text-muted-foreground text-xs">
           {provenance(t, setting, storedHere)}
           {setting.restartRequired && ` · ${t('config.restartRequired')}`}
         </p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2 sm:shrink-0">
         <SettingControl disabled={disabled} label={label} onCommit={commit} setting={setting} />
 
         {/* Only offered when this scope actually stores a row — there is

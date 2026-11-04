@@ -54,12 +54,95 @@ describe('GanttView keyboard nudge', () => {
     expect(onChange).toHaveBeenLastCalledWith('p1', '2026-03-01', '2026-03-09');
   });
 
+  it('resizes the end with Shift+Arrow and the start with Shift+Alt+Arrow', () => {
+    const onChange = vi.fn();
+    render(<GanttView items={[item]} onChange={onChange} />);
+    const bar = screen.getByRole('button', { name: 'roadmap.gantt.dragBar:Alpha' });
+
+    fireEvent.keyDown(bar, { key: 'ArrowRight', shiftKey: true });
+    expect(onChange).toHaveBeenLastCalledWith('p1', '2026-03-02', '2026-03-11');
+
+    fireEvent.keyDown(bar, { altKey: true, key: 'ArrowLeft', shiftKey: true });
+    expect(onChange).toHaveBeenLastCalledWith('p1', '2026-03-01', '2026-03-10');
+  });
+
+  it('keeps resize handles out of the tab order and inert to arrow keys', () => {
+    const onChange = vi.fn();
+    render(<GanttView items={[item]} onChange={onChange} />);
+    for (const name of ['roadmap.gantt.resizeStart', 'roadmap.gantt.resizeEnd']) {
+      const handle = screen.getByRole('button', { name });
+      expect(handle).toHaveAttribute('tabindex', '-1');
+      fireEvent.keyDown(handle, { key: 'ArrowRight' });
+    }
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('exposes the name and dates as a tooltip and never forces white ink', () => {
+    render(<GanttView items={[item]} />);
+    const bar = screen.getByRole('button', { name: 'roadmap.gantt.dragBar:Alpha' });
+    expect(bar).toHaveAttribute('title', 'Alpha (2026-03-02 – 2026-03-10)');
+    expect(bar.className).not.toContain('text-white');
+  });
+
   it('ignores other keys', () => {
     const onChange = vi.fn();
     render(<GanttView items={[item]} onChange={onChange} />);
     fireEvent.keyDown(screen.getByRole('button', { name: 'roadmap.gantt.dragBar:Alpha' }), {
       key: 'Enter',
     });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('GanttView dates', () => {
+  it('positions bars from ISO timestamps, not "today"', () => {
+    const onChange = vi.fn();
+    render(
+      <GanttView
+        items={[
+          {
+            endDate: '2026-10-27T00:00:00.000Z',
+            id: 'iso',
+            name: 'Iso',
+            startDate: '2026-10-20T00:00:00.000Z',
+          },
+        ]}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.keyDown(screen.getByRole('button', { name: 'roadmap.gantt.dragBar:Iso' }), {
+      key: 'ArrowRight',
+    });
+    expect(onChange).toHaveBeenLastCalledWith('iso', '2026-10-21', '2026-10-28');
+  });
+
+  it('nudging a one-sided bar moves only the date that exists', () => {
+    const onChange = vi.fn();
+    render(
+      <GanttView
+        items={[{ endDate: '2026-10-27T00:00:00.000Z', id: 'one', name: 'One', startDate: null }]}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.keyDown(screen.getByRole('button', { name: 'roadmap.gantt.dragBar:One' }), {
+      key: 'ArrowRight',
+    });
+    expect(onChange).toHaveBeenLastCalledWith('one', null, '2026-10-28');
+  });
+
+  it('never persists invented dates for a bar with no dates', () => {
+    const onChange = vi.fn();
+    render(
+      <GanttView
+        items={[{ endDate: null, id: 'none', name: 'None', startDate: null }]}
+        onChange={onChange}
+      />,
+    );
+    const bar = screen.getByRole('button', { name: 'roadmap.gantt.dragBar:None' });
+    fireEvent.keyDown(bar, { key: 'ArrowRight' });
+    fireEvent.pointerDown(bar, { clientX: 10 });
+    fireEvent.pointerMove(window, { clientX: 400 });
+    fireEvent.pointerUp(window);
     expect(onChange).not.toHaveBeenCalled();
   });
 });

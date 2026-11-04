@@ -1,6 +1,7 @@
 'use client';
 
 import { runInAction } from 'mobx';
+import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
 import type { CreateIssueInput } from '@/components/issues/create-issue-modal';
 import { useTranslations } from '@/hooks/use-translations';
@@ -22,6 +23,9 @@ export function useIssueCreate(
 ): (input: CreateIssueInput) => Promise<void> {
   const { issueStore } = useStore();
   const t = useTranslations();
+  const router = useRouter();
+  const params = useParams<{ workspace?: string }>();
+  const workspace = params?.workspace;
   const txQueue = useMemo(() => new TransactionQueue(), []);
 
   return useCallback(
@@ -83,10 +87,24 @@ export function useIssueCreate(
                 issueStore.applySyncAction('I', created.id, created);
               }
             });
+            // The identifier only exists once the server has numbered the issue,
+            // so the confirmation toast (with an Open action) is raised here
+            // rather than by the caller, which resolves optimistically.
+            if (created?.identifier) {
+              toast.success(
+                t('issueDetail.createModal.issueCreatedNamed', { identifier: created.identifier }),
+                workspace
+                  ? {
+                      label: t('issueDetail.createModal.openIssue'),
+                      onClick: () => router.push(`/${workspace}/issue/${created.id}`),
+                    }
+                  : undefined,
+              );
+            }
           },
         },
       );
     },
-    [team, states, issueStore, txQueue, t],
+    [team, states, issueStore, txQueue, t, router, workspace],
   );
 }

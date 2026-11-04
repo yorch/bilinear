@@ -2,7 +2,7 @@
 
 import { Users } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { TipTapEditor } from '@/components/editor/tiptap-editor.lazy';
 import { AssigneeSelect } from '@/components/properties/assignee-select';
 import { CycleSelect } from '@/components/properties/cycle-select';
@@ -115,7 +115,8 @@ export const CreateIssueModal = observer(function CreateIssueModal({
   // Estimation is a per-team setting; the picker only appears when it is on.
   const estimationType =
     (teamId ? teamStore.findById(teamId) : null)?.issueEstimationType ?? 'notUsed';
-  const titleRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  const createMoreId = useId();
   const [form, setForm] = useState<FormState>(() => initialForm(defaultStateId, states[0]?.id));
   const [submitting, setSubmitting] = useState(false);
   const [templateOpen, setTemplateOpen] = useState(false);
@@ -296,7 +297,6 @@ export const CreateIssueModal = observer(function CreateIssueModal({
         title: form.title.trim(),
       });
       if (createMore) {
-        toast.success(t('issueDetail.createModal.issueCreated'));
         setForm(initialForm(defaultStateId, states[0]?.id));
         setTemplateOpen(false);
         titleRef.current?.focus();
@@ -343,17 +343,57 @@ export const CreateIssueModal = observer(function CreateIssueModal({
       onClose={requestClose}
       open={open}
     >
-      <form className="flex flex-col" onSubmit={handleSubmit}>
+      <form
+        className="flex flex-col"
+        onKeyDownCapture={e => {
+          // Mod+Enter submits from any field. Captured so it runs before the
+          // editor's own Mod-Enter (hard break) binding can swallow it.
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.requestSubmit();
+            return;
+          }
+          // Escape from the description editor goes through the same discard
+          // guard as Cancel. The editor consumes Escape itself (preventDefault
+          // in the bubble phase), so this has to be captured, and it steps
+          // aside while a mention / slash menu or a property popover is open,
+          // so that Escape closes that surface first.
+          if (e.key === 'Escape' && !e.defaultPrevented) {
+            const editor = (e.target as HTMLElement).closest('.ProseMirror');
+            if (
+              editor?.querySelector('.suggestion') ||
+              e.currentTarget.querySelector('[aria-haspopup][aria-expanded="true"]')
+            ) {
+              return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            requestClose();
+          }
+        }}
+        onSubmit={handleSubmit}
+      >
         {/* Title */}
         <div className="flex items-center gap-2 px-5 pt-5">
-          <input
-            className="w-full bg-transparent text-lg font-medium text-foreground placeholder:text-muted-foreground outline-none"
+          {/* A textarea that grows with its content, so a long title wraps
+              instead of scrolling its own start out of view. It is still a
+              single logical line: Enter submits and pasted newlines collapse. */}
+          <textarea
+            aria-label={t('issueDetail.createModal.titlePlaceholder')}
+            className="field-sizing-content max-h-40 w-full resize-none bg-transparent text-lg font-medium text-foreground placeholder:text-muted-foreground outline-none"
             data-autofocus
-            onChange={e => patchForm({ title: e.target.value })}
+            onChange={e => patchForm({ title: e.target.value.replace(/\s*\n+\s*/g, ' ') })}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                e.currentTarget.form?.requestSubmit();
+              }
+            }}
             placeholder={t('issueDetail.createModal.titlePlaceholder')}
             ref={titleRef}
             required
-            type="text"
+            rows={1}
             value={form.title}
           />
           {aiAvailable && (
@@ -376,7 +416,7 @@ export const CreateIssueModal = observer(function CreateIssueModal({
         {/* Description */}
         <div className="px-5 pt-2">
           <TipTapEditor
-            className="text-sm text-muted-foreground"
+            className="text-sm text-foreground"
             content={form.description}
             onChange={html => patchForm({ description: html })}
             placeholder={t('issueDetail.createModal.descriptionPlaceholder')}
@@ -424,26 +464,50 @@ export const CreateIssueModal = observer(function CreateIssueModal({
               )}
             </SelectPopover>
           )}
+          {teams && teams.length === 1 && (
+            <span
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground"
+              title={t('issueDetail.createModal.team')}
+            >
+              <Users className="h-3.5 w-3.5" />
+              {teams[0]?.key}
+            </span>
+          )}
           <StatusSelect
             onChange={v => patchForm({ stateId: v })}
             states={states}
             value={form.stateId}
           />
-          <PrioritySelect onChange={v => patchForm({ priority: v })} value={form.priority} />
+          <PrioritySelect
+            label={t('issues.priority')}
+            onChange={v => patchForm({ priority: v })}
+            value={form.priority}
+          />
           <AssigneeSelect
+            label={t('issues.assignee')}
             onChange={v => patchForm({ assigneeId: v })}
             users={users}
             value={form.assigneeId}
           />
           <LabelSelect
+            label={t('issues.labels')}
             labels={labels}
             onChange={v => patchForm({ labelIds: v })}
             value={form.labelIds}
           />
-          <DueDatePicker onChange={v => patchForm({ dueDate: v })} value={form.dueDate} />
-          <ProjectSelect onChange={v => patchForm({ projectId: v })} value={form.projectId} />
+          <DueDatePicker
+            label={t('issues.dueDate')}
+            onChange={v => patchForm({ dueDate: v })}
+            value={form.dueDate}
+          />
+          <ProjectSelect
+            label={t('issues.project')}
+            onChange={v => patchForm({ projectId: v })}
+            value={form.projectId}
+          />
           {teamId && (
             <CycleSelect
+              label={t('issues.cycle')}
               onChange={v => patchForm({ cycleId: v })}
               teamId={teamId}
               value={form.cycleId}
@@ -468,14 +532,18 @@ export const CreateIssueModal = observer(function CreateIssueModal({
 
         {/* Actions */}
         <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-3">
-          <span className="flex items-center gap-2 text-sm text-muted-foreground">
+          <label
+            className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
+            htmlFor={createMoreId}
+          >
             <Switch
               aria-label={t('issueDetail.createModal.createMore')}
               checked={createMore}
+              id={createMoreId}
               onCheckedChange={handleCreateMoreChange}
             />
             {t('issueDetail.createModal.createMore')}
-          </span>
+          </label>
           <div className="flex items-center gap-2">
             <Button onClick={requestClose} size="sm" type="button" variant="ghost">
               {t('common.cancel')}

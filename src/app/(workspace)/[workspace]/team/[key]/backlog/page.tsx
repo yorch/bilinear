@@ -215,6 +215,7 @@ const BacklogPage = observer(function BacklogPage() {
             />
             <ColumnPicker
               customFields={customFieldDefs}
+              estimationType={team.issueEstimationType}
               isVisible={isColumnVisible}
               onToggle={toggleColumn}
             />
@@ -231,12 +232,14 @@ const BacklogPage = observer(function BacklogPage() {
             getCustomFieldValue={(issueId, definitionId) =>
               customFieldStore.findValue(issueId, definitionId)?.value ?? null
             }
+            hasActiveFilters={filterSet.conditions.length > 0}
             isColumnVisible={isColumnVisible}
             issues={issues}
             labels={labels}
             onArchive={handleArchive}
             onArchiveMany={handleArchiveMany}
             onBulkUpdate={handleBulkUpdate}
+            onClearFilters={() => setFilterSet(createEmptyFilterSet())}
             onDelete={requestDelete}
             onOpen={handleOpen}
             onPropertyClosed={() => setOpenProperty(null)}

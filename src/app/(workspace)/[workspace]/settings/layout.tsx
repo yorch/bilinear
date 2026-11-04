@@ -8,9 +8,9 @@ import { SettingsNav } from '@/components/layouts/settings-nav';
  */
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex h-full min-h-0 flex-col md:flex-row">
       <SettingsNav />
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
     </div>
   );
 }

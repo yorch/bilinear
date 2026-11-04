@@ -5,6 +5,7 @@ import {
   coerceSortFields,
   createEmptyFilterSet,
   type FilterableIssue,
+  type FilterCondition,
   type FilterSet,
   type SortField,
 } from './filter-engine';
@@ -122,12 +123,99 @@ describe('applyFilters', () => {
       expect(ids(applyFilters(ISSUES, set))).toEqual(['3']);
     });
 
-    it('in returns nothing when value is not an array', () => {
-      const set: FilterSet = {
+    it('in / nin accept a scalar value as a one-item list', () => {
+      const inSet: FilterSet = {
         composition: 'and',
         conditions: [{ field: 'assignee', operator: 'in', value: 'user-a' }],
       };
-      expect(applyFilters(ISSUES, set)).toEqual([]);
+      expect(ids(applyFilters(ISSUES, inSet))).toEqual(['1']);
+      const ninSet: FilterSet = {
+        composition: 'and',
+        conditions: [{ field: 'assignee', operator: 'nin', value: 'user-a' }],
+      };
+      expect(ids(applyFilters(ISSUES, ninSet))).toEqual(['2', '3']);
+    });
+  });
+
+  // Operator x field-type matrix, built from the value shapes the filter form
+  // emits (arrays for in/nin, a scalar for eq/neq).
+  describe('operator x field matrix', () => {
+    const run = (
+      field: FilterCondition['field'],
+      operator: FilterCondition['operator'],
+      value: FilterCondition['value'],
+    ) =>
+      ids(applyFilters(ISSUES, { composition: 'and', conditions: [{ field, operator, value }] }));
+
+    it('status: any of / none of', () => {
+      expect(run('status', 'in', ['state-todo'])).toEqual(['1', '3']);
+      expect(run('status', 'in', ['state-todo', 'state-done'])).toEqual(['1', '2', '3']);
+      expect(run('status', 'nin', ['state-todo'])).toEqual(['2']);
+      expect(run('status', 'nin', ['state-todo', 'state-done'])).toEqual([]);
+    });
+
+    it('assignee: unassigned issues are in "none of" and never in "any of"', () => {
+      expect(run('assignee', 'in', ['user-a'])).toEqual(['1']);
+      expect(run('assignee', 'nin', ['user-a'])).toEqual(['2', '3']);
+      expect(run('assignee', 'neq', 'user-a')).toEqual(['2', '3']);
+    });
+
+    it('priority: numeric field against string-typed form values', () => {
+      expect(run('priority', 'eq', '2')).toEqual(['3']);
+      expect(run('priority', 'in', ['1', '2'])).toEqual(['1', '3']);
+      expect(run('priority', 'nin', ['1', '2'])).toEqual(['2']);
+    });
+
+    it('label: is / is not use set semantics for multi-label issues', () => {
+      expect(run('label', 'eq', 'bug')).toEqual(['1', '2']);
+      expect(run('label', 'neq', 'bug')).toEqual(['3']);
+      expect(run('label', 'eq', 'feature')).toEqual(['2']);
+      expect(run('label', 'neq', 'feature')).toEqual(['1', '3']);
+    });
+
+    it('label: any of / none of', () => {
+      expect(run('label', 'in', ['bug', 'feature'])).toEqual(['1', '2']);
+      expect(run('label', 'in', ['feature'])).toEqual(['2']);
+      expect(run('label', 'nin', ['feature'])).toEqual(['1', '3']);
+      expect(run('label', 'nin', ['bug', 'feature'])).toEqual(['3']);
+    });
+
+    it('label: "is null" matches unlabelled issues and "is not null" matches labelled ones', () => {
+      expect(run('label', 'eq', null as never)).toEqual(['3']);
+      expect(run('label', 'neq', null as never)).toEqual(['1', '2']);
+      expect(run('label', 'in', ['bug', null] as never)).toEqual(['1', '2', '3']);
+    });
+
+    it('label: is_set / is_not_set', () => {
+      expect(run('label', 'is_set', undefined)).toEqual(['1', '2']);
+      expect(run('label', 'is_not_set', undefined)).toEqual(['3']);
+    });
+
+    it('a custom multi-select value uses set semantics for is / is not', () => {
+      const resolver = (issueId: string) => (issueId === '1' ? ['y', 'z'] : ['z']);
+      const withResolver = (
+        operator: FilterCondition['operator'],
+        value: FilterCondition['value'],
+      ) =>
+        ids(
+          applyFilters(
+            ISSUES,
+            {
+              composition: 'and',
+              conditions: [{ customFieldId: 'tags', field: 'custom', operator, value }],
+            },
+            resolver,
+          ),
+        );
+      expect(withResolver('eq', 'y')).toEqual(['1']);
+      expect(withResolver('neq', 'y')).toEqual(['2', '3']);
+      expect(withResolver('nin', ['y'])).toEqual(['2', '3']);
+    });
+
+    it('is_set / is_not_set on scalar fields', () => {
+      expect(run('assignee', 'is_not_set', undefined)).toEqual(['3']);
+      expect(run('dueDate', 'is_set', undefined)).toEqual(['1', '3']);
+      expect(run('estimate', 'is_not_set', undefined)).toEqual(['3']);
     });
   });
 
@@ -265,6 +353,22 @@ describe('applySorting', () => {
     expect(ids(desc)).toEqual(['2', '3', '1']);
   });
 
+  it('priority sort keeps "No priority" last in both directions (asc = urgent-first, desc = low-first)', () => {
+    const withNone = [...ISSUES, issue({ id: 'none', priority: 0 })];
+    expect(ids(applySorting(withNone, [{ direction: 'asc', field: 'priority' }]))).toEqual([
+      '1',
+      '3',
+      '2',
+      'none',
+    ]);
+    expect(ids(applySorting(withNone, [{ direction: 'desc', field: 'priority' }]))).toEqual([
+      '2',
+      '3',
+      '1',
+      'none',
+    ]);
+  });
+
   it('sorts by status using the position map', () => {
     const positions = new Map([
       ['state-done', 0],
@@ -307,6 +411,21 @@ describe('applySorting', () => {
       'b',
       'c',
       'a',
+    ]);
+  });
+});
+
+describe('applySorting priority', () => {
+  it('sorts "No priority" after Low when ascending (urgent first)', () => {
+    const list = [
+      issue({ id: 'none', priority: 0 }),
+      issue({ id: 'low', priority: 4 }),
+      issue({ id: 'urgent', priority: 1 }),
+    ];
+    expect(ids(applySorting(list, [{ direction: 'asc', field: 'priority' }]))).toEqual([
+      'urgent',
+      'low',
+      'none',
     ]);
   });
 });

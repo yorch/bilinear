@@ -3,6 +3,7 @@
 import { Activity, Clock } from 'lucide-react';
 import { useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -157,16 +158,25 @@ export function ActivityTimeline({ issueId, refetchKey }: ActivityTimelineProps)
           <div className="flex gap-3" key={activity.id}>
             {/* Timeline line + avatar */}
             <div className="flex flex-col items-center">
-              <span
-                className={cn(
-                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white',
-                  actor?.avatarBgColor ? '' : 'bg-avatar-fallback',
-                )}
-                style={actor?.avatarBgColor ? { backgroundColor: actor.avatarBgColor } : undefined}
-                title={actor?.displayName ?? t('issueDetail.activity.system')}
-              >
-                {actor?.initials ?? 'S'}
-              </span>
+              {actor?.avatarBgColor ? (
+                <span title={actor.displayName}>
+                  <UserAvatar
+                    size="md"
+                    user={{
+                      avatarBackgroundColor: actor.avatarBgColor,
+                      displayName: actor.displayName,
+                      initials: actor.initials,
+                    }}
+                  />
+                </span>
+              ) : (
+                <span
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground"
+                  title={actor?.displayName ?? t('issueDetail.activity.system')}
+                >
+                  {actor?.initials ?? 'S'}
+                </span>
+              )}
               {!isLast && <div className="my-1 w-px flex-1 bg-muted" />}
             </div>
 

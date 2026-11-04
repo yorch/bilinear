@@ -51,6 +51,68 @@ export interface TeamExtras {
   defaultIssueStateId: string | null;
 }
 
+export type TeamNumberField =
+  | 'autoArchivePeriod'
+  | 'autoClosePeriod'
+  | 'cycleCooldownTime'
+  | 'cycleDuration';
+
+export interface TeamNumberDrafts {
+  autoArchivePeriod: string;
+  autoClosePeriod: string;
+  cycleCooldownTime: string;
+  cycleDuration: string;
+  cyclesEnabled: boolean;
+}
+
+export interface TeamNumberValues {
+  autoArchivePeriod: number | null;
+  autoClosePeriod: number | null;
+  cycleCooldownTime: number;
+  cycleDuration: number | null;
+}
+
+/**
+ * Validate the four numeric drafts together and report *which* fields are
+ * wrong, so the page can attach the error to the field instead of printing one
+ * line beside the Save button. Cycle fields are only checked while cycles are
+ * enabled (a disabled card's stale draft must not block saving other settings).
+ */
+export function validateTeamNumbers(drafts: TeamNumberDrafts): {
+  errors: Partial<Record<TeamNumberField, true>>;
+  values: TeamNumberValues | null;
+} {
+  const duration = parseIntInRange(drafts.cycleDuration, CYCLE_DURATION_RANGE);
+  const cooldown = parseIntInRange(drafts.cycleCooldownTime, CYCLE_COOLDOWN_RANGE);
+  const closePeriod = parseIntInRange(drafts.autoClosePeriod, AUTO_PERIOD_RANGE);
+  const archivePeriod = parseIntInRange(drafts.autoArchivePeriod, AUTO_PERIOD_RANGE);
+  const errors: Partial<Record<TeamNumberField, true>> = {};
+  if (drafts.cyclesEnabled && !duration) {
+    errors.cycleDuration = true;
+  }
+  if (drafts.cyclesEnabled && cooldown === undefined) {
+    errors.cycleCooldownTime = true;
+  }
+  if (closePeriod === undefined) {
+    errors.autoClosePeriod = true;
+  }
+  if (archivePeriod === undefined) {
+    errors.autoArchivePeriod = true;
+  }
+  if (Object.keys(errors).length > 0) {
+    return { errors, values: null };
+  }
+  return {
+    errors,
+    values: {
+      autoArchivePeriod: archivePeriod ?? null,
+      autoClosePeriod: closePeriod ?? null,
+      cycleCooldownTime: cooldown ?? 0,
+      cycleDuration: duration ?? null,
+    },
+  };
+}
+
 export function readTeamExtras(team: DBTeam | null | undefined): TeamExtras {
   return {
     autoArchivePeriod: team?.autoArchivePeriod ?? null,

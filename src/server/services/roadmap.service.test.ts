@@ -1,10 +1,23 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../middleware/rate-limit', () => ({ checkFixedWindow: vi.fn() }));
+const warn = vi.hoisted(() => vi.fn());
+vi.mock('../lib/logger', () => ({
+  childLogger: () => ({ error: vi.fn(), info: vi.fn(), warn }),
+  logger: { error: vi.fn(), info: vi.fn(), warn },
+}));
+
 import { createMockPrisma } from '@/test/prisma-mock';
+import { checkFixedWindow } from '../middleware/rate-limit';
 import {
   hashRoadmapPassword,
+  isRoadmapUnlockTokenValid,
   RoadmapPasswordError,
   RoadmapService,
   RoadmapSlugConflictError,
+  RoadmapSlugInvalidError,
+  resetUnknownIpWarning,
+  roadmapUnlockToken,
   verifyRoadmapPassword,
 } from './roadmap.service';
 
@@ -241,5 +254,87 @@ describe('RoadmapService', () => {
         RoadmapPasswordError,
       );
     });
+  });
+});
+
+describe('roadmap unlock token', () => {
+  it('validates the token minted for the same slug and password hash', () => {
+    const token = roadmapUnlockToken('acme', 'salt:key', 'secret');
+    expect(isRoadmapUnlockTokenValid(token, 'acme', 'salt:key', 'secret')).toBe(true);
+  });
+  it('is rejected once the password hash changes, for another slug, or when absent', () => {
+    const token = roadmapUnlockToken('acme', 'salt:key', 'secret');
+    expect(isRoadmapUnlockTokenValid(token, 'acme', 'salt:other', 'secret')).toBe(false);
+    expect(isRoadmapUnlockTokenValid(token, 'other', 'salt:key', 'secret')).toBe(false);
+    expect(isRoadmapUnlockTokenValid(undefined, 'acme', 'salt:key', 'secret')).toBe(false);
+    expect(isRoadmapUnlockTokenValid('short', 'acme', 'salt:key', 'secret')).toBe(false);
+  });
+  it('does not contain the password hash', () => {
+    const hash = 'abcd1234:ef015678';
+    const token = roadmapUnlockToken('acme', hash, 'secret');
+    expect(token).not.toContain(hash);
+    expect(token).not.toContain('abcd1234');
+    expect(token).not.toContain('ef015678');
+  });
+  it('expires server-side', () => {
+    const past = Math.floor(Date.now() / 1000) - 10;
+    const expired = roadmapUnlockToken('acme', 'salt:key', 'secret', past);
+    expect(isRoadmapUnlockTokenValid(expired, 'acme', 'salt:key', 'secret')).toBe(false);
+    // Rewriting the expiry without the key must not revalidate it.
+    const forged = `${past + 99999}.${expired.split('.')[1]}`;
+    expect(isRoadmapUnlockTokenValid(forged, 'acme', 'salt:key', 'secret')).toBe(false);
+  });
+  it('uses the shared JWT_SECRET accessor by default', () => {
+    const token = roadmapUnlockToken('acme', 'salt:key');
+    expect(isRoadmapUnlockTokenValid(token, 'acme', 'salt:key')).toBe(true);
+    const prev = process.env.JWT_SECRET;
+    process.env.JWT_SECRET = 'short';
+    try {
+      expect(() => roadmapUnlockToken('acme', 'salt:key')).toThrow(/at least/);
+    } finally {
+      process.env.JWT_SECRET = prev;
+    }
+  });
+});
+
+describe('RoadmapService slug validation', () => {
+  it('rejects slugs that cannot be a cookie name suffix', async () => {
+    const prisma = createMockPrisma();
+    const service = new RoadmapService(prisma as never);
+    for (const slug of ['has space', 'semi;colon', 'Upper', 'ñandú', '']) {
+      await expect(service.upsert(ORG_ID, URL_KEY, { slug })).rejects.toThrow(
+        RoadmapSlugInvalidError,
+      );
+    }
+  });
+});
+
+describe('RoadmapService.isPasswordAttemptLimited', () => {
+  const svc = new RoadmapService(createMockPrisma() as never);
+  beforeEach(() => {
+    vi.mocked(checkFixedWindow).mockReset();
+    vi.mocked(checkFixedWindow).mockResolvedValue({ count: 1, exceeded: false });
+    warn.mockClear();
+    resetUnknownIpWarning();
+  });
+
+  it('uses a per-IP bucket plus the roadmap backstop when the IP is known', async () => {
+    await svc.isPasswordAttemptLimited(ROADMAP_ID, '1.2.3.4');
+    const keys = vi.mocked(checkFixedWindow).mock.calls.map(c => c[0]);
+    expect(keys).toEqual([`rl:roadmap:${ROADMAP_ID}:ip:1.2.3.4`, `rl:roadmap:${ROADMAP_ID}:all`]);
+  });
+
+  it('never shares one global per-IP bucket when the IP is unknown', async () => {
+    await svc.isPasswordAttemptLimited(ROADMAP_ID, null);
+    const keys = vi.mocked(checkFixedWindow).mock.calls.map(c => String(c[0]));
+    expect(keys).toEqual([`rl:roadmap:${ROADMAP_ID}:all`]);
+    expect(keys.some(k => k.includes('unknown'))).toBe(false);
+  });
+
+  it('still honours the roadmap backstop when the IP is unknown, and warns once', async () => {
+    vi.mocked(checkFixedWindow).mockResolvedValue({ count: 999, exceeded: true });
+    expect(await svc.isPasswordAttemptLimited(ROADMAP_ID, null)).toBe(true);
+    await svc.isPasswordAttemptLimited(ROADMAP_ID, null);
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 });

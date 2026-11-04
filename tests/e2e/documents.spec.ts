@@ -36,7 +36,7 @@ test.describe('Documents', () => {
     await page.waitForURL(`**/${ws}/docs/**`, { timeout: 10_000 });
 
     // Editor renders with the default Untitled placeholder.
-    const titleInput = page.locator('input[placeholder="Untitled"]');
+    const titleInput = page.getByLabel('Document title');
     await expect(titleInput).toBeVisible({ timeout: 10_000 });
   });
 
@@ -55,7 +55,7 @@ test.describe('Documents', () => {
       .click();
     await page.waitForURL(`**/${ws}/docs/**`, { timeout: 10_000 });
 
-    const titleInput = page.locator('input[placeholder="Untitled"]');
+    const titleInput = page.getByLabel('Document title');
     await expect(titleInput).toBeVisible({ timeout: 10_000 });
 
     const title = `Doc title ${Date.now()}`;
@@ -65,7 +65,7 @@ test.describe('Documents', () => {
     await page.waitForTimeout(2_000);
 
     await page.reload();
-    await expect(page.locator('input[placeholder="Untitled"]')).toHaveValue(title, {
+    await expect(page.getByLabel('Document title')).toHaveValue(title, {
       timeout: 15_000,
     });
   });

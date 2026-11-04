@@ -1,11 +1,12 @@
 'use client';
 
-import { ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronDown, Copy } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { LoadError } from '@/components/shared/load-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
@@ -16,7 +17,7 @@ import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql, gqlQuery, isPermissionError } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_ROW, TOUCH_TARGET } from '@/lib/utils';
 import { deliveryTone } from '@/lib/webhook-delivery';
 
 /**
@@ -199,6 +200,13 @@ export default function WebhooksSettingsPage() {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
+  const [creatingBusy, setCreatingBusy] = useState(false);
+  const [formErrors, setFormErrors] = useState<{ events?: string; name?: string; url?: string }>(
+    {},
+  );
+  const nameRef = useRef<HTMLInputElement>(null);
+  const urlRef = useRef<HTMLInputElement>(null);
+  const eventsRef = useRef<HTMLDivElement>(null);
   const [revealedSecrets, setRevealedSecrets] = useState<Set<string>>(new Set());
   const [expandedDeliveries, setExpandedDeliveries] = useState<Set<string>>(new Set());
   const [pendingAction, setPendingAction] = useState<{
@@ -254,67 +262,108 @@ export default function WebhooksSettingsPage() {
   };
 
   const handleCreate = async () => {
-    if (!name.trim() || !url.trim() || selectedEvents.size === 0) {
-      toast.error(t('settings.webhooks.createValidationError'));
+    const errs: typeof formErrors = {};
+    if (!name.trim()) {
+      errs.name = t('settings.webhooks.nameRequired');
+    }
+    if (!url.trim()) {
+      errs.url = t('settings.webhooks.urlRequired');
+    }
+    if (selectedEvents.size === 0) {
+      errs.events = t('settings.webhooks.eventsRequired');
+    }
+    setFormErrors(errs);
+    if (errs.name || errs.url || errs.events) {
+      if (errs.name) {
+        nameRef.current?.focus();
+      } else if (errs.url) {
+        urlRef.current?.focus();
+      } else {
+        eventsRef.current?.focus();
+      }
       return;
     }
-    const res = await gql(WEBHOOK_CREATE_MUTATION, {
-      input: {
-        events: Array.from(selectedEvents),
-        name: name.trim(),
-        url: url.trim(),
-      },
-    });
-    if (res.errors?.length) {
-      toast.error(
-        (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.createError'),
-      );
-      return;
+    setCreatingBusy(true);
+    try {
+      const res = await gql(WEBHOOK_CREATE_MUTATION, {
+        input: {
+          events: Array.from(selectedEvents),
+          name: name.trim(),
+          url: url.trim(),
+        },
+      });
+      if (res.errors?.length) {
+        toast.error(
+          (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.createError'),
+        );
+        return;
+      }
+      const created = (res.data as { webhookCreate?: { webhook?: Webhook } } | undefined)
+        ?.webhookCreate?.webhook;
+      if (created) {
+        setWebhooks(w => [created, ...w]);
+        // Reveal secret once on create so the user can copy it.
+        setRevealedSecrets(s => new Set(s).add(created.id));
+        toast.success(t('settings.webhooks.webhookCreated'));
+      }
+      setName('');
+      setUrl('');
+      setSelectedEvents(new Set());
+      setCreating(false);
+    } catch {
+      toast.error(t('settings.webhooks.createError'));
+    } finally {
+      setCreatingBusy(false);
     }
-    const created = (res.data as { webhookCreate?: { webhook?: Webhook } } | undefined)
-      ?.webhookCreate?.webhook;
-    if (created) {
-      setWebhooks(w => [created, ...w]);
-      // Reveal secret once on create so the user can copy it.
-      setRevealedSecrets(s => new Set(s).add(created.id));
-      toast.success(t('settings.webhooks.webhookCreated'));
-    }
-    setName('');
-    setUrl('');
-    setSelectedEvents(new Set());
-    setCreating(false);
   };
 
   const handleToggle = async (hook: Webhook) => {
     const next = !hook.enabled;
-    const res = await gql(WEBHOOK_UPDATE_MUTATION, {
-      id: hook.id,
-      input: { enabled: next },
-    });
-    if (res.errors?.length) {
+    try {
+      const res = await gql(WEBHOOK_UPDATE_MUTATION, {
+        id: hook.id,
+        input: { enabled: next },
+      });
+      if (res.errors?.length) {
+        toast.error(t('settings.webhooks.updateError'));
+        return;
+      }
+      setWebhooks(w =>
+        w.map(h =>
+          h.id === hook.id
+            ? { ...h, enabled: next, ...(next ? { consecutiveFailures: 0 } : {}) }
+            : h,
+        ),
+      );
+      toast.success(
+        next ? t('settings.webhooks.webhookEnabled') : t('settings.webhooks.webhookDisabled'),
+      );
+    } catch {
       toast.error(t('settings.webhooks.updateError'));
-      return;
     }
-    setWebhooks(w =>
-      w.map(h =>
-        h.id === hook.id ? { ...h, enabled: next, ...(next ? { consecutiveFailures: 0 } : {}) } : h,
-      ),
-    );
   };
 
   const handleDelete = async (hook: Webhook) => {
-    const res = await gql(WEBHOOK_DELETE_MUTATION, { id: hook.id });
-    if (res.errors?.length) {
+    try {
+      const res = await gql(WEBHOOK_DELETE_MUTATION, { id: hook.id });
+      if (res.errors?.length) {
+        toast.error(t('settings.webhooks.deleteError'));
+        return;
+      }
+      setWebhooks(w => w.filter(h => h.id !== hook.id));
+      toast.success(t('settings.webhooks.webhookDeleted'));
+    } catch {
       toast.error(t('settings.webhooks.deleteError'));
-      return;
     }
-    setWebhooks(w => w.filter(h => h.id !== hook.id));
-    toast.success(t('settings.webhooks.webhookDeleted'));
   };
 
   const handleRotate = async (hook: Webhook) => {
-    const res = await gql(WEBHOOK_ROTATE_SECRET_MUTATION, { id: hook.id });
-    if (!res.errors?.length) {
+    try {
+      const res = await gql(WEBHOOK_ROTATE_SECRET_MUTATION, { id: hook.id });
+      if (res.errors?.length) {
+        toast.error(t('settings.webhooks.rotateError'));
+        return;
+      }
       // The document selects only `{ id signingSecret }` — narrow the cast to
       // what is actually there rather than the full `Webhook` shape.
       const updated = (
@@ -322,14 +371,23 @@ export default function WebhooksSettingsPage() {
           | { webhookRotateSecret?: { webhook?: Pick<Webhook, 'id' | 'signingSecret'> | null } }
           | undefined
       )?.webhookRotateSecret?.webhook;
-      if (updated) {
-        setWebhooks(w =>
-          w.map(h => (h.id === hook.id ? { ...h, signingSecret: updated.signingSecret } : h)),
-        );
-        setRevealedSecrets(s => new Set(s).add(hook.id));
-        toast.success(t('settings.webhooks.secretRotated'));
+      if (!updated) {
+        toast.error(t('settings.webhooks.rotateError'));
+        return;
       }
+      setWebhooks(w =>
+        w.map(h => (h.id === hook.id ? { ...h, signingSecret: updated.signingSecret } : h)),
+      );
+      setRevealedSecrets(s => new Set(s).add(hook.id));
+      toast.success(t('settings.webhooks.secretRotated'));
+    } catch {
+      toast.error(t('settings.webhooks.rotateError'));
     }
+  };
+
+  const copySecret = (secret: string) => {
+    void navigator.clipboard.writeText(secret);
+    toast.success(t('settings.webhooks.secretCopied'));
   };
 
   if (loading) {
@@ -355,7 +413,7 @@ export default function WebhooksSettingsPage() {
         title={t('settings.webhooks.title')}
       />
 
-      <div className="mx-auto w-full max-w-3xl px-6 py-8">
+      <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-6 md:py-8">
         {/* Rendered inside the page shell, not instead of it: replacing the whole
             page drops the heading and reads as a crash rather than a failed
             section. A refused read renders as a muted line with no retry. */}
@@ -370,41 +428,100 @@ export default function WebhooksSettingsPage() {
         )}
 
         {creating ? (
-          <div className="mb-6 rounded border border-border p-4">
+          <div className="mb-6 rounded-lg border border-border bg-card p-4">
             <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="text-xs" htmlFor="webhook-name">
-                <span className="mb-1 block text-foreground-secondary">
-                  {t('settings.webhooks.name')}
-                </span>
+              <div className="text-xs">
+                <label className="mb-1 block text-foreground-secondary" htmlFor="webhook-name">
+                  {t('settings.webhooks.name')} <span className="text-danger">*</span>
+                </label>
                 <Input
+                  aria-describedby={formErrors.name ? 'webhook-name-error' : undefined}
+                  aria-invalid={formErrors.name ? true : undefined}
                   id="webhook-name"
-                  onChange={e => setName(e.target.value)}
+                  onChange={e => {
+                    setName(e.target.value);
+                    setFormErrors(f => ({ ...f, name: undefined }));
+                  }}
                   placeholder={t('settings.webhooks.namePlaceholder')}
+                  ref={nameRef}
                   value={name}
                 />
-              </label>
-              <label className="text-xs" htmlFor="webhook-url">
-                <span className="mb-1 block text-foreground-secondary">
-                  {t('settings.webhooks.url')}
-                </span>
+                {formErrors.name && (
+                  <p
+                    className="mt-1 text-danger-subtle-foreground"
+                    id="webhook-name-error"
+                    role="alert"
+                  >
+                    {formErrors.name}
+                  </p>
+                )}
+              </div>
+              <div className="text-xs">
+                <label className="mb-1 block text-foreground-secondary" htmlFor="webhook-url">
+                  {t('settings.webhooks.url')} <span className="text-danger">*</span>
+                </label>
                 <Input
+                  aria-describedby={formErrors.url ? 'webhook-url-error' : undefined}
+                  aria-invalid={formErrors.url ? true : undefined}
                   id="webhook-url"
-                  onChange={e => setUrl(e.target.value)}
+                  onChange={e => {
+                    setUrl(e.target.value);
+                    setFormErrors(f => ({ ...f, url: undefined }));
+                  }}
                   placeholder="https://example.com/hook"
+                  ref={urlRef}
                   value={url}
                 />
-              </label>
+                {formErrors.url && (
+                  <p
+                    className="mt-1 text-danger-subtle-foreground"
+                    id="webhook-url-error"
+                    role="alert"
+                  >
+                    {formErrors.url}
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="mb-3">
-              <span className="mb-1 block text-xs text-foreground-secondary">
-                {t('settings.webhooks.events')}
-              </span>
-              <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+            <fieldset className="mb-3">
+              <legend className="mb-1 flex w-full items-center justify-between text-xs text-foreground-secondary">
+                <span>
+                  {t('settings.webhooks.events')} <span className="text-danger">*</span>
+                </span>
+                <button
+                  className="text-brand hover:underline"
+                  onClick={() => {
+                    setSelectedEvents(
+                      selectedEvents.size === availableEvents.length
+                        ? new Set()
+                        : new Set(availableEvents),
+                    );
+                    setFormErrors(f => ({ ...f, events: undefined }));
+                  }}
+                  type="button"
+                >
+                  {selectedEvents.size === availableEvents.length
+                    ? t('settings.webhooks.clearAllEvents')
+                    : t('settings.webhooks.selectAllEvents')}
+                </button>
+              </legend>
+              <div
+                aria-describedby={formErrors.events ? 'webhook-events-error' : undefined}
+                className="grid grid-cols-1 gap-1 rounded-md border border-input p-2 sm:grid-cols-2 md:grid-cols-3"
+                ref={eventsRef}
+                tabIndex={-1}
+              >
                 {availableEvents.map(e => (
-                  <label className="flex items-center gap-1.5 text-xs" key={e}>
-                    <input
+                  <label
+                    className={cn('flex min-w-0 items-center gap-1.5 text-xs', TOUCH_ROW)}
+                    htmlFor={`webhook-event-${e}`}
+                    key={e}
+                  >
+                    <Checkbox
                       checked={selectedEvents.has(e)}
+                      id={`webhook-event-${e}`}
                       onChange={() => {
+                        setFormErrors(f => ({ ...f, events: undefined }));
                         setSelectedEvents(prev => {
                           const next = new Set(prev);
                           if (next.has(e)) {
@@ -415,14 +532,22 @@ export default function WebhooksSettingsPage() {
                           return next;
                         });
                       }}
-                      type="checkbox"
                     />
-                    <span className="font-mono">{e}</span>
+                    <span className="truncate font-mono">{e}</span>
                   </label>
                 ))}
               </div>
-            </div>
-            <Button onClick={handleCreate} size="sm" type="button">
+              {formErrors.events && (
+                <p
+                  className="mt-1 text-xs text-danger-subtle-foreground"
+                  id="webhook-events-error"
+                  role="alert"
+                >
+                  {formErrors.events}
+                </p>
+              )}
+            </fieldset>
+            <Button disabled={creatingBusy} onClick={handleCreate} size="sm" type="button">
               {t('settings.webhooks.createWebhook')}
             </Button>
           </div>
@@ -437,7 +562,7 @@ export default function WebhooksSettingsPage() {
             {webhooks.map(hook => {
               const showDeliveries = expandedDeliveries.has(hook.id);
               return (
-                <div className="rounded border border-border p-4" key={hook.id}>
+                <div className="rounded-lg border border-border bg-card p-4" key={hook.id}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -461,7 +586,7 @@ export default function WebhooksSettingsPage() {
                       <div className="mt-2 flex flex-wrap gap-1">
                         {hook.events.map(e => (
                           <Badge
-                            className="font-mono text-[10px] text-foreground-secondary"
+                            className="font-mono text-xs text-foreground-secondary"
                             key={e}
                             tone="muted"
                             variant="square"
@@ -475,9 +600,25 @@ export default function WebhooksSettingsPage() {
                           {t('settings.webhooks.signingSecret')}
                         </span>
                         {revealedSecrets.has(hook.id) ? (
-                          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                            {hook.signingSecret ?? t('settings.webhooks.hiddenNonAdmin')}
-                          </code>
+                          <>
+                            <code className="min-w-0 truncate rounded bg-muted px-1.5 py-0.5 text-xs">
+                              {hook.signingSecret ?? t('settings.webhooks.hiddenNonAdmin')}
+                            </code>
+                            {hook.signingSecret ? (
+                              <button
+                                aria-label={t('settings.webhooks.copySecret')}
+                                className={cn(
+                                  'shrink-0 text-muted-foreground hover:text-foreground',
+                                  TOUCH_TARGET,
+                                )}
+                                onClick={() => copySecret(hook.signingSecret as string)}
+                                title={t('settings.webhooks.copySecret')}
+                                type="button"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </button>
+                            ) : null}
+                          </>
                         ) : (
                           <button
                             className="text-brand hover:underline"

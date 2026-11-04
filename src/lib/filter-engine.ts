@@ -75,6 +75,50 @@ export interface FilterableIssue {
 /** Resolves an issue's value for a given custom-field definition id. */
 export type CustomFieldValueResolver = (issueId: string, definitionId: string) => unknown;
 
+/** A condition value as a list: arrays pass through, a scalar is a one-item list. */
+function toValueList(value: FilterCondition['value']): unknown[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  return value === undefined || value === null ? [] : [value];
+}
+
+/**
+ * Whether the issue's value for `field` intersects `wanted`.
+ *
+ * One definition backs eq/neq/in/nin, so they cannot disagree: `eq` is a
+ * one-item `in`, and `neq`/`nin` are their negations. Multi-valued fields
+ * (labels, custom multi-selects) use set semantics: "Label is Bug" means the
+ * issue *has* Bug, not that Bug is its only label.
+ */
+function matchesAny(
+  issue: FilterableIssue,
+  field: FilterField,
+  fieldValue: unknown,
+  wanted: unknown[],
+): boolean {
+  const held: unknown[] | null =
+    field === 'label'
+      ? (issue.labelIds ?? [])
+      : Array.isArray(fieldValue)
+        ? (fieldValue as unknown[])
+        : null;
+  if (held) {
+    // Decision: "no labels" (empty held) matches an explicit null target, as it
+    // did when an unlabelled issue's value was null. So `label eq null` finds
+    // unlabelled issues and `label neq null` finds labelled ones.
+    if (held.length === 0 && wanted.some(w => w === null || w === undefined)) {
+      return true;
+    }
+    return wanted.some(w => held.some(h => String(h) === String(w)));
+  }
+  if (fieldValue === null || fieldValue === undefined) {
+    // An unset value matches an explicit null target and nothing else.
+    return wanted.some(w => w === null || w === undefined);
+  }
+  return wanted.some(w => w !== null && w !== undefined && String(w) === String(fieldValue));
+}
+
 function matchCondition(
   issue: FilterableIssue,
   condition: FilterCondition,
@@ -89,35 +133,13 @@ function matchCondition(
 
   switch (operator) {
     case 'eq':
-      return fieldValue === value;
+      return matchesAny(issue, field, fieldValue, [value]);
     case 'neq':
-      return fieldValue !== value;
+      return !matchesAny(issue, field, fieldValue, [value]);
     case 'in':
-      if (Array.isArray(value)) {
-        if (field === 'label') {
-          // For labels, check if the issue has any of the specified labels
-          const issueLabels = issue.labelIds ?? [];
-          return value.some(v => issueLabels.includes(v));
-        }
-        if (Array.isArray(fieldValue)) {
-          // Custom multi_select — match if any selected value overlaps
-          return value.some(v => (fieldValue as unknown[]).includes(v));
-        }
-        return value.includes(String(fieldValue));
-      }
-      return false;
+      return matchesAny(issue, field, fieldValue, toValueList(value));
     case 'nin':
-      if (Array.isArray(value)) {
-        if (field === 'label') {
-          const issueLabels = issue.labelIds ?? [];
-          return !value.some(v => issueLabels.includes(v));
-        }
-        if (Array.isArray(fieldValue)) {
-          return !value.some(v => (fieldValue as unknown[]).includes(v));
-        }
-        return !value.includes(String(fieldValue));
-      }
-      return false;
+      return !matchesAny(issue, field, fieldValue, toValueList(value));
     case 'gt':
       return typeof fieldValue === 'number' && typeof value === 'number'
         ? fieldValue > value
@@ -211,6 +233,13 @@ export function applySorting<T extends FilterableIssue>(
 
       switch (field) {
         case 'priority':
+          // Ascending is urgent-first, so "No priority" (0) sorts last rather
+          // than ahead of Urgent.
+          // "No priority" stays last in BOTH directions, so it is handled
+          // outside the direction multiplier.
+          if (!a.priority !== !b.priority) {
+            return a.priority ? -1 : 1;
+          }
           cmp = a.priority - b.priority;
           break;
         case 'status':

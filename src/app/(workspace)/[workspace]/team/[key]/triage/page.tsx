@@ -11,7 +11,7 @@ import { AssigneeSelect } from '@/components/properties/assignee-select';
 import { LabelSelect } from '@/components/properties/label-select';
 import { PriorityIcon } from '@/components/properties/priority-icon';
 import { PrioritySelect } from '@/components/properties/priority-select';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { PageSkeleton } from '@/components/ui/skeleton';
@@ -121,7 +121,7 @@ function SnoozeButton({
       <button
         aria-expanded={open}
         aria-haspopup="menu"
-        className="rounded border border-border px-2.5 py-1 text-xs text-foreground-secondary hover:bg-muted disabled:opacity-50"
+        className={buttonVariants({ size: 'sm', variant: 'outline' })}
         disabled={disabled}
         onClick={() => setOpen(o => !o)}
         type="button"
@@ -160,7 +160,7 @@ const TriagePage = observer(function TriagePage() {
     useStore();
   const handleUpdate = useIssueUpdate();
   const t = useTranslations();
-  const { formatDate } = useFormatters();
+  const { formatRelativeTime } = useFormatters();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [duplicatePickerFor, setDuplicatePickerFor] = useState<string | null>(null);
@@ -497,7 +497,7 @@ const TriagePage = observer(function TriagePage() {
                   {creator ? (
                     <span className="text-xs text-muted-foreground">
                       {t('settings.triage.fromCreator', {
-                        date: formatDate(issue.createdAt),
+                        date: formatRelativeTime(issue.createdAt),
                         name: creator.displayName,
                       })}
                     </span>
@@ -550,7 +550,7 @@ const TriagePage = observer(function TriagePage() {
                     onClose={() => setDuplicatePickerFor(null)}
                     onSelect={canonical => submitMarkDuplicate(focusedIssue.id, canonical)}
                     triggerChildren={t('settings.triage.duplicate')}
-                    triggerClassName="rounded-md border border-border px-2.5 py-1 text-xs text-foreground-secondary hover:bg-muted"
+                    triggerClassName={buttonVariants({ size: 'sm', variant: 'outline' })}
                     triggerTitle={t('settings.triage.markDuplicateTitle')}
                   />
                   <SnoozeButton
@@ -614,7 +614,7 @@ const TriagePage = observer(function TriagePage() {
       )}
 
       {queue.length > 0 && (
-        <div className="flex items-center gap-3 border-t border-border px-4 py-1.5 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-3 border-t border-border px-4 py-1.5 text-[10px] text-muted-foreground max-md:hidden [@media(hover:none)]:hidden">
           <span className="flex items-center gap-1">
             <kbd className="rounded border border-border px-1 font-mono">J</kbd>
             <kbd className="rounded border border-border px-1 font-mono">K</kbd>

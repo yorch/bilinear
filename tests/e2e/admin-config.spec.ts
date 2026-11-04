@@ -124,11 +124,14 @@ test.describe('Configuration console — as a platform admin', () => {
 
   test('an env-backed knob renders locked and names its variable', async ({ page }) => {
     await page.goto('/admin/config');
+    // The Environment group is collapsed by default; filtering reveals the row.
+    await page.getByRole('searchbox', { name: /filter settings/i }).fill('APP_URL');
     // `env.*` knobs are `storage: 'env-only'` — nothing stored can take effect,
-    // so accepting a write would appear to succeed and do nothing.
+    // so accepting a write would appear to succeed and do nothing. Locked rows
+    // render as plain text with no editable control at all.
     const row = page.getByTestId('setting-row-env.APP_URL');
     await expect(row).toContainText('Forced by APP_URL');
-    await expect(row.getByRole('textbox')).toBeDisabled();
+    await expect(row.getByRole('textbox')).toHaveCount(0);
   });
 
   test('a secret renders as presence only, with no control bound to it', async ({ page }) => {
@@ -136,6 +139,7 @@ test.describe('Configuration console — as a platform admin', () => {
     // regression that rendered a secret into an editable `Input` would leave
     // this suite green, because nothing else navigates to the redacted row.
     await page.goto('/admin/config');
+    await page.getByRole('searchbox', { name: /filter settings/i }).fill('JWT_SECRET');
     const row = page.getByTestId('setting-row-env.JWT_SECRET');
     await expect(row).toContainText('Set');
     await expect(row.getByRole('textbox')).toHaveCount(0);

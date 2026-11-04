@@ -169,13 +169,13 @@ export function IssueRow({
    * up down the page and the pending dot occupies a reserved slot whether or
    * not it is showing.
    */
-  const gridTemplateColumns = [
+  const desktopColumns = [
     '0.875rem', // selection checkbox
     '1rem', // priority
     '3.75rem', // identifier
     '0.375rem', // pending-write dot (reserved, so it never shifts the title)
     'minmax(0, 1fr)', // title
-    visible('labels') ? '6rem' : null,
+    visible('labels') ? 'minmax(6rem, 9rem)' : null, // names, not just dots
     visible('dueDate') ? '4.25rem' : null,
     visible('assignee') ? '1.5rem' : null,
     showCycle ? '4.75rem' : null,
@@ -187,11 +187,34 @@ export function IssueRow({
     .filter(Boolean)
     .join(' ');
 
+  /**
+   * Below `lg` (phones, and tablets where the sidebar eats the width) the row cannot afford the property columns: with them the fixed
+   * tracks summed to more than a phone's width and the `1fr` title track
+   * collapsed to 0px, so a list showed identifiers and icons but no titles.
+   * On a phone the row keeps only checkbox, priority, identifier, title and an
+   * icon-only status (the rest are `max-lg:hidden` below, so they take no
+   * track), and the property chips live in the detail panel. The tracks are
+   * touch-target sized so the 44px priority/status triggers no longer spill
+   * over their neighbours. Applied with `!` because the desktop template is an
+   * inline style, which would otherwise win.
+   */
+  const mobileColumns = [
+    '0.875rem', // selection checkbox
+    '2.75rem', // priority (44px touch target)
+    '3.25rem', // identifier
+    'minmax(0, 1fr)', // title
+    '2.75rem', // status, icon-only
+    trailing ? '2rem' : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: presentational row container; interactive children (checkbox, button, selects) provide all a11y. onContextMenu is the only handler.
     <div
       className={cn(
-        'group grid h-9 select-none items-center gap-2 border-b border-border px-4 py-0 transition-colors hover:bg-accent',
+        'group grid h-9 select-none items-center gap-2 border-b border-border px-4 py-0 transition-colors hover:bg-accent max-lg:gap-1 max-lg:px-3',
+        'max-lg:[grid-template-columns:var(--row-cols-mobile)]!',
         // Grid items default to min-width:auto, which would let a wide label
         // set or a long custom-field value blow past its track and re-ragged
         // the columns this template exists to align.
@@ -207,13 +230,19 @@ export function IssueRow({
         'max-md:[&_[data-prop-empty]]:opacity-100',
         selected && 'bg-brand-subtle',
       )}
+      data-issue-id={issue.id}
       data-selected={selected ? 'true' : undefined}
       data-testid="issue-row"
       onContextMenu={onContextMenu}
-      style={{ gridTemplateColumns, ...style }}
+      style={{
+        gridTemplateColumns: desktopColumns,
+        ['--row-cols-mobile' as string]: mobileColumns,
+        ...style,
+      }}
     >
       {/* Checkbox */}
       <input
+        aria-label={t('issues.selectIssue', { identifier: issue.identifier })}
         checked={isBulkMode ? (checked ?? false) : selected}
         className={cn(
           'h-3.5 w-3.5 accent-brand focus:opacity-100',
@@ -261,7 +290,7 @@ export function IssueRow({
       {/* Pending-write indicator — an unconfirmed optimistic write is in
           flight. The slot is always present so showing it can't nudge the
           title; only the dot inside is conditional. */}
-      <span className="flex items-center justify-center">
+      <span className="flex items-center justify-center max-lg:hidden">
         {pending && (
           <span
             aria-label={t('issues.syncingRow')}
@@ -298,75 +327,97 @@ export function IssueRow({
 
       {/* Labels */}
       {visible('labels') && (
-        <LabelSelect
-          forceOpen={openProperty === 'label'}
-          labels={allLabels}
-          onChange={labelIds => onUpdate(issue.id, { labelIds })}
-          onClose={onPropertyClosed}
-          value={issue.labels.map(l => l.id)}
-        />
+        // Names, not just colour dots (colour alone can't tell two labels
+        // apart); the trigger clips at the track, and its title lists them all.
+        <div className="[&_button]:max-w-full [&_button]:flex-nowrap [&_button]:whitespace-nowrap [&_button]:overflow-hidden max-lg:hidden">
+          <LabelSelect
+            forceOpen={openProperty === 'label'}
+            labels={allLabels}
+            onChange={labelIds => onUpdate(issue.id, { labelIds })}
+            onClose={onPropertyClosed}
+            showNames
+            value={issue.labels.map(l => l.id)}
+          />
+        </div>
       )}
 
       {/* Due date */}
       {visible('dueDate') && (
-        <DueDatePicker
-          forceOpen={openProperty === 'dueDate'}
-          onChange={dueDate => onUpdate(issue.id, { dueDate })}
-          onClose={onPropertyClosed}
-          value={issue.dueDate}
-        />
+        <div className="max-lg:hidden">
+          <DueDatePicker
+            forceOpen={openProperty === 'dueDate'}
+            onChange={dueDate => onUpdate(issue.id, { dueDate })}
+            onClose={onPropertyClosed}
+            value={issue.dueDate}
+          />
+        </div>
       )}
 
       {/* Assignee */}
       {visible('assignee') && (
-        <AssigneeSelect
-          forceOpen={openProperty === 'assignee'}
-          onChange={assigneeId => onUpdate(issue.id, { assigneeId })}
-          onClose={onPropertyClosed}
-          users={users}
-          value={issue.assigneeId}
-        />
+        <div className="max-lg:hidden">
+          <AssigneeSelect
+            forceOpen={openProperty === 'assignee'}
+            onChange={assigneeId => onUpdate(issue.id, { assigneeId })}
+            onClose={onPropertyClosed}
+            users={users}
+            value={issue.assigneeId}
+          />
+        </div>
       )}
 
       {/* Cycle */}
       {showCycle && teamId && (
-        <CycleSelect
-          onChange={cycleId => onUpdate(issue.id, { cycleId })}
-          onClose={onPropertyClosed}
-          open={openProperty === 'cycle'}
-          teamId={teamId}
-          value={issue.cycleId ?? null}
-        />
+        // The trigger is content-sized, so a long cycle name ran out of its
+        // 4.75rem track and painted over the Status cell. Cap the trigger at
+        // the track and let its label shrink/truncate.
+        <div className="[&_button>span]:min-w-0 [&_button]:max-w-full max-lg:hidden">
+          <CycleSelect
+            onChange={cycleId => onUpdate(issue.id, { cycleId })}
+            onClose={onPropertyClosed}
+            open={openProperty === 'cycle'}
+            teamId={teamId}
+            value={issue.cycleId ?? null}
+          />
+        </div>
       )}
 
       {/* Estimate — only when team has estimation enabled */}
       {showEstimate && estimationType && (
-        <EstimatePicker
-          estimationType={estimationType}
-          forceOpen={openProperty === 'estimate'}
-          onChange={estimate => onUpdate(issue.id, { estimate: estimate ?? undefined })}
-          onClose={onPropertyClosed}
-          value={issue.estimate}
-        />
+        <div className="max-lg:hidden">
+          <EstimatePicker
+            estimationType={estimationType}
+            forceOpen={openProperty === 'estimate'}
+            onChange={estimate => onUpdate(issue.id, { estimate: estimate ?? undefined })}
+            onClose={onPropertyClosed}
+            value={issue.estimate}
+          />
+        </div>
       )}
 
       {/* Custom field columns (read-only cells — edit via detail panel).
           Driven by the same filtered list the grid template is built from, so
           the cells and the tracks can't drift apart. */}
       {visibleCustomFields.map(def => (
-        <span className="truncate text-xs text-muted-foreground" key={def.id} title={def.name}>
+        <span
+          className="truncate text-xs text-muted-foreground max-lg:hidden"
+          key={def.id}
+          title={def.name}
+        >
           {renderCustomFieldValue(def, getCustomFieldValue?.(def.id))}
         </span>
       ))}
 
       {/* Status */}
-      <StatusSelect
-        forceOpen={openProperty === 'status'}
-        onChange={stateId => onUpdate(issue.id, { stateId })}
-        onClose={onPropertyClosed}
-        states={states}
-        value={issue.stateId}
-      />
+      <div className="max-lg:[&_button_span.text-muted-foreground]:sr-only">
+        <StatusSelect
+          forceOpen={openProperty === 'status'}
+          onChange={stateId => onUpdate(issue.id, { stateId })}
+          onClose={onPropertyClosed}
+          states={states}
+          value={issue.stateId}
+        />
+      </div>
 
       {trailing && <div className="flex justify-end">{trailing}</div>}
     </div>

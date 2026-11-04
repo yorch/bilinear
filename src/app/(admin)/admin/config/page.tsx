@@ -1,7 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { SettingRow } from '@/components/settings/setting-row';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { SectionHeader } from '@/components/shared/section-header';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
@@ -31,6 +35,9 @@ import { getErrorMessage } from '@/lib/utils';
 export default function AdminConfigPage() {
   const t = useTranslations();
   useDocumentTitle(t('admin.nav.config'));
+  const [query, setQuery] = useState('');
+  // ~28 read-only environment rows dwarf the ~30 editable ones, so they start collapsed.
+  const [envOpen, setEnvOpen] = useState(false);
 
   const {
     cause,
@@ -79,7 +86,15 @@ export default function AdminConfigPage() {
     );
   }
 
-  const groups = groupByArea(settings);
+  const needle = query.trim().toLowerCase();
+  const visible = needle
+    ? settings.filter(
+        item =>
+          item.key.toLowerCase().includes(needle) ||
+          t(item.labelKey).toLowerCase().includes(needle),
+      )
+    : settings;
+  const groups = groupByArea(visible);
 
   return (
     <div className="space-y-8">
@@ -88,24 +103,49 @@ export default function AdminConfigPage() {
         <p className="mt-1 text-muted-foreground text-sm">{t('config.description')}</p>
       </div>
 
-      {groups.map(({ area, items }) => (
-        <section key={area}>
-          <h2 className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-            {t(`config.areas.${area}`)}
-          </h2>
-          <div className="rounded-lg border border-border px-4">
-            {items.map(setting => (
-              <SettingRow
-                key={setting.key}
-                onChange={value => handleChange(setting, value)}
-                scope="platform"
-                setting={setting}
-                writable={setting.writable}
+      <Input
+        aria-label={t('config.filterPlaceholder')}
+        className="sm:max-w-sm"
+        onChange={e => setQuery(e.target.value)}
+        placeholder={t('config.filterPlaceholder')}
+        type="search"
+        value={query}
+      />
+
+      {groups.length === 0 && <EmptyState size="compact" title={t('config.noMatches')} />}
+
+      {groups.map(({ area, items }) => {
+        // A filter match inside the environment group opens it: hiding a hit
+        // behind a collapsed header would read as "no result".
+        const collapsible = area === 'env';
+        const open = !collapsible || envOpen || needle !== '';
+        return (
+          <section key={area}>
+            <div className="mb-1">
+              <SectionHeader
+                as="h2"
+                collapsed={collapsible ? !open : undefined}
+                count={collapsible ? items.length : undefined}
+                onToggle={collapsible ? () => setEnvOpen(v => !v) : undefined}
+                title={t(`config.areas.${area}`)}
               />
-            ))}
-          </div>
-        </section>
-      ))}
+            </div>
+            {open && (
+              <div className="rounded-lg border border-border bg-card px-4">
+                {items.map(setting => (
+                  <SettingRow
+                    key={setting.key}
+                    onChange={value => handleChange(setting, value)}
+                    scope="platform"
+                    setting={setting}
+                    writable={setting.writable}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }

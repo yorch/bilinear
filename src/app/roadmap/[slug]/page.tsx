@@ -1,15 +1,19 @@
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import { PublicRoadmapView } from '@/components/roadmap/public-roadmap-view';
 import { getServerTranslations } from '@/lib/i18n/server';
 import { prisma } from '@/server/lib/prisma';
 import { ProjectService } from '@/server/services/project.service';
-import { verifyRoadmapPassword } from '@/server/services/roadmap.service';
+import {
+  isRoadmapUnlockTokenValid,
+  roadmapUnlockCookieName,
+} from '@/server/services/roadmap.service';
 
 interface Props {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ password?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }
 
 const getRoadmapBySlug = cache((slug: string) =>
@@ -28,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PublicRoadmapPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const { password } = await searchParams;
+  const { error } = await searchParams;
 
   const roadmap = await getRoadmapBySlug(slug);
 
@@ -36,7 +40,16 @@ export default async function PublicRoadmapPage({ params, searchParams }: Props)
     notFound();
   }
 
-  const requiresPassword = !!roadmap.passwordHash && !password;
+  // The password is entered via POST /roadmap/[slug]/unlock, which sets this
+  // cookie; it is never accepted from the URL.
+  const unlocked =
+    !roadmap.passwordHash ||
+    isRoadmapUnlockTokenValid(
+      (await cookies()).get(roadmapUnlockCookieName(slug))?.value,
+      slug,
+      roadmap.passwordHash,
+    );
+  const requiresPassword = !unlocked;
   let projects: Array<{
     color: string;
     health: string | null;
@@ -51,19 +64,6 @@ export default async function PublicRoadmapPage({ params, searchParams }: Props)
   }> = [];
 
   if (!requiresPassword) {
-    if (roadmap.passwordHash && password) {
-      const valid = await verifyRoadmapPassword(roadmap.passwordHash, password);
-      if (!valid) {
-        return (
-          <PublicRoadmapView
-            projects={[]}
-            requiresPassword
-            roadmap={{ ...roadmap, passwordHash: null }}
-          />
-        );
-      }
-    }
-
     const rawProjects = await prisma.project.findMany({
       include: { milestones: { where: { archivedAt: null } } },
       where: {
@@ -96,6 +96,7 @@ export default async function PublicRoadmapPage({ params, searchParams }: Props)
 
   return (
     <PublicRoadmapView
+      passwordError={error === 'rate' ? 'rate' : error ? 'wrong' : false}
       projects={projects}
       requiresPassword={requiresPassword}
       roadmap={{ ...roadmap, passwordHash: null }}

@@ -76,9 +76,12 @@ function countViolations(text) {
 function scan() {
   const counts = {};
   for (const root of ROOTS) {
-    for (const file of globSync(`${root}/**/*.{ts,tsx}`, {
+    // `.css` is scanned too, so component stylesheets (the TipTap editor's)
+    // can't reintroduce hex behind the TS/TSX guard. `globals.css` is the one
+    // exception: it is where the token layer and fixed palettes are *defined*.
+    for (const file of globSync(`${root}/**/*.{ts,tsx,css}`, {
       cwd: ROOT,
-      ignore: `${root}/**/*.test.{ts,tsx}`,
+      exclude: f => /(^|\/)globals\.css$/.test(f) || /\.test\.(ts|tsx)$/.test(f),
     })) {
       const text = readFileSync(path.join(ROOT, file), 'utf8');
       const count = countViolations(text);

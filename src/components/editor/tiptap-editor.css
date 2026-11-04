@@ -1,25 +1,107 @@
 /*
  * TipTap editor styles.
  *
- * Generic surface colors (placeholders, borders, muted backgrounds) reference
- * the app's semantic tokens from globals.css so the editor inherits the
- * design system. Editor-specific accents that don't map to a semantic token
- * (inline-code pink, link/mention indigo, highlight yellow) are kept as
- * literal hex values with explicit `.dark` overrides — the literal pairs
- * stay together for clarity until those colors get promoted into globals.
+ * Every colour is a token from globals.css (`yarn lint:tokens` scans .css),
+ * so the editor follows the user's accent (brand roles) and both themes.
+ * Status roles (warning highlight, success/info syntax colours) never follow
+ * the accent. Typography is defined here because Tailwind preflight strips
+ * headings and lists and `@tailwindcss/typography` is not installed.
  */
 .tiptap-wrapper .ProseMirror {
   padding: 0.25rem 0;
+  line-height: 1.65;
+  color: var(--foreground);
   outline: none;
 }
 
 .tiptap-wrapper .ProseMirror p.is-editor-empty:first-child::before {
   float: left;
   height: 0;
-  font-style: italic;
   color: var(--muted-foreground);
   pointer-events: none;
   content: attr(data-placeholder);
+}
+
+/* ── Typography ─────────────────────────────────────────────────────────── */
+.tiptap-wrapper .ProseMirror h1,
+.tiptap-wrapper .ProseMirror h2,
+.tiptap-wrapper .ProseMirror h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.375rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.tiptap-wrapper .ProseMirror h1 {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.tiptap-wrapper .ProseMirror h2 {
+  font-size: 1.25rem;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+}
+
+.tiptap-wrapper .ProseMirror h3 {
+  font-size: 1.0625rem;
+  line-height: 1.4;
+}
+
+.tiptap-wrapper .ProseMirror p {
+  margin: 0.375rem 0;
+}
+
+.tiptap-wrapper .ProseMirror strong {
+  font-weight: 600;
+}
+
+.tiptap-wrapper .ProseMirror > *:first-child {
+  margin-top: 0;
+}
+
+.tiptap-wrapper .ProseMirror > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Lists */
+.tiptap-wrapper .ProseMirror ul,
+.tiptap-wrapper .ProseMirror ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.tiptap-wrapper .ProseMirror ul {
+  list-style: disc;
+}
+
+.tiptap-wrapper .ProseMirror ul ul {
+  list-style: circle;
+}
+
+.tiptap-wrapper .ProseMirror ul ul ul {
+  list-style: square;
+}
+
+.tiptap-wrapper .ProseMirror ol {
+  list-style: decimal;
+}
+
+.tiptap-wrapper .ProseMirror ol ol {
+  list-style: lower-alpha;
+}
+
+.tiptap-wrapper .ProseMirror li > p {
+  margin: 0;
+}
+
+.tiptap-wrapper .ProseMirror li + li {
+  margin-top: 0.125rem;
+}
+
+.tiptap-wrapper .ProseMirror li::marker {
+  color: var(--muted-foreground);
 }
 
 /* Task list */
@@ -36,14 +118,16 @@
 }
 
 .tiptap-wrapper .ProseMirror ul[data-type="taskList"] li > label {
+  display: flex;
   flex-shrink: 0;
-  margin-top: 0.125rem;
+  align-items: center;
+  height: 1.65em;
   user-select: none;
 }
 
 .tiptap-wrapper .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
-  accent-color: #6366f1; /* indigo-500 */
-  cursor: pointer; /* indigo-500 */
+  accent-color: var(--brand);
+  cursor: pointer;
 }
 
 .tiptap-wrapper .ProseMirror ul[data-type="taskList"] li > div {
@@ -51,42 +135,101 @@
   min-width: 0;
 }
 
-/* Code block */
+.tiptap-wrapper .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+
+/* ── Code ───────────────────────────────────────────────────────────────── */
 .tiptap-wrapper .ProseMirror pre {
   padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
   overflow-x: auto;
+  font-family: var(--font-mono);
   font-size: 0.8125rem;
   line-height: 1.6;
-  background: #18181b; /* zinc-900 */
+  color: var(--foreground);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
   border-radius: 0.5rem;
 }
 
 .tiptap-wrapper .ProseMirror pre code {
   padding: 0;
+  font-family: inherit;
   font-size: inherit;
-  color: #e4e4e7; /* zinc-200 */
+  color: inherit;
   background: transparent;
+}
+
+/* Syntax colours (lowlight/highlight.js token classes), all token-based so
+   they hold contrast in both themes. */
+.tiptap-wrapper .ProseMirror pre .hljs-keyword,
+.tiptap-wrapper .ProseMirror pre .hljs-selector-tag,
+.tiptap-wrapper .ProseMirror pre .hljs-doctag {
+  color: var(--brand-subtle-foreground);
+}
+
+.tiptap-wrapper .ProseMirror pre .hljs-string,
+.tiptap-wrapper .ProseMirror pre .hljs-regexp,
+.tiptap-wrapper .ProseMirror pre .hljs-addition {
+  color: var(--success-subtle-foreground);
+}
+
+.tiptap-wrapper .ProseMirror pre .hljs-comment,
+.tiptap-wrapper .ProseMirror pre .hljs-quote {
+  font-style: italic;
+  color: var(--muted-foreground);
+}
+
+.tiptap-wrapper .ProseMirror pre .hljs-number,
+.tiptap-wrapper .ProseMirror pre .hljs-literal,
+.tiptap-wrapper .ProseMirror pre .hljs-symbol,
+.tiptap-wrapper .ProseMirror pre .hljs-attr {
+  color: var(--warning-subtle-foreground);
+}
+
+.tiptap-wrapper .ProseMirror pre .hljs-title,
+.tiptap-wrapper .ProseMirror pre .hljs-built_in,
+.tiptap-wrapper .ProseMirror pre .hljs-type,
+.tiptap-wrapper .ProseMirror pre .hljs-class,
+.tiptap-wrapper .ProseMirror pre .hljs-function {
+  color: var(--info-subtle-foreground);
+}
+
+.tiptap-wrapper .ProseMirror pre .hljs-deletion {
+  color: var(--danger-subtle-foreground);
+}
+
+.tiptap-wrapper .ProseMirror pre .hljs-emphasis {
+  font-style: italic;
+}
+
+.tiptap-wrapper .ProseMirror pre .hljs-strong {
+  font-weight: 600;
 }
 
 /* Inline code (not inside pre blocks) */
 .tiptap-wrapper .ProseMirror :not(pre) > code {
   padding: 0.125rem 0.3rem;
+  font-family: var(--font-mono);
   font-size: 0.85em;
-  color: #be185d; /* pink-700 */
-  background: #f4f4f5; /* zinc-100 */
+  color: var(--foreground-secondary);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
   border-radius: 0.25rem;
 }
 
-.dark .tiptap-wrapper .ProseMirror :not(pre) > code {
-  color: #f9a8d4; /* pink-300 */
-  background: #27272a; /* pink-300 */
+/* ── Table ──────────────────────────────────────────────────────────────── */
+.tiptap-wrapper .ProseMirror .tableWrapper {
+  max-width: 100%;
+  margin: 0.75rem 0;
+  overflow-x: auto;
 }
 
-/* Table */
 .tiptap-wrapper .ProseMirror table {
   width: 100%;
   margin: 0;
-  overflow: hidden;
   table-layout: fixed;
   border-collapse: collapse;
 }
@@ -95,10 +238,15 @@
 .tiptap-wrapper .ProseMirror table th {
   position: relative;
   box-sizing: border-box;
-  min-width: 1em;
+  min-width: 3rem;
   padding: 0.375rem 0.5rem;
   vertical-align: top;
   border: 1px solid var(--border);
+}
+
+.tiptap-wrapper .ProseMirror table td > p,
+.tiptap-wrapper .ProseMirror table th > p {
+  margin: 0;
 }
 
 .tiptap-wrapper .ProseMirror table th {
@@ -107,50 +255,56 @@
   background-color: var(--muted);
 }
 
-.tiptap-wrapper .ProseMirror table .selectedCell:after {
+.tiptap-wrapper .ProseMirror table .selectedCell::after {
   position: absolute;
   inset: 0;
   pointer-events: none;
   content: "";
-  background: rgba(99, 102, 241, 0.1);
+  background: var(--brand-subtle);
 }
 
-/* Blockquote */
+.tiptap-wrapper .ProseMirror table .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: -2px;
+  width: 4px;
+  pointer-events: none;
+  background-color: var(--brand);
+}
+
+.tiptap-wrapper .ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
+/* ── Blocks ─────────────────────────────────────────────────────────────── */
 .tiptap-wrapper .ProseMirror blockquote {
   padding-left: 1rem;
   margin: 0.75rem 0;
-  font-style: italic;
-  color: var(--muted-foreground);
-  border-left: 3px solid #6366f1; /* indigo-500 — accent kept inline */
+  color: var(--foreground-secondary);
+  border-left: 3px solid var(--brand-border);
 }
 
-/* Horizontal rule */
 .tiptap-wrapper .ProseMirror hr {
-  margin: 1rem 0;
+  margin: 1.25rem 0;
   border: none;
   border-top: 1px solid var(--border);
 }
 
-/* Links */
 .tiptap-wrapper .ProseMirror a {
-  color: #6366f1; /* indigo-500 */
+  color: var(--brand-subtle-foreground);
   text-decoration: underline;
+  text-underline-offset: 2px;
   cursor: pointer;
 }
 
-/* Highlight */
 .tiptap-wrapper .ProseMirror mark {
   padding: 0.05em 0.1em;
-  color: inherit;
-  background-color: #fef08a; /* yellow-200 */
+  color: var(--warning-subtle-foreground);
+  background-color: var(--warning-subtle);
   border-radius: 0.125rem;
 }
 
-.dark .tiptap-wrapper .ProseMirror mark {
-  background-color: #713f12; /* yellow-900 */
-}
-
-/* Images */
 .tiptap-wrapper .ProseMirror img {
   max-width: 100%;
   height: auto;
@@ -158,34 +312,7 @@
 }
 
 .tiptap-wrapper .ProseMirror img.ProseMirror-selectednode {
-  outline: 2px solid #6366f1;
-}
-
-/* Heading spacing */
-.tiptap-wrapper .ProseMirror h1,
-.tiptap-wrapper .ProseMirror h2,
-.tiptap-wrapper .ProseMirror h3 {
-  margin-top: 1rem;
-  margin-bottom: 0.25rem;
-}
-
-.tiptap-wrapper .ProseMirror h1:first-child,
-.tiptap-wrapper .ProseMirror h2:first-child,
-.tiptap-wrapper .ProseMirror h3:first-child {
-  margin-top: 0;
-}
-
-/* Paragraph spacing */
-.tiptap-wrapper .ProseMirror p {
-  margin: 0.25rem 0;
-}
-
-.tiptap-wrapper .ProseMirror > *:first-child {
-  margin-top: 0;
-}
-
-.tiptap-wrapper .ProseMirror > *:last-child {
-  margin-bottom: 0;
+  outline: 2px solid var(--brand);
 }
 
 /* Details / collapsible */
@@ -203,22 +330,76 @@
   list-style: disclosure-closed;
 }
 
+.tiptap-wrapper .ProseMirror details summary::marker {
+  color: var(--muted-foreground);
+}
+
+.tiptap-wrapper .ProseMirror details summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
 .tiptap-wrapper .ProseMirror details[open] summary {
   margin-bottom: 0.5rem;
   list-style: disclosure-open;
 }
 
-/* @mention chip */
-.tiptap-wrapper .ProseMirror .mention {
+/* ── Mentions ───────────────────────────────────────────────────────────── */
+/* @user chip. */
+.tiptap-wrapper .ProseMirror .mention,
+.tiptap-wrapper .ProseMirror .issue-mention,
+.tiptap-wrapper .ProseMirror .project-mention {
   padding: 0.1em 0.3em;
   font-size: 0.875em;
   font-weight: 500;
-  color: #6366f1; /* indigo-500 */
-  background-color: #eef2ff; /* indigo-50 */
+  color: var(--brand-subtle-foreground);
+  background-color: var(--brand-subtle);
   border-radius: 0.25rem;
 }
 
-.dark .tiptap-wrapper .ProseMirror .mention {
-  color: #a5b4fc; /* indigo-300 */
-  background-color: #1e1b4b; /* indigo-950 */
+/* #issue: identifier-style (mono, squarer chip). */
+.tiptap-wrapper .ProseMirror .issue-mention {
+  font-family: var(--font-mono);
+  font-size: 0.8125em;
+  color: var(--info-subtle-foreground);
+  background-color: var(--info-subtle);
+}
+
+/* ~project: outlined chip so it reads differently from a person. */
+.tiptap-wrapper .ProseMirror .project-mention {
+  background-color: transparent;
+  border: 1px solid var(--brand-border);
+}
+
+/* ── Collaboration presence ─────────────────────────────────────────────── */
+/* The extension sets border-color / background-color inline from the peer's
+   --cursor-N colour; geometry and label chip live here. */
+.tiptap-wrapper .collaboration-carets__caret {
+  position: relative;
+  margin-inline: -1px;
+  word-break: normal;
+  pointer-events: none;
+  border-inline: 1px solid;
+}
+
+.tiptap-wrapper .collaboration-carets__label {
+  position: absolute;
+  top: -1.45em;
+  left: -1px;
+  padding: 1px 6px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--invert-foreground);
+  white-space: nowrap;
+  user-select: none;
+  border-radius: 4px 4px 4px 0;
+}
+
+/* Light cursor swatches need dark ink; see CURSOR_INK in tiptap-editor.tsx. */
+.tiptap-wrapper .collaboration-carets__label[data-ink="dark"] {
+  color: var(--cursor-ink);
 }

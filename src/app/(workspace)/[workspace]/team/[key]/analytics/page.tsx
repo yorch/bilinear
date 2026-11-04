@@ -5,16 +5,19 @@ import { useParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { CycleVelocitySection } from '@/components/analytics/cycle-velocity-section';
 import { InsightsSection } from '@/components/analytics/insights-section';
+import { StatCard } from '@/components/analytics/stat-card';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { ColorDot } from '@/components/ui/color-dot';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
+import { stateChartColor } from '@/lib/planning-utils';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -95,7 +98,12 @@ function BarChart({ data, maxValue, unit = '', emptyMessage }: BarChartProps) {
       {data.map(item => {
         const pct = max > 0 ? (item.value / max) * 100 : 0;
         return (
-          <div className="flex min-w-0 flex-1 flex-col items-center gap-1" key={item.label}>
+          <div
+            aria-label={`${item.label}: ${item.value}${unit}`}
+            className="flex min-w-0 flex-1 flex-col items-center gap-1"
+            key={item.label}
+            role="img"
+          >
             <span className="text-xs font-medium tabular-nums text-muted-foreground">
               {item.value > 0 ? `${item.value}${unit}` : ''}
             </span>
@@ -236,22 +244,6 @@ function HBarChart({ data, maxValue, emptyMessage }: HBarChartProps) {
 // Stat card
 // ---------------------------------------------------------------------------
 
-interface StatCardProps {
-  label: string;
-  sub?: string;
-  value: string | number;
-}
-
-function StatCard({ label, value, sub }: StatCardProps) {
-  return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Section card wrapper
 // ---------------------------------------------------------------------------
@@ -341,7 +333,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     return states
       .filter(s => counts.has(s.id))
       .map(s => ({
-        color: s.color,
+        color: stateChartColor(s),
         label: s.name,
         value: counts.get(s.id) ?? 0,
       }));
@@ -479,7 +471,9 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     if (durations.length === 0) {
       return null;
     }
-    return (durations.reduce((s, d) => s + d, 0) / durations.length).toFixed(1);
+    const avg = (durations.reduce((s, d) => s + d, 0) / durations.length).toFixed(1);
+    // "0.0d" is a rounding artefact, not a measurement.
+    return avg === '0.0' ? null : avg;
   }, [rangeIssues]);
 
   // ── Team health (fetched from GraphQL, not MobX store) ────────────────────
@@ -506,11 +500,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        {t('analytics.team.loading')}
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!team) {
@@ -615,10 +605,6 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
 
         {/* Charts grid */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          <Section title={t('analytics.team.issuesByState')}>
-            <BarChart data={byStateData} emptyMessage={t('analytics.team.noIssuesYet')} />
-          </Section>
-
           <Section title={t('analytics.team.velocityPerWeek')}>
             <BarChart data={velocityData} emptyMessage={t('analytics.team.noCompletedIssuesYet')} />
           </Section>
@@ -630,7 +616,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
             />
           </Section>
 
-          <Section title={t('analytics.team.issueBreakdown')}>
+          <Section title={t('analytics.team.issuesByState')}>
             <div className="space-y-3">
               {byStateData.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t('analytics.team.noIssuesYet')}</p>

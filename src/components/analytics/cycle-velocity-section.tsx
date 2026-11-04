@@ -1,9 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { StatCard } from '@/components/analytics/stat-card';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
@@ -108,25 +110,14 @@ function VelocityBarChart({ data }: VelocityBarChartProps) {
 // Rolling average stat card
 // ---------------------------------------------------------------------------
 
-interface RollingCardProps {
-  label: string;
-  value: number;
-}
-
-function RollingCard({ label, value }: RollingCardProps) {
-  return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-foreground">
-        {value === 0 ? '—' : value.toFixed(1)}
-      </p>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
+
+/** A rolling average as a stat tile: zero means "no data", shown as an em dash. */
+function RollingAvg({ label, value }: { label: string; value: number }) {
+  return <StatCard label={label} value={value === 0 ? '—' : value.toFixed(1)} />;
+}
 
 type MetricMode = 'issues' | 'points';
 
@@ -177,7 +168,9 @@ export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
       </div>
 
       {loading ? (
-        <p className="text-xs text-muted-foreground">{t('analytics.velocity.loading')}</p>
+        <LoadingRegion>
+          <Skeleton className="h-52 w-full" />
+        </LoadingRegion>
       ) : error ? (
         <InlineRetry message={t('analytics.workspace.failedToLoad')} onRetry={refetch} />
       ) : (
@@ -194,10 +187,10 @@ export function CycleVelocitySection({ teamId }: CycleVelocitySectionProps) {
             <VelocityBarChart data={chartData} />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <RollingCard label={t('analytics.velocity.avg3Cycle')} value={rolling3} />
-            <RollingCard label={t('analytics.velocity.avg6Cycle')} value={rolling6} />
-            <RollingCard label={t('analytics.velocity.avg12Cycle')} value={rolling12} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <RollingAvg label={t('analytics.velocity.avg3Cycle')} value={rolling3} />
+            <RollingAvg label={t('analytics.velocity.avg6Cycle')} value={rolling6} />
+            <RollingAvg label={t('analytics.velocity.avg12Cycle')} value={rolling12} />
           </div>
         </>
       )}

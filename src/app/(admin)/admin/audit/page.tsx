@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -89,7 +90,7 @@ export default function AdminAuditPage() {
         <EmptyState size="compact" title={t('admin.audit.empty')} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[36rem] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted text-left text-xs font-medium text-muted-foreground">
                 <th className="px-4 py-2">{t('admin.audit.colAction')}</th>
@@ -112,7 +113,7 @@ export default function AdminAuditPage() {
                         <p className="text-xs font-medium text-foreground">
                           {entry.actor.displayName}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">{entry.actor.email}</p>
+                        <p className="text-xs text-muted-foreground">{entry.actor.email}</p>
                       </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
@@ -132,7 +133,7 @@ export default function AdminAuditPage() {
                       <span className="text-xs text-foreground-faint">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-2 text-xs text-muted-foreground">
+                  <td className="whitespace-nowrap px-4 py-2 text-xs text-muted-foreground">
                     {formatDateTime(entry.createdAt)}
                   </td>
                 </tr>
@@ -148,14 +149,15 @@ export default function AdminAuditPage() {
 
       {hasMore && (
         <div className="flex justify-center">
-          <button
-            className="rounded border border-border px-4 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+          <Button
             disabled={loadingMore}
             onClick={handleLoadMore}
+            size="sm"
             type="button"
+            variant="outline"
           >
             {loadingMore ? t('common.loading') : t('admin.audit.loadMore')}
-          </button>
+          </Button>
         </div>
       )}
     </div>

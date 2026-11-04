@@ -14,7 +14,7 @@ import { useStore } from '@/providers/store-provider';
 
 const TeamDocsPage = observer(function TeamDocsPage() {
   const { key: teamKey } = useParams<{ key: string; workspace: string }>();
-  const { teamStore, syncStore } = useStore();
+  const { documentStore, teamStore, syncStore } = useStore();
   const t = useTranslations();
   useDocumentTitle(t('nav.docs'));
 
@@ -45,10 +45,19 @@ const TeamDocsPage = observer(function TeamDocsPage() {
     <div className="flex flex-1 flex-col overflow-hidden">
       <PageHeader
         actions={
-          <Button disabled={creating} onClick={() => void create()} size="sm">
-            <Plus className="h-3.5 w-3.5" />
-            {creating ? t('documents.creating') : t('documents.newDocument')}
-          </Button>
+          // An empty list already offers the same CTA in its empty state; two
+          // identical primary buttons on one screen is noise.
+          documentStore.getByTeamId(team.id).length > 0 ? (
+            <Button
+              className="min-w-36"
+              disabled={creating}
+              onClick={() => void create()}
+              size="sm"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {creating ? t('documents.creating') : t('documents.newDocument')}
+            </Button>
+          ) : undefined
         }
         title={t('documents.teamDocsTitle', { teamName: team.displayName ?? team.name })}
       />

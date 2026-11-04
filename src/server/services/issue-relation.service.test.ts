@@ -76,6 +76,29 @@ describe('IssueRelationService', () => {
       );
     });
 
+    it('writes a single directed row for duplicate (no mirror whose direction would tie on createdAt)', async () => {
+      prisma.issueRelation.findUnique.mockResolvedValue(null);
+      prisma.issueRelation.create.mockResolvedValueOnce({ ...TEST_RELATION, type: 'duplicate' });
+      prisma.issue.findUnique.mockResolvedValue(null);
+
+      await service.create({
+        issueId: TEST_RELATION.issueId,
+        relatedIssueId: TEST_RELATION.relatedIssueId,
+        type: 'duplicate',
+      });
+
+      expect(prisma.issueRelation.create).toHaveBeenCalledTimes(1);
+      expect(prisma.issueRelation.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            issueId: TEST_RELATION.issueId,
+            relatedIssueId: TEST_RELATION.relatedIssueId,
+            type: 'duplicate',
+          },
+        }),
+      );
+    });
+
     it('throws IssueRelationAlreadyExistsError when relation already exists', async () => {
       // No circular check hit (type is 'related')
       // Duplicate check finds existing

@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { PromptDialog } from '@/components/shared/prompt-dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
@@ -228,33 +230,32 @@ export default function AdminTenantDetailPage() {
 
       <div className="flex flex-wrap gap-1.5">
         {status === 'suspended' ? (
-          <button
-            className="rounded border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
-            disabled={busy}
-            onClick={handleRestore}
-            type="button"
-          >
+          <Button disabled={busy} onClick={handleRestore} size="sm" type="button" variant="outline">
             {t('admin.tenants.restore')}
-          </button>
+          </Button>
         ) : status === 'active' ? (
-          <button
-            className="rounded border border-warning/40 px-3 py-1.5 text-xs text-warning-subtle-foreground hover:bg-warning-subtle disabled:opacity-50"
+          <Button
+            className="border-warning/40 text-warning-subtle-foreground hover:bg-warning-subtle"
             disabled={busy}
             onClick={() => setSuspendOpen(true)}
+            size="sm"
             type="button"
+            variant="outline"
           >
             {t('admin.tenants.suspend')}
-          </button>
+          </Button>
         ) : null}
         {status !== 'archived' && (
-          <button
-            className="rounded border border-danger/40 px-3 py-1.5 text-xs text-danger-subtle-foreground hover:bg-danger-subtle disabled:opacity-50"
+          <Button
+            className="border-danger/40 text-danger-subtle-foreground hover:bg-danger-subtle"
             disabled={busy}
             onClick={() => setConfirmingDelete(true)}
+            size="sm"
             type="button"
+            variant="outline"
           >
-            {t('common.delete')}
-          </button>
+            {t('admin.tenants.archive')}
+          </Button>
         )}
       </div>
 
@@ -272,7 +273,7 @@ export default function AdminTenantDetailPage() {
         {tenant.owners.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('admin.tenants.noOwners')}</p>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-border">
+          <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full text-sm">
               <tbody className="divide-y divide-border">
                 {tenant.owners.map(o => (
@@ -282,19 +283,20 @@ export default function AdminTenantDetailPage() {
                       <p className="text-xs text-muted-foreground">{o.email}</p>
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <button
-                        className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+                      <Button
                         disabled={busy || status !== 'active'}
                         onClick={() => handleImpersonateOwner(o.id)}
+                        size="xs"
                         title={
                           status === 'active'
                             ? t('admin.tenants.impersonateOwnerActive')
                             : t('admin.tenants.impersonateOwnerInactive')
                         }
                         type="button"
+                        variant="outline"
                       >
                         {t('admin.tenants.impersonate')}
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -315,35 +317,33 @@ export default function AdminTenantDetailPage() {
           </div>
           {limitsDraft ? (
             <div className="flex shrink-0 gap-1.5">
-              <button
-                className="rounded border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+              <Button
                 disabled={busy}
                 onClick={() => setLimitsDraft(null)}
+                size="sm"
                 type="button"
+                variant="outline"
               >
                 {t('common.cancel')}
-              </button>
-              <button
-                className="rounded border border-brand-border bg-brand-subtle px-3 py-1.5 text-xs text-brand-subtle-foreground hover:bg-brand/15 disabled:opacity-50"
-                disabled={busy}
-                onClick={handleSaveLimits}
-                type="button"
-              >
+              </Button>
+              <Button disabled={busy} onClick={handleSaveLimits} size="sm" type="button">
                 {t('admin.tenants.limits.save')}
-              </button>
+              </Button>
             </div>
           ) : (
-            <button
-              className="shrink-0 rounded border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+            <Button
+              className="shrink-0"
               disabled={busy}
               onClick={startEditingLimits}
+              size="sm"
               type="button"
+              variant="outline"
             >
               {t('admin.tenants.limits.edit')}
-            </button>
+            </Button>
           )}
         </div>
-        <div className="overflow-hidden rounded-lg border border-border">
+        <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <tbody className="divide-y divide-border">
               {PLAN_LIMIT_FIELDS.map(({ key, labelKey }) => (
@@ -351,8 +351,9 @@ export default function AdminTenantDetailPage() {
                   <td className="px-4 py-2 text-foreground">{t(`admin.tenants.${labelKey}`)}</td>
                   <td className="px-4 py-2 text-right">
                     {limitsDraft ? (
-                      <input
-                        className="w-28 rounded border border-input bg-background px-2 py-1 text-right font-mono text-sm tabular-nums focus:border-ring focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-subtle)]"
+                      <Input
+                        aria-label={t(`admin.tenants.${labelKey}`)}
+                        className="ml-auto w-28 text-right font-mono tabular-nums"
                         inputMode="numeric"
                         min={1}
                         onChange={e =>
@@ -374,11 +375,13 @@ export default function AdminTenantDetailPage() {
         </div>
       </section>
       <ConfirmDialog
-        message={t('admin.tenants.deleteConfirmDetail', { name: tenant.name })}
+        confirmLabel={t('admin.tenants.archive')}
+        message={t('admin.tenants.archiveConfirm', { name: tenant.name })}
         onCancel={() => setConfirmingDelete(false)}
         onConfirm={handleDelete}
         open={confirmingDelete}
-        title={t('common.delete')}
+        requireText={tenant.urlKey}
+        title={t('admin.tenants.archive')}
       />
       <PromptDialog
         confirmLabel={t('admin.tenants.suspend')}

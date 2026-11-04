@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, ArrowLeft, CircleDot, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Archive, ArrowLeft, CircleDot, MoreHorizontal, Target, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -11,6 +11,7 @@ import { ProjectPropertiesPanel } from '@/components/projects/project-properties
 import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { LoadError } from '@/components/shared/load-error';
+import { IssueStateDot, IssueTrailing } from '@/components/shared/planning-issue-parts';
 import { SectionCard } from '@/components/shared/section-card';
 import { SectionHeader } from '@/components/shared/section-header';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -24,6 +25,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { PROJECT_PROGRESS_QUERY } from '@/lib/graphql-queries';
 import { buildIssueHref } from '@/lib/issue-nav';
+import { sortIssuesByState } from '@/lib/planning-utils';
 import {
   PROJECT_HEALTH_LABEL_KEYS,
   PROJECT_HEALTH_OPTIONS,
@@ -77,8 +79,13 @@ export const ProjectDetailView = observer(function ProjectDetailView({
   // pool.size is the MobX reactive dependency per repo convention.
   // biome-ignore lint/correctness/useExhaustiveDependencies: issueStore.pool.size is the intentional reactive trigger
   const projectIssues = useMemo(
-    () => (project ? issueStore.findByProjectId(project.id) : []),
-    [project?.id, issueStore.pool.size],
+    () =>
+      project
+        ? sortIssuesByState(issueStore.findByProjectId(project.id), id =>
+            workflowStateStore.findById(id),
+          )
+        : [],
+    [project?.id, issueStore.pool.size, workflowStateStore.pool.size],
   );
 
   const projectId = project?.id;
@@ -226,11 +233,11 @@ export const ProjectDetailView = observer(function ProjectDetailView({
             <span
               className="flex h-5 w-5 items-center justify-center rounded text-xs"
               style={{
-                backgroundColor: `${project.color}20`,
+                backgroundColor: `color-mix(in srgb, ${project.color} 15%, transparent)`,
                 color: project.color,
               }}
             >
-              {project.icon ?? ''}
+              {project.icon || <Target aria-hidden="true" className="h-3 w-3" />}
             </span>
           </>
         }
@@ -254,9 +261,10 @@ export const ProjectDetailView = observer(function ProjectDetailView({
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">{t('projects.healthLabel')}</span>
-              <div className="flex gap-1">
+              <fieldset aria-label={t('projects.healthLabel')} className="flex gap-1">
                 {PROJECT_HEALTH_OPTIONS.map(h => (
                   <button
+                    aria-pressed={project.health === h.value}
                     className={cn(
                       'rounded px-2 py-0.5 text-xs font-medium transition-colors',
                       project.health === h.value
@@ -270,17 +278,11 @@ export const ProjectDetailView = observer(function ProjectDetailView({
                     {t(PROJECT_HEALTH_LABEL_KEYS[h.value])}
                   </button>
                 ))}
-              </div>
+              </fieldset>
             </div>
           </div>
-          <SectionCard className="mt-6" title={t('projects.properties')}>
-            <ProjectPropertiesPanel project={project} />
-          </SectionCard>
-          <div className="mt-6 rounded-lg border border-border p-4">
+          <SectionCard className="mt-6" title={t('projects.progress')}>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">
-                {t('projects.progress')}
-              </span>
               <span className="text-xs tabular-nums text-muted-foreground">
                 {progressStats
                   ? t('projects.issuesCountRatio', {
@@ -303,7 +305,10 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               <span className="text-xs text-muted-foreground">{t('projects.trend')}</span>
               <ProgressSparkline projectId={project.id} />
             </div>
-          </div>
+          </SectionCard>
+          <SectionCard className="mt-6" title={t('projects.properties')}>
+            <ProjectPropertiesPanel project={project} />
+          </SectionCard>
           <ProjectMilestonesSection projectId={project.id} />
           <div className="mt-6">
             <SectionHeader title={t('projects.issuesCount', { count: projectIssues.length })} />
@@ -311,30 +316,23 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               {projectIssues.length === 0 ? (
                 <EmptyState size="compact" title={t('projects.noIssuesAssigned')} />
               ) : (
-                projectIssues.map(issue => {
-                  const state = workflowStateStore.findById(issue.stateId);
-                  return (
-                    <Link
-                      className="flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
-                      href={buildIssueHref(workspaceKey, issue.id, {
-                        label: project.name,
-                        path: `/${workspaceKey}/project/${project.slugId}`,
-                      })}
-                      key={issue.id}
-                    >
-                      {state && (
-                        <span
-                          className="h-3 w-3 shrink-0 rounded-full border-2"
-                          style={{ borderColor: state.color }}
-                        />
-                      )}
-                      <span className="shrink-0 text-xs font-mono text-muted-foreground">
-                        {issue.identifier}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-foreground">{issue.title}</span>
-                    </Link>
-                  );
-                })
+                projectIssues.map(issue => (
+                  <Link
+                    className="flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
+                    href={buildIssueHref(workspaceKey, issue.id, {
+                      label: project.name,
+                      path: `/${workspaceKey}/project/${project.slugId}`,
+                    })}
+                    key={issue.id}
+                  >
+                    <IssueStateDot stateId={issue.stateId} />
+                    <span className="shrink-0 text-xs font-mono text-muted-foreground">
+                      {issue.identifier}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-foreground">{issue.title}</span>
+                    <IssueTrailing issue={issue} />
+                  </Link>
+                ))
               )}
             </div>
           </div>

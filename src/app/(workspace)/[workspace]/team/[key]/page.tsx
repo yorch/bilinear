@@ -3,15 +3,16 @@
 import { Bookmark, Plus, Settings } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { BoardControls } from '@/components/issues/board-controls';
 import { BoardView } from '@/components/issues/board-view';
 import { ColumnPicker } from '@/components/issues/column-picker';
 import { CsvExportButton } from '@/components/issues/csv-export-button';
 import { FilterBuilder } from '@/components/issues/filter-builder';
-import { IssueListView } from '@/components/issues/issue-list-view';
+import { IssueListView, type ListGroupBy } from '@/components/issues/issue-list-view';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
+import { ListDisplayControls } from '@/components/issues/list-display-controls';
 import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -20,15 +21,21 @@ import { Button } from '@/components/ui/button';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
+import { type ListOrderBy, orderByToSort } from '@/components/views/view-layout';
 import { useDocumentTitle } from '@/hooks/use-document-title';
-import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import { useTranslations } from '@/hooks/use-translations';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
-import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
+import {
+  applyFilters,
+  applySorting,
+  coerceFilterSet,
+  createEmptyFilterSet,
+  type FilterSet,
+} from '@/lib/filter-engine';
 import { gql } from '@/lib/graphql';
 import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildIssueHref } from '@/lib/issue-nav';
@@ -76,8 +83,33 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
 
   // UI state (local to this page)
   const [saveViewOpen, setSaveViewOpen] = useState(false);
-  // Filters
-  const [filterSet, setFilterSet] = useState<FilterSet>(createEmptyFilterSet());
+  const router = useRouter();
+  const [listGroupBy, setListGroupBy] = useState<ListGroupBy>('status');
+  const [orderBy, setOrderBy] = useState<ListOrderBy>('manual');
+  // Filters. Kept per team in sessionStorage so a reload or a trip into an
+  // issue and back doesn't silently drop them (storage can be unavailable, so
+  // every access is guarded and the page works without it).
+  const filterStorageKey = `bilinear:team-filters:${teamKey}`;
+  const [filterSet, setFilterSetState] = useState<FilterSet>(() => {
+    try {
+      const raw = window.sessionStorage.getItem(filterStorageKey);
+      return raw ? coerceFilterSet(JSON.parse(raw)) : createEmptyFilterSet();
+    } catch {
+      return createEmptyFilterSet();
+    }
+  });
+  const setFilterSet = (next: FilterSet) => {
+    setFilterSetState(next);
+    try {
+      if (next.conditions.length === 0) {
+        window.sessionStorage.removeItem(filterStorageKey);
+      } else {
+        window.sessionStorage.setItem(filterStorageKey, JSON.stringify(next));
+      }
+    } catch {
+      // Storage blocked: filters just stay in memory.
+    }
+  };
 
   // Recent items tracking (for command palette) — scoped to this workspace
   const { addRecent } = useRecentItems(workspace);
@@ -125,11 +157,14 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
 
   // Same rationale as `customFieldDefs`: stop memoizing on `.size`. Filters
   // depend on the actual field values, not their cardinality.
-  const issues = applyFilters(
+  const filtered = applyFilters(
     allIssues,
     filterSet,
     (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
   );
+  // "Manual" keeps the team's own order (workflow position, then drag order);
+  // any other choice orders across the whole list before it is grouped.
+  const issues = applySorting(filtered, orderByToSort(orderBy));
 
   const users: IssueUser[] = toIssueUsers(userStore.all);
 
@@ -192,17 +227,8 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   // C (create issue) is registered globally in WorkspaceClient and opens the
   // shared GlobalCreateIssueModal; the New-issue button below uses it too.
 
-  // X — toggle selection checkbox
-  useHotkeys(
-    'x',
-    () => {
-      if (selectedId) {
-        setSelectedId(prev => (prev === selectedId ? null : selectedId));
-      }
-    },
-    {},
-    [selectedId],
-  );
+  // X (check the cursor row) and Escape (clear the checked set) live in
+  // IssueListView, which owns the checked set.
 
   // Shift+P / Q project & cycle pickers and Backspace/Delete archive are
   // registered by useIssueListPage.
@@ -235,6 +261,14 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       <PageHeader
         actions={
           <>
+            {viewMode === 'list' && (
+              <ListDisplayControls
+                groupBy={listGroupBy}
+                onGroupBy={setListGroupBy}
+                onOrderBy={setOrderBy}
+                orderBy={orderBy}
+              />
+            )}
             {viewMode === 'board' && (
               <BoardControls
                 groupBy={boardGroupBy}
@@ -260,6 +294,7 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
             </Button>
           </>
         }
+        count={issues.length}
         title={t('issues.teamIssuesTitle', { team: team.displayName ?? team.name })}
       />
 
@@ -273,45 +308,52 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           states={states}
           users={users}
         />
-        {viewMode === 'list' && (
-          <div className="flex items-center gap-1">
-            <CsvExportButton
-              customFields={customFieldDefs}
-              cyclesById={
-                new Map(
-                  Array.from(cycleStore.pool.values()).map(c => [
-                    c.id,
-                    { name: c.name ?? null, number: c.number },
-                  ]),
-                )
-              }
-              getCustomFieldValue={(issueId, definitionId) =>
-                customFieldStore.findValue(issueId, definitionId)?.value ?? null
-              }
-              issues={issues}
-              projectsById={
-                new Map(Array.from(projectStore.pool.values()).map(p => [p.id, { name: p.name }]))
-              }
-              states={states}
-              stem={`team-${team?.key ?? 'issues'}-issues`}
-              users={users}
-            />
-            <ColumnPicker
-              customFields={customFieldDefs}
-              isVisible={isColumnVisible}
-              onToggle={toggleColumn}
-            />
-            <button
-              aria-label={t('issues.saveView')}
-              className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
-              onClick={() => setSaveViewOpen(true)}
-              title={t('issues.saveCurrentFiltersAsView')}
-              type="button"
-            >
-              <Bookmark className="h-4 w-4" />
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-1">
+          {viewMode === 'list' && (
+            <>
+              <CsvExportButton
+                customFields={customFieldDefs}
+                cyclesById={
+                  new Map(
+                    Array.from(cycleStore.pool.values()).map(c => [
+                      c.id,
+                      { name: c.name ?? null, number: c.number },
+                    ]),
+                  )
+                }
+                getCustomFieldValue={(issueId, definitionId) =>
+                  customFieldStore.findValue(issueId, definitionId)?.value ?? null
+                }
+                issues={issues}
+                projectsById={
+                  new Map(Array.from(projectStore.pool.values()).map(p => [p.id, { name: p.name }]))
+                }
+                states={states}
+                stem={`team-${team?.key ?? 'issues'}-issues`}
+                users={users}
+              />
+              <ColumnPicker
+                customFields={customFieldDefs}
+                estimationType={team.issueEstimationType}
+                isVisible={isColumnVisible}
+                onToggle={toggleColumn}
+              />
+            </>
+          )}
+          {/* Saving captures the filters + layout, so it is offered in every layout. */}
+          <button
+            aria-label={t('issues.saveView')}
+            className={cn(
+              'flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+              TOUCH_TARGET_SQUARE,
+            )}
+            onClick={() => setSaveViewOpen(true)}
+            title={t('issues.saveCurrentFiltersAsView')}
+            type="button"
+          >
+            <Bookmark className="h-4 w-4" />
+          </button>
+        </div>
       </Toolbar>
 
       {/* Issue list / board / timeline */}
@@ -319,15 +361,19 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         {viewMode === 'list' ? (
           <IssueListView
             customFields={customFieldDefs}
+            estimationType={team.issueEstimationType}
             getCustomFieldValue={(issueId, definitionId) =>
               customFieldStore.findValue(issueId, definitionId)?.value ?? null
             }
+            groupBy={listGroupBy}
+            hasActiveFilters={filterSet.conditions.length > 0}
             isColumnVisible={isColumnVisible}
             issues={issues}
             labels={labels}
             onArchive={handleArchive}
             onArchiveMany={handleArchiveMany}
             onBulkUpdate={handleBulkUpdate}
+            onClearFilters={() => setFilterSet(createEmptyFilterSet())}
             onDelete={requestDelete}
             onOpen={handleOpen}
             onPropertyClosed={() => setOpenProperty(null)}
@@ -387,8 +433,11 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       {/* Save current filters as a custom view */}
       <SaveViewModal
         initialFilters={filterSet}
-        initialGroupBy={viewMode === 'board' ? boardGroupBy : undefined}
+        initialGroupBy={
+          viewMode === 'board' ? boardGroupBy : viewMode === 'list' ? listGroupBy : undefined
+        }
         initialLayout={viewMode}
+        initialSort={orderByToSort(orderBy)}
         onClose={() => setSaveViewOpen(false)}
         onSubmit={async (input: SaveViewInput) => {
           const res = await gql(CUSTOM_VIEW_CREATE_MUTATION, {
@@ -397,9 +446,19 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
           if (res.errors?.length) {
             throw new Error((res.errors[0] as { message: string }).message);
           }
+          const created = (res.data as { customViewCreate?: { customView?: { id?: string } } })
+            ?.customViewCreate?.customView;
           toast.success(t('issues.viewSaved'));
+          // Land on the view that was just made, so the save is visible.
+          if (created?.id) {
+            router.push(`/${workspace}/team/${teamKey}/view/${created.id}`);
+          }
         }}
         open={saveViewOpen}
+        summary={t('issues.saveViewSummary', {
+          count: filterSet.conditions.length,
+          layout: t(`issues.layout${viewMode.charAt(0).toUpperCase()}${viewMode.slice(1)}`),
+        })}
         teamId={teamId ?? undefined}
       />
     </div>

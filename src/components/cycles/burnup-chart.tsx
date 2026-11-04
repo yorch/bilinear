@@ -1,16 +1,18 @@
+'use client';
+
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import {
   CHART_HEIGHT,
-  CHART_WIDTH,
   makeScales,
   PADDING_BOTTOM,
   PADDING_LEFT,
   PADDING_RIGHT,
-  PADDING_TOP,
   toPath,
   xAxisLabels,
+  xAxisStep,
 } from './chart-geometry';
+import { useChartWidth } from './use-chart-width';
 
 interface BurnupPoint {
   completed: number;
@@ -25,10 +27,13 @@ interface BurnupChartProps {
 export function BurnupChart({ data }: BurnupChartProps) {
   const t = useTranslations();
   const { formatDate } = useFormatters();
+  const { ref, width } = useChartWidth();
 
   if (data.length === 0) {
     return (
-      <p className="py-6 text-center text-xs text-muted-foreground">{t('cycles.burnup.empty')}</p>
+      <div ref={ref}>
+        <p className="py-6 text-center text-xs text-muted-foreground">{t('cycles.burnup.empty')}</p>
+      </div>
     );
   }
 
@@ -36,7 +41,7 @@ export function BurnupChart({ data }: BurnupChartProps) {
   const maxY = Math.max(finalScope, 1);
   const n = data.length;
 
-  const { xScale, yScale, yTicks } = makeScales(n, maxY);
+  const { xScale, yScale, yTicks } = makeScales(n, maxY, width);
 
   // Ideal: linear from 0 to finalScope over the cycle duration.
   // For a single data point (1-day cycle) the ideal is finalScope (all done by end of day).
@@ -49,15 +54,17 @@ export function BurnupChart({ data }: BurnupChartProps) {
   const scopePath = toPath(data.map((d, i) => ({ x: xScale(i), y: yScale(d.scope) })));
   const completedPath = toPath(data.map((d, i) => ({ x: xScale(i), y: yScale(d.completed) })));
 
-  const xLabels = xAxisLabels(data, date => formatDate(date, { day: 'numeric', month: 'short' }));
+  const fmt = (date: string) => formatDate(date, { day: 'numeric', month: 'short' });
+  const xLabels = xAxisLabels(data, fmt, xAxisStep(n, width));
 
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full" ref={ref}>
       <svg
         aria-label={t('cycles.burnup.ariaLabel')}
-        className="w-full"
-        style={{ height: CHART_HEIGHT }}
-        viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+        height={CHART_HEIGHT}
+        role="img"
+        viewBox={`0 0 ${width} ${CHART_HEIGHT}`}
+        width={width}
       >
         {/* Y-axis grid lines + labels */}
         {yTicks.map(v => {
@@ -69,13 +76,13 @@ export function BurnupChart({ data }: BurnupChartProps) {
                 strokeOpacity={0.08}
                 strokeWidth={1}
                 x1={PADDING_LEFT}
-                x2={CHART_WIDTH - PADDING_RIGHT}
+                x2={width - PADDING_RIGHT}
                 y1={y}
                 y2={y}
               />
               <text
                 className="fill-muted-foreground"
-                fontSize={10}
+                fontSize={11}
                 textAnchor="end"
                 x={PADDING_LEFT - 4}
                 y={y + 4}
@@ -90,7 +97,7 @@ export function BurnupChart({ data }: BurnupChartProps) {
         {xLabels.map(({ i, label }) => (
           <text
             className="fill-muted-foreground"
-            fontSize={9}
+            fontSize={11}
             key={i}
             textAnchor="middle"
             x={xScale(i)}
@@ -110,35 +117,47 @@ export function BurnupChart({ data }: BurnupChartProps) {
         />
 
         {/* Scope line (blue) */}
-        <path d={scopePath} fill="none" stroke="var(--chart-ideal)" strokeWidth={2} />
+        <path d={scopePath} fill="none" stroke="var(--chart-primary)" strokeWidth={2} />
 
         {/* Completed line (green) */}
         <path d={completedPath} fill="none" stroke="var(--chart-actual)" strokeWidth={2} />
-
-        {/* Legend */}
-        <g transform={`translate(${PADDING_LEFT + 8}, ${PADDING_TOP + 8})`}>
-          <line
-            stroke="var(--chart-grid)"
-            strokeDasharray="4 3"
-            strokeWidth={1.5}
-            x1={0}
-            x2={16}
-            y1={5}
-            y2={5}
-          />
-          <text className="fill-muted-foreground" fontSize={9} x={20} y={9}>
-            {t('cycles.chart.ideal')}
-          </text>
-          <line stroke="var(--chart-ideal)" strokeWidth={2} x1={50} x2={66} y1={5} y2={5} />
-          <text className="fill-muted-foreground" fontSize={9} x={70} y={9}>
-            {t('cycles.chart.scope')}
-          </text>
-          <line stroke="var(--chart-actual)" strokeWidth={2} x1={106} x2={122} y1={5} y2={5} />
-          <text className="fill-muted-foreground" fontSize={9} x={126} y={9}>
-            {t('cycles.chart.completed')}
-          </text>
-        </g>
       </svg>
+      <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 px-1 text-xs text-muted-foreground">
+        {[
+          { dash: true, label: t('cycles.chart.ideal'), stroke: 'var(--chart-grid)' },
+          { dash: false, label: t('cycles.chart.scope'), stroke: 'var(--chart-primary)' },
+          { dash: false, label: t('cycles.chart.completed'), stroke: 'var(--chart-actual)' },
+        ].map(item => (
+          <li className="flex items-center gap-1.5" key={item.label}>
+            <svg aria-hidden="true" height="8" width="18">
+              <line
+                stroke={item.stroke}
+                strokeDasharray={item.dash ? '4 3' : undefined}
+                strokeWidth={2}
+                x1="0"
+                x2="18"
+                y1="4"
+                y2="4"
+              />
+            </svg>
+            {item.label}
+          </li>
+        ))}
+      </ul>
+
+      {/* The chart is a picture; this is the same data for assistive tech. */}
+      <table className="sr-only">
+        <caption>{t('cycles.burnup.ariaLabel')}</caption>
+        <tbody>
+          {data.map(d => (
+            <tr key={d.date}>
+              <th scope="row">{fmt(d.date)}</th>
+              <td>{`${t('cycles.chart.scope')} ${d.scope}`}</td>
+              <td>{`${t('cycles.chart.completed')} ${d.completed}`}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

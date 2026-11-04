@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { StatusSelect } from './status-select';
 
@@ -33,5 +33,18 @@ describe('StatusSelect a11y (listbox pattern)', () => {
     render(<StatusSelect forceOpen onChange={() => {}} states={STATES} value="nonexistent" />);
     const options = screen.getAllByRole('option');
     expect(options.every(o => o.getAttribute('aria-selected') === 'false')).toBe(true);
+  });
+
+  // PROP-01 — a long state list must be filterable.
+  it('filters options as the reader types and picks with Enter', () => {
+    const onChange = vi.fn();
+    render(<StatusSelect forceOpen onChange={onChange} states={STATES} value="todo" />);
+    const search = screen.getByRole('combobox');
+    fireEvent.change(search, { target: { value: 'prog' } });
+    const options = screen.getAllByRole('option');
+    expect(options).toHaveLength(1);
+    expect(options[0]).toHaveTextContent('In Progress');
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(onChange).toHaveBeenCalledWith('doing');
   });
 });

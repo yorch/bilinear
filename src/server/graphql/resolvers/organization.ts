@@ -116,7 +116,14 @@ export const organizationResolvers = {
       try {
         organization = await ctx.services.organization.createWithOwner(ctx.userId, input);
       } catch (err) {
-        if (err instanceof InvalidUrlKeyError || err instanceof UrlKeyTakenError) {
+        if (err instanceof UrlKeyTakenError) {
+          // `reason` lets the onboarding form pin the message to the URL field
+          // (and offer an alternative) without matching on message text.
+          throw new GraphQLError(err.message, {
+            extensions: { code: 'BAD_USER_INPUT', reason: 'URL_KEY_TAKEN' },
+          });
+        }
+        if (err instanceof InvalidUrlKeyError) {
           throw new GraphQLError(err.message, {
             extensions: { code: 'BAD_USER_INPUT' },
           });

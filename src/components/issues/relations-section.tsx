@@ -14,6 +14,13 @@ import { gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
+import {
+  type IssueRelation,
+  normalizeRelations,
+  RELATION_VIEW_ORDER,
+  type RelationType,
+  type RelationViewType,
+} from './relation-utils';
 
 // ─── GraphQL documents ────────────────────────────────────────────────────────
 
@@ -24,6 +31,7 @@ const GET_ISSUE_RELATIONS = `
       type
       issueId
       relatedIssueId
+      createdAt
       issue { id identifier title }
       relatedIssue { id identifier title }
     }
@@ -53,32 +61,16 @@ const DELETE_ISSUE_RELATION = `
 
 const RELATION_TYPES = ['blocks', 'blocked_by', 'related', 'duplicate'] as const;
 
-type RelationType = (typeof RELATION_TYPES)[number];
-
 function getRelationTypeLabels(
   t: ReturnType<typeof useTranslations>,
-): Record<RelationType, string> {
+): Record<RelationViewType, string> {
   return {
     blocked_by: t('issueDetail.relations.blockedBy'),
     blocks: t('issueDetail.relations.blocks'),
     duplicate: t('issueDetail.relations.duplicateOf'),
+    duplicated_by: t('issueDetail.relations.duplicatedBy'),
     related: t('issueDetail.relations.relatedTo'),
   };
-}
-
-interface RelatedIssueRef {
-  id: string;
-  identifier: string;
-  title: string;
-}
-
-interface IssueRelation {
-  id: string;
-  issue: RelatedIssueRef;
-  issueId: string;
-  relatedIssue: RelatedIssueRef;
-  relatedIssueId: string;
-  type: string;
 }
 
 interface RelationsSectionProps {
@@ -160,18 +152,20 @@ export const RelationsSection = observer(function RelationsSection({
     await fetchRelations({ silent: true });
   };
 
-  // Group relations by type
+  // Re-expressed relative to this issue, with each mirrored row pair collapsed.
+  const entries = useMemo(() => normalizeRelations(relations, issueId), [relations, issueId]);
   const grouped = useMemo(() => {
-    const map = new Map<string, IssueRelation[]>();
-    for (const rel of relations) {
-      const key = rel.type;
-      if (!map.has(key)) {
-        map.set(key, []);
+    const map = new Map<RelationViewType, typeof entries>();
+    for (const entry of entries) {
+      const list = map.get(entry.type);
+      if (list) {
+        list.push(entry);
+      } else {
+        map.set(entry.type, [entry]);
       }
-      map.get(key)?.push(rel);
     }
     return map;
-  }, [relations]);
+  }, [entries]);
 
   return (
     <div>
@@ -184,7 +178,7 @@ export const RelationsSection = observer(function RelationsSection({
             />
           )
         }
-        count={relations.length}
+        count={entries.length}
         title={t('issueDetail.relations.title')}
       />
 
@@ -200,7 +194,7 @@ export const RelationsSection = observer(function RelationsSection({
         />
       )}
 
-      {!loading && !loadError && relations.length === 0 && !showAddForm && (
+      {!loading && !loadError && entries.length === 0 && !showAddForm && (
         <p className="mt-2 text-xs text-muted-foreground italic">
           {t('issueDetail.relations.empty')}
         </p>
@@ -208,7 +202,7 @@ export const RelationsSection = observer(function RelationsSection({
 
       {!loading && (
         <div className="mt-2 space-y-3">
-          {RELATION_TYPES.map(type => {
+          {RELATION_VIEW_ORDER.map(type => {
             const items = grouped.get(type);
             if (!items?.length) {
               return null;
@@ -220,12 +214,11 @@ export const RelationsSection = observer(function RelationsSection({
                 </p>
                 <ul className="space-y-0.5">
                   {items.map(rel => {
-                    // Show the "other" side of the relation relative to current issue
-                    const other = rel.issueId === issueId ? rel.relatedIssue : rel.issue;
+                    const other = rel.other;
                     return (
                       <li
                         className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-                        key={rel.id}
+                        key={`${rel.otherId}-${rel.type}`}
                       >
                         <span className="shrink-0 font-mono text-xs text-muted-foreground">
                           {other?.identifier ?? '—'}

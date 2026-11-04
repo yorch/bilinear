@@ -5,9 +5,12 @@ import { observer } from 'mobx-react-lite';
 import { PropertyPlaceholder } from '@/components/properties/property-placeholder';
 import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
 import { useTranslations } from '@/hooks/use-translations';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 interface ProjectSelectProps {
+  /** Text shown beside the icon while no project is set. */
+  label?: string;
   onChange: (projectId: string | null) => void;
   onClose?: () => void;
   open?: boolean;
@@ -16,6 +19,7 @@ interface ProjectSelectProps {
 
 export const ProjectSelect = observer(function ProjectSelect({
   value,
+  label,
   onChange,
   open,
   onClose,
@@ -64,9 +68,10 @@ export const ProjectSelect = observer(function ProjectSelect({
             <span className="max-w-[100px] truncate">{current.name}</span>
           </>
         ) : (
-          <PropertyPlaceholder icon={Target} />
+          <PropertyPlaceholder icon={Target} label={label} />
         )
       }
+      triggerClassName={cn(TOUCH_TARGET, 'max-md:justify-start')}
       triggerTitle={t('properties.project.setProject')}
     />
   );

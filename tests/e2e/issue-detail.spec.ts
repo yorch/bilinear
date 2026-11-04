@@ -74,7 +74,9 @@ test.describe('Issue Detail Panel', () => {
     await expect(titleHeading).toHaveText(original);
     await titleHeading.click();
 
-    const titleInput = panel.locator('input.text-xl');
+    // The inline title editor is an auto-growing textarea (Enter commits,
+    // Shift+Enter inserts a newline).
+    const titleInput = panel.locator('textarea.text-xl');
     await expect(titleInput).toBeVisible();
     const updated = `${original} (edited)`;
     await titleInput.fill(updated);

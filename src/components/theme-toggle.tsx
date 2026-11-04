@@ -43,6 +43,7 @@ export function ThemeToggle({ className, compact = false }: ThemeToggleProps) {
         aria-label={t('theme.currentTheme', { theme: label })}
         className={cn(
           'flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+          TOUCH_TARGET_SQUARE,
           className,
         )}
         onClick={() => setTheme(CYCLE[theme])}

@@ -26,25 +26,31 @@ import {
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { AccentToggle } from '@/components/accent-toggle';
+import { getDocumentIdFromPath, isTeamDocsActive } from '@/components/documents/doc-route';
 import { LanguageToggle } from '@/components/language-toggle';
-import { ConnectionStatus } from '@/components/layouts/connection-status';
+import { ConnectionStatus, useShowConnectionStatus } from '@/components/layouts/connection-status';
+import { RailTooltip } from '@/components/layouts/rail-tooltip';
 import { WorkspaceSwitcher } from '@/components/layouts/workspace-switcher';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { Badge } from '@/components/ui/badge';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
+import { LoadingRegion, RowsSkeleton, Skeleton } from '@/components/ui/skeleton';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useAuth } from '@/hooks/use-auth';
+import { useModKey } from '@/hooks/use-mod-key';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql, gqlQuery } from '@/lib/graphql';
 import { FAVORITE_DELETE_MUTATION, FAVORITES_QUERY } from '@/lib/graphql-queries';
 import { isPathWithin } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
-import { cn, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
+import { cn, TOUCH_ROW, TOUCH_ROW_SQUARE, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useAppName } from '@/providers/branding-provider';
 import { useStore } from '@/providers/store-provider';
+import { useMobileDrawer } from './use-mobile-drawer';
 
 interface FavoriteMeta {
   entity:
@@ -199,8 +205,43 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
     }
   }
 
-  if (collapsed || (favorites.length === 0 && !loadError)) {
+  if (favorites.length === 0 && !loadError) {
     return null;
+  }
+
+  // Collapsed rail: icon-only, with the full label in a tooltip.
+  if (collapsed) {
+    if (favorites.length === 0) {
+      return null;
+    }
+    return (
+      <ul className="mt-2 flex flex-col gap-0.5 border-t border-border px-1.5 pt-2">
+        {favorites.map(fav => {
+          const href = favoriteHref(fav, base, id => (id ? teamStore.findById(id) : null));
+          const label = favoriteLabel(fav, t);
+          return (
+            <li key={fav.id}>
+              <RailTooltip label={label}>
+                <Link
+                  aria-label={label}
+                  className={cn(
+                    'flex items-center justify-center rounded-md py-1.5 transition-colors',
+                    TOUCH_ROW,
+                    pathname === href
+                      ? 'bg-brand-subtle text-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                  )}
+                  href={href}
+                  onClick={onNavigate}
+                >
+                  {favoriteIcon(fav.entityType)}
+                </Link>
+              </RailTooltip>
+            </li>
+          );
+        })}
+      </ul>
+    );
   }
 
   return (
@@ -227,6 +268,7 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
               <Link
                 className={cn(
                   'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                  TOUCH_ROW,
                   isActive
                     ? 'bg-brand-subtle text-foreground'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground',
@@ -243,7 +285,10 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
               <button
                 aria-label={t('nav.removeNamedFromFavorites', { name: label })}
                 className={cn(
-                  'mr-1 hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground group-hover:flex',
+                  // Visible on hover, on keyboard focus, and always on touch. It
+                  // used to be `hidden` until hover, which removed it from the
+                  // tab order and from every touch screen.
+                  'mr-1 flex shrink-0 items-center justify-center rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100 pointer-coarse:opacity-100',
                   TOUCH_TARGET,
                 )}
                 onClick={() => void removeFavorite(fav.id)}
@@ -280,6 +325,7 @@ function TeamSubLink({
     <Link
       className={cn(
         'flex items-center gap-2 rounded-md py-1 pl-8 pr-2 text-xs transition-colors',
+        TOUCH_ROW,
         active
           ? 'bg-brand-subtle text-foreground'
           : 'text-muted-foreground hover:bg-accent hover:text-foreground',
@@ -305,8 +351,11 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
   onNavigate?: () => void;
   pathname: string;
 }) {
-  const { customViewStore, teamStore, uiStore } = useStore();
+  const { customViewStore, documentStore, syncStore, teamStore, uiStore } = useStore();
   const t = useTranslations();
+  // Until the first bootstrap lands the team pool is empty for everyone, so
+  // "New team" would tell a user who has teams that they have none.
+  const bootstrapping = syncStore.status === 'idle' || syncStore.status === 'bootstrapping';
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the intentional reactive trigger
   const teams = useMemo(() => {
@@ -358,7 +407,10 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
             </span>
             <button
               aria-label={t('nav.newTeam')}
-              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className={cn(
+                'flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+                TOUCH_TARGET_SQUARE,
+              )}
               onClick={() => uiStore.openCreateTeamModal()}
               title={t('nav.newTeam')}
               type="button"
@@ -366,151 +418,165 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
               <Plus className="h-3 w-3" />
             </button>
           </div>
-          <ul className="flex flex-col gap-0.5">
-            {teams.length === 0 ? (
-              <li>
-                <button
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-                  onClick={() => uiStore.openCreateTeamModal()}
-                  type="button"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  {t('nav.createTeam')}
-                </button>
-              </li>
-            ) : (
-              teams.map(team => {
-                const isChild = !!team.parentId;
-                const href = `${base}/team/${team.key}`;
-                const cyclesHref = `${href}/cycles`;
-                const backlogHref = `${href}/backlog`;
-                const docsHref = `${href}/docs`;
-                const triageHref = `${href}/triage`;
-                const viewHrefPrefix = `${href}/view/`;
-                const analyticsHref = `${href}/analytics`;
-                const isActive =
-                  isPathWithin(pathname, href) &&
-                  !pathname.startsWith(cyclesHref) &&
-                  !pathname.startsWith(backlogHref) &&
-                  !pathname.startsWith(docsHref) &&
-                  !pathname.startsWith(triageHref) &&
-                  !pathname.startsWith(analyticsHref) &&
-                  !pathname.startsWith(viewHrefPrefix);
-                const isCyclesActive = pathname.startsWith(cyclesHref);
-                const isBacklogActive = pathname.startsWith(backlogHref);
-                const isDocsActive = pathname.startsWith(docsHref);
-                const isTriageActive = pathname.startsWith(triageHref);
-                const isAnalyticsActive = pathname.startsWith(analyticsHref);
-                const expanded = isExpanded(team.key);
-                return (
-                  <li className={cn('flex flex-col gap-0.5', isChild && 'ml-3')} key={team.id}>
-                    <div className="flex items-center gap-0.5">
-                      <button
-                        aria-expanded={expanded}
-                        aria-label={t(expanded ? 'nav.collapseTeam' : 'nav.expandTeam', {
-                          team: team.displayName || team.name,
-                        })}
-                        className={cn(
-                          'flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-                          TOUCH_TARGET_SQUARE,
-                        )}
-                        onClick={() =>
-                          setManuallyToggled(prev => ({ ...prev, [team.key]: !expanded }))
-                        }
-                        type="button"
-                      >
-                        <ChevronRight
-                          className={cn('h-3 w-3 transition-transform', expanded && 'rotate-90')}
-                        />
-                      </button>
-                      <Link
-                        className={cn(
-                          'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                          isActive
-                            ? 'bg-brand-subtle text-foreground'
-                            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                        )}
-                        href={href}
-                        onClick={onNavigate}
-                        title={team.displayName || team.name}
-                      >
-                        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                          {team.icon ? (
-                            <span className="text-xs">{team.icon}</span>
-                          ) : (
-                            <Users className={cn(isChild ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
+          {bootstrapping && teams.length === 0 ? (
+            <RowsSkeleton className="px-2 py-1" count={3} />
+          ) : (
+            <ul className="flex flex-col gap-0.5">
+              {teams.length === 0 ? (
+                <li>
+                  <button
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground',
+                      TOUCH_ROW,
+                    )}
+                    onClick={() => uiStore.openCreateTeamModal()}
+                    type="button"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {t('nav.createTeam')}
+                  </button>
+                </li>
+              ) : (
+                teams.map(team => {
+                  const isChild = !!team.parentId;
+                  const href = `${base}/team/${team.key}`;
+                  const cyclesHref = `${href}/cycles`;
+                  const backlogHref = `${href}/backlog`;
+                  const docsHref = `${href}/docs`;
+                  const triageHref = `${href}/triage`;
+                  const viewHrefPrefix = `${href}/view/`;
+                  const analyticsHref = `${href}/analytics`;
+                  const isActive =
+                    isPathWithin(pathname, href) &&
+                    !pathname.startsWith(cyclesHref) &&
+                    !pathname.startsWith(backlogHref) &&
+                    !pathname.startsWith(docsHref) &&
+                    !pathname.startsWith(triageHref) &&
+                    !pathname.startsWith(analyticsHref) &&
+                    !pathname.startsWith(viewHrefPrefix);
+                  const isCyclesActive = pathname.startsWith(cyclesHref);
+                  const isBacklogActive = pathname.startsWith(backlogHref);
+                  const isDocsActive = isTeamDocsActive({
+                    docsHref,
+                    docTeamId: documentStore.findById(getDocumentIdFromPath(pathname) ?? '')
+                      ?.teamId,
+                    pathname,
+                    teamId: team.id,
+                  });
+                  const isTriageActive = pathname.startsWith(triageHref);
+                  const isAnalyticsActive = pathname.startsWith(analyticsHref);
+                  const expanded = isExpanded(team.key);
+                  return (
+                    <li className={cn('flex flex-col gap-0.5', isChild && 'ml-3')} key={team.id}>
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          aria-expanded={expanded}
+                          aria-label={t(expanded ? 'nav.collapseTeam' : 'nav.expandTeam', {
+                            team: team.displayName || team.name,
+                          })}
+                          className={cn(
+                            'flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+                            TOUCH_ROW_SQUARE,
                           )}
-                        </span>
-                        <span className={cn('truncate', isChild && 'text-xs')}>
-                          {team.displayName || team.name}
-                        </span>
-                        {/* The team key is what people actually type in search
+                          onClick={() =>
+                            setManuallyToggled(prev => ({ ...prev, [team.key]: !expanded }))
+                          }
+                          type="button"
+                        >
+                          <ChevronRight
+                            className={cn('h-3 w-3 transition-transform', expanded && 'rotate-90')}
+                          />
+                        </button>
+                        <Link
+                          className={cn(
+                            'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                            TOUCH_ROW,
+                            isActive
+                              ? 'bg-brand-subtle text-foreground'
+                              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                          )}
+                          href={href}
+                          onClick={onNavigate}
+                          title={team.displayName || team.name}
+                        >
+                          <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                            {team.icon ? (
+                              <span className="text-xs">{team.icon}</span>
+                            ) : (
+                              <Users className={cn(isChild ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
+                            )}
+                          </span>
+                          <span className={cn('truncate', isChild && 'text-xs')}>
+                            {team.displayName || team.name}
+                          </span>
+                          {/* The team key is what people actually type in search
                             and read in identifiers, so it earns its place. */}
-                        <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
-                          {team.key}
-                        </span>
-                      </Link>
-                    </div>
-                    {expanded && (
-                      <>
-                        {/* Triage first, and only for teams that have it on.
+                          <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
+                            {team.key}
+                          </span>
+                        </Link>
+                      </div>
+                      {expanded && (
+                        <>
+                          {/* Triage first, and only for teams that have it on.
                             The route existed with no link to it anywhere in the
                             app: a team could turn triage on in settings and
                             then have no way to reach the queue. */}
-                        {team.triageEnabled && (
+                          {team.triageEnabled && (
+                            <TeamSubLink
+                              active={isTriageActive}
+                              href={triageHref}
+                              icon={<Inbox className="h-3 w-3" />}
+                              label={t('nav.triage')}
+                              onNavigate={onNavigate}
+                            />
+                          )}
                           <TeamSubLink
-                            active={isTriageActive}
-                            href={triageHref}
-                            icon={<Inbox className="h-3 w-3" />}
-                            label={t('nav.triage')}
+                            active={isBacklogActive}
+                            href={backlogHref}
+                            icon={<Archive className="h-3 w-3" />}
+                            label={t('nav.backlog')}
                             onNavigate={onNavigate}
                           />
-                        )}
-                        <TeamSubLink
-                          active={isBacklogActive}
-                          href={backlogHref}
-                          icon={<Archive className="h-3 w-3" />}
-                          label={t('nav.backlog')}
-                          onNavigate={onNavigate}
-                        />
-                        <TeamSubLink
-                          active={isCyclesActive}
-                          href={cyclesHref}
-                          icon={<RefreshCw className="h-3 w-3" />}
-                          label={t('nav.cycles')}
-                          onNavigate={onNavigate}
-                        />
-                        <TeamSubLink
-                          active={isAnalyticsActive}
-                          href={analyticsHref}
-                          icon={<BarChart2 className="h-3 w-3" />}
-                          label={t('nav.analytics')}
-                          onNavigate={onNavigate}
-                        />
-                        <TeamSubLink
-                          active={isDocsActive}
-                          href={docsHref}
-                          icon={<FileText className="h-3 w-3" />}
-                          label={t('nav.docs')}
-                          onNavigate={onNavigate}
-                        />
-                        {customViewStore.getByTeamId(team.id).map(view => (
                           <TeamSubLink
-                            active={pathname === `${href}/view/${view.id}`}
-                            href={`${href}/view/${view.id}`}
-                            icon={<Eye className="h-3 w-3" />}
-                            key={view.id}
-                            label={view.name}
+                            active={isCyclesActive}
+                            href={cyclesHref}
+                            icon={<RefreshCw className="h-3 w-3" />}
+                            label={t('nav.cycles')}
                             onNavigate={onNavigate}
                           />
-                        ))}
-                      </>
-                    )}
-                  </li>
-                );
-              })
-            )}
-          </ul>
+                          <TeamSubLink
+                            active={isAnalyticsActive}
+                            href={analyticsHref}
+                            icon={<BarChart2 className="h-3 w-3" />}
+                            label={t('nav.analytics')}
+                            onNavigate={onNavigate}
+                          />
+                          <TeamSubLink
+                            active={isDocsActive}
+                            href={docsHref}
+                            icon={<FileText className="h-3 w-3" />}
+                            label={t('nav.docs')}
+                            onNavigate={onNavigate}
+                          />
+                          {customViewStore.getByTeamId(team.id).map(view => (
+                            <TeamSubLink
+                              active={pathname === `${href}/view/${view.id}`}
+                              href={`${href}/view/${view.id}`}
+                              icon={<Eye className="h-3 w-3" />}
+                              key={view.id}
+                              label={view.name}
+                              onNavigate={onNavigate}
+                            />
+                          ))}
+                        </>
+                      )}
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          )}
         </div>
       )}
 
@@ -522,23 +588,31 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
             const isActive = pathname.startsWith(href);
             return (
               <li key={team.id}>
-                <Link
-                  className={cn(
-                    'flex items-center justify-center rounded-md py-1.5 text-sm transition-colors',
-                    isActive
-                      ? 'bg-brand-subtle text-foreground'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                  )}
-                  href={href}
-                  onClick={onNavigate}
-                  title={team.displayName || team.name}
-                >
-                  {team.icon ? (
-                    <span className="text-xs">{team.icon}</span>
-                  ) : (
-                    <Users className="h-4 w-4" />
-                  )}
-                </Link>
+                <RailTooltip label={team.displayName || team.name}>
+                  <Link
+                    aria-label={team.displayName || team.name}
+                    className={cn(
+                      'flex items-center justify-center rounded-md py-1.5 text-sm transition-colors',
+                      TOUCH_ROW,
+                      isActive
+                        ? 'bg-brand-subtle text-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                    )}
+                    href={href}
+                    onClick={onNavigate}
+                  >
+                    {/* Teams without an icon used to share one generic glyph,
+                        so two or more were indistinguishable. The key is what
+                        people type and read in identifiers. */}
+                    {team.icon ? (
+                      <span className="text-xs">{team.icon}</span>
+                    ) : (
+                      <span className="font-mono text-[10px] font-medium tabular-nums">
+                        {team.key.slice(0, 3)}
+                      </span>
+                    )}
+                  </Link>
+                </RailTooltip>
               </li>
             );
           })}
@@ -567,27 +641,43 @@ export const Sidebar = observer(function Sidebar({
   onMobileClose,
   workspaceKey,
 }: SidebarProps) {
-  const { syncStore, uiStore } = useStore();
+  const { notificationStore, syncStore, uiStore } = useStore();
   const pathname = usePathname();
   const t = useTranslations();
   const appName = useAppName();
+  const modKey = useModKey();
   const base = workspaceKey ? `/${workspaceKey}` : '';
   // The mobile drawer always shows full content — the desktop collapse
   // preference (a persistent-rail concept) doesn't apply to a transient overlay.
   const effectiveCollapsed = collapsed && !mobileOpen;
+  const unreadCount = notificationStore.unreadCount;
+  const bootstrapping = syncStore.status === 'idle' || syncStore.status === 'bootstrapping';
+  // `null` renders a skeleton in the switcher: before the bootstrap lands the
+  // name is unknown, and the raw URL key ("demo") is not it.
+  const workspaceLabel =
+    syncStore.organizationName ?? (bootstrapping ? null : (workspaceKey ?? appName));
+
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useMobileDrawer(mobileOpen, onMobileClose, closeButtonRef);
 
   const globalNavItems = [
     {
+      count: 0,
       href: `${base}/my-issues`,
       icon: <User className="h-4 w-4" />,
       label: t('nav.myIssues'),
+      shortcut: 'G I',
     },
     {
+      count: unreadCount,
       href: `${base}/inbox`,
       icon: <Inbox className="h-4 w-4" />,
       label: t('nav.inbox'),
+      shortcut: 'G N',
     },
     {
+      count: 0,
       href: `${base}/projects`,
       icon: <Target className="h-4 w-4" />,
       label: t('nav.projects'),
@@ -595,11 +685,13 @@ export const Sidebar = observer(function Sidebar({
     // Initiatives shipped as a reachable-by-URL-only page: the route rendered
     // fine but nothing in the app linked to it, so the feature was invisible.
     {
+      count: 0,
       href: `${base}/initiatives`,
       icon: <Flag className="h-4 w-4" />,
       label: t('nav.initiatives'),
     },
     {
+      count: 0,
       href: `${base}/analytics`,
       icon: <BarChart2 className="h-4 w-4" />,
       label: t('nav.analytics'),
@@ -608,30 +700,42 @@ export const Sidebar = observer(function Sidebar({
 
   return (
     <aside
+      aria-label={t('nav.sidebar')}
       className={cn(
         'fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-shrink-0 flex-col border-r border-border bg-background transition-transform duration-200',
-        mobileOpen ? 'translate-x-0' : '-translate-x-full',
+        // Closed: `invisible` after the slide-out finishes (visibility is in the
+        // transition list only here, so opening flips it to visible at once —
+        // the focus call below needs a visible target).
+        mobileOpen
+          ? 'translate-x-0'
+          : '-translate-x-full max-md:invisible max-md:transition-[transform,visibility]',
         'md:relative md:z-auto md:translate-x-0 md:transition-[width]',
         collapsed ? 'md:w-12' : 'md:w-60',
       )}
       data-collapsed={collapsed ? 'true' : 'false'}
       data-mobile-open={mobileOpen ? 'true' : 'false'}
     >
-      {/* Workspace header */}
-      <div className="flex h-12 items-center gap-2 border-b border-border px-2">
+      {/* Workspace header. Collapsed, the 48px rail stacks the toggle over the
+          workspace tile instead of squeezing both into one row. */}
+      <div
+        className={cn(
+          'flex h-12 items-center gap-2 border-b border-border px-2',
+          collapsed && 'md:h-auto md:flex-col md:justify-center md:px-0 md:py-2',
+        )}
+      >
         <button
           aria-label={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
-          className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:flex"
+          className={cn(
+            'hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:flex',
+            'pointer-coarse:h-11 pointer-coarse:w-11',
+          )}
           onClick={onToggle}
           title={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
           type="button"
         >
           <PanelLeft className="h-4 w-4" />
         </button>
-        <WorkspaceSwitcher
-          collapsed={effectiveCollapsed}
-          fallbackLabel={syncStore.organizationName ?? workspaceKey ?? appName}
-        />
+        <WorkspaceSwitcher collapsed={effectiveCollapsed} fallbackLabel={workspaceLabel} />
         <button
           aria-label={t('nav.closeMenu')}
           className={cn(
@@ -639,6 +743,7 @@ export const Sidebar = observer(function Sidebar({
             TOUCH_TARGET_SQUARE,
           )}
           onClick={onMobileClose}
+          ref={closeButtonRef}
           title={t('nav.closeMenu')}
           type="button"
         >
@@ -647,54 +752,109 @@ export const Sidebar = observer(function Sidebar({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-2">
+      <nav aria-label={t('nav.primary')} className="flex-1 overflow-y-auto py-2">
         {/* Search. The command palette was reachable only by ⌘K, which nobody
             discovers without being told; a search-shaped affordance is how
-            every comparable product exposes it. Opens the same palette. */}
-        <div className={cn('px-1.5 pb-2', effectiveCollapsed && 'px-1.5')}>
-          <button
-            aria-keyshortcuts="Meta+K Control+K"
-            className={cn(
-              'flex w-full items-center gap-2 rounded-md border border-border bg-surface-sunken px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-              effectiveCollapsed && 'justify-center border-transparent bg-transparent px-0',
-            )}
-            onClick={() => uiStore.openCommandPalette()}
-            title={t('common.search')}
-            type="button"
-          >
-            <Search className="h-4 w-4 shrink-0" />
-            {!effectiveCollapsed && (
-              <>
-                <span className="truncate">{t('nav.searchHint')}</span>
-                <kbd className="ml-auto shrink-0 rounded border border-border px-1 font-sans text-[10px] text-muted-foreground">
-                  ⌘K
-                </kbd>
-              </>
-            )}
-          </button>
+            every comparable product exposes it. Opens the same palette. The
+            compose button beside it is the visible way to create an issue. */}
+        <div className="flex items-center gap-1 px-1.5 pb-2">
+          <RailTooltipIf label={t('common.search')} when={effectiveCollapsed}>
+            <button
+              aria-keyshortcuts="Meta+K Control+K"
+              aria-label={effectiveCollapsed ? t('common.search') : undefined}
+              className={cn(
+                'flex min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-surface-sunken px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+                TOUCH_ROW,
+                effectiveCollapsed &&
+                  'w-full justify-center border-transparent bg-transparent px-0',
+              )}
+              onClick={() => uiStore.openCommandPalette()}
+              title={effectiveCollapsed ? undefined : t('common.search')}
+              type="button"
+            >
+              <Search className="h-4 w-4 shrink-0" />
+              {!effectiveCollapsed && (
+                <>
+                  <span className="truncate">{t('nav.searchHint')}</span>
+                  <kbd className="ml-auto shrink-0 rounded border border-border px-1 font-sans text-[10px] text-muted-foreground">
+                    {modKey === '⌘' ? '⌘K' : 'Ctrl K'}
+                  </kbd>
+                </>
+              )}
+            </button>
+          </RailTooltipIf>
+          {!effectiveCollapsed && (
+            <button
+              aria-keyshortcuts="C"
+              aria-label={t('issues.newIssue')}
+              className={cn(
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+                TOUCH_ROW_SQUARE,
+              )}
+              onClick={() => uiStore.openCreateIssueModal()}
+              title={`${t('issues.newIssue')} (C)`}
+              type="button"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         {/* Global nav */}
         <ul className="flex flex-col gap-0.5 px-1.5">
-          {globalNavItems.map(item => (
-            <li key={item.href}>
-              <Link
-                className={cn(
-                  'flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                  effectiveCollapsed && 'justify-center px-0',
-                  pathname === item.href
-                    ? 'bg-brand-subtle text-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                )}
-                href={item.href}
-                onClick={onMobileClose}
-                title={item.label}
-              >
-                {item.icon}
-                {!effectiveCollapsed && <span className="truncate">{item.label}</span>}
-              </Link>
-            </li>
-          ))}
+          {globalNavItems.map(item => {
+            const hasCount = item.count > 0;
+            const countLabel = t('nav.unreadCount', { count: item.count });
+            return (
+              <li key={item.href}>
+                <RailTooltipIf
+                  label={hasCount ? `${item.label} · ${countLabel}` : item.label}
+                  when={effectiveCollapsed}
+                >
+                  <Link
+                    aria-label={effectiveCollapsed ? item.label : undefined}
+                    className={cn(
+                      'relative flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                      TOUCH_ROW,
+                      effectiveCollapsed && 'justify-center px-0',
+                      pathname === item.href
+                        ? 'bg-brand-subtle text-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                    )}
+                    href={item.href}
+                    onClick={onMobileClose}
+                    title={
+                      effectiveCollapsed
+                        ? undefined
+                        : item.shortcut
+                          ? `${item.label} (${item.shortcut})`
+                          : item.label
+                    }
+                  >
+                    {item.icon}
+                    {!effectiveCollapsed && <span className="truncate">{item.label}</span>}
+                    {hasCount &&
+                      (effectiveCollapsed ? (
+                        // A bare dot on the rail: there is no room for a number.
+                        <span
+                          aria-hidden="true"
+                          className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-brand"
+                        />
+                      ) : (
+                        <Badge
+                          className="ml-auto shrink-0 font-mono tabular-nums"
+                          tone="brand"
+                          variant="pill"
+                        >
+                          {item.count}
+                        </Badge>
+                      ))}
+                    {hasCount && <span className="sr-only">{countLabel}</span>}
+                  </Link>
+                </RailTooltipIf>
+              </li>
+            );
+          })}
         </ul>
 
         <SidebarFavoritesSection
@@ -722,6 +882,19 @@ export const Sidebar = observer(function Sidebar({
   );
 });
 
+/** Wraps children in a rail tooltip only while the rail is collapsed. */
+function RailTooltipIf({
+  children,
+  label,
+  when,
+}: {
+  children: React.ReactNode;
+  label: string;
+  when: boolean;
+}) {
+  return when ? <RailTooltip label={label}>{children}</RailTooltip> : children;
+}
+
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
 /**
@@ -745,26 +918,33 @@ const SidebarFooter = observer(function SidebarFooter({
   onNavigate?: () => void;
   pathname: string;
 }) {
-  const { logout, user } = useAuth();
+  const { loading: authLoading, logout, user } = useAuth();
   const { uiStore, userStore } = useStore();
+  const showConnection = useShowConnectionStatus();
   const t = useTranslations();
   const settingsActive = pathname.startsWith(`${base}/settings`);
   // `useAuth().user` carries only id/email/displayName; the avatar fields live
   // on the synced user record, so the menu reads both.
   const profile = userStore.currentUser;
 
-  const avatar = profile ? (
-    <UserAvatar
-      size="sm"
-      user={{
-        avatarBackgroundColor: profile.avatarBgColor,
-        avatarUrl: profile.avatarUrl ?? null,
-        displayName: profile.displayName,
-        initials: profile.initials,
-      }}
-    />
-  ) : (
-    <User className="h-4 w-4" />
+  // Decorative: the visible name beside it is the accessible name. Without
+  // `aria-hidden` the trigger read as "E2E2E Tester" (initials then name).
+  const avatar = (
+    <span aria-hidden="true" className="inline-flex shrink-0">
+      {profile ? (
+        <UserAvatar
+          size="sm"
+          user={{
+            avatarBackgroundColor: profile.avatarBgColor,
+            avatarUrl: profile.avatarUrl ?? null,
+            displayName: profile.displayName,
+            initials: profile.initials,
+          }}
+        />
+      ) : (
+        <User className="h-4 w-4" />
+      )}
+    </span>
   );
 
   return (
@@ -778,18 +958,29 @@ const SidebarFooter = observer(function SidebarFooter({
             {avatar}
             {!collapsed && (
               <>
-                <span className="min-w-0 flex-1 truncate text-left text-sm text-foreground-secondary">
-                  {user?.displayName ?? t('nav.userMenu')}
-                </span>
+                {authLoading ? (
+                  <LoadingRegion className="min-w-0 flex-1">
+                    <Skeleton className="h-4 w-24" />
+                  </LoadingRegion>
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-left text-sm text-foreground-secondary">
+                    {user?.displayName ?? t('nav.userMenu')}
+                  </span>
+                )}
+                {/* An offline app queues edits silently; the signal belongs
+                    on the always-visible rail, not only inside this menu. */}
+                <ConnectionStatus />
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 -rotate-90 text-muted-foreground" />
               </>
             )}
+            {collapsed && <ConnectionStatus compact />}
           </>
         }
         triggerClassName={cn(
           'w-full gap-2 px-2 py-1.5',
           collapsed && 'justify-center px-0',
           TOUCH_TARGET,
+          'pointer-coarse:min-h-11',
         )}
         triggerTitle={user?.email ?? t('nav.userMenu')}
       >
@@ -852,14 +1043,17 @@ const SidebarFooter = observer(function SidebarFooter({
 
             <div className="my-1 border-t border-border" />
 
-            {/* Connection state stays in the menu rather than the rail: it is
-                worth finding when something is wrong and worth nothing when it
-                is fine, which is the definition of a menu row, not a fixture. */}
-            <div className="px-2 py-1">
-              <ConnectionStatus />
-            </div>
-
-            <div className="my-1 border-t border-border" />
+            {/* Also shown in the menu while disconnected; the slot (and its
+                divider) only exists then, so a healthy connection leaves no
+                double rule between Language and Sign out. */}
+            {showConnection && (
+              <>
+                <div className="px-2 py-1">
+                  <ConnectionStatus />
+                </div>
+                <div className="my-1 border-t border-border" />
+              </>
+            )}
 
             <button
               className={cn(POPOVER_ITEM_CLASS, 'rounded text-danger-subtle-foreground')}

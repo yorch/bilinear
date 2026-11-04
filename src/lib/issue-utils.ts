@@ -58,7 +58,7 @@ export function getDueDateColor(dueDate: string | null | undefined): string {
     return 'text-warning-subtle-foreground';
   }
   if (daysUntil <= 3) {
-    return 'text-warning';
+    return 'text-warning-text';
   }
   return 'text-muted-foreground';
 }

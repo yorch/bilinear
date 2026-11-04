@@ -8,6 +8,8 @@ import { PriorityIcon, priorityLabelKey } from './priority-icon';
 interface PrioritySelectProps {
   className?: string;
   forceOpen?: boolean;
+  /** Text shown beside the icon while priority is unset. */
+  label?: string;
   onChange: (priority: number) => void;
   onClose?: () => void;
   value: number;
@@ -20,6 +22,7 @@ export function PrioritySelect({
   onChange,
   className,
   forceOpen,
+  label,
   onClose,
 }: PrioritySelectProps) {
   const t = useTranslations();
@@ -31,7 +34,16 @@ export function PrioritySelect({
       onClose={onClose}
       panelClassName="min-w-[160px] py-1"
       panelDataTestId="priority-select-popover"
-      triggerChildren={<PriorityIcon priority={value} />}
+      triggerChildren={
+        value === 0 && label ? (
+          <span className="inline-flex items-center gap-1.5">
+            <PriorityIcon priority={value} />
+            <span className="text-xs text-muted-foreground">{label}</span>
+          </span>
+        ) : (
+          <PriorityIcon priority={value} />
+        )
+      }
       triggerClassName={cn('px-1.5 py-1', TOUCH_TARGET)}
       triggerTitle={t(priorityLabelKey(value))}
     >

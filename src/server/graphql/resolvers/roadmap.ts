@@ -1,11 +1,11 @@
 import { GraphQLError } from 'graphql';
 import { requireAuth } from '../../middleware/auth';
-import { checkFixedWindow } from '../../middleware/rate-limit';
 import type { RoadmapUpsertInput } from '../../services/roadmap.service';
 import {
   RoadmapNotFoundError,
   RoadmapPasswordError,
   RoadmapSlugConflictError,
+  RoadmapSlugInvalidError,
 } from '../../services/roadmap.service';
 import type { GraphQLContext } from '../context';
 
@@ -62,7 +62,7 @@ export const roadmapResolvers = {
           success: true,
         };
       } catch (err) {
-        if (err instanceof RoadmapSlugConflictError) {
+        if (err instanceof RoadmapSlugConflictError || err instanceof RoadmapSlugInvalidError) {
           throw new GraphQLError(err.message, {
             extensions: { code: 'BAD_USER_INPUT' },
           });
@@ -104,12 +104,7 @@ export const roadmapResolvers = {
         // an org-wide backstop per roadmap so a distributed guess still
         // slows down. Fail-closed: an outage of the counter must not turn
         // the password check into an unlimited oracle.
-        const ip = ctx.clientIp ?? 'unknown';
-        const [perIp, perRoadmap] = await Promise.all([
-          checkFixedWindow(`rl:roadmap:${roadmap.id}:ip:${ip}`, 10, 15 * 60, true),
-          checkFixedWindow(`rl:roadmap:${roadmap.id}:all`, 300, 15 * 60, true),
-        ]);
-        if (perIp.exceeded || perRoadmap.exceeded) {
+        if (await ctx.services.roadmap.isPasswordAttemptLimited(roadmap.id, ctx.clientIp ?? null)) {
           throw new GraphQLError('Too many password attempts — try again later', {
             extensions: { code: 'RATELIMITED' },
           });

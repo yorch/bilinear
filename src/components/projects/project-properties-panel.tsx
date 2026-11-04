@@ -5,6 +5,7 @@ import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
 import { AssigneeSelect } from '@/components/properties/assignee-select';
 import { DueDatePicker } from '@/components/properties/due-date-picker';
+import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { PrioritySelect } from '@/components/properties/priority-select';
 import { LoadError } from '@/components/shared/load-error';
 import { Badge } from '@/components/ui/badge';
@@ -246,11 +247,17 @@ export const ProjectPropertiesPanel = observer(function ProjectPropertiesPanel({
       <div className={rowClass}>
         <span className={labelClass}>{t('projects.lead')}</span>
         <div className="col-span-2">
-          <AssigneeSelect
-            onChange={leadId => void update({ leadId })}
-            users={toIssueUsers(userStore.all.filter(u => u.active))}
-            value={project.leadId}
-          />
+          <div className="flex items-center gap-1">
+            <AssigneeSelect
+              onChange={leadId => void update({ leadId })}
+              users={toIssueUsers(userStore.all.filter(u => u.active))}
+              value={project.leadId}
+            />
+            <span className="text-sm text-foreground-secondary">
+              {(project.leadId && userStore.findById(project.leadId)?.displayName) ||
+                t('projects.noLead')}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -258,10 +265,15 @@ export const ProjectPropertiesPanel = observer(function ProjectPropertiesPanel({
       <div className={rowClass}>
         <span className={labelClass}>{t('properties.priority.label')}</span>
         <div className="col-span-2">
-          <PrioritySelect
-            onChange={priority => void update({ priority })}
-            value={project.priority}
-          />
+          <div className="flex items-center gap-1">
+            <PrioritySelect
+              onChange={priority => void update({ priority })}
+              value={project.priority}
+            />
+            <span className="text-sm text-foreground-secondary">
+              {t(priorityLabelKey(project.priority))}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -272,6 +284,7 @@ export const ProjectPropertiesPanel = observer(function ProjectPropertiesPanel({
           <DueDatePicker
             label={t('properties.dueDate.setDate')}
             onChange={startDate => void update({ startDate })}
+            tone="neutral"
             value={project.startDate}
           />
         </div>

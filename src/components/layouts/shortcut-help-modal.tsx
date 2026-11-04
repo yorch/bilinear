@@ -1,6 +1,7 @@
 'use client';
 
 import { ModalDialog, ModalHeader } from '@/components/ui/modal-dialog';
+import { useModKey } from '@/hooks/use-mod-key';
 import { useTranslations } from '@/hooks/use-translations';
 
 interface ShortcutEntry {
@@ -18,11 +19,14 @@ interface ShortcutSection {
  * `use-issue-list-page.ts` / `workspace-client.tsx`). The modal is not a
  * roadmap — an advertised key that does nothing reads as a broken app.
  */
+/** Placeholder swapped for the platform's modifier label at render time. */
+const MOD = '$mod';
+
 const SECTIONS: ShortcutSection[] = [
   {
     shortcuts: [
-      { descriptionKey: 'layout.shortcutHelp.commandPalette', keys: ['Ctrl/⌘', 'K'] },
-      { descriptionKey: 'layout.shortcutHelp.toggleSidebar', keys: ['Ctrl/⌘', 'B'] },
+      { descriptionKey: 'layout.shortcutHelp.commandPalette', keys: [MOD, 'K'] },
+      { descriptionKey: 'layout.shortcutHelp.toggleSidebar', keys: [MOD, 'B'] },
       { descriptionKey: 'layout.shortcutHelp.createIssue', keys: ['C'] },
       { descriptionKey: 'layout.shortcutHelp.openShortcuts', keys: ['?'] },
     ],
@@ -75,7 +79,7 @@ interface ShortcutHelpModalProps {
 
 function KbdGroup({ keys }: { keys: string[] }) {
   return (
-    <span className="flex items-center gap-0.5">
+    <span className="flex shrink-0 items-center gap-0.5 whitespace-nowrap">
       {keys.map((k, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: static shortcut key arrays never reorder
         <span className="flex items-center gap-0.5" key={`${k}-${i}`}>
@@ -91,6 +95,7 @@ function KbdGroup({ keys }: { keys: string[] }) {
 
 export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
   const t = useTranslations();
+  const modKey = useModKey();
 
   // `ModalDialog` owns the focus trap, backdrop click and the Escape → `cancel`
   // contract; the previous hand-rolled dialog listened on `window` and let
@@ -106,7 +111,7 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
 
       {/* Body — two-column grid of sections */}
       <div className="max-h-[70vh] overflow-y-auto p-6">
-        <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+        <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2 gap-y-6">
           {SECTIONS.map(section => (
             <div key={section.titleKey}>
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -121,7 +126,7 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
                     <span className="text-sm text-foreground-secondary">
                       {t(shortcut.descriptionKey)}
                     </span>
-                    <KbdGroup keys={shortcut.keys} />
+                    <KbdGroup keys={shortcut.keys.map(k => (k === MOD ? modKey : k))} />
                   </div>
                 ))}
               </div>

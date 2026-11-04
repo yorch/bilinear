@@ -4,7 +4,10 @@ import type { CommandProps } from '@tiptap/core';
 import { mergeAttributes, Node } from '@tiptap/core';
 import type { NodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
-import { useState } from 'react';
+import { Pencil } from 'lucide-react';
+import { useId, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 
@@ -25,6 +28,7 @@ function getEmbedUrl(url: string): string | null {
 
 function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
   const t = useTranslations();
+  const fieldId = useId();
   const url = (node.attrs.url as string) ?? '';
   const [editing, setEditing] = useState(!url);
   const embedUrl = url ? getEmbedUrl(url) : null;
@@ -35,35 +39,34 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
   };
 
   if (editing || !embedUrl) {
+    const inputId = `${fieldId}-url`;
     return (
       <NodeViewWrapper>
-        <div className="embed-editor my-2 rounded-md border border-border bg-card p-3">
-          <p className="mb-2 text-xs font-medium text-muted-foreground">
+        <div className="embed-editor my-2 rounded-md border border-input bg-card p-3">
+          <label className="mb-2 block text-xs font-medium text-muted-foreground" htmlFor={inputId}>
             {t('editor.embed.urlLabel')}
-          </p>
+          </label>
           <form
             className="flex gap-2"
             onSubmit={e => {
               e.preventDefault();
-              const input = (e.currentTarget.elements[0] as HTMLInputElement).value;
-              handleSubmit(input);
+              handleSubmit(new FormData(e.currentTarget).get('url') as string);
             }}
           >
-            <input
-              className="flex-1 rounded border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-brand"
+            <Input
+              className="flex-1 text-xs"
               defaultValue={url}
+              id={inputId}
+              name="url"
               placeholder="https://youtube.com/watch?v=..."
               type="url"
             />
-            <button
-              className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90"
-              type="submit"
-            >
+            <Button size="xs" type="submit">
               {t('editor.embed.submit')}
-            </button>
+            </Button>
           </form>
           {url && !embedUrl && (
-            <p className="mt-1 text-xs text-danger-subtle-foreground">
+            <p className="mt-1 text-xs text-danger-subtle-foreground" role="alert">
               {t('editor.embed.unsupportedUrl')}
             </p>
           )}
@@ -76,43 +79,30 @@ function EmbedView({ node, updateAttributes, selected }: NodeViewProps) {
     <NodeViewWrapper>
       <div
         className={cn(
-          'embed-block group relative my-2 overflow-hidden rounded-md border border-border',
-          selected ? 'border-brand' : 'border-border',
+          'embed-block group relative my-2 aspect-video w-full max-w-2xl overflow-hidden rounded-md border border-border',
+          selected && 'border-brand',
         )}
-        style={{ paddingBottom: '56.25%' }}
       >
         <iframe
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
           className="absolute inset-0 h-full w-full"
+          sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"
           src={embedUrl}
           title={t('editor.embed.videoTitle')}
         />
         <button
           aria-label={t('editor.embed.editAriaLabel')}
           className={cn(
-            'absolute right-2 top-2 z-10 flex rounded bg-black/50 p-1.5 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100 max-md:items-center max-md:justify-center max-md:opacity-100',
+            'absolute right-2 top-2 z-10 flex items-center justify-center rounded bg-surface-raised p-1.5 text-foreground opacity-0 shadow-e1 transition-opacity hover:bg-accent focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100',
+            selected && 'opacity-100',
             TOUCH_TARGET_SQUARE,
           )}
           onClick={() => setEditing(true)}
           title={t('editor.embed.editAriaLabel')}
           type="button"
         >
-          <svg
-            aria-hidden="true"
-            fill="none"
-            height="12"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2.5"
-            viewBox="0 0 24 24"
-            width="12"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
+          <Pencil aria-hidden="true" className="h-3 w-3" />
         </button>
       </div>
     </NodeViewWrapper>
@@ -131,7 +121,12 @@ declare module '@tiptap/core' {
 export const EmbedNode = Node.create({
   addAttributes() {
     return {
-      url: { default: '' },
+      url: {
+        default: '',
+        parseHTML: el => el.getAttribute('data-url') ?? '',
+        // Single source: without this TipTap also emitted a bare `url="…"`.
+        renderHTML: attrs => ({ 'data-url': attrs.url as string }),
+      },
     };
   },
 
