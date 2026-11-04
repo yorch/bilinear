@@ -1864,9 +1864,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@radix-ui/react-slot@npm:1.3.3":
-  version: 1.3.3
-  resolution: "@radix-ui/react-slot@npm:1.3.3"
+"@radix-ui/react-slot@npm:1.5.0":
+  version: 1.5.0
+  resolution: "@radix-ui/react-slot@npm:1.5.0"
   dependencies:
     "@radix-ui/react-compose-refs": "npm:1.1.5"
   peerDependencies:
@@ -1875,7 +1875,7 @@ __metadata:
   peerDependenciesMeta:
     "@types/react":
       optional: true
-  checksum: 10c0/7ed356819bbb40415ccd16bc8a8da3162966e827ea8fa404c2ae547518777aa193b0aad07f139f3c9d3280f51433e1cc4fa4cfd8dc7e8e6215e7b0d7a25e4b39
+  checksum: 10c0/8bc25dc5569d50b5b019811b51ef43a55bf1c0eb69d46bd132bac7c4f124b57805ad1a81b2c94e8f4faf115ce9dad91490411a2f631af2e43f9cfe060c0d6f79
   languageName: node
   linkType: hard
 
@@ -4310,7 +4310,7 @@ __metadata:
     "@playwright/test": "npm:1.63.0"
     "@prisma/adapter-pg": "npm:7.10.1"
     "@prisma/client": "npm:7.10.1"
-    "@radix-ui/react-slot": "npm:1.3.3"
+    "@radix-ui/react-slot": "npm:1.5.0"
     "@sentry/nextjs": "npm:11.10.0"
     "@tailwindcss/postcss": "npm:4.3.3"
     "@tanstack/react-virtual": "npm:3.14.13"
@@ -4356,7 +4356,7 @@ __metadata:
     clsx: "npm:2.1.1"
     dataloader: "npm:2.2.3"
     date-fns: "npm:4.4.0"
-    dexie: "npm:4.4.6"
+    dexie: "npm:4.4.7"
     dotenv: "npm:18.0.9"
     graphql: "npm:16.14.2"
     graphql-depth-limit: "npm:1.1.0"
@@ -4368,8 +4368,8 @@ __metadata:
     lowlight: "npm:3.3.0"
     lucide-react: "npm:1.51.0"
     mermaid: "npm:12.1.0"
-    mobx: "npm:7.0.6"
-    mobx-react-lite: "npm:5.1.0"
+    mobx: "npm:7.1.4"
+    mobx-react-lite: "npm:5.1.2"
     next: "npm:16.3.8"
     next-themes: "npm:0.4.6"
     nodemailer: "npm:10.3.1"
@@ -5266,10 +5266,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"dexie@npm:4.4.6":
-  version: 4.4.6
-  resolution: "dexie@npm:4.4.6"
-  checksum: 10c0/fc8be52970dc33c2a904ee77bfc459084afe6bb44f80cdce2ff5da989f0992bf56a5413cf3c3599d6e58f1fc1136632dde52cbf2d441cb9d430a92f5e99b28fc
+"dexie@npm:4.4.7":
+  version: 4.4.7
+  resolution: "dexie@npm:4.4.7"
+  checksum: 10c0/5de6b45d928d61f8fd77dbb92ff206928007392c92c5500486655d2bed918eefb2c00ec07a932488bc09948463f91e7679607b241e2cd51930721a6e294da06c
   languageName: node
   linkType: hard
 
@@ -6794,20 +6794,20 @@ __metadata:
   languageName: node
   linkType: hard
 
-"mobx-react-lite@npm:5.1.0":
-  version: 5.1.0
-  resolution: "mobx-react-lite@npm:5.1.0"
+"mobx-react-lite@npm:5.1.2":
+  version: 5.1.2
+  resolution: "mobx-react-lite@npm:5.1.2"
   peerDependencies:
     mobx: ^7.0.0
     react: ^18 || ^19
-  checksum: 10c0/134506d46be4d8a0853ef4053c599d37aec8214d06396c1c0ed7f1026c2795f0659065fb877ab48fe1d0bda7940ec5a4483aae8b7a2b5f36467551cfb1a62f75
+  checksum: 10c0/801f0a02758a0fa94fbe9c11685b5d0d4a4859a5e4eed21329f179b4b60babb171fe1e8292296e28a99218aac9db985f8c7cd3acff8379ca91a8ff7dcc0b430b
   languageName: node
   linkType: hard
 
-"mobx@npm:7.0.6":
-  version: 7.0.6
-  resolution: "mobx@npm:7.0.6"
-  checksum: 10c0/fb22c92b775195d5f3ddf5218de98d2cf67ff21070ad7aa96be25700ebe67028b986bfe03d4584fb5daeb64b079617755da745d5e3cc150fa63f5576b5512080
+"mobx@npm:7.1.4":
+  version: 7.1.4
+  resolution: "mobx@npm:7.1.4"
+  checksum: 10c0/7cf63992108e9df72dab3f48e3581568e3683128a10567733c6aac8271abe43d5c59736294d8f5b3807bef381e04ef450ab5734de18587625428958910b166a9
   languageName: node
   linkType: hard
 
