@@ -4361,7 +4361,7 @@ __metadata:
     graphql: "npm:16.14.2"
     graphql-depth-limit: "npm:1.1.0"
     graphql-query-complexity: "npm:2.0.0"
-    graphql-scalars: "npm:2.0.0"
+    graphql-scalars: "npm:2.0.1"
     ioredis: "npm:6.0.0"
     jose: "npm:6.2.12"
     jsdom: "npm:30.1.1"
@@ -5868,14 +5868,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"graphql-scalars@npm:2.0.0":
-  version: 2.0.0
-  resolution: "graphql-scalars@npm:2.0.0"
+"graphql-scalars@npm:2.0.1":
+  version: 2.0.1
+  resolution: "graphql-scalars@npm:2.0.1"
   dependencies:
     tslib: "npm:^2.5.0"
   peerDependencies:
     graphql: ^16.0.0 || ^17.0.0
-  checksum: 10c0/6f8595d12e8f3a59dc8d3e31aecb674b9e34cbb78ae935b654fae2fa0a33bfb434f3943dc8fceb97484f99bfd2467998fc99ccd60296792c11c9ebdf7da9bf3f
+  checksum: 10c0/69cd83e9bc576a1d59924bfe807113b24f89e82f2701d289490b21468ae5fba461985719b979f5ca01309095db4fd8cb7d62bdaaca80c2e000a563cdc788d97c
   languageName: node
   linkType: hard
 
