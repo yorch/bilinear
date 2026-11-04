@@ -1,14 +1,19 @@
 'use client';
 
-import { ExternalLink, Eye, EyeOff } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SettingToggleRow } from '@/components/shared/setting-toggle-row';
+import { Button } from '@/components/ui/button';
 import { ColorDot } from '@/components/ui/color-dot';
+import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
 import { RowsSkeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -65,10 +70,18 @@ interface RoadmapSettings {
   title: string;
 }
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
   const t = useTranslations();
   useDocumentTitle(t('roadmap.settings.title'));
-  const { projectStore } = useStore();
+  const { projectStore, syncStore } = useStore();
+  const { workspace } = useParams<{ workspace: string }>();
 
   const [saving, setSaving] = useState(false);
   const [togglingProjectId, setTogglingProjectId] = useState<string | null>(null);
@@ -103,6 +116,12 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
           setDescription(r.description ?? '');
           setSlug(r.slug);
           setEnabled(r.enabled);
+        } else {
+          // No roadmap yet: start from real values (the org name and the
+          // workspace key) instead of greyed placeholders that look filled in
+          // and then fail the required check on save.
+          setTitle(syncStore.organizationName ?? '');
+          setSlug(slugify(workspace ?? ''));
         }
       },
     },
@@ -178,7 +197,10 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <PageHeader title={t('roadmap.settings.title')} />
+      <PageHeader
+        description={t('roadmap.settings.description')}
+        title={t('roadmap.settings.title')}
+      />
 
       <div className="mx-auto w-full max-w-2xl px-6 py-8 flex flex-col gap-8">
         {/* Settings form */}
@@ -204,6 +226,12 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                   onCheckedChange={setEnabled}
                 />
 
+                {!enabled && (
+                  <p className="-mt-2 text-xs text-muted-foreground">
+                    {t('roadmap.settings.offHint')}
+                  </p>
+                )}
+
                 {/* Title */}
                 <div className="flex flex-col gap-1">
                   <label
@@ -212,8 +240,7 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                   >
                     {t('roadmap.settings.titleLabel')}
                   </label>
-                  <input
-                    className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  <Input
                     id="roadmap-title"
                     onChange={e => setTitle(e.target.value)}
                     placeholder={t('roadmap.settings.titlePlaceholder')}
@@ -231,8 +258,8 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                   >
                     {t('roadmap.settings.descriptionLabel')}
                   </label>
-                  <textarea
-                    className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 resize-none"
+                  <Textarea
+                    className="resize-none"
                     id="roadmap-description"
                     onChange={e => setDescription(e.target.value)}
                     placeholder={t('roadmap.settings.descriptionPlaceholder')}
@@ -251,8 +278,8 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground shrink-0">/roadmap/</span>
-                    <input
-                      className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    <Input
+                      className="flex-1 font-mono"
                       id="roadmap-slug"
                       onChange={e => setSlug(e.target.value)}
                       pattern="[a-z0-9-]+"
@@ -315,8 +342,8 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                           <label className="sr-only" htmlFor="roadmap-password">
                             {t('roadmap.settings.newPassword')}
                           </label>
-                          <input
-                            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                          <Input
+                            autoComplete="new-password"
                             id="roadmap-password"
                             onChange={e => setNewPassword(e.target.value)}
                             placeholder={t('roadmap.settings.newPasswordPlaceholder')}
@@ -330,13 +357,9 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                 </div>
 
                 <div className="flex justify-end">
-                  <button
-                    className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-background"
-                    disabled={saving}
-                    type="submit"
-                  >
+                  <Button disabled={saving} type="submit">
                     {saving ? t('common.saving') : t('roadmap.settings.saveSettings')}
-                  </button>
+                  </Button>
                 </div>
               </form>
             )}
@@ -371,36 +394,23 @@ const RoadmapSettingsPage = observer(function RoadmapSettingsPage() {
                           {project.statusType.replace(/([A-Z])/g, ' $1').trim()}
                         </p>
                       </div>
-                      <button
-                        aria-label={
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {project.roadmapVisible
+                          ? t('roadmap.settings.visible')
+                          : t('roadmap.settings.hidden')}
+                      </span>
+                      <Switch
+                        aria-label={`${project.name}: ${
                           project.roadmapVisible
                             ? t('roadmap.settings.removeFromRoadmap')
                             : t('roadmap.settings.addToRoadmap')
-                        }
-                        className="shrink-0 flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand disabled:opacity-50"
+                        }`}
+                        checked={project.roadmapVisible}
                         disabled={isToggling}
-                        onClick={() => handleToggleProject(project.id, project.roadmapVisible)}
-                        title={
-                          project.roadmapVisible
-                            ? t('roadmap.settings.removeFromRoadmap')
-                            : t('roadmap.settings.addToRoadmap')
+                        onCheckedChange={() =>
+                          handleToggleProject(project.id, project.roadmapVisible)
                         }
-                        type="button"
-                      >
-                        {project.roadmapVisible ? (
-                          <>
-                            <Eye className="h-3.5 w-3.5 text-brand" />
-                            <span className="text-brand">{t('roadmap.settings.visible')}</span>
-                          </>
-                        ) : (
-                          <>
-                            <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-muted-foreground">
-                              {t('roadmap.settings.hidden')}
-                            </span>
-                          </>
-                        )}
-                      </button>
+                      />
                     </li>
                   );
                 })}

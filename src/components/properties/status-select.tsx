@@ -1,9 +1,9 @@
 'use client';
 
 import { ColorDot } from '@/components/ui/color-dot';
-import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
+import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
 import { useTranslations } from '@/hooks/use-translations';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 
 interface WorkflowState {
   color: string;
@@ -37,41 +37,33 @@ export function StatusSelect({
   const current = states.find(s => s.id === value);
 
   return (
-    <SelectPopover
+    <SearchableSelectPopover
       className={className}
+      emptyText={t('properties.status.noStatusesFound')}
       forceOpen={forceOpen}
-      listbox
+      getKey={state => state.id}
+      isSelected={state => state.id === value}
+      items={states}
+      matchesSearch={(state, search) => state.name.toLowerCase().includes(search.toLowerCase())}
       onClose={onClose}
-      panelClassName="min-w-[160px] py-1"
+      onSelect={state => onChange(state.id)}
+      panelClassName="min-w-[200px]"
       panelDataTestId="status-select-popover"
+      renderItem={state => (
+        <>
+          <StatusDot color={state.color} />
+          {state.name}
+        </>
+      )}
+      searchPlaceholder={t('properties.status.searchPlaceholder')}
       triggerChildren={
         <>
           {current && <StatusDot color={current.color} />}
           <span className="text-muted-foreground">{current?.name ?? '—'}</span>
         </>
       }
-      triggerClassName="gap-1.5 px-1.5 py-1 text-xs"
+      triggerClassName={cn('gap-1.5 px-1.5 py-1 text-xs', TOUCH_TARGET, 'max-md:justify-start')}
       triggerTitle={current?.name ?? t('properties.status.status')}
-    >
-      {close =>
-        states.map(state => (
-          <button
-            aria-selected={state.id === value}
-            className={cn(POPOVER_ITEM_CLASS, state.id === value && 'font-medium')}
-            key={state.id}
-            onClick={e => {
-              e.stopPropagation();
-              onChange(state.id);
-              close();
-            }}
-            role="option"
-            type="button"
-          >
-            <StatusDot color={state.color} />
-            {state.name}
-          </button>
-        ))
-      }
-    </SelectPopover>
+    />
   );
 }

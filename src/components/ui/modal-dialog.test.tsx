@@ -33,6 +33,24 @@ describe('ModalDialog', () => {
     expect(screen.getByRole('textbox', { name: 'Name' })).not.toHaveFocus();
   });
 
+  it("keeps a nested dialog's Escape from reaching the outer dialog", () => {
+    const outer = vi.fn();
+    const inner = vi.fn();
+    render(
+      <ModalDialog aria-label="Outer" onClose={outer} open>
+        <ModalDialog aria-label="Inner" onClose={inner} open>
+          <p>confirm</p>
+        </ModalDialog>
+      </ModalDialog>,
+    );
+    fireEvent(
+      screen.getByLabelText('Inner'),
+      new Event('cancel', { bubbles: false, cancelable: true }),
+    );
+    expect(inner).toHaveBeenCalledTimes(1);
+    expect(outer).not.toHaveBeenCalled();
+  });
+
   it('routes Escape through the native cancel event to onClose', () => {
     const onClose = vi.fn();
     render(

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { avatarPresentation } from '@/components/ui/user-avatar';
 import { accents } from './accent';
 
 /**
@@ -232,9 +233,23 @@ const CHECKS: ReadonlyArray<readonly [string, string, number, string]> = [
   ['--warning-subtle-foreground', '--warning-subtle', 4.5, 'warning pill text'],
   ['--info-subtle-foreground', '--info-subtle', 4.5, 'info pill text'],
   ['--merged-subtle-foreground', '--merged-subtle', 4.5, 'merged pill text'],
+  // The light brand is also TEXT: `text-brand` links in the admin tables.
+  // `--brand` as a rail or ring only needs 3:1, so the 4.5:1 here is the
+  // stricter, text-bearing use and it is the one that was failing.
+  ['--brand', '--background', 4.5, 'brand link text on page'],
+  ['--brand', '--card', 4.5, 'brand link text on card'],
+  // The active sidebar row sits on --brand-subtle, and its team key is muted
+  // text. The page-level pair passes while this one did not.
+  ['--muted-foreground', '--brand-subtle', 4.5, 'muted text on active brand row'],
+  // Text-safe red. `--destructive` is the solid button fill (dark in dark mode)
+  // and measured 2.87:1 as text on dark; required-asterisks must use `--danger`.
+  ['--danger', '--background', 4.5, 'danger text on page (required marks)'],
+  ['--danger', '--card', 4.5, 'danger text on card (required marks)'],
   ['--danger-subtle-foreground', '--background', 4.5, 'danger text on page'],
   ['--success-subtle-foreground', '--background', 4.5, 'success text on page'],
   ['--warning-subtle-foreground', '--background', 4.5, 'warning text on page'],
+  ['--warning-text', '--background', 4.5, 'due-soon text on page'],
+  ['--warning-text', '--card', 4.5, 'due-soon text on card'],
   ['--info-subtle-foreground', '--background', 4.5, 'info text on page'],
   // Non-text UI components and state indicators: WCAG 1.4.11, 3:1.
   ['--ring', '--background', 3.0, 'focus ring vs page'],
@@ -289,6 +304,69 @@ describe('WCAG contrast across every accent and theme', () => {
     env['--muted-foreground'] = 'oklch(0.62 0 0)';
     const bg = over(evaluate('var(--background)', env), [1, 1, 1]);
     const fg = over(evaluate('var(--muted-foreground)', env), bg);
+    expect(contrast(fg, bg)).toBeLessThan(4.5);
+  });
+});
+
+/**
+ * User avatar initials. The swatch is per-user data, so this cannot be a
+ * token pair; it is checked by resolving the ink the component picks against
+ * the real ink tokens, for every named swatch and for a full colour grid.
+ */
+function rgbHex(r: number, g: number, b: number): string {
+  return `#${[r, g, b].map(c => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+describe('avatar initials contrast', () => {
+  const namedSwatches = [
+    ...CSS.matchAll(/--(?:entity-swatch|cursor)-\d+:\s*(#[0-9a-fA-F]{6});/g),
+  ].map(([, hex]) => hex);
+  // Seeded default (prisma/seed.ts), the schema default, and the two stops
+  // that failed in the sweep.
+  const EMERALD = rgbHex(0x10, 0xb9, 0x81);
+  const INDIGO = rgbHex(0x63, 0x66, 0xf1);
+  const ORANGE = rgbHex(0xf9, 0x73, 0x16);
+  const seeded = [EMERALD, INDIGO, ORANGE];
+
+  const grid: string[] = [];
+  for (let r = 0; r <= 255; r += 15) {
+    for (let g = 0; g <= 255; g += 15) {
+      for (let b = 0; b <= 255; b += 15) {
+        grid.push(rgbHex(r, g, b));
+      }
+    }
+  }
+
+  const swatches = [...new Set([...namedSwatches, ...seeded, ...grid])];
+
+  it.each(['light', 'dark'] as const)('every swatch clears 4.5:1 in %s', theme => {
+    const env = resolve('aurora', theme);
+    const failures: string[] = [];
+    for (const hex of swatches) {
+      const { background, ink } = avatarPresentation(hex);
+      const bg = over(evaluate(background, env), [1, 1, 1]);
+      const fg = over(evaluate(ink, env), bg);
+      const ratio = contrast(fg, bg);
+      if (ratio < 4.5) {
+        failures.push(`${hex} -> ${background} / ${ink}: ${ratio.toFixed(2)}`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it('the named failures from the sweep are now covered', () => {
+    // White on the emerald was 2.54:1 and on the orange 2.8:1. Both are light
+    // swatches, so they take the dark ink. The indigo is mid-tone and is
+    // darkened so the light ink clears.
+    expect(avatarPresentation(EMERALD).ink).toBe('var(--avatar-ink-dark)');
+    expect(avatarPresentation(ORANGE).ink).toBe('var(--avatar-ink-dark)');
+    expect(avatarPresentation(INDIGO).ink).toBe('var(--avatar-ink-light)');
+  });
+
+  it('is not vacuous — white ink on the unadjusted indigo is caught', () => {
+    const env = resolve('aurora', 'light');
+    const bg = over(evaluate(INDIGO, env), [1, 1, 1]);
+    const fg = over(evaluate('var(--avatar-ink-light)', env), bg);
     expect(contrast(fg, bg)).toBeLessThan(4.5);
   });
 });

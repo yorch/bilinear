@@ -4,7 +4,7 @@ import { Languages } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
 import { type Locale, locales } from '@/lib/i18n';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useLocale } from '@/providers/locale-provider';
 
 const CYCLE: Record<Locale, Locale> = {
@@ -37,6 +37,7 @@ export function LanguageToggle({ className, compact = false }: LanguageTogglePro
         aria-label={t('language.currentLanguage', { language: label(current) })}
         className={cn(
           'flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+          TOUCH_TARGET_SQUARE,
           className,
         )}
         onClick={() => setLocale(CYCLE[current])}
@@ -58,6 +59,7 @@ export function LanguageToggle({ className, compact = false }: LanguageTogglePro
           aria-pressed={mounted ? locale === l : undefined}
           className={cn(
             'flex h-6 items-center justify-center rounded px-1.5 text-[11px] font-medium transition-colors',
+            TOUCH_TARGET,
             mounted && locale === l
               ? 'bg-surface-raised text-foreground shadow-e1'
               : 'text-muted-foreground hover:text-foreground',

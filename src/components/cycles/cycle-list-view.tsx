@@ -1,5 +1,6 @@
 'use client';
 
+import { differenceInCalendarDays } from 'date-fns';
 import { Calendar, Plus, RefreshCw } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
@@ -8,7 +9,9 @@ import { useState } from 'react';
 import { CreateCycleModal } from '@/components/cycles/create-cycle-modal';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { readTeamExtras } from '@/components/teams/team-settings-helpers';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { CollapsibleGroup } from '@/components/ui/collapsible-group';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { ProgressBar } from '@/components/ui/progress-bar';
@@ -19,7 +22,6 @@ import type { DBCycle } from '@/lib/db';
 import { gqlQuery } from '@/lib/graphql';
 import { CYCLES_PROGRESS_QUERY } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 interface CycleListViewProps {
@@ -41,26 +43,6 @@ function getCycleDisplayName(cycle: DBCycle, t: ReturnType<typeof useTranslation
 }
 
 type CycleStatus = 'active' | 'completed' | 'upcoming';
-
-function getCycleStatusBadge(status: CycleStatus, t: ReturnType<typeof useTranslations>) {
-  switch (status) {
-    case 'active':
-      return {
-        className: 'bg-success-subtle text-success-subtle-foreground',
-        label: t('cycles.status.active'),
-      };
-    case 'completed':
-      return {
-        className: 'bg-muted text-muted-foreground',
-        label: t('cycles.status.completed'),
-      };
-    case 'upcoming':
-      return {
-        className: 'bg-info-subtle text-info-subtle-foreground',
-        label: t('cycles.status.upcoming'),
-      };
-  }
-}
 
 export const CycleListView = observer(function CycleListView({
   teamId,
@@ -140,10 +122,10 @@ export const CycleListView = observer(function CycleListView({
         actions={
           <div className="flex items-center gap-3">
             {!hasNoCycles && disabledHint}
-            {newCycleButton}
+            {(cyclesEnabled || !hasNoCycles) && newCycleButton}
           </div>
         }
-        title={t('cycles.list.title')}
+        title={t('cycles.list.teamTitle', { team: team?.displayName ?? team?.name ?? '' })}
       />
 
       <CreateCycleModal
@@ -162,10 +144,15 @@ export const CycleListView = observer(function CycleListView({
         {hasNoCycles ? (
           <EmptyState
             action={
-              <div className="flex flex-col items-center gap-2">
-                {newCycleButton}
-                {disabledHint}
-              </div>
+              cyclesEnabled ? (
+                newCycleButton
+              ) : (
+                // A disabled "New cycle" next to a hint reads as a broken
+                // button; the actionable thing is turning cycles on.
+                <Button asChild size="sm">
+                  <Link href={settingsHref}>{t('cycles.list.enableCycles')}</Link>
+                </Button>
+              )
             }
             description={t('cycles.list.emptyDescription')}
             icon={<RefreshCw className="h-5 w-5" />}
@@ -225,6 +212,9 @@ export const CycleListView = observer(function CycleListView({
   );
 });
 
+/** Upcoming cycles shown before the "Show N more" disclosure. */
+const UPCOMING_PREVIEW = 3;
+
 const CycleGroup = observer(function CycleGroup({
   title,
   cycles,
@@ -244,83 +234,90 @@ const CycleGroup = observer(function CycleGroup({
 }) {
   const t = useTranslations();
   const { formatDate } = useFormatters();
-  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const [showAll, setShowAll] = useState(false);
+  // Enabling cycles generates a dozen-plus upcoming cycles at once; showing all
+  // of them pushes Completed off-screen and adds nothing, so only the next few
+  // render until asked.
+  const limit = status === 'upcoming' && !showAll ? UPCOMING_PREVIEW : cycles.length;
+  const visible = cycles.slice(0, limit);
+  const hidden = cycles.length - visible.length;
+  const thisYear = new Date().getFullYear();
+
+  const formatRange = (cycle: DBCycle) => {
+    const start = new Date(cycle.startsAt);
+    const end = new Date(cycle.endsAt);
+    // Year only when it disambiguates: a range crossing New Year or one that
+    // isn't in the current year ("Dec 21 – Jan 4" reads as the wrong Jan).
+    const withYear = start.getFullYear() !== end.getFullYear() || end.getFullYear() !== thisYear;
+    const opts: Intl.DateTimeFormatOptions = withYear
+      ? { day: 'numeric', month: 'short', year: 'numeric' }
+      : { day: 'numeric', month: 'short' };
+    return `${formatDate(cycle.startsAt, opts)} \u2013 ${formatDate(cycle.endsAt, opts)}`;
+  };
 
   return (
-    <div>
-      <button
-        className="flex items-center gap-2 px-1 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground-secondary"
-        onClick={() => setCollapsed(!collapsed)}
-        type="button"
-      >
-        <svg
-          aria-hidden="true"
-          className={cn('h-3 w-3 transition-transform', collapsed ? '' : 'rotate-90')}
-          fill="currentColor"
-          viewBox="0 0 20 20"
-        >
-          <path
-            clipRule="evenodd"
-            d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
-            fillRule="evenodd"
-          />
-        </svg>
-        {title}
-        <span className="font-normal text-muted-foreground">{cycles.length}</span>
-      </button>
-      {!collapsed && (
-        <div className="mt-1 flex flex-col gap-1">
-          {cycles.map(cycle => {
-            const badge = getCycleStatusBadge(status, t);
-            const stats = progressByCycle.get(cycle.id);
-            const progress = stats ? Math.round(stats.progress * 100) : 0;
-            const completedCount = stats ? Math.round(stats.progress * stats.scope) : 0;
+    <CollapsibleGroup count={cycles.length} defaultCollapsed={defaultCollapsed} title={title}>
+      <div className="mt-1 flex flex-col gap-1">
+        {visible.map(cycle => {
+          const stats = progressByCycle.get(cycle.id);
+          const progress = stats ? Math.round(stats.progress * 100) : 0;
+          const completedCount = stats ? Math.round(stats.progress * stats.scope) : 0;
+          const daysLeft =
+            status === 'active'
+              ? Math.max(0, differenceInCalendarDays(new Date(cycle.endsAt), new Date()))
+              : null;
 
-            return (
-              <Link
-                className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-border hover:bg-accent"
-                href={`/${workspaceKey}/team/${teamKey}/cycles/${cycle.id}`}
-                key={cycle.id}
-              >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
-                  <RefreshCw className="h-3.5 w-3.5" />
+          return (
+            <Link
+              className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-border hover:bg-accent"
+              href={`/${workspaceKey}/team/${teamKey}/cycles/${cycle.id}`}
+              key={cycle.id}
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+                <RefreshCw className="h-3.5 w-3.5" />
+              </span>
+
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm font-medium text-foreground">
+                  {getCycleDisplayName(cycle, t)}
                 </span>
-
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-medium text-foreground">
-                    {getCycleDisplayName(cycle, t)}
+                <div className="mt-0.5 flex items-center gap-2">
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Calendar className="h-3 w-3" />
+                    {formatRange(cycle)}
                   </span>
-                  <div className="mt-0.5 flex items-center gap-2">
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Calendar className="h-3 w-3" />
-                      {formatDate(cycle.startsAt, { day: 'numeric', month: 'short' })} &ndash;{' '}
-                      {formatDate(cycle.endsAt, { day: 'numeric', month: 'short' })}
-                    </span>
-                  </div>
                 </div>
+              </div>
 
-                {stats !== undefined && stats.scope > 0 && (
-                  <div className="flex items-center gap-2">
-                    <ProgressBar className="h-1.5 w-16" value={progress} />
-                    <span className="text-xs tabular-nums text-muted-foreground">
-                      {completedCount}/{stats.scope}
-                    </span>
-                  </div>
-                )}
+              {stats !== undefined && stats.scope > 0 && (
+                <div className="flex items-center gap-2">
+                  <ProgressBar className="h-1.5 w-16" value={progress} />
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {completedCount}/{stats.scope}
+                  </span>
+                </div>
+              )}
 
-                <span
-                  className={cn(
-                    'rounded-full px-2 py-0.5 text-[10px] font-medium',
-                    badge.className,
-                  )}
-                >
-                  {badge.label}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      )}
-    </div>
+              {/* The group header already says Upcoming / Completed; a pill per
+                  row repeated it. Active keeps one, with the time left. */}
+              {status === 'active' && (
+                <Badge tone="success" variant="pill">
+                  {t('cycles.list.daysLeft', { count: daysLeft ?? 0 })}
+                </Badge>
+              )}
+            </Link>
+          );
+        })}
+        {hidden > 0 && (
+          <button
+            className="self-start rounded px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground-secondary"
+            onClick={() => setShowAll(true)}
+            type="button"
+          >
+            {t('cycles.list.showMore', { count: hidden })}
+          </button>
+        )}
+      </div>
+    </CollapsibleGroup>
   );
 });

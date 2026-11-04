@@ -5,6 +5,7 @@ import {
   InvalidTenantLimitsError,
   LastPlatformAdminError,
   PlatformAdminService,
+  SelfTargetError,
   type TenantLimits,
   TenantNotFoundError,
 } from './platform-admin.service';
@@ -61,6 +62,33 @@ describe('PlatformAdminService', () => {
 
       await service.setPlatformAdmin('u1', true);
       expect(prisma.user.count).not.toHaveBeenCalled();
+      expect(prisma.user.update).toHaveBeenCalled();
+    });
+  });
+
+  describe('self-targeting guard', () => {
+    it('refuses to suspend yourself, comparing by user id', async () => {
+      prisma.user.count.mockResolvedValue(5);
+      await expect(service.setUserActive('u1', false, 'u1')).rejects.toBeInstanceOf(
+        SelfTargetError,
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to revoke your own admin flag', async () => {
+      prisma.user.count.mockResolvedValue(5);
+      await expect(service.setPlatformAdmin('u1', false, 'u1')).rejects.toBeInstanceOf(
+        SelfTargetError,
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('still lets an admin suspend someone else', async () => {
+      prisma.user.findUnique
+        .mockResolvedValueOnce({ id: 'u2' })
+        .mockResolvedValueOnce({ isPlatformAdmin: false });
+      prisma.user.update.mockResolvedValue({ active: false, id: 'u2' });
+      await service.setUserActive('u2', false, 'u1');
       expect(prisma.user.update).toHaveBeenCalled();
     });
   });

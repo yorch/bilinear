@@ -51,7 +51,7 @@ export function SectionHeader({
       {count !== undefined && (
         <>
           {' '}
-          <span className="ml-1 font-normal tabular-nums text-foreground-faint">{count}</span>
+          <span className="ml-1 font-normal tabular-nums text-muted-foreground">{count}</span>
         </>
       )}
     </>

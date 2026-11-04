@@ -22,6 +22,14 @@ export const TOUCH_TARGET =
 /** Fixed 44×44 variant, for controls wrapping a fixed-size icon. */
 export const TOUCH_TARGET_SQUARE = 'max-md:h-11 max-md:w-11';
 
+/**
+ * Row-shaped touch target (a min-height, for nav links that stretch to their
+ * container) that also keys off a coarse pointer, since tablets at 768px+ are
+ * touch devices too. `TOUCH_ROW_SQUARE` is the square variant.
+ */
+export const TOUCH_ROW = 'max-md:min-h-11 pointer-coarse:min-h-11';
+export const TOUCH_ROW_SQUARE = 'max-md:h-11 max-md:w-11 pointer-coarse:h-11 pointer-coarse:w-11';
+
 /** Extract the first error message from a GraphQL response, with a fallback. */
 export function gqlError(result: { errors?: unknown[] }, fallback: string): string {
   return (result.errors?.[0] as { message?: string })?.message ?? fallback;

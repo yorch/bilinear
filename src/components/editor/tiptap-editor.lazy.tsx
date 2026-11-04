@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { EditorSkeleton } from './editor-skeleton';
 import type { TipTapEditorProps } from './tiptap-editor';
 
 // Lazy wrapper around TipTapEditor. The underlying module pulls in
@@ -11,5 +12,5 @@ import type { TipTapEditorProps } from './tiptap-editor';
 // DOM APIs + React refs).
 export const TipTapEditor = dynamic<TipTapEditorProps>(
   () => import('./tiptap-editor').then(m => ({ default: m.TipTapEditor })),
-  { ssr: false },
+  { loading: () => <EditorSkeleton />, ssr: false },
 );

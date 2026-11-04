@@ -72,24 +72,20 @@ test.describe('Issue Properties via Keyboard', () => {
 
   test('A opens the assignee selector and dismisses on outside click', async ({ page }) => {
     await page.keyboard.press('a');
-    // The popover container has unique `min-w-[200px]` + `z-50` styling.
-    // Match it page-wide so the assertion is valid even after dismiss
-    // (when the row may also lose `data-selected`).
-    const popover = page.locator('div.absolute.z-50.min-w-\\[200px\\]', {
-      has: page.getByRole('option', { name: /^No assignee$/ }),
-    });
+    // The picker is a SearchableSelectPopover: a search combobox plus a listbox.
+    const popover = page.getByRole('listbox');
+    const search = page.getByRole('combobox', { name: /search people/i });
+    await expect(search).toBeVisible({ timeout: 5_000 });
     await expect(popover).toBeVisible({ timeout: 5_000 });
     await dismissPopover(page);
-    await expect(popover).not.toBeVisible({ timeout: 5_000 });
+    await expect(search).not.toBeVisible({ timeout: 5_000 });
   });
 
   test('L opens the label selector and dismisses on outside click', async ({ page }) => {
     await page.keyboard.press('l');
-    // The label popover renders a "No labels" empty-state paragraph inside
-    // its `min-w-[220px]` container; locate the container page-wide.
-    const popover = page.locator('div.absolute.z-50', {
-      has: page.getByText('No labels', { exact: true }),
-    });
+    // Searchable picker; matching the combobox keeps this independent of
+    // whether the workspace has any labels.
+    const popover = page.getByRole('combobox', { name: /search labels/i });
     await expect(popover).toBeVisible({ timeout: 5_000 });
     await dismissPopover(page);
     await expect(popover).not.toBeVisible({ timeout: 5_000 });

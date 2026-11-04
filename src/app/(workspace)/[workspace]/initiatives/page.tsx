@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from 'react';
 import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
 import { FavoriteToggle } from '@/components/layouts/favorite-toggle';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ColorDot } from '@/components/ui/color-dot';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -14,10 +13,14 @@ import { Input } from '@/components/ui/input';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { PageSkeleton } from '@/components/ui/skeleton';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBInitiative } from '@/lib/db';
 import { gql, gqlMutate, gqlQuery } from '@/lib/graphql';
+import { toIssueUsers } from '@/lib/issue-mappers';
+import { formatDateOnly } from '@/lib/project-dates';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -104,6 +107,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
   const t = useTranslations();
   const STATUS_LABELS = useStatusLabels();
   const { initiativeStore, projectStore, userStore } = useStore();
+  const { intlLocale } = useFormatters();
   const viewerId = userStore.currentUser?.id ?? '';
   const [expanded, setExpanded] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -125,7 +129,10 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
   const projectIdKey = projectIds.join(',');
   // biome-ignore lint/correctness/useExhaustiveDependencies: projectIdKey is the stable stand-in for the projectIds array
   useEffect(() => {
-    if (!expanded || projectIds.length === 0) {
+    // Fetched on mount, not just on expand: the row's own percentage is the
+    // mean of these, and the stored `initiative.progress` is a cache that is
+    // stale until the next recompute (a freshly seeded initiative read 0%).
+    if (projectIds.length === 0) {
       return;
     }
     gqlQuery<{ projects: Array<{ id: string; progress: number }> } | null>(
@@ -140,7 +147,17 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
         // Leave the map empty — the row renders '—' rather than a wrong number.
         setProgressById({});
       });
-  }, [expanded, projectIdKey, initiative.id]);
+  }, [projectIdKey, initiative.id]);
+
+  const knownProgress = projectIds
+    .map(id => progressById[id])
+    .filter((v): v is number => v !== undefined);
+  const rolledUp =
+    knownProgress.length === projectIds.length && knownProgress.length > 0
+      ? knownProgress.reduce((a, b) => a + b, 0) / knownProgress.length
+      : initiative.progress;
+  const owner = initiative.ownerId ? userStore.findById(initiative.ownerId) : null;
+  const target = formatDateOnly(initiative.targetDate, intlLocale);
 
   // Archive is optimistic: `initiativeStore.all` filters on `archivedAt`, so
   // patching it drops the row at once and the sync action confirms or, on
@@ -174,6 +191,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
         style={{ paddingLeft: `${16 + indentPx}px` }}
       >
         <button
+          aria-expanded={expanded}
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
           onClick={() => setExpanded(e => !e)}
           type="button"
@@ -202,13 +220,19 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
               </span>
             ) : null}
           </span>
-          <Badge className="text-foreground-secondary" tone="muted" variant="square">
-            {STATUS_LABELS[initiative.status] ?? initiative.status}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            {Math.round(initiative.progress * 100)}%
+          {/* No status badge: the group header above the row already says it. */}
+          <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+            {t('initiatives.row.projectCount', { count: projectIds.length })}
           </span>
-          <span className="w-20 text-xs text-muted-foreground">{initiative.targetDate ?? ''}</span>
+          <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+            {Math.round(rolledUp * 100)}%
+          </span>
+          <span className="hidden w-24 shrink-0 whitespace-nowrap text-xs text-muted-foreground sm:inline">
+            {target}
+          </span>
+          <span className="flex w-5 shrink-0 justify-end" title={owner?.displayName}>
+            {owner && <UserAvatar size="sm" user={toIssueUsers([owner])[0]} />}
+          </span>
         </button>
         <FavoriteToggle className="h-7 w-7" entityId={initiative.id} entityType="Initiative" />
         <SelectPopover
@@ -277,13 +301,9 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
             <span className="text-xs font-medium text-foreground-secondary">
               {t('initiatives.row.projects', { count: projects.length })}
             </span>
-            <button
-              className="rounded border border-border px-2 py-0.5 text-xs hover:bg-muted"
-              onClick={() => setAdding(a => !a)}
-              type="button"
-            >
+            <Button onClick={() => setAdding(a => !a)} size="sm" type="button" variant="outline">
               {adding ? t('common.cancel') : t('initiatives.row.addProject')}
-            </button>
+            </Button>
           </div>
           {adding ? (
             <div className="mb-2 max-h-40 overflow-y-auto rounded border border-border">
@@ -294,7 +314,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
               ) : (
                 allProjects.map(p => (
                   <button
-                    className="block w-full px-3 py-1.5 text-left text-xs hover:bg-accent"
+                    className={POPOVER_ITEM_CLASS}
                     key={p.id}
                     onClick={async () => {
                       const res = await gql(INITIATIVE_ADD_PROJECT_MUTATION, {
@@ -365,6 +385,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
           <div className="mt-3 flex gap-1">
             {STATUS_ORDER.map(s => (
               <button
+                aria-pressed={initiative.status === s}
                 className={cn(
                   'rounded border border-border px-2 py-0.5 text-xs',
                   initiative.status === s
@@ -457,6 +478,7 @@ const InitiativesPage = observer(function InitiativesPage() {
             )}
           </Button>
         }
+        count={rootInitiatives.length}
         title={t('initiatives.page.title')}
       />
 

@@ -1,12 +1,13 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useRef } from 'react';
+import { Button } from '@/components/ui/button';
 import { ColorDot } from '@/components/ui/color-dot';
+import { Input } from '@/components/ui/input';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { PROJECT_HEALTH_LABEL_KEYS } from '@/lib/project-constants';
+import { formatDateOnly, toDateOnly } from '@/lib/project-dates';
 import { cn } from '@/lib/utils';
 
 interface RoadmapProject {
@@ -30,6 +31,7 @@ interface RoadmapMeta {
 }
 
 interface Props {
+  passwordError?: 'rate' | 'wrong' | false;
   projects: RoadmapProject[];
   requiresPassword: boolean;
   roadmap: RoadmapMeta;
@@ -79,59 +81,89 @@ const HEALTH_DOTS: Record<string, string> = {
  */
 const HEALTH_NONE_LABEL_KEY = 'properties.updateForm.health.none';
 
-function PasswordForm({ slug }: { slug: string }) {
+function PasswordForm({ error, slug }: { error: 'rate' | 'wrong' | false; slug: string }) {
   const t = useTranslations();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const pw = inputRef.current?.value ?? '';
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('password', pw);
-    router.push(`/roadmap/${slug}?${params.toString()}`);
-  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm rounded-xl border border-border bg-card p-8 shadow-e1">
-        <h2 className="mb-1 text-lg font-semibold text-foreground">
+        <h1 className="mb-1 text-lg font-semibold text-foreground">
           {t('roadmap.public.passwordRequired')}
-        </h2>
+        </h1>
         <p className="mb-6 text-sm text-muted-foreground">
           {t('roadmap.public.passwordProtected')}
         </p>
-        <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
-          <input
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+        {/* A plain POST, not a client-side navigation: the password goes in the
+            request body and is exchanged for an httpOnly cookie, instead of
+            sitting in the URL (history, logs, Referer). */}
+        <form
+          action={`/roadmap/${encodeURIComponent(slug)}/unlock`}
+          className="flex flex-col gap-3"
+          method="post"
+        >
+          <Input
+            aria-describedby={error ? 'roadmap-password-error' : undefined}
+            aria-invalid={!!error}
+            aria-label={t('roadmap.public.enterPassword')}
+            autoComplete="current-password"
+            name="password"
             placeholder={t('roadmap.public.enterPassword')}
-            ref={inputRef}
             required
             type="password"
           />
-          <button
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 dark:focus:ring-offset-background"
-            type="submit"
-          >
-            {t('roadmap.public.continue')}
-          </button>
+          {error && (
+            <p
+              className="text-xs text-danger-subtle-foreground"
+              id="roadmap-password-error"
+              role="alert"
+            >
+              {error === 'rate'
+                ? t('roadmap.public.tooManyAttempts')
+                : t('roadmap.public.wrongPassword')}
+            </p>
+          )}
+          <Button type="submit">{t('roadmap.public.continue')}</Button>
         </form>
       </div>
     </div>
   );
 }
 
-export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props) {
+export function groupRoadmapProjects<
+  T extends { statusType: string; targetDate: Date | string | null; name: string },
+>(projects: T[]): Array<{ items: T[]; status: string }> {
+  const dateKey = (p: T) =>
+    toDateOnly(p.targetDate instanceof Date ? p.targetDate.toISOString() : p.targetDate) ??
+    '9999-99-99';
+  const byDate = (a: T, b: T) =>
+    dateKey(a).localeCompare(dateKey(b)) || a.name.localeCompare(b.name);
+  return STATUS_SECTIONS.map(status => ({
+    // An unrecognised status lands under Planned instead of vanishing.
+    items: projects
+      .filter(p => (STATUS_SECTIONS.includes(p.statusType) ? p.statusType : 'planned') === status)
+      .sort(byDate),
+    status,
+  })).filter(g => g.items.length > 0);
+}
+
+/** Display order of the status sections: what is happening now first. */
+const STATUS_SECTIONS = ['inProgress', 'planned', 'paused', 'backlog', 'completed', 'canceled'];
+/** Statuses where "0%" is the expected state, so an empty bar says nothing. */
+const NOT_STARTED = new Set(['backlog', 'planned', 'paused']);
+
+export function PublicRoadmapView({
+  passwordError = false,
+  projects,
+  requiresPassword,
+  roadmap,
+}: Props) {
   const t = useTranslations();
-  const { formatDate } = useFormatters();
+  const { intlLocale } = useFormatters();
   if (requiresPassword) {
-    return (
-      <Suspense fallback={<div className="flex min-h-screen items-center justify-center" />}>
-        <PasswordForm slug={roadmap.slug} />
-      </Suspense>
-    );
+    return <PasswordForm error={passwordError} slug={roadmap.slug} />;
   }
+
+  const sections = groupRoadmapProjects(projects);
 
   return (
     <div className="min-h-screen bg-background">
@@ -144,89 +176,112 @@ export function PublicRoadmapView({ projects, requiresPassword, roadmap }: Props
           )}
         </div>
 
-        {/* Project grid */}
+        {/* Grouped by status, soonest target first, so the page reads as a
+            roadmap rather than an arbitrary card wall. */}
         {projects.length === 0 ? (
           <div className="rounded-xl border border-border bg-card p-10 text-center">
             <p className="text-sm text-muted-foreground">{t('roadmap.public.noProjects')}</p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {projects.map(project => {
-              const statusInfo = STATUS_BADGES[project.statusType] ?? STATUS_BADGES.planned;
-              const healthDot = project.health ? HEALTH_DOTS[project.health] : null;
-              const targetDateStr = project.targetDate
-                ? formatDate(project.targetDate, { month: 'short', year: 'numeric' })
-                : null;
-              const progressPct = Math.round(project.progress * 100);
-
-              return (
-                <div
-                  className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-e1"
-                  key={project.id}
+          <div className="flex flex-col gap-10">
+            {sections.map(({ items, status }) => (
+              <section aria-labelledby={`roadmap-${status}`} key={status}>
+                <h2
+                  className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                  id={`roadmap-${status}`}
                 >
-                  {/* Title row */}
-                  <div className="flex items-center gap-2">
-                    {project.icon ? (
-                      <span className="text-lg leading-none">{project.icon}</span>
-                    ) : (
-                      <ColorDot className="h-3 w-3" color={project.color} />
-                    )}
-                    <span className="flex-1 truncate text-sm font-semibold text-foreground">
-                      {project.name}
-                    </span>
-                  </div>
+                  {t(STATUS_BADGES[status]?.labelKey ?? STATUS_BADGES.planned.labelKey)}
+                  <span className="ml-2 font-normal">{items.length}</span>
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {items.map(project => {
+                    const statusInfo = STATUS_BADGES[project.statusType] ?? STATUS_BADGES.planned;
+                    const healthDot = project.health ? HEALTH_DOTS[project.health] : null;
+                    const targetDateStr = project.targetDate
+                      ? formatDateOnly(
+                          typeof project.targetDate === 'string'
+                            ? project.targetDate
+                            : project.targetDate.toISOString(),
+                          intlLocale,
+                          { month: 'short', year: 'numeric' },
+                        )
+                      : null;
+                    const progressPct = Math.round(project.progress * 100);
 
-                  {/* Badges row */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={cn(
-                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                        statusInfo.cls,
-                      )}
-                    >
-                      {project.statusName ?? t(statusInfo.labelKey)}
-                    </span>
-                    {healthDot && (
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <span className={cn('h-2 w-2 rounded-full', healthDot)} />
-                        {t(
-                          (project.health && PROJECT_HEALTH_LABEL_KEYS[project.health]) ??
-                            HEALTH_NONE_LABEL_KEY,
+                    return (
+                      <div
+                        className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 shadow-e1"
+                        key={project.id}
+                      >
+                        {/* Title row */}
+                        <div className="flex items-center gap-2">
+                          {project.icon ? (
+                            <span className="text-lg leading-none">{project.icon}</span>
+                          ) : (
+                            <ColorDot className="h-3 w-3" color={project.color} />
+                          )}
+                          <span className="flex-1 truncate text-sm font-semibold text-foreground">
+                            {project.name}
+                          </span>
+                        </div>
+
+                        {/* Badges row */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={cn(
+                              'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                              statusInfo.cls,
+                            )}
+                          >
+                            {project.statusName ?? t(statusInfo.labelKey)}
+                          </span>
+                          {healthDot && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <span className={cn('h-2 w-2 rounded-full', healthDot)} />
+                              {t(
+                                (project.health && PROJECT_HEALTH_LABEL_KEYS[project.health]) ??
+                                  HEALTH_NONE_LABEL_KEY,
+                              )}
+                            </span>
+                          )}
+                          {targetDateStr && (
+                            <span className="text-xs text-muted-foreground">
+                              {t('roadmap.public.target', { date: targetDateStr })}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Progress bar — omitted for work that hasn't started, where
+                      an empty bar reads as a problem rather than a plan. */}
+                        {!(progressPct === 0 && NOT_STARTED.has(project.statusType)) && (
+                          <div>
+                            <div className="mb-1 flex items-center justify-between">
+                              <span className="text-xs text-muted-foreground">
+                                {t('roadmap.public.progress')}
+                              </span>
+                              <span className="text-xs font-medium text-muted-foreground">
+                                {progressPct}%
+                              </span>
+                            </div>
+                            <ProgressBar className="h-1.5 w-full" value={progressPct} />
+                          </div>
                         )}
-                      </span>
-                    )}
-                    {targetDateStr && (
-                      <span className="text-xs text-muted-foreground">
-                        {t('roadmap.public.target', { date: targetDateStr })}
-                      </span>
-                    )}
-                  </div>
 
-                  {/* Progress bar */}
-                  <div>
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">
-                        {t('roadmap.public.progress')}
-                      </span>
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {progressPct}%
-                      </span>
-                    </div>
-                    <ProgressBar className="h-1.5 w-full" value={progressPct} />
-                  </div>
-
-                  {/* Milestones */}
-                  {project.milestoneCount > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      {project.milestoneCount}{' '}
-                      {project.milestoneCount === 1
-                        ? t('roadmap.public.milestone')
-                        : t('roadmap.public.milestones')}
-                    </p>
-                  )}
+                        {/* Milestones */}
+                        {project.milestoneCount > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            {project.milestoneCount}{' '}
+                            {project.milestoneCount === 1
+                              ? t('roadmap.public.milestone')
+                              : t('roadmap.public.milestones')}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </section>
+            ))}
           </div>
         )}
       </div>

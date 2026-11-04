@@ -42,6 +42,11 @@ function getSecret(key: string): Uint8Array {
   return encoded;
 }
 
+/** Secret bytes for HMAC use outside JWTs, with the same min-length check. */
+export function getSecretBytes(key: string): Uint8Array {
+  return getSecret(key);
+}
+
 export interface AccessTokenPayload {
   /**
    * Set only on impersonation tokens: the id of the platform admin acting as

@@ -1,6 +1,8 @@
 'use client';
 
+import { TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useReportRenderError } from '@/hooks/use-report-render-error';
 import { useTranslations } from '@/hooks/use-translations';
 
@@ -23,15 +25,31 @@ export default function WorkspaceError({
   useReportRenderError('workspace-error-boundary', error);
 
   return (
-    <div className="flex h-full flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-      <h2 className="text-lg font-semibold text-foreground">{t('layout.workspaceError.title')}</h2>
-      <p className="max-w-md text-sm text-muted-foreground">{t('layout.workspaceError.detail')}</p>
-      {error.digest ? (
-        <p className="font-mono text-xs text-muted-foreground">
-          {t('errors.errorRef')} {error.digest}
-        </p>
-      ) : null}
-      <Button onClick={() => reset()}>{t('layout.workspaceError.retry')}</Button>
+    <div className="flex h-full flex-1 items-center justify-center">
+      <EmptyState
+        action={
+          <div className="flex gap-2">
+            <Button onClick={() => reset()} size="sm">
+              {t('layout.workspaceError.retry')}
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <a href="/">{t('errors.goHome')}</a>
+            </Button>
+          </div>
+        }
+        description={
+          <>
+            {t('layout.workspaceError.detail')}
+            {error.digest ? (
+              <span className="mt-2 block font-mono">
+                {t('errors.errorRef')} {error.digest}
+              </span>
+            ) : null}
+          </>
+        }
+        icon={<TriangleAlert className="h-5 w-5" />}
+        title={t('layout.workspaceError.title')}
+      />
     </div>
   );
 }

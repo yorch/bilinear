@@ -7,8 +7,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { BoardControls } from '@/components/issues/board-controls';
 import { BoardView } from '@/components/issues/board-view';
 import { FilterBuilder } from '@/components/issues/filter-builder';
-import { IssueListView } from '@/components/issues/issue-list-view';
+import { IssueListView, type ListGroupBy } from '@/components/issues/issue-list-view';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
+import { ListDisplayControls } from '@/components/issues/list-display-controls';
 import { ViewToggle } from '@/components/issues/view-toggle';
 import { FavoriteToggle } from '@/components/layouts/favorite-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
@@ -18,7 +19,14 @@ import { Button } from '@/components/ui/button';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
-import { coerceBoardGroupBy, coerceViewMode } from '@/components/views/view-layout';
+import {
+  coerceBoardGroupBy,
+  coerceListGroupBy,
+  coerceViewMode,
+  type ListOrderBy,
+  orderByToSort,
+  sortToOrderBy,
+} from '@/components/views/view-layout';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
@@ -30,6 +38,7 @@ import {
   applySorting,
   coerceFilterSet,
   coerceSortFields,
+  createEmptyFilterSet,
   type FilterSet,
 } from '@/lib/filter-engine';
 import { gqlMutate } from '@/lib/graphql';
@@ -116,6 +125,17 @@ const CustomViewPage = observer(function CustomViewPage() {
     setFilterSet(coerceFilterSet(view.filters));
   }
 
+  // List grouping / ordering. Seeded from the stored view; `orderOverride` is
+  // null until the user picks an order, so a stored multi-field sort is
+  // honoured untouched rather than being flattened through the picker.
+  const [listGroupBy, setListGroupBy] = useState<ListGroupBy>(() =>
+    coerceListGroupBy(view?.groupBy),
+  );
+  const [orderOverride, setOrderOverride] = useState<ListOrderBy | null>(null);
+  const storedSort = coerceSortFields(view?.sort);
+  const orderBy = orderOverride ?? sortToOrderBy(storedSort);
+  const storedFilters = coerceFilterSet(view?.filters);
+
   const allIssues: IssueDetail[] = (() => {
     if (!teamId) {
       return [];
@@ -133,7 +153,7 @@ const CustomViewPage = observer(function CustomViewPage() {
           (issueId, definitionId) =>
             customFieldStore.findValue(issueId, definitionId)?.value ?? null,
         ),
-        coerceSortFields(view.sort),
+        orderOverride === null ? storedSort : orderByToSort(orderOverride),
         new Map(states.map(s => [s.id, s.position])),
       )
     : [];
@@ -172,15 +192,32 @@ const CustomViewPage = observer(function CustomViewPage() {
   });
 
   // Honour the stored layout once the view row arrives (it may land after the
-  // first render, when the hook's initial values were already taken).
+  // first render, when the hook's initial values were already taken). Keyed on
+  // the view's stored layout/grouping (a different view remounts this page,
+  // since App Router keys a dynamic segment by its param) — NOT the object, whose
+  // identity changes on any remote update (a teammate's rename) and would wipe
+  // the user's unsaved local grouping.
   const storedLayout = view?.layout ?? null;
   const storedGroupBy = view?.groupBy ?? null;
+  const hasView = view !== undefined && view !== null;
   useEffect(() => {
-    if (view) {
+    if (hasView) {
       setViewMode(coerceViewMode(storedLayout));
       setBoardGroupBy(coerceBoardGroupBy(storedGroupBy));
+      setListGroupBy(coerceListGroupBy(storedGroupBy));
     }
-  }, [view, storedLayout, storedGroupBy, setViewMode, setBoardGroupBy]);
+  }, [hasView, storedLayout, storedGroupBy, setViewMode, setBoardGroupBy]);
+
+  // Grouping and layout count as unsaved changes too: they are written back by
+  // the same "Update view" action as the filters.
+  const groupingModified =
+    viewMode !== coerceViewMode(storedLayout) ||
+    (viewMode === 'list' && listGroupBy !== coerceListGroupBy(storedGroupBy)) ||
+    (viewMode === 'board' && boardGroupBy !== coerceBoardGroupBy(storedGroupBy));
+  const isModified =
+    JSON.stringify(filterSet) !== JSON.stringify(storedFilters) ||
+    orderOverride !== null ||
+    groupingModified;
 
   // ── View actions ────────────────────────────────────────────────────────────
 
@@ -217,11 +254,22 @@ const CustomViewPage = observer(function CustomViewPage() {
     void updateView(
       {
         filters: filterSet,
-        groupBy: viewMode === 'board' ? boardGroupBy : undefined,
+        groupBy:
+          viewMode === 'board' ? boardGroupBy : viewMode === 'list' ? listGroupBy : undefined,
         layout: viewMode,
+        ...(orderOverride === null ? {} : { sort: orderByToSort(orderOverride) }),
       },
       t('customViews.filtersUpdated'),
     );
+    setOrderOverride(null);
+  };
+
+  const handleResetChanges = () => {
+    setFilterSet(coerceFilterSet(view?.filters));
+    setOrderOverride(null);
+    setViewMode(coerceViewMode(view?.layout));
+    setBoardGroupBy(coerceBoardGroupBy(view?.groupBy));
+    setListGroupBy(coerceListGroupBy(view?.groupBy));
   };
 
   const handleDeleteView = async () => {
@@ -274,6 +322,14 @@ const CustomViewPage = observer(function CustomViewPage() {
       <PageHeader
         actions={
           <>
+            {viewMode === 'list' && (
+              <ListDisplayControls
+                groupBy={listGroupBy}
+                onGroupBy={setListGroupBy}
+                onOrderBy={setOrderOverride}
+                orderBy={orderBy}
+              />
+            )}
             {viewMode === 'board' && (
               <BoardControls
                 groupBy={boardGroupBy}
@@ -329,7 +385,7 @@ const CustomViewPage = observer(function CustomViewPage() {
       />
 
       {/* Filter bar — seeded from the view, saved back via "Update filters" */}
-      <Toolbar>
+      <Toolbar className="justify-between">
         <FilterBuilder
           customFields={customFieldDefs}
           filterSet={filterSet}
@@ -338,6 +394,17 @@ const CustomViewPage = observer(function CustomViewPage() {
           states={states}
           users={users}
         />
+        {isModified && (
+          <div className="flex items-center gap-2" data-testid="view-modified">
+            <span className="text-xs text-muted-foreground">{t('customViews.unsavedChanges')}</span>
+            <Button onClick={handleResetChanges} size="sm" type="button" variant="ghost">
+              {t('customViews.resetChanges')}
+            </Button>
+            <Button onClick={handleUpdateFilters} size="sm" type="button">
+              {t('common.save')}
+            </Button>
+          </div>
+        )}
       </Toolbar>
 
       {/* Filtered list / board / timeline */}
@@ -345,14 +412,18 @@ const CustomViewPage = observer(function CustomViewPage() {
         {viewMode === 'list' ? (
           <IssueListView
             customFields={customFieldDefs}
+            estimationType={team.issueEstimationType}
             getCustomFieldValue={(issueId, definitionId) =>
               customFieldStore.findValue(issueId, definitionId)?.value ?? null
             }
+            groupBy={listGroupBy}
+            hasActiveFilters={filterSet.conditions.length > 0}
             issues={issues}
             labels={labels}
             onArchive={handleArchive}
             onArchiveMany={handleArchiveMany}
             onBulkUpdate={handleBulkUpdate}
+            onClearFilters={() => setFilterSet(createEmptyFilterSet())}
             onDelete={requestDelete}
             onOpen={handleOpen}
             onPropertyClosed={() => setOpenProperty(null)}

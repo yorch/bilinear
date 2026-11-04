@@ -205,14 +205,16 @@ export class IssueService {
       // a member of team A could create an issue in team A but with team
       // B's workflow state, breaking team isolation. Mirrors the same
       // check the triage service applies on accept.
+      let explicitStateType: string | null = null;
       if (input.stateId) {
         const state = await tx.workflowState.findFirst({
-          select: { teamId: true },
+          select: { teamId: true, type: true },
           where: { archivedAt: null, id: input.stateId },
         });
         if (!state || state.teamId !== input.teamId) {
           throw new IssueInvalidStateError();
         }
+        explicitStateType = state.type;
       }
 
       // Triage routing: issues created on a triage-enabled team without an
@@ -235,6 +237,16 @@ export class IssueService {
         throw new IssueStateRequiredError();
       }
       const enteringTriage = stateId === triageStateId;
+
+      // The team's default state can itself be a started/completed/canceled
+      // state; stamp from the type of whatever state was actually resolved.
+      if (explicitStateType === null && !enteringTriage) {
+        const resolved = await tx.workflowState.findFirst({
+          select: { type: true },
+          where: { id: stateId },
+        });
+        explicitStateType = resolved?.type ?? null;
+      }
 
       // Property inheritance: a child created from a parent inherits the
       // parent's project and cycle when the caller does not supply them.
@@ -290,6 +302,12 @@ export class IssueService {
           addedToCycleAt: inheritedCycleId ? new Date() : undefined,
           addedToProjectAt: inheritedProjectId ? new Date() : undefined,
           assigneeId: input.assigneeId,
+          // An issue created straight into a terminal state (an import, a
+          // backfill) must carry the lifecycle stamp `update()` would have
+          // set on the transition; otherwise progress and burndown count it
+          // as not done until something re-touches it.
+          canceledAt: explicitStateType === 'canceled' ? new Date() : undefined,
+          completedAt: explicitStateType === 'completed' ? new Date() : undefined,
           creatorId,
           cycleId: inheritedCycleId,
           description: input.description,
@@ -305,6 +323,7 @@ export class IssueService {
           projectMilestoneId: inheritedProjectMilestoneId,
           sortOrder: input.sortOrder ?? 0,
           startDate: input.startDate ? new Date(input.startDate) : undefined,
+          startedAt: explicitStateType === 'started' ? new Date() : undefined,
           startedTriageAt: enteringTriage ? new Date() : undefined,
           stateId,
           teamId: input.teamId,

@@ -58,6 +58,9 @@ function ModalDialogInner({
         // Escape fires `cancel`; let React state drive the unmount instead
         // of the native close so `open` stays the single source of truth.
         e.preventDefault();
+        // React bubbles `cancel` through nested dialogs; a nested ConfirmDialog's
+        // Escape must not also reach the outer dialog's close guard.
+        e.stopPropagation();
         onClose();
       }}
       onClick={e => {
@@ -130,7 +133,7 @@ export function ModalFooter({
 }: ModalFooterProps) {
   return (
     <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
-      {submitError && <p className="flex-1 text-xs text-destructive">{submitError}</p>}
+      {submitError && <p className="flex-1 text-xs text-danger">{submitError}</p>}
       <Button onClick={onCancel} size="sm" type="button" variant="ghost">
         {cancelLabel}
       </Button>

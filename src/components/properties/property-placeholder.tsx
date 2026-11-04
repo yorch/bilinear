@@ -24,15 +24,27 @@ import { cn } from '@/lib/utils';
 export function PropertyPlaceholder({
   className,
   icon: Icon,
+  label,
 }: {
   className?: string;
   icon: LucideIcon;
+  /** Optional text beside the icon (forms such as the create modal); lists omit it. */
+  label?: string;
 }) {
-  return (
+  const icon = (
     <Icon
       aria-hidden="true"
       className={cn('h-3.5 w-3.5 text-foreground-faint transition-opacity', className)}
       data-prop-empty=""
     />
+  );
+  if (!label) {
+    return icon;
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {icon}
+      <span className="text-xs text-muted-foreground">{label}</span>
+    </span>
   );
 }

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SelectPopover } from '@/components/ui/select-popover';
+import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import {
   fetchViewerOrganizations,
   pendingWriteCount,
@@ -20,23 +21,25 @@ const log = createClientLogger('WorkspaceSwitcher');
 
 interface WorkspaceSwitcherProps {
   /**
-   * Renders nothing when the rail is collapsed. Taken as a prop rather than
-   * letting the sidebar conditionally mount the component, so collapsing and
-   * re-expanding doesn't unmount it and re-run the workspace fetch.
+   * Renders a one-letter tile when the rail is collapsed. Taken as a prop
+   * rather than letting the sidebar conditionally mount the component, so
+   * collapsing and re-expanding doesn't unmount it and re-run the workspace
+   * fetch.
    */
   collapsed: boolean;
-  /** Label to show before the org list resolves (or when it's a single org). */
-  fallbackLabel: string;
+  /**
+   * Label to show before the org list resolves. `null` means "not known yet"
+   * (the sync bootstrap is still running) and renders a skeleton, not the raw
+   * URL key.
+   */
+  fallbackLabel: string | null;
 }
 
 /**
- * The workspace name in the sidebar header, upgraded to a switcher when the
- * signed-in user belongs to more than one organization.
- *
- * Deliberately renders as a plain label for the single-org case — which is
- * every account until someone joins or creates a second workspace — so the
- * common path keeps exactly the header it had before, with no dropdown
- * affordance promising a choice that doesn't exist.
+ * The workspace name in the sidebar header. It is always a menu once the
+ * workspace list has loaded: with one org it shows that org plus "Create
+ * workspace" (otherwise a single-workspace user had no way to reach it), with
+ * several it is the switcher.
  */
 export function WorkspaceSwitcher({ collapsed, fallbackLabel }: WorkspaceSwitcherProps) {
   const t = useTranslations();
@@ -91,10 +94,28 @@ export function WorkspaceSwitcher({ collapsed, fallbackLabel }: WorkspaceSwitche
   }
 
   if (collapsed) {
-    return null;
+    // The rail keeps the workspace's identity as a one-letter tile.
+    return (
+      <span
+        aria-label={label ?? t('workspaceSwitcher.title')}
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-brand-subtle text-xs font-semibold uppercase text-brand-subtle-foreground"
+        role="img"
+        title={label ?? undefined}
+      >
+        {label?.trim().charAt(0) ?? ''}
+      </span>
+    );
   }
 
-  if (!orgs || orgs.length < 2) {
+  if (label === null || label === undefined) {
+    return (
+      <LoadingRegion className="min-w-0 flex-1">
+        <Skeleton className="h-4 w-24" />
+      </LoadingRegion>
+    );
+  }
+
+  if (!orgs || orgs.length === 0) {
     return <span className="truncate text-sm font-semibold text-foreground">{label}</span>;
   }
 

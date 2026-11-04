@@ -1,10 +1,10 @@
 'use client';
 
-import { ChevronDown, Plus, X } from 'lucide-react';
+import { Check, ChevronDown, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
-import { SelectPopover } from '@/components/ui/select-popover';
+import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBCustomFieldDefinition, DBWorkflowState } from '@/lib/db';
 import type {
@@ -52,12 +52,21 @@ interface FilterPillProps {
   condition: FilterCondition;
   customFields?: DBCustomFieldDefinition[];
   labels: IssueLabel[];
+  onEdit: () => void;
   onRemove: () => void;
   states: DBWorkflowState[];
   users: IssueUser[];
 }
 
-function FilterPill({ condition, states, users, labels, customFields, onRemove }: FilterPillProps) {
+function FilterPill({
+  condition,
+  states,
+  users,
+  labels,
+  customFields,
+  onEdit,
+  onRemove,
+}: FilterPillProps) {
   const t = useTranslations();
   const filterFields = useFilterFields();
   const operators = useOperators();
@@ -71,43 +80,49 @@ function FilterPill({ condition, states, users, labels, customFields, onRemove }
     condition.field;
   const opLabel = operators.find(o => o.value === condition.operator)?.label ?? condition.operator;
 
-  let valueLabel = '';
-  if (condition.operator === 'is_set' || condition.operator === 'is_not_set') {
-    valueLabel = '';
-  } else if (condition.field === 'status') {
-    valueLabel = states.find(s => s.id === condition.value)?.name ?? String(condition.value);
-  } else if (condition.field === 'assignee' || condition.field === 'creator') {
-    valueLabel = users.find(u => u.id === condition.value)?.displayName ?? String(condition.value);
-  } else if (condition.field === 'label') {
-    if (Array.isArray(condition.value)) {
-      valueLabel = condition.value.map(v => labels.find(l => l.id === v)?.name ?? v).join(', ');
-    } else {
-      valueLabel = labels.find(l => l.id === condition.value)?.name ?? String(condition.value);
+  const rawValues: unknown[] = Array.isArray(condition.value)
+    ? condition.value
+    : condition.value === undefined || condition.value === null
+      ? []
+      : [condition.value];
+  const labelOf = (v: unknown): string => {
+    switch (condition.field) {
+      case 'status':
+        return states.find(st => st.id === v)?.name ?? String(v);
+      case 'assignee':
+      case 'creator':
+        return users.find(u => u.id === v)?.displayName ?? String(v);
+      case 'label':
+        return labels.find(l => l.id === v)?.name ?? String(v);
+      case 'priority':
+        return t(priorityLabelKey(Number(v)));
+      case 'custom':
+        if (customDef?.type === 'checkbox') {
+          return v === true || v === 'true' ? t('issues.true') : t('issues.false');
+        }
+        return customDef?.options?.find(o => o.value === v)?.label ?? String(v ?? '');
+      default:
+        return String(v ?? '');
     }
-  } else if (condition.field === 'priority') {
-    const p = Number(condition.value);
-    valueLabel = t(priorityLabelKey(p));
-  } else if (condition.field === 'custom' && customDef) {
-    if (Array.isArray(condition.value)) {
-      valueLabel = condition.value
-        .map(v => customDef.options?.find(o => o.value === v)?.label ?? String(v))
-        .join(', ');
-    } else if (customDef.type === 'checkbox') {
-      valueLabel = condition.value ? t('issues.true') : t('issues.false');
-    } else {
-      valueLabel =
-        customDef.options?.find(o => o.value === condition.value)?.label ??
-        String(condition.value ?? '');
-    }
-  } else {
-    valueLabel = String(condition.value ?? '');
-  }
+  };
+  const valueLabel =
+    condition.operator === 'is_set' || condition.operator === 'is_not_set'
+      ? ''
+      : rawValues.map(labelOf).join(', ');
 
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-foreground-secondary">
-      <span className="font-medium">{fieldLabel}</span>
-      <span className="text-muted-foreground">{opLabel}</span>
-      {valueLabel && <span>{valueLabel}</span>}
+      <button
+        aria-label={t('issues.editFilter')}
+        className="inline-flex items-center gap-1 rounded-full hover:text-foreground"
+        onClick={onEdit}
+        title={t('issues.editFilter')}
+        type="button"
+      >
+        <span className="font-medium">{fieldLabel}</span>
+        <span className="text-muted-foreground">{opLabel}</span>
+        {valueLabel && <span className="max-w-48 truncate">{valueLabel}</span>}
+      </button>
       <button
         aria-label={t('issues.removeFilter')}
         className={cn('ml-0.5 text-muted-foreground hover:text-foreground-secondary', TOUCH_TARGET)}
@@ -125,6 +140,8 @@ function FilterPill({ condition, states, users, labels, customFields, onRemove }
 
 interface AddFilterFormProps {
   customFields?: DBCustomFieldDefinition[];
+  /** Pre-fills the form when editing an existing pill. */
+  initial?: FilterCondition;
   labels: IssueLabel[];
   onAdd: (condition: FilterCondition) => void;
   onCancel: () => void;
@@ -141,20 +158,129 @@ interface FieldOption {
   value: string;
 }
 
+interface ValueOption {
+  label: string;
+  value: string;
+}
+
+/** Condition value -> the form's string[] working state. */
+function valuesToStrings(value: FilterCondition['value']): string[] {
+  if (Array.isArray(value)) {
+    return value.map(String);
+  }
+  return value === undefined || value === null ? [] : [String(value)];
+}
+
+/**
+ * Searchable checkbox list for the "is any of / is none of" operators. Stays
+ * open while toggling so several values can be picked in one go.
+ */
+function MultiValuePicker({
+  emptyText,
+  onToggle,
+  options,
+  placeholder,
+  searchPlaceholder,
+  selected,
+}: {
+  emptyText: string;
+  onToggle: (value: string) => void;
+  options: ValueOption[];
+  placeholder: string;
+  searchPlaceholder: string;
+  selected: string[];
+}) {
+  const t = useTranslations();
+  const [search, setSearch] = useState('');
+  const visible = search.trim()
+    ? options.filter(o => o.label.toLowerCase().includes(search.trim().toLowerCase()))
+    : options;
+  const summary =
+    selected.length === 0
+      ? placeholder
+      : selected.length === 1
+        ? (options.find(o => o.value === selected[0])?.label ?? selected[0])
+        : t('issues.valuesSelected', { count: selected.length });
+
+  return (
+    <SelectPopover
+      onClose={() => setSearch('')}
+      triggerChildren={
+        <>
+          <span className="truncate">{summary}</span>
+          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+        </>
+      }
+      triggerClassName="gap-1 border border-input px-2 py-1 text-xs"
+    >
+      {() => (
+        <div className="w-56 p-1">
+          <input
+            aria-label={searchPlaceholder}
+            className="mb-1 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
+            data-autofocus
+            onChange={e => setSearch(e.target.value)}
+            placeholder={searchPlaceholder}
+            type="text"
+            value={search}
+          />
+          {visible.length === 0 && (
+            <p className="px-2 py-3 text-center text-xs text-muted-foreground">{emptyText}</p>
+          )}
+          <div
+            aria-label={searchPlaceholder}
+            aria-multiselectable="true"
+            className="max-h-48 overflow-y-auto"
+            role="listbox"
+          >
+            {visible.map(o => {
+              const isOn = selected.includes(o.value);
+              return (
+                <button
+                  aria-selected={isOn}
+                  className={cn(POPOVER_ITEM_CLASS, 'text-xs', isOn && 'bg-accent/50')}
+                  key={o.value}
+                  onClick={() => onToggle(o.value)}
+                  role="option"
+                  type="button"
+                >
+                  <span className="flex h-3 w-3 shrink-0 items-center justify-center">
+                    {isOn && <Check className="h-3 w-3" />}
+                  </span>
+                  <span className="truncate text-left">{o.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </SelectPopover>
+  );
+}
+
 function AddFilterForm({
   states,
   users,
   labels,
   customFields,
+  initial,
   onAdd,
   onCancel,
 }: AddFilterFormProps) {
   const t = useTranslations();
   const filterFields = useFilterFields();
   const operators = useOperators();
-  const [fieldValue, setFieldValue] = useState<string>('status');
-  const [operator, setOperator] = useState<FilterOperator>('eq');
-  const [value, setValue] = useState<string>('');
+  const [fieldValue, setFieldValue] = useState<string>(
+    initial
+      ? initial.field === 'custom' && initial.customFieldId
+        ? `custom:${initial.customFieldId}`
+        : initial.field
+      : 'status',
+  );
+  const [operator, setOperator] = useState<FilterOperator>(initial?.operator ?? 'eq');
+  // Always a list: a single-value operator just uses the first entry. Keeping
+  // one shape means switching "is" -> "is any of" never loses the pick.
+  const [values, setValues] = useState<string[]>(valuesToStrings(initial?.value));
 
   const customFieldId = fieldValue.startsWith('custom:')
     ? fieldValue.slice('custom:'.length)
@@ -170,7 +296,7 @@ function AddFilterForm({
     })),
   ];
 
-  const getValueOptions = () => {
+  const getValueOptions = (): ValueOption[] => {
     if (customDef) {
       if (customDef.type === 'select' || customDef.type === 'multi_select') {
         return (customDef.options ?? []).map(o => ({
@@ -204,33 +330,67 @@ function AddFilterForm({
     }
   };
 
+  const valueOptions = getValueOptions();
   const needsValue = operator !== 'is_set' && operator !== 'is_not_set';
+  const isMulti = operator === 'in' || operator === 'nin';
+  const hasValue = values.some(v => v !== '');
+
+  const resolveValue = (raw: string): string | number | boolean => {
+    if (field === 'priority') {
+      return Number.parseInt(raw, 10);
+    }
+    if (customDef?.type === 'number') {
+      return Number(raw);
+    }
+    if (customDef?.type === 'checkbox') {
+      return raw === 'true';
+    }
+    return raw;
+  };
+
+  const submit = () => {
+    let value: FilterCondition['value'];
+    if (needsValue) {
+      const picked = values.filter(v => v !== '');
+      // in / nin always carry an array so the engine and any stored view agree
+      // on the shape; eq / neq carry one scalar.
+      // (the engine compares by string, so the list stays as the picker's strings)
+      value = isMulti ? picked : resolveValue(picked[0] ?? '');
+    }
+    onAdd({
+      field,
+      operator,
+      ...(customFieldId ? { customFieldId } : {}),
+      ...(needsValue ? { value } : {}),
+    });
+  };
+
+  const valueTrigger = (summary: string) => (
+    <>
+      <span className="truncate">{summary}</span>
+      <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+    </>
+  );
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-e2">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-e2">
       <SelectPopover
-        triggerChildren={
-          <>
-            <span className="truncate">
-              {fieldOptions.find(f => f.value === fieldValue)?.label}
-            </span>
-            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
-          </>
-        }
-        triggerClassName="gap-1 border border-border px-2 py-1 text-xs"
+        triggerChildren={valueTrigger(fieldOptions.find(f => f.value === fieldValue)?.label ?? '')}
+        triggerClassName="gap-1 border border-input px-2 py-1 text-xs"
       >
         {close => (
           <div className="max-h-64 w-40 overflow-y-auto py-1">
             {fieldOptions.map(f => (
               <button
                 className={cn(
-                  'flex w-full items-center px-3 py-1.5 text-left text-xs hover:bg-accent',
+                  POPOVER_ITEM_CLASS,
+                  'text-xs',
                   f.value === fieldValue && 'bg-accent/50',
                 )}
                 key={f.value}
                 onClick={() => {
                   setFieldValue(f.value);
-                  setValue('');
+                  setValues([]);
                   close();
                 }}
                 type="button"
@@ -243,25 +403,24 @@ function AddFilterForm({
       </SelectPopover>
 
       <SelectPopover
-        triggerChildren={
-          <>
-            <span className="truncate">{operators.find(o => o.value === operator)?.label}</span>
-            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
-          </>
-        }
-        triggerClassName="gap-1 border border-border px-2 py-1 text-xs"
+        triggerChildren={valueTrigger(operators.find(o => o.value === operator)?.label ?? '')}
+        triggerClassName="gap-1 border border-input px-2 py-1 text-xs"
       >
         {close => (
           <div className="max-h-64 w-44 overflow-y-auto py-1">
             {operators.map(o => (
               <button
                 className={cn(
-                  'flex w-full items-center px-3 py-1.5 text-left text-xs hover:bg-accent',
+                  POPOVER_ITEM_CLASS,
+                  'text-xs',
                   o.value === operator && 'bg-accent/50',
                 )}
                 key={o.value}
                 onClick={() => {
                   setOperator(o.value);
+                  if (o.value !== 'in' && o.value !== 'nin') {
+                    setValues(prev => prev.slice(0, 1));
+                  }
                   close();
                 }}
                 type="button"
@@ -274,59 +433,55 @@ function AddFilterForm({
       </SelectPopover>
 
       {needsValue &&
-        (getValueOptions().length > 0 ? (
-          <SearchableSelectPopover
-            emptyText={t('commandPalette.submenu.noOptions')}
-            getKey={opt => opt.value}
-            isSelected={opt => opt.value === value}
-            items={getValueOptions()}
-            matchesSearch={(opt, search) => opt.label.toLowerCase().includes(search.toLowerCase())}
-            onSelect={opt => setValue(opt.value)}
-            renderItem={opt => <span className="truncate text-left">{opt.label}</span>}
-            searchPlaceholder={t('common.search')}
-            triggerChildren={
-              <>
-                <span className="truncate">
-                  {getValueOptions().find(opt => opt.value === value)?.label ??
-                    t('issues.selectEllipsis')}
-                </span>
-                <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
-              </>
-            }
-            triggerClassName="gap-1 border border-border px-2 py-1 text-xs"
-          />
+        (valueOptions.length > 0 ? (
+          isMulti ? (
+            <MultiValuePicker
+              emptyText={t('commandPalette.submenu.noOptions')}
+              onToggle={v =>
+                setValues(prev => (prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]))
+              }
+              options={valueOptions}
+              placeholder={t('issues.selectEllipsis')}
+              searchPlaceholder={t('common.search')}
+              selected={values}
+            />
+          ) : (
+            <SearchableSelectPopover
+              emptyText={t('commandPalette.submenu.noOptions')}
+              getKey={opt => opt.value}
+              isSelected={opt => opt.value === values[0]}
+              items={valueOptions}
+              matchesSearch={(opt, search) =>
+                opt.label.toLowerCase().includes(search.toLowerCase())
+              }
+              onSelect={opt => setValues([opt.value])}
+              renderItem={opt => <span className="truncate text-left">{opt.label}</span>}
+              searchPlaceholder={t('common.search')}
+              triggerChildren={valueTrigger(
+                valueOptions.find(opt => opt.value === values[0])?.label ??
+                  t('issues.selectEllipsis'),
+              )}
+              triggerClassName="gap-1 border border-input px-2 py-1 text-xs"
+            />
+          )
         ) : (
           <input
-            className="w-28 rounded border border-border px-2 py-1 text-xs dark:bg-muted text-foreground"
-            onChange={e => setValue(e.target.value)}
+            aria-label={t('issues.valueEllipsis')}
+            className="w-28 rounded border border-input px-2 py-1 text-xs dark:bg-muted text-foreground"
+            onChange={e => setValues([e.target.value])}
             placeholder={t('issues.valueEllipsis')}
             type="text"
-            value={value}
+            value={values[0] ?? ''}
           />
         ))}
 
       <button
         className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        disabled={needsValue && !value}
-        onClick={() => {
-          let resolvedValue: string | number | boolean = value;
-          if (field === 'priority') {
-            resolvedValue = Number.parseInt(value, 10);
-          } else if (customDef?.type === 'number') {
-            resolvedValue = Number(value);
-          } else if (customDef?.type === 'checkbox') {
-            resolvedValue = value === 'true';
-          }
-          onAdd({
-            field,
-            operator,
-            ...(customFieldId ? { customFieldId } : {}),
-            ...(needsValue ? { value: resolvedValue } : {}),
-          });
-        }}
+        disabled={needsValue && !hasValue}
+        onClick={submit}
         type="button"
       >
-        {t('issues.add')}
+        {initial ? t('common.save') : t('issues.add')}
       </button>
       <button
         className="px-1 text-xs text-muted-foreground hover:text-foreground-secondary"
@@ -360,6 +515,7 @@ export function FilterBuilder({
 }: FilterBuilderProps) {
   const t = useTranslations();
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
   const handleRemove = (index: number) => {
     const conditions = filterSet.conditions.filter((_, i) => i !== index);
@@ -369,9 +525,18 @@ export function FilterBuilder({
   const handleAdd = (condition: FilterCondition) => {
     onChange({
       ...filterSet,
-      conditions: [...filterSet.conditions, condition],
+      conditions:
+        editingIndex === null
+          ? [...filterSet.conditions, condition]
+          : filterSet.conditions.map((c, i) => (i === editingIndex ? condition : c)),
     });
     setShowAddForm(false);
+    setEditingIndex(null);
+  };
+
+  const closeForm = () => {
+    setShowAddForm(false);
+    setEditingIndex(null);
   };
 
   const toggleComposition = () => {
@@ -392,61 +557,83 @@ export function FilterBuilder({
     );
   }
 
+  const formFor = (initial?: FilterCondition) => (
+    <AddFilterForm
+      customFields={customFields}
+      initial={initial}
+      key={editingIndex ?? 'new'}
+      labels={labels}
+      onAdd={handleAdd}
+      onCancel={closeForm}
+      states={states}
+      users={users}
+    />
+  );
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-h-8 flex-wrap items-center gap-2">
       {filterSet.conditions.length > 1 && (
         <button
-          className={cn(
-            'rounded-full px-2 py-0.5 text-xs font-medium transition-colors',
-            filterSet.composition === 'and'
-              ? 'bg-brand-subtle text-brand-subtle-foreground'
-              : 'bg-warning-subtle text-warning-subtle-foreground',
-          )}
+          className="rounded-full bg-brand-subtle px-2 py-0.5 text-xs font-medium text-brand-subtle-foreground transition-colors hover:bg-brand-subtle/80"
           onClick={toggleComposition}
+          title={t('issues.filterMatchToggle')}
           type="button"
         >
-          {filterSet.composition === 'and' ? t('issues.and') : t('issues.or')}
+          {filterSet.composition === 'and'
+            ? t('issues.filterMatchAll')
+            : t('issues.filterMatchAny')}
         </button>
       )}
 
-      {filterSet.conditions.map((condition, index) => (
-        <FilterPill
-          condition={condition}
-          customFields={customFields}
-          key={`${condition.field}-${condition.customFieldId ?? ''}-${condition.operator}-${String(condition.value)}`}
-          labels={labels}
-          onRemove={() => handleRemove(index)}
-          states={states}
-          users={users}
-        />
-      ))}
+      {filterSet.conditions.map((condition, index) =>
+        editingIndex === index ? (
+          <span key={`edit-${condition.field}-${condition.customFieldId ?? ''}`}>
+            {formFor(condition)}
+          </span>
+        ) : (
+          <FilterPill
+            condition={condition}
+            customFields={customFields}
+            key={`${condition.field}-${condition.customFieldId ?? ''}-${condition.operator}-${String(condition.value)}`}
+            labels={labels}
+            onEdit={() => {
+              setShowAddForm(false);
+              setEditingIndex(index);
+            }}
+            onRemove={() => {
+              closeForm();
+              handleRemove(index);
+            }}
+            states={states}
+            users={users}
+          />
+        ),
+      )}
 
-      {showAddForm ? (
-        <AddFilterForm
-          customFields={customFields}
-          labels={labels}
-          onAdd={handleAdd}
-          onCancel={() => setShowAddForm(false)}
-          states={states}
-          users={users}
-        />
-      ) : (
+      {showAddForm && editingIndex === null ? (
+        formFor()
+      ) : editingIndex === null ? (
         <button
+          aria-label={t('issues.addFilter')}
           className={cn(
             'flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground-secondary',
             TOUCH_TARGET,
           )}
           onClick={() => setShowAddForm(true)}
+          title={t('issues.addFilter')}
           type="button"
         >
           <Plus className="h-3 w-3" />
         </button>
-      )}
+      ) : null}
 
       {filterSet.conditions.length > 0 && (
         <button
           className="text-xs text-muted-foreground hover:text-foreground-secondary"
-          onClick={() => onChange({ composition: 'and', conditions: [] })}
+          onClick={() => {
+            closeForm();
+            onChange({ composition: 'and', conditions: [] });
+          }}
           type="button"
         >
           {t('issues.clearAll')}

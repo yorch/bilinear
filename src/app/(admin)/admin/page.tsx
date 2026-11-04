@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -30,7 +31,7 @@ export default function AdminDashboardPage() {
   } = useRetryableFetch<PlatformMetrics | null>(fetchMetrics, [], null);
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">{t('admin.dashboard.loading')}</p>;
+    return <RowsSkeleton count={6} />;
   }
   if (error || !metrics) {
     return (
@@ -91,7 +92,7 @@ export default function AdminDashboardPage() {
         {metrics.topOrgs.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('admin.dashboard.noOrgs')}</p>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-border">
+          <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted text-left text-xs font-medium text-muted-foreground">

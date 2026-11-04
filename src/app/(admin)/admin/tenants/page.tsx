@@ -6,7 +6,10 @@ import { Suspense, useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { PromptDialog } from '@/components/shared/prompt-dialog';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -20,7 +23,7 @@ import {
   suspendTenant,
 } from '@/lib/admin-api';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_ROW } from '@/lib/utils';
 
 type TenantStatus = 'active' | 'suspended' | 'archived';
 
@@ -121,23 +124,25 @@ function TenantsInner() {
           setApplied(query);
         }}
       >
-        <input
-          className="rounded border border-input bg-transparent px-2 py-1 text-sm focus:border-ring focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-subtle)]"
+        <Input
+          aria-label={t('admin.tenants.searchPlaceholder')}
+          className="w-full sm:w-64"
           onChange={e => setQuery(e.target.value)}
           placeholder={t('admin.tenants.searchPlaceholder')}
+          type="search"
           value={query}
         />
-        <button
-          className="rounded bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90"
-          type="submit"
-        >
+        <Button size="sm" type="submit">
           {t('common.search')}
-        </button>
-        <label className="ml-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <input
+        </Button>
+        <label
+          className={cn('ml-2 flex items-center gap-1.5 text-muted-foreground text-xs', TOUCH_ROW)}
+          htmlFor="include-archived"
+        >
+          <Checkbox
             checked={includeArchived}
+            id="include-archived"
             onChange={e => setIncludeArchived(e.target.checked)}
-            type="checkbox"
           />
           {t('admin.tenants.includeArchived')}
         </label>
@@ -208,33 +213,38 @@ function TenantsInner() {
                     <td className="px-4 py-2">
                       <div className="flex justify-end gap-1.5">
                         {status === 'suspended' ? (
-                          <button
-                            className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+                          <Button
                             disabled={busyId === tenant.id}
                             onClick={() => handleRestore(tenant)}
+                            size="xs"
                             type="button"
+                            variant="outline"
                           >
                             {t('admin.tenants.restore')}
-                          </button>
+                          </Button>
                         ) : status === 'active' ? (
-                          <button
-                            className="rounded border border-warning/40 px-2 py-1 text-xs text-warning-subtle-foreground hover:bg-warning-subtle disabled:opacity-50"
+                          <Button
+                            className="border-warning/40 text-warning-subtle-foreground hover:bg-warning-subtle"
                             disabled={busyId === tenant.id}
                             onClick={() => setSuspending(tenant)}
+                            size="xs"
                             type="button"
+                            variant="outline"
                           >
                             {t('admin.tenants.suspend')}
-                          </button>
+                          </Button>
                         ) : null}
                         {status !== 'archived' && (
-                          <button
-                            className="rounded border border-danger/40 px-2 py-1 text-xs text-danger-subtle-foreground hover:bg-danger-subtle disabled:opacity-50"
+                          <Button
+                            className="border-danger/40 text-danger-subtle-foreground hover:bg-danger-subtle"
                             disabled={busyId === tenant.id}
                             onClick={() => setConfirmingDelete(tenant)}
+                            size="xs"
                             type="button"
+                            variant="outline"
                           >
-                            {t('common.delete')}
-                          </button>
+                            {t('admin.tenants.archive')}
+                          </Button>
                         )}
                       </div>
                     </td>
@@ -246,7 +256,8 @@ function TenantsInner() {
         </div>
       )}
       <ConfirmDialog
-        message={t('admin.tenants.deleteConfirm', { name: confirmingDelete?.name ?? '' })}
+        confirmLabel={t('admin.tenants.archive')}
+        message={t('admin.tenants.archiveConfirm', { name: confirmingDelete?.name ?? '' })}
         onCancel={() => setConfirmingDelete(null)}
         onConfirm={() => {
           if (confirmingDelete) {
@@ -255,7 +266,8 @@ function TenantsInner() {
           setConfirmingDelete(null);
         }}
         open={confirmingDelete !== null}
-        title={t('common.delete')}
+        requireText={confirmingDelete?.urlKey}
+        title={t('admin.tenants.archive')}
       />
       <PromptDialog
         confirmLabel={t('admin.tenants.suspend')}

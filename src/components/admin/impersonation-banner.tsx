@@ -1,10 +1,13 @@
 'use client';
 
+import { observer } from 'mobx-react-lite';
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { useTranslations } from '@/hooks/use-translations';
 import { stopImpersonation } from '@/lib/admin-api';
 import { gql } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
+import { useStore } from '@/providers/store-provider';
 
 interface ImpersonationState {
   active: boolean;
@@ -23,8 +26,9 @@ const IMPERSONATION_STATE_QUERY = `
  * platform admin impersonating another user. Provides the one-click exit that
  * restores the admin's own session. Renders nothing for normal sessions.
  */
-export function ImpersonationBanner() {
+export const ImpersonationBanner = observer(function ImpersonationBanner() {
   const t = useTranslations();
+  const { syncStore, userStore } = useStore();
   const [state, setState] = useState<ImpersonationState | null>(null);
   const [stopping, setStopping] = useState(false);
 
@@ -62,25 +66,38 @@ export function ImpersonationBanner() {
     }
   }
 
+  // Name who is being impersonated (the session's own user) and where, not
+  // the operator: the operator is the one clicking, the viewed identity is what
+  // they need to be reminded of.
+  const viewed = userStore.currentUser?.displayName;
+  const org = syncStore.organizationName;
+
   return (
     <div
-      className="flex items-center justify-center gap-3 bg-warning px-4 py-1.5 text-center text-xs font-medium text-warning-foreground"
+      className="sticky top-0 z-50 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-warning px-4 py-2 text-center font-medium text-sm text-warning-foreground"
       data-testid="impersonation-banner"
+      role="status"
     >
       <span>
-        {state.adminName
-          ? t('admin.impersonation.bannerAs', { name: state.adminName })
+        {viewed && org
+          ? t('admin.impersonation.viewingAs', {
+              admin: state.adminName ?? state.adminEmail ?? '',
+              org,
+              user: viewed,
+            })
           : t('admin.impersonation.banner')}
       </span>
-      <button
-        className="rounded bg-warning-foreground/20 px-2 py-0.5 font-semibold hover:bg-warning-foreground/30 disabled:opacity-50"
+      <Button
+        className="bg-warning-foreground/20 text-warning-foreground hover:bg-warning-foreground/30"
         data-testid="stop-impersonating"
         disabled={stopping}
         onClick={handleStop}
+        size="xs"
         type="button"
+        variant="ghost"
       >
         {stopping ? t('admin.impersonation.stopping') : t('admin.impersonation.stop')}
-      </button>
+      </Button>
     </div>
   );
-}
+});

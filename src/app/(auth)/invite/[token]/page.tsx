@@ -1,11 +1,17 @@
+import Link from 'next/link';
+import { AuthHeader } from '@/components/auth/auth-header';
 import { InviteAcceptPanel } from '@/components/auth/invite-accept-panel';
+import { Button } from '@/components/ui/button';
 import { getServerTranslations } from '@/lib/i18n/server';
 import { titleMetadata } from '@/lib/page-metadata';
 import { prisma } from '@/server/lib/prisma';
 import { readSessionClaim } from '@/server/lib/session-claim';
 import { OrganizationInviteService } from '@/server/services/organization-invite.service';
 
-export const generateMetadata = () => titleMetadata('invite.title');
+export async function generateMetadata() {
+  // The invitation token is in the URL: keep it out of search indexes.
+  return { ...(await titleMetadata('invite.title')), robots: { follow: false, index: false } };
+}
 
 /**
  * Invitation acceptance.
@@ -30,11 +36,11 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
 
   if (!invite) {
     return (
-      <div className="flex flex-col gap-1">
-        <h1 className="text-balance text-2xl font-semibold tracking-tight text-foreground">
-          {t('invite.expiredTitle')}
-        </h1>
-        <p className="text-sm text-muted-foreground">{t('invite.expiredBody')}</p>
+      <div className="flex flex-col gap-6">
+        <AuthHeader brandMark subtitle={t('invite.expiredBody')} title={t('invite.expiredTitle')} />
+        <Button asChild>
+          <Link href="/login">{t('invite.goToSignIn')}</Link>
+        </Button>
       </div>
     );
   }

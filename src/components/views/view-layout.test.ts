@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { coerceBoardGroupBy, coerceViewMode } from './view-layout';
+import {
+  coerceBoardGroupBy,
+  coerceListGroupBy,
+  coerceViewMode,
+  orderByToSort,
+  sortToOrderBy,
+} from './view-layout';
 
 describe('view-layout coercion', () => {
   it('passes the renderable layouts through and falls back to list', () => {
@@ -17,5 +23,23 @@ describe('view-layout coercion', () => {
     expect(coerceBoardGroupBy('status')).toBe('status');
     expect(coerceBoardGroupBy('label')).toBe('status');
     expect(coerceBoardGroupBy(null)).toBe('status');
+  });
+});
+
+describe('list display helpers', () => {
+  it('narrows a stored groupBy to the list groupings', () => {
+    expect(coerceListGroupBy('none')).toBe('none');
+    expect(coerceListGroupBy('priority')).toBe('priority');
+    expect(coerceListGroupBy('label')).toBe('status');
+    expect(coerceListGroupBy(null)).toBe('status');
+  });
+
+  it('round-trips every order choice through the stored sort', () => {
+    for (const order of ['manual', 'priority', 'updated', 'created', 'dueDate'] as const) {
+      expect(sortToOrderBy(orderByToSort(order))).toBe(order);
+    }
+    expect(orderByToSort('manual')).toEqual([]);
+    expect(orderByToSort('updated')).toEqual([{ direction: 'desc', field: 'updated' }]);
+    expect(sortToOrderBy([{ direction: 'asc', field: 'assignee' }])).toBe('manual');
   });
 });

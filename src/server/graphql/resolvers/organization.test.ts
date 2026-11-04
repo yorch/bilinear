@@ -1,5 +1,6 @@
 import type { GraphQLError } from 'graphql';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { InvalidUrlKeyError, UrlKeyTakenError } from '@/server/services/organization.service';
 import { createMockContext, type MockGraphQLContext } from '@/test/context-mock';
 import { TEST_ORG, TEST_USER } from '@/test/fixtures';
 import { organizationResolvers } from './organization';
@@ -450,5 +451,39 @@ describe('organizationInvites query', () => {
     await expect(
       organizationResolvers.Query.organizationInvites(null, {}, ctx as never),
     ).rejects.toSatisfy(err => codeOf(err) === 'FORBIDDEN');
+  });
+});
+
+describe('organizationCreate', () => {
+  it('maps a taken URL key to BAD_USER_INPUT with a typed URL_KEY_TAKEN reason', async () => {
+    const ctx = createMockContext({ orgId: null });
+    vi.spyOn(ctx.services.organization, 'createWithOwner').mockRejectedValue(
+      new UrlKeyTakenError(),
+    );
+
+    const err = await organizationResolvers.Mutation.organizationCreate(
+      null,
+      { input: { name: 'Acme', urlKey: 'demo' } },
+      ctx as never,
+    ).catch((e: unknown) => e);
+
+    expect(codeOf(err)).toBe('BAD_USER_INPUT');
+    expect((err as GraphQLError).extensions?.reason).toBe('URL_KEY_TAKEN');
+  });
+
+  it('does not tag a malformed key as taken', async () => {
+    const ctx = createMockContext({ orgId: null });
+    vi.spyOn(ctx.services.organization, 'createWithOwner').mockRejectedValue(
+      new InvalidUrlKeyError(),
+    );
+
+    const err = await organizationResolvers.Mutation.organizationCreate(
+      null,
+      { input: { name: 'Acme', urlKey: 'NoCaps' } },
+      ctx as never,
+    ).catch((e: unknown) => e);
+
+    expect(codeOf(err)).toBe('BAD_USER_INPUT');
+    expect((err as GraphQLError).extensions?.reason).toBeUndefined();
   });
 });

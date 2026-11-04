@@ -89,8 +89,11 @@ export class IssueRelationService {
         data: { issueId, relatedIssueId, type },
       });
 
-      // Auto-create inverse relation
-      const inv = inverseType(type);
+      // Auto-create inverse relation. A duplicate is stored as ONE directed row
+      // (issueId is the duplicate): its mirror would also be type `duplicate`,
+      // leaving direction to a createdAt race. Deletion still removes a legacy
+      // mirror row, via inverseType().
+      const inv = type === 'duplicate' ? null : inverseType(type);
       if (inv) {
         const inverseExists = await tx.issueRelation.findUnique({
           where: {

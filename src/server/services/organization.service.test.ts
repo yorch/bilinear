@@ -69,6 +69,18 @@ describe('OrganizationService.createWithOwner', () => {
     ).rejects.toBeInstanceOf(UrlKeyTakenError);
   });
 
+  it('recognises a P2002 from another copy of the Prisma runtime (not an instance of our class)', async () => {
+    // Bundlers can load the runtime into several chunks; the error class then
+    // differs from the one this module imports, so `instanceof` is false.
+    prisma.$transaction.mockRejectedValue(
+      Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+    );
+
+    await expect(
+      svc.createWithOwner(TEST_USER.id, { name: 'Acme', urlKey: 'acme' }),
+    ).rejects.toBeInstanceOf(UrlKeyTakenError);
+  });
+
   it('lets non-P2002 Prisma errors bubble up unchanged', async () => {
     const other = new Error('connection lost');
     prisma.$transaction.mockRejectedValue(other);

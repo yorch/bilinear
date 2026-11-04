@@ -4,6 +4,7 @@ import { Diamond, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
 import { useTranslations } from '@/hooks/use-translations';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 interface MilestoneSelectProps {
@@ -66,6 +67,7 @@ export const MilestoneSelect = observer(function MilestoneSelect({
           )}
         </>
       }
+      triggerClassName={cn(TOUCH_TARGET, 'max-md:justify-start')}
       triggerTitle={
         projectId ? t('properties.milestone.setMilestone') : t('properties.milestone.needsProject')
       }

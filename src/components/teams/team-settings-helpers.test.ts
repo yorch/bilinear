@@ -8,6 +8,7 @@ import {
   readTeamExtras,
   swapAdjacent,
   toDateInputValue,
+  validateTeamNumbers,
   WEEKDAY_INDEXES,
 } from './team-settings-helpers';
 
@@ -193,5 +194,44 @@ describe('WEEKDAY_INDEXES', () => {
   it('covers all seven days exactly once, Monday first', () => {
     expect([...WEEKDAY_INDEXES].sort()).toEqual([0, 1, 2, 3, 4, 5, 6]);
     expect(WEEKDAY_INDEXES[0]).toBe(1);
+  });
+});
+
+describe('validateTeamNumbers', () => {
+  const ok = {
+    autoArchivePeriod: '',
+    autoClosePeriod: '',
+    cycleCooldownTime: '0',
+    cycleDuration: '2',
+    cyclesEnabled: true,
+  };
+
+  it('accepts valid drafts and normalises empty optional periods to null', () => {
+    expect(validateTeamNumbers(ok)).toEqual({
+      errors: {},
+      values: {
+        autoArchivePeriod: null,
+        autoClosePeriod: null,
+        cycleCooldownTime: 0,
+        cycleDuration: 2,
+      },
+    });
+  });
+
+  it('names the out-of-range field instead of a single global failure', () => {
+    const result = validateTeamNumbers({ ...ok, autoClosePeriod: '99' });
+    expect(result.errors).toEqual({ autoClosePeriod: true });
+    expect(result.values).toBeNull();
+  });
+
+  it('reports every invalid field at once', () => {
+    const result = validateTeamNumbers({ ...ok, autoArchivePeriod: '0', cycleDuration: '' });
+    expect(result.errors).toEqual({ autoArchivePeriod: true, cycleDuration: true });
+  });
+
+  it('ignores stale cycle drafts while cycles are disabled', () => {
+    const result = validateTeamNumbers({ ...ok, cycleDuration: '99', cyclesEnabled: false });
+    expect(result.errors).toEqual({});
+    expect(result.values?.cycleDuration).toBeNull();
   });
 });

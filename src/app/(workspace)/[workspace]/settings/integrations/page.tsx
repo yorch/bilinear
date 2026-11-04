@@ -5,8 +5,11 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
+import { ReadOnlyField } from '@/components/shared/read-only-field';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
+import { SimpleSelect } from '@/components/ui/select';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -198,6 +201,11 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
     }
   }
 
+  function copyUrl(value: string) {
+    void navigator.clipboard.writeText(value);
+    toast.success(t('settings.integrations.copied'));
+  }
+
   const webhookUrl = `${appUrl}/api/integrations/github/webhook?org=${orgKey}`;
 
   return (
@@ -206,9 +214,9 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
         description={t('settings.integrations.description')}
         title={t('settings.integrations.title')}
       />
-      <div className="mx-auto w-full max-w-2xl space-y-8 p-8">
+      <div className="mx-auto w-full max-w-2xl space-y-8 px-4 py-6 md:p-8">
         {/* GitHub */}
-        <section className="rounded-lg border-border p-6 space-y-4">
+        <section className="space-y-4 rounded-lg border border-border bg-card p-4 md:p-6">
           <div className="flex items-center gap-3">
             {/* GitHub mark SVG */}
             <svg aria-hidden="true" className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
@@ -244,36 +252,45 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
                 <p className="mt-2 text-muted-foreground">
                   {t('settings.integrations.webhookUrlHint')}
                 </p>
-                <code className="mt-1 block break-all rounded bg-muted px-2 py-1 font-mono text-xs">
-                  {webhookUrl}
-                </code>
+                <div className="mt-1">
+                  <ReadOnlyField
+                    label={t('settings.integrations.webhookUrlLabel')}
+                    onCopy={() => copyUrl(webhookUrl)}
+                    value={webhookUrl}
+                  />
+                </div>
               </div>
 
-              <div className="flex gap-2">
-                <button
-                  className="rounded-md border-border px-3 py-1.5 text-sm hover:bg-muted"
+              <div className="flex flex-wrap gap-2">
+                <Button
                   onClick={() => setShowRotate(v => !v)}
+                  size="sm"
                   type="button"
+                  variant="outline"
                 >
                   {t('settings.integrations.rotateWebhookSecret')}
-                </button>
-                <button
-                  className="rounded-md border border-destructive/50 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                </Button>
+                <Button
+                  className="border-danger/40 text-danger-subtle-foreground"
                   disabled={saving}
                   onClick={() => setPendingDisconnect('github')}
+                  size="sm"
                   type="button"
+                  variant="outline"
                 >
                   {t('settings.integrations.disconnect')}
-                </button>
+                </Button>
               </div>
 
               {showRotate && (
                 <div className="flex gap-2">
-                  <input
-                    className="flex-1 rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  <Input
+                    aria-label={t('settings.integrations.newWebhookSecretPlaceholder')}
+                    autoComplete="off"
+                    className="flex-1"
                     onChange={e => setRotateSecret(e.target.value)}
                     placeholder={t('settings.integrations.newWebhookSecretPlaceholder')}
-                    type="text"
+                    type="password"
                     value={rotateSecret}
                   />
                   <Button disabled={saving} onClick={handleRotateSecret} size="sm" type="button">
@@ -288,11 +305,13 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
                 {t('settings.integrations.webhookSecretInstructions')}
               </p>
               <div className="flex gap-2">
-                <input
-                  className="flex-1 rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                <Input
+                  aria-label={t('settings.integrations.webhookSecretPlaceholder')}
+                  autoComplete="off"
+                  className="flex-1"
                   onChange={e => setConnectSecret(e.target.value)}
                   placeholder={t('settings.integrations.webhookSecretPlaceholder')}
-                  type="text"
+                  type="password"
                   value={connectSecret}
                 />
                 <Button onClick={handleConnect} size="sm" type="button">
@@ -301,15 +320,18 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {t('settings.integrations.afterConnectingHint')}
-                <br />
-                <code className="font-mono">{webhookUrl}</code>
               </p>
+              <ReadOnlyField
+                label={t('settings.integrations.webhookUrlLabel')}
+                onCopy={() => copyUrl(webhookUrl)}
+                value={webhookUrl}
+              />
             </div>
           )}
         </section>
 
         {/* Slack */}
-        <section className="rounded-lg border-border p-6 space-y-4">
+        <section className="space-y-4 rounded-lg border border-border bg-card p-4 md:p-6">
           <div className="flex items-center gap-3">
             <svg aria-hidden="true" className="h-6 w-6" viewBox="0 0 24 24">
               <path
@@ -349,28 +371,26 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
                 <label className="block text-sm font-medium mb-1" htmlFor="slack-default-team">
                   {t('settings.integrations.defaultTeamForNewIssues')}
                 </label>
-                <select
-                  className="w-full rounded-md border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                <SimpleSelect
                   id="slack-default-team"
-                  onChange={e => void handleSetDefaultTeam(e.target.value)}
+                  onChange={value => void handleSetDefaultTeam(value)}
+                  options={[
+                    { label: t('settings.integrations.chooseATeam'), value: '' },
+                    ...teams.map(team => ({ label: team.name, value: team.id })),
+                  ]}
                   value={slack.defaultTeamId ?? ''}
-                >
-                  <option value="">{t('settings.integrations.chooseATeam')}</option>
-                  {teams.map(team => (
-                    <option key={team.id} value={team.id}>
-                      {team.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
-              <button
-                className="rounded-md border border-destructive/50 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
+              <Button
+                className="border-danger/40 text-danger-subtle-foreground"
                 disabled={saving}
                 onClick={() => setPendingDisconnect('slack')}
+                size="sm"
                 type="button"
+                variant="outline"
               >
                 {t('settings.integrations.disconnect')}
-              </button>
+              </Button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -379,9 +399,11 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
                 <code className="font-mono">/bilinear</code>{' '}
                 {t('settings.integrations.connectSlackHintSuffix')}
               </p>
-              <code className="block break-all rounded bg-muted px-2 py-1 font-mono text-xs">
-                {appUrl}/api/integrations/slack/commands
-              </code>
+              <ReadOnlyField
+                label={t('settings.integrations.slackRequestUrlLabel')}
+                onCopy={() => copyUrl(`${appUrl}/api/integrations/slack/commands`)}
+                value={`${appUrl}/api/integrations/slack/commands`}
+              />
               <Button asChild size="sm">
                 <a href="/api/integrations/slack">{t('settings.integrations.connectSlack')}</a>
               </Button>

@@ -14,8 +14,13 @@ interface ViewToggleProps {
 export function ViewToggle({ mode, onChange }: ViewToggleProps) {
   const t = useTranslations();
   return (
-    <div className="flex items-center rounded-md border border-border">
+    <fieldset
+      aria-label={t('issues.viewLayout')}
+      className="flex items-center rounded-md border border-border"
+    >
       <button
+        aria-label={t('issues.listViewShortcut')}
+        aria-pressed={mode === 'list'}
         className={cn(
           'flex items-center justify-center rounded-l-md px-2 py-1 transition-colors',
           TOUCH_TARGET,
@@ -30,6 +35,8 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
         <List className="h-4 w-4" />
       </button>
       <button
+        aria-label={t('issues.boardViewShortcut')}
+        aria-pressed={mode === 'board'}
         className={cn(
           'flex items-center justify-center px-2 py-1 transition-colors',
           TOUCH_TARGET,
@@ -44,6 +51,8 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
         <Kanban className="h-4 w-4" />
       </button>
       <button
+        aria-label={t('issues.timelineViewShortcut')}
+        aria-pressed={mode === 'timeline'}
         className={cn(
           'flex items-center justify-center rounded-r-md px-2 py-1 transition-colors',
           TOUCH_TARGET,
@@ -57,6 +66,6 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
       >
         <GanttChartSquare className="h-4 w-4" />
       </button>
-    </div>
+    </fieldset>
   );
 }

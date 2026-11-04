@@ -193,16 +193,17 @@ test.describe('Initiatives', () => {
 
     // Wait for the row's status pill to reflect the change before reloading
     // so we don't race the optimistic-then-server cycle.
-    await expect(page.getByRole('button', { name: new RegExp(`${name}.*Active`) })).toBeVisible({
+    // The row no longer carries a status badge; the "Active" group header does.
+    const activeGroup = page.locator('div:has(> div > span:text-is("Active"))');
+    await expect(activeGroup.getByRole('button', { name: new RegExp(name) })).toBeVisible({
       timeout: 10_000,
     });
 
     await page.reload();
     await expect(page.getByRole('heading', { name: /initiatives/i })).toBeVisible();
 
-    // After reload the initiative should still render with an "Active" pill
-    // inside its row button.
-    await expect(page.getByRole('button', { name: new RegExp(`${name}.*Active`) })).toBeVisible({
+    // After reload the initiative should still sit under the Active group.
+    await expect(activeGroup.getByRole('button', { name: new RegExp(name) })).toBeVisible({
       timeout: 10_000,
     });
   });

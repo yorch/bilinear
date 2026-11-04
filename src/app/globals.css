@@ -39,6 +39,7 @@
   --color-warning: var(--warning);
   --color-warning-subtle: var(--warning-subtle);
   --color-warning-subtle-foreground: var(--warning-subtle-foreground);
+  --color-warning-text: var(--warning-text);
   --color-warning-foreground: var(--warning-foreground);
   --color-info: var(--info);
   --color-info-subtle: var(--info-subtle);
@@ -199,9 +200,12 @@
 
 :root {
   /* Fixed per-accent swatches for the picker (see @theme note above). */
-  --swatch-aurora-1: oklch(0.585 0.233 277.117);
+  /* The -1 stops are the LIGHT brand (`--brand`), which is also used as text
+     (`text-brand` links in admin tables). Both sat at 4.4 / 3.6:1 on the page;
+     0.55 clears 4.5:1 on --background and --card under every accent. */
+  --swatch-aurora-1: oklch(0.55 0.233 277.117);
   --swatch-aurora-2: oklch(0.627 0.233 303.9);
-  --swatch-ion-1: oklch(0.623 0.214 259.815);
+  --swatch-ion-1: oklch(0.55 0.214 259.815);
   --swatch-ion-2: oklch(0.789 0.154 211.53);
   --swatch-ultraviolet-1: oklch(0.541 0.281 293.009);
   --swatch-ultraviolet-2: oklch(0.74 0.238 322.16);
@@ -218,7 +222,10 @@
   --secondary: oklch(0.972 0.007 var(--accent-h));
   --secondary-foreground: var(--foreground);
   --muted: oklch(0.972 0.007 var(--accent-h));
-  --muted-foreground: oklch(0.535 0.016 var(--accent-h));
+  /* Darkened from 0.535 so muted text clears 4.5:1 on the brand-subtle active
+     sidebar row (the team key), not just on the page. Still well above
+     --foreground-secondary (0.42), so the hierarchy holds. */
+  --muted-foreground: oklch(0.5 0.016 var(--accent-h));
   --foreground-secondary: oklch(0.42 0.018 var(--accent-h));
   --foreground-faint: oklch(0.68 0.014 var(--accent-h));
   /* --accent is the neutral HOVER surface (shadcn's meaning), not the brand
@@ -232,6 +239,13 @@
   --invert: oklch(0.21 0.02 var(--accent-h));
   --invert-foreground: oklch(0.99 0 0);
   --avatar-fallback: oklch(0.7 0.02 var(--accent-h));
+  /* Initials ink on a user's avatar swatch. Theme-independent, because the
+     swatch is data (`avatarBgColor`), not chrome. user-avatar.tsx picks one per
+     swatch; contrast.test.ts asserts each pair clears 4.5:1. Near-pure
+     white/black on purpose: the swatch picker's worst case is bounded by how
+     far these inks are from pure white/black. */
+  --avatar-ink-light: oklch(0.99 0 0);
+  --avatar-ink-dark: oklch(0.12 0.01 var(--accent-h));
   --surface-raised: oklch(1 0 0);
   --surface-sunken: oklch(0.962 0.009 var(--accent-h));
 
@@ -292,6 +306,9 @@
   --danger-subtle-foreground: color-mix(in oklab, var(--danger) 70%, black);
   --success-subtle-foreground: color-mix(in oklab, var(--success) 70%, black);
   --warning-subtle-foreground: color-mix(in oklab, var(--warning) 70%, black);
+  /* Text-safe amber for "due soon": lighter than the subtle-foreground used for
+     "due today" so the two urgency levels stay distinct, still >=4.5:1. */
+  --warning-text: color-mix(in oklab, var(--warning) 78%, black);
   --info-subtle-foreground: color-mix(in oklab, var(--info) 70%, black);
   /* Ink for text sitting ON the solid `--warning` fill — the impersonation
      banner. Parallel to `--destructive-foreground`, and for the same reason a
@@ -368,6 +385,8 @@
   --cursor-8: #14b8a6;
   --cursor-9: #3b82f6;
   --cursor-10: #06b6d4;
+  /* Ink for labels on the light cursor swatches (5-8, 10); white fails there. */
+  --cursor-ink: oklch(0.2 0.02 var(--accent-h));
 }
 
 /* ── Brand stops per accent (light) ──────────────────────────────────────── */
@@ -395,7 +414,9 @@
   --secondary: oklch(0.238 0.018 var(--accent-h));
   --secondary-foreground: var(--foreground);
   --muted: oklch(0.238 0.018 var(--accent-h));
-  --muted-foreground: oklch(0.63 0.016 var(--accent-h));
+  /* Lightened from 0.63 for the same reason as the light value: the team key
+     on the brand-subtle active sidebar row measured 4.0 to 4.2:1. */
+  --muted-foreground: oklch(0.68 0.016 var(--accent-h));
   --foreground-secondary: oklch(0.79 0.014 var(--accent-h));
   --foreground-faint: oklch(0.49 0.016 var(--accent-h));
   --accent: oklch(0.272 0.02 var(--accent-h));
@@ -436,6 +457,7 @@
   --danger-subtle-foreground: color-mix(in oklab, var(--danger) 80%, white);
   --success-subtle-foreground: color-mix(in oklab, var(--success) 80%, white);
   --warning-subtle-foreground: color-mix(in oklab, var(--warning) 80%, white);
+  --warning-text: var(--warning);
   --info-subtle-foreground: color-mix(in oklab, var(--info) 80%, white);
   --merged: oklch(0.714 0.203 305.504);
   --merged-subtle: color-mix(in oklab, var(--merged) 20%, transparent);

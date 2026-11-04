@@ -58,7 +58,7 @@ export function AuthCanvas() {
             <dd className="font-mono text-xl font-semibold tracking-tight tabular-nums text-foreground">
               {stat.value}
             </dd>
-            <p aria-hidden="true" className="mt-0.5 text-[11px] text-muted-foreground">
+            <p aria-hidden="true" className="mt-0.5 text-xs text-foreground-secondary">
               {stat.label}
             </p>
           </div>

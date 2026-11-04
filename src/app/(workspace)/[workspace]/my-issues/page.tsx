@@ -12,6 +12,7 @@ import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-pane
 import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { SectionHeader } from '@/components/shared/section-header';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { Button } from '@/components/ui/button';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
@@ -25,6 +26,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
 import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildIssueHref } from '@/lib/issue-nav';
+import { disambiguateStateNames, groupIssuesByTeam } from '@/lib/multi-team-issues';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
@@ -38,7 +40,8 @@ type MyIssuesScope = 'assigned' | 'created';
 const MyIssuesPage = observer(function MyIssuesPage() {
   const { workspace } = useParams<{ workspace: string }>();
   const t = useTranslations();
-  const { issueStore, userStore, workflowStateStore, labelStore, syncStore, uiStore } = useStore();
+  const { issueStore, userStore, workflowStateStore, labelStore, syncStore, teamStore, uiStore } =
+    useStore();
 
   useDocumentTitle(t('nav.myIssues'));
 
@@ -68,11 +71,30 @@ const MyIssuesPage = observer(function MyIssuesPage() {
       .sort((a, b) => a.sortOrder - b.sortOrder);
   }, [issueStore.pool.size, userStore.pool.size, currentUser, issueStore, labelStore, scope]);
 
-  // All active workflow states across all teams (for grouping + filter options).
+  // Every active state across all teams — filter options and the timeline only.
+  // Names shared by several teams get a team suffix so the filter doesn't offer
+  // two indistinguishable "Todo" rows. Grouping and status pickers must NOT use
+  // this union: states belong to a team, so they get one section per team below.
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
-  const states = useMemo(() => workflowStateStore.all, [workflowStateStore.pool.size]);
+  const states = useMemo(
+    () => disambiguateStateNames(workflowStateStore.all, id => teamStore.findById(id)?.key),
+    [workflowStateStore.pool.size, teamStore.pool.size],
+  );
 
-  const issues = applyFilters(allMyIssues, filterSet);
+  const filteredIssues = applyFilters(allMyIssues, filterSet);
+  const teamGroups = groupIssuesByTeam(
+    filteredIssues,
+    teamStore.all.map(team => team.id),
+  );
+  const multiTeam = teamGroups.length > 1;
+  // Keyboard navigation (j/k) walks the order the sections are drawn in.
+  const issues = teamGroups.flatMap(group => group.issues);
+  // One section per team, each with only that team's workflow states. An empty
+  // list still gets one (stateless) section so the empty state renders.
+  const sections = (teamGroups.length > 0 ? teamGroups : [{ issues, teamId: '' }]).map(group => ({
+    ...group,
+    states: workflowStateStore.findByTeamId(group.teamId),
+  }));
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
   const users: IssueUser[] = useMemo(() => toIssueUsers(userStore.all), [userStore.pool.size]);
@@ -172,24 +194,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
 
       {/* Issue list / board / timeline */}
       <div className="flex-1 overflow-y-auto">
-        {viewMode === 'list' ? (
-          <IssueListView
-            issues={issues}
-            labels={labels}
-            onArchive={handleArchive}
-            onArchiveMany={handleArchiveMany}
-            onBulkUpdate={handleBulkUpdate}
-            onDelete={requestDelete}
-            onOpen={handleOpen}
-            onPropertyClosed={() => setOpenProperty(null)}
-            onSelect={setSelectedId}
-            onUpdate={handleUpdate}
-            openProperty={openProperty}
-            selectedId={selectedId}
-            states={states}
-            users={users}
-          />
-        ) : viewMode === 'timeline' ? (
+        {viewMode === 'timeline' ? (
           <GanttView
             emptyMessage={t('issues.ganttEmptyMessage')}
             items={issues
@@ -206,28 +211,58 @@ const MyIssuesPage = observer(function MyIssuesPage() {
             }}
           />
         ) : (
-          <BoardView
-            groupBy={boardGroupBy}
-            issues={issues}
-            labels={labels}
-            onOpen={handleOpen}
-            onSelect={setSelectedId}
-            onUpdate={handleUpdate}
-            selectedId={selectedId}
-            states={states}
-            swimlaneBy={swimlaneBy}
-            users={users}
-          />
+          sections.map(section => (
+            <section key={section.teamId}>
+              {multiTeam && (
+                <div className="border-b border-border bg-surface-sunken px-4 py-1.5">
+                  <SectionHeader
+                    as="h2"
+                    title={teamStore.findById(section.teamId)?.name ?? section.teamId}
+                  />
+                </div>
+              )}
+              {viewMode === 'list' ? (
+                <IssueListView
+                  issues={section.issues}
+                  labels={labels}
+                  onArchive={handleArchive}
+                  onArchiveMany={handleArchiveMany}
+                  onBulkUpdate={handleBulkUpdate}
+                  onDelete={requestDelete}
+                  onOpen={handleOpen}
+                  onPropertyClosed={() => setOpenProperty(null)}
+                  onSelect={setSelectedId}
+                  onUpdate={handleUpdate}
+                  openProperty={openProperty}
+                  selectedId={selectedId}
+                  states={section.states}
+                  users={users}
+                />
+              ) : (
+                <BoardView
+                  groupBy={boardGroupBy}
+                  issues={section.issues}
+                  labels={labels}
+                  onOpen={handleOpen}
+                  onSelect={setSelectedId}
+                  onUpdate={handleUpdate}
+                  selectedId={selectedId}
+                  states={section.states}
+                  swimlaneBy={swimlaneBy}
+                  users={users}
+                />
+              )}
+            </section>
+          ))
         )}
       </div>
-
       {/* Detail panel */}
       <LazyIssueDetailPanel
         issue={detailIssue}
         labels={labels}
         onClose={closeDetail}
         onUpdate={handleUpdate}
-        states={states}
+        states={workflowStateStore.findByTeamId(detailIssue?.teamId ?? '')}
         users={users}
       />
 

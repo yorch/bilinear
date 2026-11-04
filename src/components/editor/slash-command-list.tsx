@@ -39,7 +39,7 @@ export const SlashCommandList = forwardRef<SlashCommandListHandle, SlashCommandL
   function SlashCommandList({ items, command }, ref) {
     const t = useTranslations();
     const [selectedIndex, setSelectedIndex] = useState(0);
-    const listRef = useRef<HTMLUListElement>(null);
+    const listRef = useRef<HTMLDivElement>(null);
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: items triggers reset
     useEffect(() => {
@@ -85,17 +85,20 @@ export const SlashCommandList = forwardRef<SlashCommandListHandle, SlashCommandL
     }
 
     return (
-      <ul
+      <div
+        aria-label={t('editor.slashMenu.label')}
         className="slash-popup max-h-72 w-64 overflow-y-auto rounded-md border border-border bg-card py-1 shadow-e2"
         ref={listRef}
+        role="listbox"
       >
         {items.map((item, index) => {
           const key = SLASH_ITEM_KEYS[item.id];
           const title = key ? t(`editor.slashMenu.${key}.title`) : item.title;
           const description = key ? t(`editor.slashMenu.${key}.description`) : item.description;
           return (
-            <li key={item.id}>
+            <div key={item.id} role="presentation">
               <button
+                aria-selected={index === selectedIndex}
                 className={cn(
                   'flex w-full items-center gap-3 px-3 py-1.5 text-left transition-colors',
                   index === selectedIndex
@@ -106,6 +109,7 @@ export const SlashCommandList = forwardRef<SlashCommandListHandle, SlashCommandL
                   e.preventDefault();
                   command(item);
                 }}
+                role="option"
                 type="button"
               >
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border bg-card font-mono text-xs text-muted-foreground">
@@ -118,10 +122,10 @@ export const SlashCommandList = forwardRef<SlashCommandListHandle, SlashCommandL
                   </span>
                 </span>
               </button>
-            </li>
+            </div>
           );
         })}
-      </ul>
+      </div>
     );
   },
 );

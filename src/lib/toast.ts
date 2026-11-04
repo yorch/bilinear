@@ -14,7 +14,8 @@ export const toast = {
   loading: (message: string) => sonnerToast.loading(message),
   /** Pending → success/error lifecycle for a promise-shaped operation. */
   promise: sonnerToast.promise,
-  success: (message: string) => sonnerToast.success(message),
+  success: (message: string, action?: { label: string; onClick: () => void }) =>
+    sonnerToast.success(message, action ? { action } : undefined),
   /**
    * Toast with an inline undo action (Linear-style "Archived — Undo").
    * `onUndo` runs when the user clicks the action before the toast expires.

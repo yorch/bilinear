@@ -1,7 +1,12 @@
 'use client';
 
+import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { AuthHeader } from '@/components/auth/auth-header';
+import { beginOAuth, type OAuthStartConfig } from '@/components/auth/oauth-start';
+import { Button } from '@/components/ui/button';
 import { useTranslations } from '@/hooks/use-translations';
 import { installSessionCookies } from '@/lib/auth-session';
 import { gql } from '@/lib/graphql';
@@ -12,20 +17,12 @@ import { gqlError } from '@/lib/utils';
 const log = createClientLogger('OAuthCallback');
 
 /**
- * Configuration for one OAuth login provider. Mirrors the `startOAuth`
- * descriptor in `login-form.tsx` so the start and callback halves stay
- * symmetric: the login form stashes `state` under `storageKey` and the
- * callback replays it to `mutation`'s `exchangeField`.
+ * Configuration for one OAuth login provider: the shared start/storage
+ * descriptor from `oauth-start.ts` (so the start and callback halves cannot
+ * drift) plus the `*AuthExchange` mutation string this page replays `state` to.
  */
-export interface OAuthProvider {
-  /** The mutation's response field, e.g. "googleAuthExchange". */
-  exchangeField: string;
-  /** Human-readable name shown in status/error copy, e.g. "Google". */
-  label: string;
-  /** The `*AuthExchange` mutation string from `@/lib/graphql-queries`. */
+export interface OAuthProvider extends OAuthStartConfig {
   mutation: string;
-  /** sessionStorage key the login form stored the CSRF `state` under. */
-  storageKey: string;
 }
 
 /**
@@ -40,6 +37,7 @@ export function OAuthCallbackHandler({ provider }: { provider: OAuthProvider }) 
   const searchParams = useSearchParams();
   const t = useTranslations();
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
   // The OAuth code is single-use and the stored state is consumed on read, so
   // the exchange must run exactly once even if the effect re-fires (React
   // StrictMode double-invokes mount effects in dev).
@@ -100,26 +98,46 @@ export function OAuthCallbackHandler({ provider }: { provider: OAuthProvider }) 
     exchange();
   }, []);
 
+  async function retry() {
+    setRetrying(true);
+    try {
+      const failure = await beginOAuth(
+        provider,
+        t('auth.failedToStart', { provider: provider.label }),
+      );
+      if (failure) {
+        setError(failure);
+        setRetrying(false);
+      }
+    } catch {
+      setError(t('common.somethingWentWrong'));
+      setRetrying(false);
+    }
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-6" role="alert">
+        <AuthHeader brandMark subtitle={error} title={t('auth.oauthErrorTitle')} />
+        <div className="flex flex-col gap-2">
+          <Button disabled={retrying} onClick={() => void retry()} type="button">
+            {t('auth.retryWithProvider', { provider: provider.label })}
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/login">{t('auth.backToSignIn')}</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col items-center gap-4 text-center">
-      {error ? (
-        <>
-          <p className="text-sm text-danger-subtle-foreground" role="alert">
-            {error}
-          </p>
-          <button
-            className="text-sm text-muted-foreground hover:text-foreground"
-            onClick={() => router.push('/login')}
-            type="button"
-          >
-            {t('auth.backToSignIn')}
-          </button>
-        </>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          {t('auth.signingInWithProvider', { provider: provider.label })}
-        </p>
-      )}
+    <div
+      className="flex items-center justify-center gap-2.5 text-sm text-muted-foreground"
+      role="status"
+    >
+      <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+      {t('auth.signingInWithProvider', { provider: provider.label })}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   LastPlatformAdminError,
   type PlatformAuditAction,
   PlatformUserNotFoundError,
+  SelfTargetError,
   type TenantLimits,
   TenantNotFoundError,
 } from '../../services/platform-admin.service';
@@ -23,6 +24,7 @@ function mapPlatformError(err: unknown): never {
   }
   if (
     err instanceof LastPlatformAdminError ||
+    err instanceof SelfTargetError ||
     err instanceof ImpersonationTargetError ||
     err instanceof InvalidTenantLimitsError
   ) {
@@ -121,7 +123,7 @@ export const platformAdminResolvers = {
       ctx: GraphQLContext,
     ) => {
       const actorId = await requirePlatformAdmin(ctx.prisma, ctx);
-      await mapped(() => ctx.services.platformAdmin.setUserActive(id, true));
+      await mapped(() => ctx.services.platformAdmin.setUserActive(id, true, actorId));
       audit(ctx, actorId, 'user.reactivated', 'User', id);
       return ctx.services.platformAdmin.getUser(id);
     },
@@ -132,7 +134,7 @@ export const platformAdminResolvers = {
       ctx: GraphQLContext,
     ) => {
       const actorId = await requirePlatformAdmin(ctx.prisma, ctx);
-      await mapped(() => ctx.services.platformAdmin.setPlatformAdmin(id, isPlatformAdmin));
+      await mapped(() => ctx.services.platformAdmin.setPlatformAdmin(id, isPlatformAdmin, actorId));
       audit(
         ctx,
         actorId,
@@ -145,7 +147,7 @@ export const platformAdminResolvers = {
 
     platformUserSuspend: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       const actorId = await requirePlatformAdmin(ctx.prisma, ctx);
-      await mapped(() => ctx.services.platformAdmin.setUserActive(id, false));
+      await mapped(() => ctx.services.platformAdmin.setUserActive(id, false, actorId));
       audit(ctx, actorId, 'user.suspended', 'User', id);
       return ctx.services.platformAdmin.getUser(id);
     },

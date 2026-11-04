@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { ChevronRight } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
+import { Fragment, useState } from 'react';
 import { LoadError } from '@/components/shared/load-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
 import { SimpleSelect } from '@/components/ui/select';
 import { RowsSkeleton } from '@/components/ui/skeleton';
@@ -15,7 +16,8 @@ import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
+import { useStore } from '@/providers/store-provider';
 
 /**
  * Audit log page (admins only).
@@ -35,6 +37,7 @@ interface AuditLogEntry {
   createdAt: string;
   id: string;
   ipAddress: string | null;
+  metadata: Record<string, unknown> | null;
   resourceId: string | null;
   resourceType: string | null;
   user: AuditLogUser | null;
@@ -58,6 +61,7 @@ const AUDIT_LOGS_QUERY = `
         resourceType
         resourceId
         ipAddress
+        metadata
         createdAt
       }
       hasMore
@@ -93,8 +97,30 @@ const AUDIT_ACTIONS = [
   'webhook.deleted',
 ] as const;
 
-export default function AuditLogPage() {
+/** 'member.role_changed' -> 'Member role changed' (the raw id stays on the badge). */
+function humanizeAction(action: string): string {
+  const text = action.replace(/[._]/g, ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+const AuditLogPage = observer(function AuditLogPage() {
   const t = useTranslations();
+  const { organizationMemberStore, userStore } = useStore();
+  const memberRoles = organizationMemberStore.rolesByUserId as Record<string, unknown>;
+  const memberOptions = userStore.all
+    .filter(u => memberRoles[u.id] !== undefined)
+    .map(u => ({ label: u.displayName || u.email, value: u.id }));
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpanded = (id: string) =>
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   useDocumentTitle(t('settings.auditLog.title'));
   const { formatDateTime } = useFormatters();
   const [loadingMore, setLoadingMore] = useState(false);
@@ -217,23 +243,24 @@ export default function AuditLogPage() {
         description={t('settings.auditLog.description')}
         title={t('settings.auditLog.title')}
       />
-      <div className="mx-auto w-full max-w-5xl px-6 py-8">
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
         {/* Filters */}
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <SimpleSelect
             ariaLabel={t('settings.auditLog.columnAction')}
-            className="w-48"
+            className="w-full sm:w-48"
             onChange={setActionFilter}
             options={[
               { label: t('settings.auditLog.allActions'), value: '' },
-              ...AUDIT_ACTIONS.map(a => ({ label: a, value: a })),
+              ...AUDIT_ACTIONS.map(a => ({ label: humanizeAction(a), value: a })),
             ]}
             value={actionFilter}
           />
-          <Input
-            className="w-56"
-            onChange={e => setUserIdFilter(e.target.value)}
-            placeholder={t('settings.auditLog.filterByUserId')}
+          <SimpleSelect
+            ariaLabel={t('settings.auditLog.columnUser')}
+            className="w-full sm:w-56"
+            onChange={setUserIdFilter}
+            options={[{ label: t('settings.auditLog.allUsers'), value: '' }, ...memberOptions]}
             value={userIdFilter}
           />
           <Button onClick={handleApplyFilters} size="sm" type="button">
@@ -251,8 +278,8 @@ export default function AuditLogPage() {
         ) : entries.length === 0 ? (
           <EmptyState size="compact" title={t('settings.auditLog.noEntriesFound')} />
         ) : (
-          <div className="overflow-hidden rounded border border-border">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-[40rem] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted">
                   <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
@@ -273,71 +300,110 @@ export default function AuditLogPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {entries.map(entry => (
-                  <tr className="bg-background hover:bg-muted" key={entry.id}>
-                    <td className="px-4 py-2">
-                      <Badge
-                        className="font-mono text-foreground-secondary"
-                        tone="muted"
-                        variant="square"
-                      >
-                        {entry.action}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-2">
-                      {entry.user ? (
-                        <div>
-                          <p className="text-xs font-medium text-foreground">
-                            {entry.user.displayName}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">{entry.user.email}</p>
-                        </div>
-                      ) : entry.userId ? (
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {entry.userId}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">
-                          {t('settings.auditLog.system')}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2">
-                      {entry.resourceType ? (
-                        <span className="text-xs text-muted-foreground">
-                          {entry.resourceType}
-                          {entry.resourceId ? (
-                            <span className="ml-1 font-mono text-muted-foreground">
-                              {entry.resourceId.slice(0, 8)}
+                {entries.map(entry => {
+                  const open = expanded.has(entry.id);
+                  const meta = entry.metadata && Object.keys(entry.metadata).length > 0;
+                  return (
+                    <Fragment key={entry.id}>
+                      <tr className="bg-background hover:bg-muted">
+                        <td className="px-4 py-2">
+                          <div className="flex items-center gap-1.5">
+                            {meta ? (
+                              <button
+                                aria-expanded={open}
+                                aria-label={t('settings.auditLog.toggleDetails')}
+                                className="shrink-0 text-muted-foreground hover:text-foreground"
+                                onClick={() => toggleExpanded(entry.id)}
+                                type="button"
+                              >
+                                <ChevronRight
+                                  className={cn(
+                                    'h-3.5 w-3.5 transition-transform',
+                                    open && 'rotate-90',
+                                  )}
+                                />
+                              </button>
+                            ) : (
+                              <span className="w-3.5 shrink-0" />
+                            )}
+                            <Badge
+                              className="font-mono text-foreground-secondary"
+                              title={humanizeAction(entry.action)}
+                              tone="muted"
+                              variant="square"
+                            >
+                              {entry.action}
+                            </Badge>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">
+                          {entry.user ? (
+                            <div>
+                              <p className="text-xs font-medium text-foreground">
+                                {entry.user.displayName}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{entry.user.email}</p>
+                            </div>
+                          ) : entry.userId ? (
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {entry.userId}
                             </span>
-                          ) : null}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-foreground-faint">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2">
-                      {entry.ipAddress ? (
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {entry.ipAddress}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-foreground-faint">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span className="text-xs text-muted-foreground">
-                        {formatDateTime(entry.createdAt, {
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              {t('settings.auditLog.system')}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2">
+                          {entry.resourceType ? (
+                            <span className="text-xs text-muted-foreground">
+                              {entry.resourceType}
+                              {entry.resourceId ? (
+                                <span
+                                  className="ml-1 font-mono text-muted-foreground"
+                                  title={entry.resourceId}
+                                >
+                                  {entry.resourceId.slice(0, 8)}
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-foreground-faint">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2">
+                          {entry.ipAddress ? (
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {entry.ipAddress}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-foreground-faint">—</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2">
+                          <span className="text-xs text-muted-foreground">
+                            {formatDateTime(entry.createdAt, {
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          </span>
+                        </td>
+                      </tr>
+                      {open && meta ? (
+                        <tr className="bg-muted/40">
+                          <td className="px-4 py-2" colSpan={5}>
+                            <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs text-foreground-secondary">
+                              {JSON.stringify(entry.metadata, null, 2)}
+                            </pre>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -359,4 +425,6 @@ export default function AuditLogPage() {
       </div>
     </div>
   );
-}
+});
+
+export default AuditLogPage;

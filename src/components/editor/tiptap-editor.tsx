@@ -25,16 +25,18 @@ import StarterKit from '@tiptap/starter-kit';
 // rather than `all` (~190 grammars, multi-MB). Covers realistic code-block
 // usage in an issue tracker and trims the editor bundle significantly.
 import { common, createLowlight } from 'lowlight';
-import { ImageIcon, Link2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Y from 'yjs';
 import { PromptDialog } from '@/components/shared/prompt-dialog';
 import { useTranslations } from '@/hooks/use-translations';
 import { DEFAULT_YJS_PORT } from '@/lib/collab';
-import { cn, TOUCH_TARGET } from '@/lib/utils';
+import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 import { resolveBrowserWsUrl } from '@/lib/ws-url';
 import { useCollabConfig } from '@/providers/collab-provider';
 import { Details, DetailsSummary } from './details-node';
+import { EditorSkeleton } from './editor-skeleton';
+import { EditorToolbar } from './editor-toolbar';
 import { EmbedNode } from './embed-node';
 import type { MentionItem, MentionListHandle } from './mention-list';
 import { MentionList } from './mention-list';
@@ -82,6 +84,32 @@ const CURSOR_COLORS = [
   'var(--cursor-9)',
   'var(--cursor-10)',
 ];
+// Swatches light enough that white label ink fails contrast; they get the dark
+// `--cursor-ink` instead (CSS keys off `data-ink`).
+const DARK_INK_COLORS = new Set([
+  'var(--cursor-5)',
+  'var(--cursor-6)',
+  'var(--cursor-7)',
+  'var(--cursor-8)',
+  'var(--cursor-10)',
+]);
+
+/** Caret + name chip for a remote collaborator (styled in tiptap-editor.css). */
+function renderCollabCaret(user: { color?: string; name?: string }): HTMLElement {
+  const caret = document.createElement('span');
+  caret.classList.add('collaboration-carets__caret');
+  caret.style.borderColor = user.color ?? '';
+  const label = document.createElement('div');
+  label.classList.add('collaboration-carets__label');
+  label.style.backgroundColor = user.color ?? '';
+  if (user.color && DARK_INK_COLORS.has(user.color)) {
+    label.dataset.ink = 'dark';
+  }
+  label.textContent = user.name ?? '';
+  caret.append(document.createTextNode('\u2060'), label, document.createTextNode('\u2060'));
+  return caret;
+}
+
 function sessionColor(): string {
   return CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)];
 }
@@ -112,6 +140,10 @@ interface UploadContext {
  * renders inline.
  */
 const PASTE_INLINE_LIMIT = 2 * 1024 * 1024; // 2 MB
+// Module-level paste helpers cannot call useTranslations; the component keeps
+// this in sync with the active locale.
+const IMAGE_TOO_LARGE_MESSAGE = { current: 'Image is too large (2 MB max)' };
+const IMAGE_UPLOAD_FAILED_MESSAGE = { current: 'Image upload failed' };
 
 async function insertPastedImage(
   file: File,
@@ -126,6 +158,7 @@ async function insertPastedImage(
     return;
   }
 
+  let uploadFailed = false;
   if (ctx.issueId || ctx.projectId) {
     const fd = new FormData();
     fd.append('file', file);
@@ -144,14 +177,21 @@ async function insertPastedImage(
           return;
         }
       }
+      uploadFailed = true;
     } catch {
       // fall through to inline fallback
+      uploadFailed = true;
     }
   }
 
   // No parent context (or upload failed): embed as base64 inline, matching
   // the toolbar button behavior. 2 MB cap keeps row payloads sane.
   if (file.size > PASTE_INLINE_LIMIT) {
+    // Say why: "too large" is only true of the inline fallback, and when an
+    // upload was attempted the real cause is that it failed.
+    toast.error(
+      uploadFailed ? IMAGE_UPLOAD_FAILED_MESSAGE.current : IMAGE_TOO_LARGE_MESSAGE.current,
+    );
     return;
   }
   const reader = new FileReader();
@@ -216,7 +256,8 @@ export interface TipTapEditorProps {
   uploadProjectId?: string;
 }
 
-// Popup dimensions match the MentionList CSS (w-48 / max-h-48)
+// Fallback size used before the popup has been laid out; the real size is
+// measured (the slash menu is 256x288, the mention list 192x192).
 const POPUP_W = 192;
 const POPUP_H = 192;
 const POPUP_GAP = 4;
@@ -236,13 +277,17 @@ function positionPopup(
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
+  const measured = popup.getBoundingClientRect();
+  const popupW = measured.width || POPUP_W;
+  const popupH = measured.height || POPUP_H;
+
   // Prefer below caret; flip above when not enough room below.
   let top = rect.bottom + POPUP_GAP;
-  if (top + POPUP_H > vh) {
-    top = rect.top - POPUP_H - POPUP_GAP;
+  if (top + popupH > vh) {
+    top = rect.top - popupH - POPUP_GAP;
   }
   // Clamp left so the popup never goes off the right edge.
-  const left = Math.min(rect.left, vw - POPUP_W - POPUP_GAP);
+  const left = Math.min(rect.left, vw - popupW - POPUP_GAP);
 
   popup.style.top = `${Math.max(0, top)}px`;
   popup.style.left = `${Math.max(0, left)}px`;
@@ -364,6 +409,8 @@ export function TipTapEditor({
 }: TipTapEditorProps) {
   const t = useTranslations();
   const placeholder = placeholderProp ?? t('editor.placeholder');
+  IMAGE_TOO_LARGE_MESSAGE.current = t('editor.imageTooLarge');
+  IMAGE_UPLOAD_FAILED_MESSAGE.current = t('editor.imageUploadFailed');
   const resolvedCollabUserName = collabUserName ?? t('issueDetail.defaultUserName');
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -562,6 +609,7 @@ export function TipTapEditor({
             Collaboration.configure({ document: ydocRef.current }),
             CollaborationCaret.configure({
               provider: providerRef.current,
+              render: renderCollabCaret,
             }),
           ]
         : []),
@@ -580,9 +628,11 @@ export function TipTapEditor({
     editorProps: {
       attributes: {
         class: cn(
-          'prose prose-sm dark:prose-invert max-w-none focus:outline-none',
-          'prose-zinc min-h-[80px]',
-          readOnly ? 'cursor-default' : 'cursor-text',
+          'max-w-none focus:outline-none',
+          // A read-only render (a posted comment, a description preview) is as
+          // tall as its content; the editing floor left ~60px dead under a
+          // one-line comment.
+          readOnly ? 'cursor-default' : 'min-h-[80px] cursor-text',
         ),
       },
       handleDrop: (_view, event) => {
@@ -700,12 +750,16 @@ export function TipTapEditor({
    * ⚠️ Base64 images are stored inline in the issue description HTML, so large
    * images will bloat DB records and sync payloads. Until server-side file
    * storage is wired up (the `File` model exists in the schema), images are
-   * capped at 2 MB. Larger files are silently skipped.
+   * capped at 2 MB. Larger files are rejected with a toast.
    */
   const handleImageFile = useCallback(
     (file: File) => {
       const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
-      if (!editor || !file.type.startsWith('image/') || file.size > MAX_SIZE) {
+      if (!editor || !file.type.startsWith('image/')) {
+        return;
+      }
+      if (file.size > MAX_SIZE) {
+        toast.error(t('editor.imageTooLarge'));
         return;
       }
       const reader = new FileReader();
@@ -717,138 +771,25 @@ export function TipTapEditor({
       };
       reader.readAsDataURL(file);
     },
-    [editor],
+    [editor, t],
   );
 
   if (!editor) {
-    return null;
+    return <EditorSkeleton compact={readOnly} />;
   }
 
   return (
     <div className={cn('tiptap-wrapper relative', className)}>
       {showToolbar && !readOnly && (
-        <div className="mb-2 flex flex-wrap items-center gap-0.5 rounded-md border border-border bg-muted p-1 dark:bg-muted/50">
-          <ToolbarButton
-            active={editor.isActive('bold')}
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            title={t('editor.toolbar.bold')}
-          >
-            <strong>B</strong>
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive('italic')}
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            title={t('editor.toolbar.italic')}
-          >
-            <em>I</em>
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive('underline')}
-            onClick={() => editor.chain().focus().toggleUnderline().run()}
-            title={t('editor.toolbar.underline')}
-          >
-            <span className="underline">U</span>
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive('strike')}
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            title={t('editor.toolbar.strikethrough')}
-          >
-            <span className="line-through">S</span>
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive('link')}
-            onClick={openLinkDialog}
-            title={t('editor.toolbar.link')}
-          >
-            <Link2 className="h-3 w-3" />
-          </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-border" />
-          <ToolbarButton
-            active={editor.isActive('heading', { level: 1 })}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            title={t('editor.toolbar.heading1')}
-          >
-            H1
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive('heading', { level: 2 })}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            title={t('editor.toolbar.heading2')}
-          >
-            H2
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive('heading', { level: 3 })}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-            title={t('editor.toolbar.heading3')}
-          >
-            H3
-          </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-border" />
-          <ToolbarButton
-            active={editor.isActive('bulletList')}
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            title={t('editor.toolbar.bulletList')}
-          >
-            •—
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive('orderedList')}
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            title={t('editor.toolbar.orderedList')}
-          >
-            1.
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive('taskList')}
-            onClick={() => editor.chain().focus().toggleTaskList().run()}
-            title={t('editor.toolbar.taskList')}
-          >
-            ☐
-          </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-border" />
-          <ToolbarButton
-            active={editor.isActive('codeBlock')}
-            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-            title={t('editor.toolbar.codeBlock')}
-          >
-            {'{}'}
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive('blockquote')}
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            title={t('editor.toolbar.blockquote')}
-          >
-            ❝
-          </ToolbarButton>
-          <ToolbarButton
-            active={false}
-            onClick={() =>
-              editor.chain().focus().insertTable({ cols: 3, rows: 3, withHeaderRow: true }).run()
-            }
-            title={t('editor.toolbar.insertTable')}
-          >
-            ⊞
-          </ToolbarButton>
-          <ToolbarButton
-            active={false}
-            onClick={() => editor.chain().focus().setHorizontalRule().run()}
-            title={t('editor.toolbar.divider')}
-          >
-            —
-          </ToolbarButton>
-          <div className="mx-1 h-4 w-px bg-border" />
-          {/* Image upload */}
-          <ToolbarButton
-            active={false}
-            onClick={() => imageInputRef.current?.click()}
-            title={t('editor.toolbar.insertImage')}
-          >
-            <ImageIcon className="h-3 w-3" />
-          </ToolbarButton>
+        <>
+          <EditorToolbar
+            editor={editor}
+            onImage={() => imageInputRef.current?.click()}
+            onLink={openLinkDialog}
+          />
           <input
             accept="image/*"
+            aria-hidden="true"
             className="hidden"
             onChange={e => {
               const file = e.target.files?.[0];
@@ -859,9 +800,10 @@ export function TipTapEditor({
               e.target.value = '';
             }}
             ref={imageInputRef}
+            tabIndex={-1}
             type="file"
           />
-        </div>
+        </>
       )}
 
       <EditorContent editor={editor} />
@@ -875,36 +817,5 @@ export function TipTapEditor({
         title={t('editor.toolbar.link')}
       />
     </div>
-  );
-}
-
-function ToolbarButton({
-  onClick,
-  active,
-  title,
-  children,
-}: {
-  onClick: () => void;
-  active: boolean;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      aria-label={title}
-      className={cn(
-        'rounded px-1.5 py-0.5 text-xs font-medium transition-colors',
-        TOUCH_TARGET,
-        active
-          ? 'bg-brand-subtle text-brand-subtle-foreground'
-          : 'text-muted-foreground hover:bg-foreground/10',
-      )}
-      onClick={onClick}
-      onMouseDown={e => e.preventDefault()}
-      title={title}
-      type="button"
-    >
-      {children}
-    </button>
   );
 }

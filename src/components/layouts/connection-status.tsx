@@ -4,6 +4,13 @@ import { observer } from 'mobx-react-lite';
 import { useTranslations } from '@/hooks/use-translations';
 import { useStore } from '@/providers/store-provider';
 
+/** True when the pill would render — lets a caller reserve (or skip) its slot. */
+export function useShowConnectionStatus(): boolean {
+  const { syncStore } = useStore();
+  const bootstrapping = syncStore.status === 'idle' || syncStore.status === 'bootstrapping';
+  return !syncStore.wsConnected && !bootstrapping;
+}
+
 /**
  * Presentational pill surfacing the WebSocket connection state syncStore
  * already tracks. Renders nothing while connected or during initial
@@ -32,7 +39,7 @@ export const ConnectionStatus = observer(function ConnectionStatus({
       title={label}
     >
       <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />
-      {!compact && label}
+      {compact ? <span className="sr-only">{label}</span> : label}
     </div>
   );
 });

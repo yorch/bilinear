@@ -17,7 +17,14 @@ import { useStore } from '@/providers/store-provider';
 // `workflow-state.service.ts` validates and `team.service.ts` seeds. The
 // `cancelled` translation *key* below is a separate namespace and keeps its
 // own spelling.
-const STATE_CATEGORY_ORDER = ['started', 'unstarted', 'backlog', 'completed', 'canceled'] as const;
+const STATE_CATEGORY_ORDER = [
+  'started',
+  'unstarted',
+  'triage',
+  'backlog',
+  'completed',
+  'canceled',
+] as const;
 
 function getStateCategoryLabels(t: ReturnType<typeof useTranslations>): Record<string, string> {
   return {
@@ -25,6 +32,7 @@ function getStateCategoryLabels(t: ReturnType<typeof useTranslations>): Record<s
     canceled: t('issueDetail.subIssues.categories.cancelled'),
     completed: t('issueDetail.subIssues.categories.done'),
     started: t('issueDetail.subIssues.categories.inProgress'),
+    triage: t('issueDetail.subIssues.categories.triage'),
     unstarted: t('issueDetail.subIssues.categories.todo'),
   };
 }
@@ -81,6 +89,16 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
     return null;
   }
 
+  // Any category the order list doesn't know (a new workflow-state type) still
+  // renders, after the known ones — the header counts every child, so the list
+  // must show every child.
+  const orderedCategories = [
+    ...STATE_CATEGORY_ORDER,
+    ...Array.from(grouped.keys()).filter(
+      c => !(STATE_CATEGORY_ORDER as readonly string[]).includes(c),
+    ),
+  ];
+
   const completionPct = subIssues.length > 0 ? (completedCount / subIssues.length) * 100 : 0;
 
   return (
@@ -127,7 +145,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
 
       {!collapsed && (
         <div className="mt-2 space-y-3">
-          {STATE_CATEGORY_ORDER.map(category => {
+          {orderedCategories.map(category => {
             const issues = grouped.get(category);
             if (!issues?.length) {
               return null;

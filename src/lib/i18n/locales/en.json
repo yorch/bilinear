@@ -42,7 +42,8 @@
       "banner": "Impersonating this workspace — signed in from the platform console.",
       "bannerAs": "Impersonating this workspace as {name} — signed in from the platform console.",
       "stop": "Stop impersonating",
-      "stopping": "Stopping…"
+      "stopping": "Stopping…",
+      "viewingAs": "Viewing {org} as {user} — signed in by {admin}. Actions are audited."
     },
     "nav": {
       "adminTitle": "Admin",
@@ -56,6 +57,8 @@
       "users": "Users"
     },
     "tenants": {
+      "archive": "Archive",
+      "archiveConfirm": "Archive \"{name}\"? Every member loses access immediately. The data is retained and the workspace can be restored from this console.",
       "archivedToast": "Archived {name}",
       "backBreadcrumb": "← Tenants",
       "backToTenants": "← Back to tenants",
@@ -124,6 +127,7 @@
       "impersonateActive": "Sign in as this user",
       "impersonateNoOrg": "No organization to impersonate into",
       "makeAdmin": "Make admin",
+      "makeAdminConfirm": "Make {name} a platform admin? They will be able to see and manage every workspace, user and setting on this deployment.",
       "noOrgToImpersonate": "User has no organization to impersonate into",
       "pickOrgPrompt": "Impersonate {name} in which org?",
       "reactivate": "Reactivate",
@@ -131,10 +135,12 @@
       "revokeAdmin": "Revoke admin",
       "revokeAdminConfirm": "Revoke platform-admin from {name}?",
       "searchPlaceholder": "Search name or email",
+      "selfActionBlocked": "You can't do this to your own account.",
       "statusActive": "Active",
       "statusSuspended": "Suspended",
       "subtitle": "Every account across all organizations. Suspend to block sign-in globally.",
       "suspend": "Suspend",
+      "suspendConfirm": "Suspend {name}? They are signed out and blocked from signing in to every workspace until reactivated.",
       "suspendedToast": "Suspended {name}",
       "title": "Users"
     }
@@ -238,6 +244,8 @@
       "subhead": "Offline-first by design. Write while you’re on a plane, land, and find the queue already drained."
     },
     "checkYourEmail": "Check your email",
+    "codeHint": "The code expires in 15 minutes. Check your spam folder if you don’t see it.",
+    "codeResent": "A new code is on its way.",
     "continueWithEmail": "Continue with email",
     "continueWithGitHub": "Continue with GitHub",
     "continueWithGoogle": "Continue with Google",
@@ -246,25 +254,32 @@
     "createWorkspaceSubtitle": "Set up your organization to get started",
     "creatingWorkspace": "Creating workspace…",
     "emailAddress": "Email address",
+    "emailInvalid": "Enter a valid email address.",
     "emailPlaceholder": "you@example.com",
-    "enterCode": "Enter the 6-digit code we sent you",
+    "enterCodeSent": "Enter the 6-digit code we sent to {email}",
     "failedToEstablishSession": "Failed to establish a session. Please try again.",
     "failedToStart": "Failed to start {provider} sign-in",
     "invalidCode": "Invalid or expired code. Please try again.",
+    "oauthErrorTitle": "Couldn’t sign you in",
     "oauthSignInFailed": "{provider} sign-in failed. Please try again.",
     "organizationName": "Organization name",
     "organizationNamePlaceholder": "Acme Inc.",
+    "resendCode": "Resend code",
+    "resendCodeIn": "Resend code in {seconds}s",
+    "retryWithProvider": "Try {provider} again",
     "sending": "Sending…",
-    "sessionExpiredOrTampered": "Sign-in session expired or was tampered with. Please try again.",
-    "signInSubtitle": "Enter your email to receive a sign-in link",
+    "sessionExpiredOrTampered": "Your sign-in session expired. Please try again.",
+    "signInSubtitle": "We’ll email you a 6-digit sign-in code",
     "signInTitle": "Sign in to {appName}",
     "signingInWithProvider": "Signing you in with {provider}…",
+    "signOutSwitch": "Use another account",
     "urlKeyMinLength": "Must be at least 3 characters",
+    "urlKeyTaken": "That URL is already taken. Try another.",
+    "urlKeyTakenSuggestion": "Try “{suggestion}” instead",
     "useDifferentEmail": "Use a different email",
     "verificationCode": "Verification code",
     "verifyCode": "Verify code",
     "verifying": "Verifying…",
-    "weSentCodeTo": "We sent a code to",
     "workspaceUrl": "Workspace URL"
   },
   "commandPalette": {
@@ -303,11 +318,16 @@
     "searchPlaceholder": "Search issues, commands…",
     "sections": {
       "actions": "Actions",
+      "docs": "Docs",
       "issues": "Issues",
-      "recent": "Recent"
+      "projects": "Projects",
+      "recent": "Recent",
+      "teams": "Teams",
+      "views": "Views"
     },
     "submenu": {
       "actions": "Issue actions…",
+      "current": "Current",
       "noAssignee": "No assignee",
       "noOptions": "No options",
       "setAssignee": "Set assignee…",
@@ -339,6 +359,7 @@
     "settings": "Settings",
     "signOut": "Sign out",
     "somethingWentWrong": "Something went wrong. Please try again.",
+    "typeToConfirm": "Type {text} to confirm",
     "undo": "Undo"
   },
   "config": {
@@ -392,6 +413,7 @@
       "yjsPort": "Yjs port",
       "yjsPublicUrl": "Yjs public URL"
     },
+    "filterPlaceholder": "Filter settings by name or key",
     "inheritedFrom": "Inherited from {source}",
     "invite": {
       "expiryDays": "Invite expiry (days)",
@@ -411,6 +433,10 @@
       "httpSampleRate": "HTTP access-log sample rate",
       "level": "Log level"
     },
+    "noMatches": "No settings match your filter.",
+    "numberRange": "Must be between {min} and {max}.",
+    "numberRequired": "Enter a number, or use reset to go back to the inherited value.",
+    "readOnlyChip": "Read-only · set via environment",
     "resetToast": "Reset to inherited",
     "resetToInherited": "Reset to inherited",
     "restartRequired": "Restart required",
@@ -425,6 +451,7 @@
     "setHere": "Set here",
     "title": "Platform configuration",
     "unsetEnv": "Set {name} to change this",
+    "usingDefault": "Default",
     "webhook": {
       "autoDisableAfter": "Auto-disable after consecutive failures",
       "maxAttempts": "Webhook delivery attempts",
@@ -479,6 +506,8 @@
     "notFound": "This view no longer exists or was deleted.",
     "rename": "Rename view",
     "renamed": "View renamed",
+    "resetChanges": "Reset",
+    "unsavedChanges": "Unsaved changes",
     "updateFailed": "Failed to update view",
     "updateFilters": "Update filters to current",
     "viewMenu": "View actions"
@@ -578,8 +607,13 @@
     },
     "failedToLoad": "Failed to load data. Please refresh.",
     "list": {
+      "daysLeft_one": "{count} day left",
+      "daysLeft_other": "{count} days left",
       "emptyDescription": "Cycles help you plan and track work in time-boxed iterations.",
       "emptyTitle": "No cycles yet",
+      "enableCycles": "Enable cycles in team settings",
+      "showMore": "Show {count} more",
+      "teamTitle": "{team} — Cycles",
       "title": "Cycles"
     },
     "status": {
@@ -591,9 +625,10 @@
   },
   "documents": {
     "archive": "Archive",
-    "archiveConfirm": "Archive \"{title}\"? It will be hidden from the list but can be restored.",
+    "archiveConfirm": "Archive \"{title}\"? It will be hidden from the list.",
     "archiveFailed": "Failed to archive document",
     "backToDocs": "Back to documents",
+    "breadcrumb": "Breadcrumb",
     "createFailed": "Failed to create document",
     "createFirst": "Create your first document",
     "creating": "Creating…",
@@ -608,10 +643,15 @@
     "loadFailed": "Failed to load data. Please refresh.",
     "moreActions": "More actions",
     "newDocument": "New document",
-    "startWriting": "Start writing...",
+    "rename": "Rename",
+    "saved": "Saved",
+    "saveFailed": "Save failed",
+    "saving": "Saving…",
+    "startWriting": "Start writing…",
     "teamDocsTitle": "{teamName} — Docs",
     "teamNotFound": "Team not found.",
     "title": "Documents",
+    "titleLabel": "Document title",
     "untitled": "Untitled"
   },
   "editor": {
@@ -622,10 +662,14 @@
       "urlLabel": "Embed URL (YouTube or Loom)",
       "videoTitle": "Embedded video"
     },
+    "imageTooLarge": "Image is too large (2 MB max)",
+    "imageUploadFailed": "Image upload failed",
     "linkPrompt": "URL",
     "mermaid": {
+      "done": "Done",
       "editHint": "Double-click to edit",
-      "label": "Mermaid diagram"
+      "label": "Mermaid diagram",
+      "renderError": "Diagram error: {message}"
     },
     "noResults": "No results",
     "placeholder": "Add a description…",
@@ -666,6 +710,7 @@
         "description": "Small section heading",
         "title": "Heading 3"
       },
+      "label": "Insert block",
       "numberedList": {
         "description": "Ordered list",
         "title": "Numbered List"
@@ -683,6 +728,16 @@
         "title": "Toggle"
       }
     },
+    "suggestions": "Suggestions",
+    "table": {
+      "addColumn": "Add column",
+      "addRow": "Add row",
+      "deleteColumn": "Delete column",
+      "deleteRow": "Delete row",
+      "deleteTable": "Delete table",
+      "label": "Table controls",
+      "toggleHeader": "Toggle header"
+    },
     "toolbar": {
       "blockquote": "Blockquote",
       "bold": "Bold",
@@ -695,6 +750,7 @@
       "insertImage": "Insert image",
       "insertTable": "Insert table",
       "italic": "Italic",
+      "label": "Formatting",
       "link": "Link",
       "orderedList": "Ordered list",
       "strikethrough": "Strikethrough",
@@ -752,7 +808,9 @@
     "notFoundTitle": "Page not found",
     "somethingWentWrong": "Something went wrong",
     "tryAgain": "Try again",
-    "unexpectedErrorDetail": "The page hit an unexpected error. Try again — if it keeps happening, reload or come back in a minute."
+    "unexpectedErrorDetail": "The page hit an unexpected error. Try again — if it keeps happening, reload or come back in a minute.",
+    "workspaceNotFoundDetail": "The page you followed doesn't exist here, or it was moved or deleted.",
+    "workspaceNotFoundTitle": "Page not found in this workspace"
   },
   "favorites": {
     "added": "Added to favorites",
@@ -785,6 +843,8 @@
       "moreActions": "More actions",
       "noProjectsToAdd": "No projects to add.",
       "noProjectsYet": "No projects yet.",
+      "projectCount_one": "{count} project",
+      "projectCount_other": "{count} projects",
       "projects": "Projects ({count})",
       "removedProject": "Removed {name}",
       "removeProjectFailed": "Failed to remove project",
@@ -810,11 +870,13 @@
     "accepting": "Joining…",
     "expiredBody": "This invitation has expired, been revoked, or was already used. Ask an admin of the workspace to send a new one.",
     "expiredTitle": "Invitation no longer valid",
+    "goToSignIn": "Go to sign in",
     "invitedAs": "You'll join as {role}.",
     "invitedBy": "{inviter} invited you to join {organization}.",
     "invitedTo": "You've been invited to join {organization}.",
     "signInCta": "Sign in",
     "signInPrompt": "Sign in as {email} to accept this invitation.",
+    "signOutSwitch": "Sign out and switch account",
     "title": "Workspace invitation",
     "wrongAccount": "This invitation was sent to {email}, but you're signed in as {current}. Sign in with the invited address to accept it."
   },
@@ -907,9 +969,10 @@
       "discard": "Discard",
       "discardConfirmBody": "You have unsaved changes that will be lost if you close this.",
       "discardConfirmTitle": "Discard this issue?",
-      "issueCreated": "Issue created",
+      "issueCreatedNamed": "{identifier} created",
       "noTeamsDescription": "Issues belong to teams. Create a team to start tracking work.",
       "noTeamsTitle": "Create a team first",
+      "openIssue": "Open",
       "suggest": "Suggest",
       "suggestTitleFromDescription": "Suggest a title from the description",
       "team": "Team",
@@ -956,6 +1019,7 @@
       "addRelation": "Add relation",
       "blockedBy": "Blocked by",
       "blocks": "Blocks",
+      "duplicatedBy": "Duplicated by",
       "duplicateOf": "Duplicate of",
       "empty": "No relations.",
       "failedToCreate": "Failed to create relation",
@@ -976,7 +1040,8 @@
         "cancelled": "Cancelled",
         "done": "Done",
         "inProgress": "In Progress",
-        "todo": "Todo"
+        "todo": "Todo",
+        "triage": "Triage"
       },
       "empty": "No sub-issues yet.",
       "failedToCreate": "Failed to create sub-issue",
@@ -1039,6 +1104,7 @@
   "issues": {
     "actionsFor": "Actions for {title}",
     "add": "Add",
+    "addFilter": "Add filter",
     "and": "AND",
     "archive": "Archive",
     "archivedManyToast": "{count} issues archived",
@@ -1050,9 +1116,11 @@
     "bulkUpdateFailed": "Failed to update issues",
     "clear": "Clear",
     "clearAll": "Clear all",
+    "clearFilters": "Clear filters",
     "clearSelection": "Clear selection",
     "columnPicker": "Column picker",
     "columns": "Columns",
+    "columnsWideOnly": "Columns show on screens 1024px and wider; the detail panel has every property.",
     "copyBranchName": "Copy branch name",
     "copyIssueId": "Copy issue ID",
     "copyIssueUrl": "Copy issue URL",
@@ -1071,16 +1139,21 @@
     "draggingCount_one": "Dragging {count} issue",
     "draggingCount_other": "Dragging {count} issues",
     "dueDate": "Due date",
+    "editFilter": "Edit filter",
     "estimate": "Estimate",
     "estimatePrompt": "Estimate:",
     "exportCsv": "Export CSV",
     "failedToLoad": "Failed to load data. Please refresh.",
     "false": "False",
     "filter": "Filter",
+    "filterMatchAll": "Match all",
+    "filterMatchAny": "Match any",
+    "filterMatchToggle": "Toggle between matching all or any of the filters",
     "ganttEmptyMessage": "No issues with start or due dates. Add dates to issues to populate the timeline.",
     "groupBy": "Group by",
     "groupByAssignee": "Group by assignee",
     "groupByLabel": "Group by",
+    "groupByNone": "No grouping",
     "groupByPriority": "Group by priority",
     "groupByStatus": "Group by status",
     "issuesCount_one": "{count} issue",
@@ -1090,6 +1163,9 @@
     "labels": "Labels",
     "lastUpdatedDaysAgo_one": "Last updated {count} day ago",
     "lastUpdatedDaysAgo_other": "Last updated {count} days ago",
+    "layoutBoard": "Board",
+    "layoutList": "List",
+    "layoutTimeline": "Timeline",
     "listViewShortcut": "List view (Alt+1)",
     "moveIssue": "Move {identifier}",
     "myIssues": "My Issues",
@@ -1100,6 +1176,8 @@
     "noIssuesDescription": "Nothing matches this view. Create an issue or widen the filters.",
     "noIssuesFoundPrefix": "No issues found. Press",
     "noIssuesFoundSuffix": "to create one.",
+    "noIssuesMatchFilters": "No issues match these filters",
+    "noIssuesMatchFiltersDescription": "Try removing a filter to see more issues.",
     "noSwimlanes": "No swimlanes",
     "nothingToExport": "Nothing to export — apply different filters or add issues.",
     "openInNewTab": "Open in new tab",
@@ -1111,6 +1189,12 @@
     "operatorIsNotSet": "is not set",
     "operatorIsSet": "is set",
     "or": "OR",
+    "orderByCreated": "Newest",
+    "orderByDueDate": "Due date",
+    "orderByLabel": "Order by",
+    "orderByManual": "Manual order",
+    "orderByPriority": "Priority",
+    "orderByUpdated": "Last updated",
     "pickerNoIssuesFound": "No issues found",
     "pickerSearchPlaceholder": "Search issues…",
     "priority": "Priority",
@@ -1120,6 +1204,8 @@
     "restoreFailed": "Failed to restore issue",
     "saveCurrentFiltersAsView": "Save current filters as a view",
     "saveView": "Save view",
+    "saveViewSummary_one": "{count} filter · {layout}",
+    "saveViewSummary_other": "{count} filters · {layout}",
     "scope": {
       "assigned": "Assigned",
       "created": "Created"
@@ -1127,6 +1213,7 @@
     "selectAllCount": "Select all {count}",
     "selectEllipsis": "Select…",
     "selectedCount": "{count} selected",
+    "selectIssue": "Select {identifier}",
     "setEstimate": "Set estimate",
     "setEstimateForSelectedPrompt": "Set estimate for selected issues:",
     "setPriorityN": "Set {priority}",
@@ -1158,6 +1245,9 @@
     "unassigned": "Unassigned",
     "updateFailed": "Failed to update issue",
     "valueEllipsis": "Value…",
+    "valuesSelected_one": "{count} selected",
+    "valuesSelected_other": "{count} selected",
+    "viewLayout": "View layout",
     "viewSaved": "View saved"
   },
   "language": {
@@ -1243,12 +1333,15 @@
     "myIssues": "My Issues",
     "newTeam": "New team",
     "openMenu": "Open menu",
+    "primary": "Primary",
     "projects": "Projects",
     "removeFromFavorites": "Remove from favorites",
     "removeNamedFromFavorites": "Remove {name} from favorites",
     "searchHint": "Search…",
+    "sidebar": "Sidebar",
     "teams": "Teams",
     "triage": "Triage",
+    "unreadCount": "{count} unread",
     "userMenu": "Account and preferences",
     "workspaceSettings": "Workspace settings"
   },
@@ -1291,6 +1384,7 @@
       "snoozed": "Notification snoozed",
       "snoozeFailed": "Failed to snooze notification"
     },
+    "unreadBadge": "{count} unread",
     "unreadCount": "Unread ({count})"
   },
   "projects": {
@@ -1326,6 +1420,7 @@
     "failedToUpdateMilestone": "Failed to update milestone",
     "failedToUpdateStatus": "Failed to update status",
     "healthLabel": "Health:",
+    "invalidRange": "The target date must be on or after the start date.",
     "issuesCount": "Issues ({count})",
     "issuesCountRatio": "{completed} / {total} issues ({progress}%)",
     "lead": "Lead",
@@ -1339,6 +1434,7 @@
     "namePlaceholder": "e.g. Q2 Launch",
     "newProject": "New project",
     "noIssuesAssigned": "No issues assigned to this project yet. Use Shift+P on any issue to assign it.",
+    "noLead": "No lead",
     "noMilestonesYet": "No milestones yet. Add one to track key checkpoints.",
     "noProjectsYet": "No projects yet",
     "noTeamsAvailable": "No teams available. You can still create this project without a team.",
@@ -1378,7 +1474,10 @@
   },
   "properties": {
     "assignee": {
-      "noAssignee": "No assignee"
+      "assignToMe": "Assign to me",
+      "noAssignee": "No assignee",
+      "noUsersFound": "No people found",
+      "searchPlaceholder": "Search people..."
     },
     "cycle": {
       "active": "Active",
@@ -1392,8 +1491,13 @@
       "clearDate": "Clear date",
       "dueDate": "Due date",
       "dueOn": "Due {date}",
+      "endOfWeek": "End of week",
+      "nextWeek": "Next week",
       "noDueDate": "No due date",
-      "setDate": "Set date"
+      "orPickDate": "Or pick a date",
+      "setDate": "Set date",
+      "today": "Today",
+      "tomorrow": "Tomorrow"
     },
     "estimate": {
       "noEstimate": "No estimate",
@@ -1401,8 +1505,12 @@
       "setEstimate": "Set estimate"
     },
     "label": {
+      "createFailed": "Couldn't create label",
+      "createLabel": "Create label \"{name}\"",
       "labels": "Labels",
-      "noLabels": "No labels"
+      "noLabels": "No labels",
+      "noLabelsFound": "No labels found",
+      "searchPlaceholder": "Search labels..."
     },
     "milestone": {
       "clear": "Clear milestone",
@@ -1440,6 +1548,8 @@
       "title": "Save view"
     },
     "status": {
+      "noStatusesFound": "No statuses found",
+      "searchPlaceholder": "Search statuses...",
       "status": "Status"
     },
     "updateForm": {
@@ -1491,16 +1601,20 @@
         "paused": "Paused",
         "planned": "Planned"
       },
-      "target": "Target: {date}"
+      "target": "Target: {date}",
+      "tooManyAttempts": "Too many attempts — try again in a few minutes.",
+      "wrongPassword": "That password is incorrect."
     },
     "settings": {
       "addToRoadmap": "Add to roadmap",
+      "description": "Choose which projects appear on your public roadmap.",
       "descriptionLabel": "Description",
       "descriptionPlaceholder": "An optional description shown at the top of the roadmap",
       "hidden": "Hidden",
       "newPassword": "New password",
       "newPasswordPlaceholder": "Set a new password (optional)",
       "noActiveProjects": "No active projects found.",
+      "offHint": "The roadmap is private while this is off. Changes below are still saved.",
       "passwordIsSet": "Password is set",
       "passwordProtection": "Password protection",
       "passwordWillBeRemoved": "Password will be removed on save.",
@@ -1529,6 +1643,7 @@
   "settings": {
     "auditLog": {
       "allActions": "All actions",
+      "allUsers": "All users",
       "apply": "Apply",
       "clear": "Clear",
       "columnAction": "Action",
@@ -1542,37 +1657,74 @@
       "loadMore": "Load more",
       "noEntriesFound": "No audit log entries found.",
       "system": "system",
-      "title": "Audit Log"
+      "title": "Audit Log",
+      "toggleDetails": "Show details"
     },
     "automations": {
       "actionConfigPlaceholder": "Action config JSON, e.g. {\"priority\": 1} or {\"stateId\": \"...\"}",
+      "actions": {
+        "add_label": "Add label",
+        "post_comment": "Post comment",
+        "set_assignee": "Set assignee",
+        "set_priority": "Set priority",
+        "set_state": "Set status"
+      },
+      "chooseLabel": "Choose a label",
+      "chooseState": "Choose a status",
+      "commentPlaceholder": "Comment text",
+      "createError": "Failed to create the rule",
       "createRule": "Create rule",
       "creatingEllipsis": "Creating…",
+      "deleteError": "Failed to delete the rule",
       "deleteRuleConfirm": "Delete rule \"{name}\"?",
       "description": "Rules fire on workspace events. Each rule has a trigger, optional conditions, and one or more actions. Owner / admin only.",
       "disableRule": "Disable rule",
       "enableRule": "Enable rule",
+      "fieldAssignee": "Assignee to set",
+      "fieldComment": "Comment to post",
+      "fieldLabel": "Label to add",
+      "fieldPriority": "Priority to set",
+      "fieldState": "Status to set",
+      "forbidden": "Only workspace owners and admins can manage automations.",
       "invalidJsonError": "Action config must be valid JSON",
       "last": "last: {date}",
       "loadError": "Failed to load automation rules",
       "noRulesYet": "No rules yet.",
       "ruleCreated": "Rule created",
       "ruleDeleted": "Rule deleted",
+      "ruleName": "Rule name",
       "ruleNamePlaceholder": "Rule name (e.g. Auto-assign urgent bugs)",
       "rulesCount": "Rules ({count})",
       "runs": "runs: {count}",
       "then": "then",
       "title": "Automations",
+      "triggers": {
+        "comment_created": "A comment is added",
+        "issue_assignee_changed": "An issue's assignee changes",
+        "issue_created": "An issue is created",
+        "issue_priority_changed": "An issue's priority changes",
+        "issue_state_changed": "An issue's status changes"
+      },
+      "unassigned": "Unassigned",
+      "unsupportedAction": "This action type can't be configured here",
+      "updateError": "Failed to update the rule",
       "when": "when"
     },
     "import": {
+      "allTeams": "All teams",
+      "chooseCsv": "Choose CSV file",
+      "chooseTeam": "Choose a team",
+      "columnsHint": "Expected columns: Title (required), Description, Priority, Assignee (email), Status (name). You can map your own column names after choosing a file.",
       "couldNotParseCsv": "Could not parse CSV",
       "createdSkipped": "Created {created}, skipped {skipped}.",
+      "csvFile": "CSV file",
       "description": "Import issues from a CSV file, or export your data as JSON.",
+      "downloadTemplate": "Download template",
       "exportDescription": "Download a JSON snapshot of issues for the selected team (or all teams).",
       "exportFailed": "Export failed",
       "exportHeading": "Export",
       "exportJson": "Export JSON",
+      "exportTeam": "Team",
       "fieldAssignee": "Assignee (email)",
       "fieldDescription": "Description",
       "fieldPriority": "Priority",
@@ -1584,8 +1736,10 @@
       "importedCount_other": "Imported {count} issues",
       "importFailed": "Import failed",
       "importHeading": "Import issues from CSV",
+      "importIntoTeam": "Import into team",
       "importingEllipsis": "Importing…",
       "mapTitleColumn": "Map the Title column",
+      "noFileChosen": "No file chosen",
       "noneOption": "— none —",
       "noTeams": "No teams",
       "rowsDetected_one": "{count} row detected. Map columns to issue fields:",
@@ -1603,6 +1757,7 @@
       "connectSlack": "Connect Slack",
       "connectSlackHintPrefix": "Connect your Slack workspace, then set the",
       "connectSlackHintSuffix": "slash command request URL to:",
+      "copied": "Copied to clipboard",
       "defaultTeamForNewIssues": "Default team for new issues",
       "defaultTeamUpdated": "Default team updated",
       "defaultTeamUpdateError": "Failed to update default team",
@@ -1623,13 +1778,15 @@
       "slackDescriptionSuffix": "command.",
       "slackDisconnectError": "Failed to disconnect Slack",
       "slackDisconnected": "Slack disconnected",
+      "slackRequestUrlLabel": "Slack request URL",
       "title": "Integrations",
       "webhookSecretInstructions": "Enter a webhook secret that you'll configure in GitHub when setting up the webhook. It must be at least 16 characters. Keep it secret — it's used to verify that incoming events are genuinely from GitHub.",
       "webhookSecretPlaceholder": "Webhook secret (min 16 chars)",
       "webhookSecretTooShort": "Webhook secret must be at least 16 characters",
       "webhookSecretUpdated": "Webhook secret updated",
       "webhookSecretUpdateError": "Failed to rotate webhook secret",
-      "webhookUrlHint": "Webhook URL (configure this in your GitHub repo or org settings):"
+      "webhookUrlHint": "Webhook URL (configure this in your GitHub repo or org settings):",
+      "webhookUrlLabel": "Webhook URL"
     },
     "roles": {
       "admin": "Admin",
@@ -1644,6 +1801,7 @@
       "configured": "Configured",
       "copiedToClipboard": "{label} copied to clipboard",
       "copy": "Copy",
+      "copyField": "Copy {label}",
       "copyToken": "Copy token",
       "copyTokenNowWarning": "Copy this token now — it will not be shown again.",
       "createdOn": "Created {date}",
@@ -1654,7 +1812,9 @@
       "enableSamlSso": "Enable SAML SSO",
       "enableSamlSsoDescription": "Allow members to authenticate via SSO",
       "enforceSso": "Enforce SSO",
+      "enforceSsoConfirm": "Once saved, every member must sign in through your identity provider, including you. If the IdP URL or certificate is wrong, nobody will be able to sign in. Use Test SSO first to confirm it works.",
       "enforceSsoDescription": "Require all members to sign in via SSO",
+      "enforceSsoTitle": "Enforce single sign-on?",
       "forbidden": "Only workspace owners and admins can view and manage single sign-on and provisioning.",
       "idpCertificate": "IDP Certificate (PEM)",
       "idpCertRequired": "IDP Certificate is required",
@@ -1696,6 +1856,7 @@
       "spEntityIdLabel": "SP Entity ID / Metadata URL",
       "testSso": "Test SSO",
       "title": "Security",
+      "tokenLabel": "Token label",
       "tokenLabelPlaceholder": "Token label (e.g. Okta)",
       "tokenRevoked": "Token revoked",
       "tokenRevokeError": "Failed to revoke token"
@@ -1745,12 +1906,17 @@
       "deleteAllIssues": "Delete all issues",
       "deleteAllIssuesHint": "Issues will be archived along with the team",
       "deleteTeam": "Delete team",
+      "deleteTeamConfirmDelete": "Permanently delete \"{name}\" and all {count} of its issues? This cannot be undone.",
+      "deleteTeamConfirmMove": "Delete \"{name}\" and move its {count} issues to the team you chose? The team itself cannot be recovered.",
+      "deleteTeamDeleteIssuesConfirm": "Delete team and {count} issues",
       "deleteTeamError": "Failed to delete team",
       "deleteTeamHint_one": "This will archive the team. Choose what happens to its {count} issue.",
       "deleteTeamHint_other": "This will archive the team. Choose what happens to its {count} issues.",
+      "deleteTeamMoveIssuesConfirm": "Delete team, move {count} issues",
       "deletingEllipsis": "Deleting…",
       "description": "Description",
       "descriptionPlaceholder": "What does this team work on?",
+      "discard": "Discard",
       "estimation": {
         "descriptions": {
           "exponential": "Points double at each step: 1, 2, 4, 8, 16.",
@@ -1769,6 +1935,7 @@
           "tShirt": "T-shirt sizes"
         }
       },
+      "fixHighlightedFields": "Some fields need attention before this can be saved.",
       "general": "General",
       "identifier": "Identifier",
       "identifierHint": "Used in issue IDs (e.g. {key}-123). Cannot be changed.",
@@ -1781,6 +1948,7 @@
         "timezoneHint": "Used for cycle boundaries and due dates."
       },
       "invalidNumber": "Enter a whole number greater than zero, or leave the field empty.",
+      "invalidNumberRange": "Enter a whole number from {min} to {max}.",
       "labels": {
         "add": "Add label",
         "archiveAria": "Archive label {name}",
@@ -1806,8 +1974,13 @@
       "memberAdded": "{name} added to team",
       "memberRemoved": "Member removed",
       "members": "Members",
+      "membersSaveNote": "Changes in this section and below are saved as you make them.",
       "moveIssuesHint": "Issues will be reassigned with new identifiers",
       "moveIssuesToAnotherTeam": "Move issues to another team",
+      "navFields": "Custom fields",
+      "navLabels": "Labels",
+      "navStates": "Workflow states",
+      "navTemplates": "Templates",
       "noParentTeam": "None (top-level team)",
       "notFound": "Team not found.",
       "ownerRoleGranted": "Owner role granted",
@@ -1816,11 +1989,13 @@
       "parentTeamHint": "Makes this a sub-team that inherits settings from its parent.",
       "privateTeam": "Private team",
       "privateTeamDescription": "Only team members can see this team and its issues",
+      "readOnlyNotice": "You can view this team's settings, but only team owners and workspace admins can change them.",
       "removeMemberError": "Failed to remove member",
       "roleUpdated": "Role updated",
       "saveChanges": "Save changes",
       "saveError": "Failed to save",
       "saveErrorRetry": "Failed to save — please try again",
+      "sections": "Sections",
       "selectATeam": "Select a team…",
       "selectTeamToMoveIssues": "Please select a team to move issues to",
       "settingsHeading": "{name} — Settings",
@@ -1828,6 +2003,7 @@
       "teamName": "Team name",
       "triage": "Triage",
       "triageDescription": "New issues start in Triage and must be reviewed before entering the backlog",
+      "unsavedChanges": "You have unsaved changes to this team's settings.",
       "updateRoleError": "Failed to update role",
       "whatShouldHappenToIssues": "What should happen to this team's issues?",
       "workflow": "Workflow",
@@ -1900,8 +2076,10 @@
     },
     "webhooks": {
       "addWebhook": "+ Add webhook",
+      "clearAllEvents": "Clear all",
       "consecutiveFailures_one": "{count} consecutive failure",
       "consecutiveFailures_other": "{count} consecutive failures",
+      "copySecret": "Copy signing secret",
       "createError": "Failed to create webhook",
       "createValidationError": "Name, URL, and at least one event are required.",
       "createWebhook": "Create webhook",
@@ -1923,22 +2101,30 @@
       "enable": "Enable",
       "enabled": "Enabled",
       "events": "Events",
+      "eventsRequired": "Select at least one event.",
       "forbidden": "Only workspace admins can manage webhooks.",
       "hiddenNonAdmin": "(hidden — non-admin)",
       "loadError": "Failed to load webhooks",
       "name": "Name",
       "namePlaceholder": "Production CI",
+      "nameRequired": "Enter a name for this webhook.",
       "noWebhooksYet": "No webhooks yet.",
       "reveal": "Reveal",
       "rotate": "Rotate",
       "rotateConfirm": "Rotate the signing secret? Existing receivers will need the new value.",
+      "rotateError": "Failed to rotate the signing secret",
+      "secretCopied": "Signing secret copied",
       "secretRotated": "Signing secret rotated",
+      "selectAllEvents": "Select all",
       "signingSecret": "Signing secret:",
       "title": "Webhooks",
       "updateError": "Failed to update webhook",
       "url": "URL",
+      "urlRequired": "Enter the URL that should receive events.",
       "webhookCreated": "Webhook created",
-      "webhookDeleted": "Webhook deleted"
+      "webhookDeleted": "Webhook deleted",
+      "webhookDisabled": "Webhook disabled",
+      "webhookEnabled": "Webhook enabled"
     },
     "workspace": {
       "accentDescription": "The accent colour used for selection, focus and primary actions.",
@@ -1971,6 +2157,7 @@
       "cycleCalendarFeed": "Cycle calendar feed",
       "cycleCalendarFeedDescription": "Subscribe to your cycles in Google Calendar, Apple Calendar, or any .ics client.",
       "dataRegion": "Data region",
+      "description": "Name, URL and notification defaults for this workspace.",
       "emailNotifications": "Email notifications",
       "emailNotificationsDescription": "Receive emails for assignments, mentions, and status changes",
       "expires": "Expires",
@@ -2020,6 +2207,7 @@
       "noMembersFound": "No members found.",
       "noTeamsYet": "No teams yet.",
       "notificationPrefsError": "Failed to update notification preferences",
+      "notificationPrefsSaved": "Notification preference saved",
       "organization": "Organization",
       "orgLoadError": "Could not load organization details.",
       "orgUpdated": "Workspace updated",
@@ -2050,6 +2238,8 @@
       "revokeToken": "Revoke token",
       "revokeTokenConfirm": "Revoke token \"{label}\"?",
       "rotate": "Rotate",
+      "rotateCalendarConfirm": "Every calendar app subscribed to the current URL will stop updating until you subscribe again with the new one.",
+      "rotateCalendarTitle": "Rotate calendar feed URL?",
       "security": "Security",
       "securityDescription": "SAML SSO and authentication policies",
       "teams": "Teams",
@@ -2093,6 +2283,7 @@
     "noMatches": "No matches",
     "optional": "optional",
     "owner": "Owner",
+    "ownersOnlyHint": "Row actions are limited to team owners.",
     "privateTeam": "Private team",
     "privateTeamHint": "Only team members can see this team and its issues",
     "removeConfirm": "Remove {name} from this team?",

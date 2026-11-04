@@ -69,6 +69,19 @@ export async function generateMetadata(): Promise<Metadata> {
       // iOS has no maskable-icon concept and composites transparency onto
       // black, so it gets its own full-bleed icon.
       apple: '/icons/apple-touch-icon-180.png',
+      // Declared explicitly so the PNG sizes the manifest ships also serve as
+      // browser-tab icons on engines that skip /favicon.ico.
+      icon: [
+        { sizes: 'any', url: '/favicon.ico' },
+        { sizes: '192x192', type: 'image/png', url: '/icons/icon-192.png' },
+        { sizes: '512x512', type: 'image/png', url: '/icons/icon-512.png' },
+      ],
+    },
+    openGraph: {
+      description: t('meta.description'),
+      siteName: appName,
+      title: appName,
+      type: 'website',
     },
     title: appName,
   };

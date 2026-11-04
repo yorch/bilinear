@@ -43,8 +43,11 @@ test.describe('Command Palette', () => {
     // useLayoutEffect-installed keydown listener has run before we send keys.
     await expect(page.locator('[data-testid="command-palette"]')).toBeVisible();
     await expect(page.locator('[data-testid="command-palette-item"]').first()).toBeVisible();
+    // The first row is highlighted on open (Enter runs it); ArrowDown moves on.
+    const items = page.locator('[data-testid="command-palette-item"]');
+    await expect(items.first()).toHaveAttribute('data-highlighted', 'true');
     await page.keyboard.press('ArrowDown');
-    const firstItem = page.locator('[data-testid="command-palette-item"]').first();
-    await expect(firstItem).toHaveAttribute('data-highlighted', 'true');
+    await expect(items.nth(1)).toHaveAttribute('data-highlighted', 'true');
+    await expect(items.first()).not.toHaveAttribute('data-highlighted', 'true');
   });
 });

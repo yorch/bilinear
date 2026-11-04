@@ -42,7 +42,8 @@
       "banner": "Estás suplantando este espacio de trabajo — con sesión iniciada desde la consola de la plataforma.",
       "bannerAs": "Estás suplantando este espacio de trabajo como {name} — con sesión iniciada desde la consola de la plataforma.",
       "stop": "Dejar de suplantar",
-      "stopping": "Deteniendo…"
+      "stopping": "Deteniendo…",
+      "viewingAs": "Viendo {org} como {user} — sesión iniciada por {admin}. Las acciones quedan auditadas."
     },
     "nav": {
       "adminTitle": "Administración",
@@ -56,6 +57,8 @@
       "users": "Usuarios"
     },
     "tenants": {
+      "archive": "Archivar",
+      "archiveConfirm": "¿Archivar \"{name}\"? Todos los miembros pierden el acceso de inmediato. Los datos se conservan y el espacio se puede restaurar desde esta consola.",
       "archivedToast": "Se archivó {name}",
       "backBreadcrumb": "← Organizaciones",
       "backToTenants": "← Volver a las organizaciones",
@@ -124,6 +127,7 @@
       "impersonateActive": "Iniciar sesión como este usuario",
       "impersonateNoOrg": "No hay ninguna organización en la que suplantar",
       "makeAdmin": "Hacer administrador",
+      "makeAdminConfirm": "¿Hacer administrador de la plataforma a {name}? Podrá ver y gestionar todos los espacios, usuarios y ajustes de esta instalación.",
       "noOrgToImpersonate": "El usuario no tiene ninguna organización en la que suplantar",
       "pickOrgPrompt": "¿En qué organización quieres suplantar a {name}?",
       "reactivate": "Reactivar",
@@ -131,10 +135,12 @@
       "revokeAdmin": "Revocar administrador",
       "revokeAdminConfirm": "¿Revocar el rol de administrador de plataforma a {name}?",
       "searchPlaceholder": "Buscar por nombre o correo",
+      "selfActionBlocked": "No puedes hacer esto con tu propia cuenta.",
       "statusActive": "Activo",
       "statusSuspended": "Suspendido",
       "subtitle": "Todas las cuentas de todas las organizaciones. Suspende para bloquear el inicio de sesión de forma global.",
       "suspend": "Suspender",
+      "suspendConfirm": "¿Suspender a {name}? Se cerrará su sesión y no podrá entrar a ningún espacio de trabajo hasta que se reactive.",
       "suspendedToast": "Se suspendió a {name}",
       "title": "Usuarios"
     }
@@ -238,6 +244,8 @@
       "subhead": "Diseñado para funcionar sin conexión. Escribe en pleno vuelo, aterriza y encuentra la cola ya vacía."
     },
     "checkYourEmail": "Revisa tu correo",
+    "codeHint": "El código caduca en 15 minutos. Revisa la carpeta de spam si no lo ves.",
+    "codeResent": "Te hemos enviado un código nuevo.",
     "continueWithEmail": "Continuar con correo electrónico",
     "continueWithGitHub": "Continuar con GitHub",
     "continueWithGoogle": "Continuar con Google",
@@ -246,25 +254,32 @@
     "createWorkspaceSubtitle": "Configura tu organización para comenzar",
     "creatingWorkspace": "Creando espacio de trabajo…",
     "emailAddress": "Correo electrónico",
+    "emailInvalid": "Ingresa un correo electrónico válido.",
     "emailPlaceholder": "tu@ejemplo.com",
-    "enterCode": "Ingresa el código de 6 dígitos que te enviamos",
+    "enterCodeSent": "Ingresa el código de 6 dígitos que enviamos a {email}",
     "failedToEstablishSession": "No se pudo establecer la sesión. Inténtalo de nuevo.",
     "failedToStart": "No se pudo iniciar el acceso con {provider}",
     "invalidCode": "Código inválido o expirado. Inténtalo de nuevo.",
+    "oauthErrorTitle": "No pudimos iniciar tu sesión",
     "oauthSignInFailed": "No se pudo iniciar sesión con {provider}. Inténtalo de nuevo.",
     "organizationName": "Nombre de la organización",
     "organizationNamePlaceholder": "Acme Inc.",
+    "resendCode": "Reenviar código",
+    "resendCodeIn": "Reenviar código en {seconds}s",
+    "retryWithProvider": "Reintentar con {provider}",
     "sending": "Enviando…",
-    "sessionExpiredOrTampered": "La sesión de inicio de sesión expiró o fue alterada. Inténtalo de nuevo.",
-    "signInSubtitle": "Ingresa tu correo para recibir un enlace de acceso",
+    "sessionExpiredOrTampered": "Tu sesión expiró. Inténtalo de nuevo.",
+    "signInSubtitle": "Te enviaremos por correo un código de acceso de 6 dígitos",
     "signInTitle": "Inicia sesión en {appName}",
     "signingInWithProvider": "Iniciando sesión con {provider}…",
+    "signOutSwitch": "Usar otra cuenta",
     "urlKeyMinLength": "Debe tener al menos 3 caracteres",
+    "urlKeyTaken": "Esa URL ya está en uso. Prueba con otra.",
+    "urlKeyTakenSuggestion": "Prueba con «{suggestion}»",
     "useDifferentEmail": "Usar otro correo electrónico",
     "verificationCode": "Código de verificación",
     "verifyCode": "Verificar código",
     "verifying": "Verificando…",
-    "weSentCodeTo": "Enviamos un código a",
     "workspaceUrl": "URL del espacio de trabajo"
   },
   "commandPalette": {
@@ -303,11 +318,16 @@
     "searchPlaceholder": "Busca tareas, comandos…",
     "sections": {
       "actions": "Acciones",
+      "docs": "Documentos",
       "issues": "Tareas",
-      "recent": "Recientes"
+      "projects": "Proyectos",
+      "recent": "Recientes",
+      "teams": "Equipos",
+      "views": "Vistas"
     },
     "submenu": {
       "actions": "Acciones de la tarea…",
+      "current": "Actual",
       "noAssignee": "Sin responsable",
       "noOptions": "Sin opciones",
       "setAssignee": "Establecer responsable…",
@@ -339,6 +359,7 @@
     "settings": "Configuración",
     "signOut": "Cerrar sesión",
     "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo.",
+    "typeToConfirm": "Escribe {text} para confirmar",
     "undo": "Deshacer"
   },
   "config": {
@@ -392,6 +413,7 @@
       "yjsPort": "Puerto Yjs",
       "yjsPublicUrl": "URL pública de Yjs"
     },
+    "filterPlaceholder": "Filtrar ajustes por nombre o clave",
     "inheritedFrom": "Heredado de {source}",
     "invite": {
       "expiryDays": "Caducidad de invitación (días)",
@@ -411,6 +433,10 @@
       "httpSampleRate": "Muestreo del registro HTTP",
       "level": "Nivel de registro"
     },
+    "noMatches": "Ningún ajuste coincide con el filtro.",
+    "numberRange": "Debe estar entre {min} y {max}.",
+    "numberRequired": "Ingresa un número, o usa restablecer para volver al valor heredado.",
+    "readOnlyChip": "Solo lectura · definido por entorno",
     "resetToast": "Restablecido al heredado",
     "resetToInherited": "Restablecer al heredado",
     "restartRequired": "Requiere reinicio",
@@ -425,6 +451,7 @@
     "setHere": "Definido aquí",
     "title": "Configuración de la plataforma",
     "unsetEnv": "Define {name} para cambiarlo",
+    "usingDefault": "Predeterminado",
     "webhook": {
       "autoDisableAfter": "Desactivar tras fallos consecutivos",
       "maxAttempts": "Intentos de entrega de webhook",
@@ -479,6 +506,8 @@
     "notFound": "Esta vista ya no existe o fue eliminada.",
     "rename": "Renombrar vista",
     "renamed": "Vista renombrada",
+    "resetChanges": "Restablecer",
+    "unsavedChanges": "Cambios sin guardar",
     "updateFailed": "No se pudo actualizar la vista",
     "updateFilters": "Actualizar filtros con los actuales",
     "viewMenu": "Acciones de la vista"
@@ -578,8 +607,13 @@
     },
     "failedToLoad": "No se pudieron cargar los datos. Por favor, actualiza la página.",
     "list": {
+      "daysLeft_one": "Queda {count} día",
+      "daysLeft_other": "Quedan {count} días",
       "emptyDescription": "Los ciclos te ayudan a planificar y hacer seguimiento del trabajo en iteraciones de tiempo definido.",
       "emptyTitle": "Aún no hay ciclos",
+      "enableCycles": "Activar ciclos en los ajustes del equipo",
+      "showMore": "Mostrar {count} más",
+      "teamTitle": "{team} — Ciclos",
       "title": "Ciclos"
     },
     "status": {
@@ -591,9 +625,10 @@
   },
   "documents": {
     "archive": "Archivar",
-    "archiveConfirm": "¿Archivar \"{title}\"? Se ocultará de la lista, pero se puede restaurar.",
+    "archiveConfirm": "¿Archivar \"{title}\"? Se ocultará de la lista.",
     "archiveFailed": "Error al archivar el documento",
     "backToDocs": "Volver a documentos",
+    "breadcrumb": "Ruta de navegación",
     "createFailed": "No se pudo crear el documento",
     "createFirst": "Crea tu primer documento",
     "creating": "Creando…",
@@ -608,10 +643,15 @@
     "loadFailed": "No se pudieron cargar los datos. Actualiza la página.",
     "moreActions": "Más acciones",
     "newDocument": "Nuevo documento",
-    "startWriting": "Empieza a escribir...",
+    "rename": "Renombrar",
+    "saved": "Guardado",
+    "saveFailed": "Error al guardar",
+    "saving": "Guardando…",
+    "startWriting": "Empieza a escribir…",
     "teamDocsTitle": "{teamName} — Documentos",
     "teamNotFound": "Equipo no encontrado.",
     "title": "Documentos",
+    "titleLabel": "Título del documento",
     "untitled": "Sin título"
   },
   "editor": {
@@ -622,10 +662,14 @@
       "urlLabel": "URL para incrustar (YouTube o Loom)",
       "videoTitle": "Video incrustado"
     },
+    "imageTooLarge": "La imagen es demasiado grande (máx. 2 MB)",
+    "imageUploadFailed": "No se pudo subir la imagen",
     "linkPrompt": "URL",
     "mermaid": {
+      "done": "Listo",
       "editHint": "Haz doble clic para editar",
-      "label": "Diagrama Mermaid"
+      "label": "Diagrama Mermaid",
+      "renderError": "Error en el diagrama: {message}"
     },
     "noResults": "Sin resultados",
     "placeholder": "Añade una descripción…",
@@ -666,6 +710,7 @@
         "description": "Encabezado de sección pequeño",
         "title": "Encabezado 3"
       },
+      "label": "Insertar bloque",
       "numberedList": {
         "description": "Lista ordenada",
         "title": "Lista numerada"
@@ -683,6 +728,16 @@
         "title": "Desplegable"
       }
     },
+    "suggestions": "Sugerencias",
+    "table": {
+      "addColumn": "Añadir columna",
+      "addRow": "Añadir fila",
+      "deleteColumn": "Eliminar columna",
+      "deleteRow": "Eliminar fila",
+      "deleteTable": "Eliminar tabla",
+      "label": "Controles de tabla",
+      "toggleHeader": "Alternar encabezado"
+    },
     "toolbar": {
       "blockquote": "Cita",
       "bold": "Negrita",
@@ -695,6 +750,7 @@
       "insertImage": "Insertar imagen",
       "insertTable": "Insertar tabla",
       "italic": "Cursiva",
+      "label": "Formato",
       "link": "Enlace",
       "orderedList": "Lista numerada",
       "strikethrough": "Tachado",
@@ -752,7 +808,9 @@
     "notFoundTitle": "Página no encontrada",
     "somethingWentWrong": "Algo salió mal",
     "tryAgain": "Intentar de nuevo",
-    "unexpectedErrorDetail": "La página tuvo un error inesperado. Inténtalo de nuevo; si sigue ocurriendo, recarga o vuelve en un minuto."
+    "unexpectedErrorDetail": "La página tuvo un error inesperado. Inténtalo de nuevo; si sigue ocurriendo, recarga o vuelve en un minuto.",
+    "workspaceNotFoundDetail": "La página que seguiste no existe aquí, o fue movida o eliminada.",
+    "workspaceNotFoundTitle": "Página no encontrada en este espacio de trabajo"
   },
   "favorites": {
     "added": "Añadido a favoritos",
@@ -785,6 +843,8 @@
       "moreActions": "Más acciones",
       "noProjectsToAdd": "No hay proyectos para agregar.",
       "noProjectsYet": "Aún no hay proyectos.",
+      "projectCount_one": "{count} proyecto",
+      "projectCount_other": "{count} proyectos",
       "projects": "Proyectos ({count})",
       "removedProject": "Se quitó {name}",
       "removeProjectFailed": "No se pudo quitar el proyecto",
@@ -810,11 +870,13 @@
     "accepting": "Uniéndote…",
     "expiredBody": "Esta invitación ha caducado, fue revocada o ya se usó. Pide a un administrador del espacio de trabajo que envíe una nueva.",
     "expiredTitle": "La invitación ya no es válida",
+    "goToSignIn": "Ir a iniciar sesión",
     "invitedAs": "Te unirás como {role}.",
     "invitedBy": "{inviter} te ha invitado a unirte a {organization}.",
     "invitedTo": "Te han invitado a unirte a {organization}.",
     "signInCta": "Iniciar sesión",
     "signInPrompt": "Inicia sesión como {email} para aceptar esta invitación.",
+    "signOutSwitch": "Cerrar sesión y cambiar de cuenta",
     "title": "Invitación a un espacio de trabajo",
     "wrongAccount": "Esta invitación se envió a {email}, pero has iniciado sesión como {current}. Inicia sesión con la dirección invitada para aceptarla."
   },
@@ -907,9 +969,10 @@
       "discard": "Descartar",
       "discardConfirmBody": "Tienes cambios sin guardar que se perderán si cierras esto.",
       "discardConfirmTitle": "¿Descartar esta tarea?",
-      "issueCreated": "Tarea creada",
+      "issueCreatedNamed": "{identifier} creada",
       "noTeamsDescription": "Las tareas pertenecen a equipos. Crea un equipo para empezar a rastrear el trabajo.",
       "noTeamsTitle": "Crea un equipo primero",
+      "openIssue": "Abrir",
       "suggest": "Sugerir",
       "suggestTitleFromDescription": "Sugerir un título a partir de la descripción",
       "team": "Equipo",
@@ -956,6 +1019,7 @@
       "addRelation": "Agregar relación",
       "blockedBy": "Bloqueado por",
       "blocks": "Bloquea",
+      "duplicatedBy": "Duplicado por",
       "duplicateOf": "Duplicado de",
       "empty": "Sin relaciones.",
       "failedToCreate": "No se pudo crear la relación",
@@ -976,7 +1040,8 @@
         "cancelled": "Cancelado",
         "done": "Hecho",
         "inProgress": "En curso",
-        "todo": "Por hacer"
+        "todo": "Por hacer",
+        "triage": "Triaje"
       },
       "empty": "Aún no hay subtareas.",
       "failedToCreate": "No se pudo crear la subtarea",
@@ -1039,6 +1104,7 @@
   "issues": {
     "actionsFor": "Acciones para {title}",
     "add": "Agregar",
+    "addFilter": "Añadir filtro",
     "and": "Y",
     "archive": "Archivar",
     "archivedManyToast": "{count} incidencias archivadas",
@@ -1050,9 +1116,11 @@
     "bulkUpdateFailed": "Error al actualizar las tareas",
     "clear": "Limpiar",
     "clearAll": "Limpiar todo",
+    "clearFilters": "Limpiar filtros",
     "clearSelection": "Limpiar selección",
     "columnPicker": "Selector de columnas",
     "columns": "Columnas",
+    "columnsWideOnly": "Las columnas se muestran en pantallas de 1024px o más; el panel de detalle tiene todas las propiedades.",
     "copyBranchName": "Copiar nombre de rama",
     "copyIssueId": "Copiar ID de la tarea",
     "copyIssueUrl": "Copiar URL de la tarea",
@@ -1071,16 +1139,21 @@
     "draggingCount_one": "Arrastrando {count} tarea",
     "draggingCount_other": "Arrastrando {count} tareas",
     "dueDate": "Fecha de entrega",
+    "editFilter": "Editar filtro",
     "estimate": "Estimación",
     "estimatePrompt": "Estimación:",
     "exportCsv": "Exportar CSV",
     "failedToLoad": "No se pudieron cargar los datos. Actualiza la página.",
     "false": "Falso",
     "filter": "Filtro",
+    "filterMatchAll": "Cumplir todos",
+    "filterMatchAny": "Cumplir alguno",
+    "filterMatchToggle": "Alternar entre cumplir todos o alguno de los filtros",
     "ganttEmptyMessage": "No hay tareas con fechas de inicio o entrega. Agrega fechas a las tareas para completar el cronograma.",
     "groupBy": "Agrupar por",
     "groupByAssignee": "Agrupar por responsable",
     "groupByLabel": "Agrupar por",
+    "groupByNone": "Sin agrupar",
     "groupByPriority": "Agrupar por prioridad",
     "groupByStatus": "Agrupar por estado",
     "issuesCount_one": "{count} tarea",
@@ -1090,6 +1163,9 @@
     "labels": "Etiquetas",
     "lastUpdatedDaysAgo_one": "Actualizado hace {count} día",
     "lastUpdatedDaysAgo_other": "Actualizado hace {count} días",
+    "layoutBoard": "Tablero",
+    "layoutList": "Lista",
+    "layoutTimeline": "Cronograma",
     "listViewShortcut": "Vista de lista (Alt+1)",
     "moveIssue": "Mover {identifier}",
     "myIssues": "Mis tareas",
@@ -1100,6 +1176,8 @@
     "noIssuesDescription": "Nada coincide con esta vista. Crea una tarea o amplía los filtros.",
     "noIssuesFoundPrefix": "No se encontraron tareas. Presiona",
     "noIssuesFoundSuffix": "para crear una.",
+    "noIssuesMatchFilters": "Ninguna tarea coincide con estos filtros",
+    "noIssuesMatchFiltersDescription": "Prueba a quitar un filtro para ver más tareas.",
     "noSwimlanes": "Sin carriles",
     "nothingToExport": "Nada para exportar — aplica otros filtros o agrega tareas.",
     "openInNewTab": "Abrir en pestaña nueva",
@@ -1111,6 +1189,12 @@
     "operatorIsNotSet": "no está definido",
     "operatorIsSet": "está definido",
     "or": "O",
+    "orderByCreated": "Más recientes",
+    "orderByDueDate": "Fecha de vencimiento",
+    "orderByLabel": "Ordenar por",
+    "orderByManual": "Orden manual",
+    "orderByPriority": "Prioridad",
+    "orderByUpdated": "Última actualización",
     "pickerNoIssuesFound": "No se encontraron tareas",
     "pickerSearchPlaceholder": "Buscar tareas…",
     "priority": "Prioridad",
@@ -1120,6 +1204,8 @@
     "restoreFailed": "Error al restaurar la tarea",
     "saveCurrentFiltersAsView": "Guardar filtros actuales como vista",
     "saveView": "Guardar vista",
+    "saveViewSummary_one": "{count} filtro · {layout}",
+    "saveViewSummary_other": "{count} filtros · {layout}",
     "scope": {
       "assigned": "Asignadas",
       "created": "Creadas"
@@ -1127,6 +1213,7 @@
     "selectAllCount": "Seleccionar las {count}",
     "selectEllipsis": "Seleccionar…",
     "selectedCount": "{count} seleccionadas",
+    "selectIssue": "Seleccionar {identifier}",
     "setEstimate": "Definir estimación",
     "setEstimateForSelectedPrompt": "Definir estimación para las tareas seleccionadas:",
     "setPriorityN": "Definir {priority}",
@@ -1158,6 +1245,9 @@
     "unassigned": "Sin asignar",
     "updateFailed": "Error al actualizar la tarea",
     "valueEllipsis": "Valor…",
+    "valuesSelected_one": "{count} seleccionado",
+    "valuesSelected_other": "{count} seleccionados",
+    "viewLayout": "Diseño de la vista",
     "viewSaved": "Vista guardada"
   },
   "language": {
@@ -1243,12 +1333,15 @@
     "myIssues": "Mis tareas",
     "newTeam": "Nuevo equipo",
     "openMenu": "Abrir menú",
+    "primary": "Principal",
     "projects": "Proyectos",
     "removeFromFavorites": "Quitar de favoritos",
     "removeNamedFromFavorites": "Quitar {name} de favoritos",
     "searchHint": "Buscar…",
+    "sidebar": "Barra lateral",
     "teams": "Equipos",
     "triage": "Clasificación",
+    "unreadCount": "{count} sin leer",
     "userMenu": "Cuenta y preferencias",
     "workspaceSettings": "Configuración del espacio de trabajo"
   },
@@ -1291,6 +1384,7 @@
       "snoozed": "Notificación pospuesta",
       "snoozeFailed": "No se pudo posponer la notificación"
     },
+    "unreadBadge": "{count} sin leer",
     "unreadCount": "Sin leer ({count})"
   },
   "projects": {
@@ -1326,6 +1420,7 @@
     "failedToUpdateMilestone": "No se pudo actualizar el hito",
     "failedToUpdateStatus": "No se pudo actualizar el estado",
     "healthLabel": "Salud:",
+    "invalidRange": "La fecha objetivo debe ser igual o posterior a la fecha de inicio.",
     "issuesCount": "Tareas ({count})",
     "issuesCountRatio": "{completed} / {total} tareas ({progress}%)",
     "lead": "Responsable",
@@ -1339,6 +1434,7 @@
     "namePlaceholder": "p. ej. Lanzamiento Q2",
     "newProject": "Nuevo proyecto",
     "noIssuesAssigned": "Aún no hay tareas asignadas a este proyecto. Usa Shift+P en cualquier tarea para asignarla.",
+    "noLead": "Sin responsable",
     "noMilestonesYet": "Aún no hay hitos. Agrega uno para hacer seguimiento de puntos clave.",
     "noProjectsYet": "Aún no hay proyectos",
     "noTeamsAvailable": "No hay equipos disponibles. Aún puedes crear este proyecto sin un equipo.",
@@ -1378,7 +1474,10 @@
   },
   "properties": {
     "assignee": {
-      "noAssignee": "Sin asignar"
+      "assignToMe": "Asignarme",
+      "noAssignee": "Sin asignar",
+      "noUsersFound": "No se encontraron personas",
+      "searchPlaceholder": "Buscar personas..."
     },
     "cycle": {
       "active": "Activo",
@@ -1392,8 +1491,13 @@
       "clearDate": "Borrar fecha",
       "dueDate": "Fecha de vencimiento",
       "dueOn": "Vence {date}",
+      "endOfWeek": "Viernes",
+      "nextWeek": "Próxima semana",
       "noDueDate": "Sin fecha de vencimiento",
-      "setDate": "Fijar fecha"
+      "orPickDate": "O elige una fecha",
+      "setDate": "Fijar fecha",
+      "today": "Hoy",
+      "tomorrow": "Mañana"
     },
     "estimate": {
       "noEstimate": "Sin estimación",
@@ -1401,8 +1505,12 @@
       "setEstimate": "Definir estimación"
     },
     "label": {
+      "createFailed": "No se pudo crear la etiqueta",
+      "createLabel": "Crear etiqueta \"{name}\"",
       "labels": "Etiquetas",
-      "noLabels": "Sin etiquetas"
+      "noLabels": "Sin etiquetas",
+      "noLabelsFound": "No se encontraron etiquetas",
+      "searchPlaceholder": "Buscar etiquetas..."
     },
     "milestone": {
       "clear": "Quitar hito",
@@ -1440,6 +1548,8 @@
       "title": "Guardar vista"
     },
     "status": {
+      "noStatusesFound": "No se encontraron estados",
+      "searchPlaceholder": "Buscar estados...",
       "status": "Estado"
     },
     "updateForm": {
@@ -1491,16 +1601,20 @@
         "paused": "Pausado",
         "planned": "Planificado"
       },
-      "target": "Objetivo: {date}"
+      "target": "Objetivo: {date}",
+      "tooManyAttempts": "Demasiados intentos — vuelve a intentarlo en unos minutos.",
+      "wrongPassword": "Esa contraseña es incorrecta."
     },
     "settings": {
       "addToRoadmap": "Agregar a la hoja de ruta",
+      "description": "Elige qué proyectos aparecen en tu hoja de ruta pública.",
       "descriptionLabel": "Descripción",
       "descriptionPlaceholder": "Una descripción opcional que se muestra en la parte superior de la hoja de ruta",
       "hidden": "Oculto",
       "newPassword": "Nueva contraseña",
       "newPasswordPlaceholder": "Establece una nueva contraseña (opcional)",
       "noActiveProjects": "No se encontraron proyectos activos.",
+      "offHint": "La hoja de ruta es privada mientras esto esté desactivado. Los cambios de abajo se guardan igualmente.",
       "passwordIsSet": "Contraseña establecida",
       "passwordProtection": "Protección con contraseña",
       "passwordWillBeRemoved": "La contraseña se eliminará al guardar.",
@@ -1529,6 +1643,7 @@
   "settings": {
     "auditLog": {
       "allActions": "Todas las acciones",
+      "allUsers": "Todos los usuarios",
       "apply": "Aplicar",
       "clear": "Limpiar",
       "columnAction": "Acción",
@@ -1542,37 +1657,74 @@
       "loadMore": "Cargar más",
       "noEntriesFound": "No se encontraron entradas en el registro de auditoría.",
       "system": "sistema",
-      "title": "Registro de auditoría"
+      "title": "Registro de auditoría",
+      "toggleDetails": "Mostrar detalles"
     },
     "automations": {
       "actionConfigPlaceholder": "JSON de configuración de la acción, p. ej. {\"priority\": 1} o {\"stateId\": \"...\"}",
+      "actions": {
+        "add_label": "Añadir etiqueta",
+        "post_comment": "Publicar comentario",
+        "set_assignee": "Establecer asignado",
+        "set_priority": "Establecer prioridad",
+        "set_state": "Establecer estado"
+      },
+      "chooseLabel": "Elige una etiqueta",
+      "chooseState": "Elige un estado",
+      "commentPlaceholder": "Texto del comentario",
+      "createError": "No se pudo crear la regla",
       "createRule": "Crear regla",
       "creatingEllipsis": "Creando…",
+      "deleteError": "No se pudo eliminar la regla",
       "deleteRuleConfirm": "¿Eliminar la regla \"{name}\"?",
       "description": "Las reglas se activan con eventos del espacio de trabajo. Cada regla tiene un disparador, condiciones opcionales y una o más acciones. Solo para propietarios y administradores.",
       "disableRule": "Desactivar regla",
       "enableRule": "Activar regla",
+      "fieldAssignee": "Asignado a establecer",
+      "fieldComment": "Comentario a publicar",
+      "fieldLabel": "Etiqueta a añadir",
+      "fieldPriority": "Prioridad a establecer",
+      "fieldState": "Estado a establecer",
+      "forbidden": "Solo los propietarios y administradores del espacio pueden gestionar las automatizaciones.",
       "invalidJsonError": "La configuración de la acción debe ser un JSON válido",
       "last": "última: {date}",
       "loadError": "Error al cargar las reglas de automatización",
       "noRulesYet": "Aún no hay reglas.",
       "ruleCreated": "Regla creada",
       "ruleDeleted": "Regla eliminada",
+      "ruleName": "Nombre de la regla",
       "ruleNamePlaceholder": "Nombre de la regla (p. ej. Asignar automáticamente bugs urgentes)",
       "rulesCount": "Reglas ({count})",
       "runs": "ejecuciones: {count}",
       "then": "entonces",
       "title": "Automatizaciones",
+      "triggers": {
+        "comment_created": "Se añade un comentario",
+        "issue_assignee_changed": "Cambia el asignado de una tarea",
+        "issue_created": "Se crea una tarea",
+        "issue_priority_changed": "Cambia la prioridad de una tarea",
+        "issue_state_changed": "Cambia el estado de una tarea"
+      },
+      "unassigned": "Sin asignar",
+      "unsupportedAction": "Este tipo de acción no se puede configurar aquí",
+      "updateError": "No se pudo actualizar la regla",
       "when": "cuando"
     },
     "import": {
+      "allTeams": "Todos los equipos",
+      "chooseCsv": "Elegir archivo CSV",
+      "chooseTeam": "Elige un equipo",
+      "columnsHint": "Columnas esperadas: Title (obligatoria), Description, Priority, Assignee (email), Status (name). Puedes asignar tus propios nombres de columna tras elegir un archivo.",
       "couldNotParseCsv": "No se pudo procesar el CSV",
       "createdSkipped": "Creados {created}, omitidos {skipped}.",
+      "csvFile": "Archivo CSV",
       "description": "Importa issues desde un archivo CSV, o exporta tus datos como JSON.",
+      "downloadTemplate": "Descargar plantilla",
       "exportDescription": "Descarga una instantánea en JSON de los issues del equipo seleccionado (o de todos los equipos).",
       "exportFailed": "Error al exportar",
       "exportHeading": "Exportar",
       "exportJson": "Exportar JSON",
+      "exportTeam": "Equipo",
       "fieldAssignee": "Asignado (correo)",
       "fieldDescription": "Descripción",
       "fieldPriority": "Prioridad",
@@ -1584,8 +1736,10 @@
       "importedCount_other": "Se importaron {count} tareas",
       "importFailed": "Error al importar",
       "importHeading": "Importar issues desde CSV",
+      "importIntoTeam": "Importar al equipo",
       "importingEllipsis": "Importando…",
       "mapTitleColumn": "Asigna la columna de Título",
+      "noFileChosen": "Ningún archivo elegido",
       "noneOption": "— ninguno —",
       "noTeams": "Sin equipos",
       "rowsDetected_one": "{count} fila detectada. Asigna las columnas a los campos de la tarea:",
@@ -1603,6 +1757,7 @@
       "connectSlack": "Conectar Slack",
       "connectSlackHintPrefix": "Conecta tu espacio de trabajo de Slack y luego configura la URL de solicitud del comando de barra",
       "connectSlackHintSuffix": "en:",
+      "copied": "Copiado al portapapeles",
       "defaultTeamForNewIssues": "Equipo predeterminado para nuevos issues",
       "defaultTeamUpdated": "Equipo predeterminado actualizado",
       "defaultTeamUpdateError": "Error al actualizar el equipo predeterminado",
@@ -1623,13 +1778,15 @@
       "slackDescriptionSuffix": ".",
       "slackDisconnectError": "Error al desconectar Slack",
       "slackDisconnected": "Slack desconectado",
+      "slackRequestUrlLabel": "URL de solicitud de Slack",
       "title": "Integraciones",
       "webhookSecretInstructions": "Ingresa un secreto de webhook que configurarás en GitHub al crear el webhook. Debe tener al menos 16 caracteres. Mantenlo en secreto: se usa para verificar que los eventos entrantes son realmente de GitHub.",
       "webhookSecretPlaceholder": "Secreto del webhook (mín. 16 caracteres)",
       "webhookSecretTooShort": "El secreto del webhook debe tener al menos 16 caracteres",
       "webhookSecretUpdated": "Secreto del webhook actualizado",
       "webhookSecretUpdateError": "Error al rotar el secreto del webhook",
-      "webhookUrlHint": "URL del webhook (configúralo en tu repositorio de GitHub o en la configuración de tu organización):"
+      "webhookUrlHint": "URL del webhook (configúralo en tu repositorio de GitHub o en la configuración de tu organización):",
+      "webhookUrlLabel": "URL del webhook"
     },
     "roles": {
       "admin": "Administrador",
@@ -1644,6 +1801,7 @@
       "configured": "Configurado",
       "copiedToClipboard": "{label} copiado al portapapeles",
       "copy": "Copiar",
+      "copyField": "Copiar {label}",
       "copyToken": "Copiar token",
       "copyTokenNowWarning": "Copia este token ahora — no se volverá a mostrar.",
       "createdOn": "Creado el {date}",
@@ -1654,7 +1812,9 @@
       "enableSamlSso": "Habilitar SSO SAML",
       "enableSamlSsoDescription": "Permitir que los miembros se autentiquen mediante SSO",
       "enforceSso": "Forzar SSO",
+      "enforceSsoConfirm": "Una vez guardado, todos los miembros deberán iniciar sesión mediante tu proveedor de identidad, incluido tú. Si la URL o el certificado del IdP son incorrectos, nadie podrá entrar. Usa antes Probar SSO para confirmar que funciona.",
       "enforceSsoDescription": "Requerir que todos los miembros inicien sesión mediante SSO",
+      "enforceSsoTitle": "¿Exigir inicio de sesión único?",
       "forbidden": "Solo los propietarios y administradores del espacio pueden ver y gestionar el inicio de sesión único y el aprovisionamiento.",
       "idpCertificate": "Certificado del IDP (PEM)",
       "idpCertRequired": "El certificado del IDP es obligatorio",
@@ -1696,6 +1856,7 @@
       "spEntityIdLabel": "ID de entidad del SP / URL de metadatos",
       "testSso": "Probar SSO",
       "title": "Seguridad",
+      "tokenLabel": "Etiqueta del token",
       "tokenLabelPlaceholder": "Etiqueta del token (p. ej. Okta)",
       "tokenRevoked": "Token revocado",
       "tokenRevokeError": "Error al revocar el token"
@@ -1745,12 +1906,17 @@
       "deleteAllIssues": "Eliminar todos los issues",
       "deleteAllIssuesHint": "Los issues se archivarán junto con el equipo",
       "deleteTeam": "Eliminar equipo",
+      "deleteTeamConfirmDelete": "¿Eliminar definitivamente \"{name}\" y sus {count} tareas? Esta acción no se puede deshacer.",
+      "deleteTeamConfirmMove": "¿Eliminar \"{name}\" y mover sus {count} tareas al equipo elegido? El equipo en sí no se puede recuperar.",
+      "deleteTeamDeleteIssuesConfirm": "Eliminar equipo y {count} tareas",
       "deleteTeamError": "Error al eliminar el equipo",
       "deleteTeamHint_one": "Esto archivará el equipo. Elige qué ocurre con su {count} tarea.",
       "deleteTeamHint_other": "Esto archivará el equipo. Elige qué ocurre con sus {count} tareas.",
+      "deleteTeamMoveIssuesConfirm": "Eliminar equipo y mover {count} tareas",
       "deletingEllipsis": "Eliminando…",
       "description": "Descripción",
       "descriptionPlaceholder": "¿En qué trabaja este equipo?",
+      "discard": "Descartar",
       "estimation": {
         "descriptions": {
           "exponential": "Los puntos se duplican en cada paso: 1, 2, 4, 8, 16.",
@@ -1769,6 +1935,7 @@
           "tShirt": "Tallas de camiseta"
         }
       },
+      "fixHighlightedFields": "Algunos campos requieren atención antes de poder guardar.",
       "general": "General",
       "identifier": "Identificador",
       "identifierHint": "Se usa en los ID de los issues (p. ej. {key}-123). No se puede cambiar.",
@@ -1781,6 +1948,7 @@
         "timezoneHint": "Se usa para los límites de los ciclos y las fechas de vencimiento."
       },
       "invalidNumber": "Introduce un número entero mayor que cero o deja el campo vacío.",
+      "invalidNumberRange": "Ingresa un número entero de {min} a {max}.",
       "labels": {
         "add": "Añadir etiqueta",
         "archiveAria": "Archivar etiqueta {name}",
@@ -1806,8 +1974,13 @@
       "memberAdded": "{name} agregado al equipo",
       "memberRemoved": "Miembro eliminado",
       "members": "Miembros",
+      "membersSaveNote": "Los cambios de esta sección y de las siguientes se guardan al instante.",
       "moveIssuesHint": "Los issues se reasignarán con nuevos identificadores",
       "moveIssuesToAnotherTeam": "Mover issues a otro equipo",
+      "navFields": "Campos personalizados",
+      "navLabels": "Etiquetas",
+      "navStates": "Estados del flujo",
+      "navTemplates": "Plantillas",
       "noParentTeam": "Ninguno (equipo de nivel superior)",
       "notFound": "Equipo no encontrado.",
       "ownerRoleGranted": "Rol de propietario otorgado",
@@ -1816,11 +1989,13 @@
       "parentTeamHint": "Convierte a este en un subequipo que hereda la configuración de su equipo principal.",
       "privateTeam": "Equipo privado",
       "privateTeamDescription": "Solo los miembros del equipo pueden ver este equipo y sus issues",
+      "readOnlyNotice": "Puedes ver los ajustes de este equipo, pero solo los propietarios del equipo y los administradores del espacio pueden cambiarlos.",
       "removeMemberError": "Error al eliminar miembro",
       "roleUpdated": "Rol actualizado",
       "saveChanges": "Guardar cambios",
       "saveError": "Error al guardar",
       "saveErrorRetry": "Error al guardar — inténtalo de nuevo",
+      "sections": "Secciones",
       "selectATeam": "Selecciona un equipo…",
       "selectTeamToMoveIssues": "Selecciona un equipo al que mover los issues",
       "settingsHeading": "{name} — Configuración",
@@ -1828,6 +2003,7 @@
       "teamName": "Nombre del equipo",
       "triage": "Clasificación",
       "triageDescription": "Los issues nuevos comienzan en Clasificación y deben revisarse antes de entrar al backlog",
+      "unsavedChanges": "Tienes cambios sin guardar en los ajustes de este equipo.",
       "updateRoleError": "Error al actualizar el rol",
       "whatShouldHappenToIssues": "¿Qué debería pasar con los issues de este equipo?",
       "workflow": "Flujo de trabajo",
@@ -1900,8 +2076,10 @@
     },
     "webhooks": {
       "addWebhook": "+ Agregar webhook",
+      "clearAllEvents": "Quitar todo",
       "consecutiveFailures_one": "{count} fallo consecutivo",
       "consecutiveFailures_other": "{count} fallos consecutivos",
+      "copySecret": "Copiar secreto de firma",
       "createError": "Error al crear el webhook",
       "createValidationError": "Se requieren nombre, URL y al menos un evento.",
       "createWebhook": "Crear webhook",
@@ -1923,22 +2101,30 @@
       "enable": "Activar",
       "enabled": "Activado",
       "events": "Eventos",
+      "eventsRequired": "Selecciona al menos un evento.",
       "forbidden": "Solo los administradores del espacio de trabajo pueden gestionar webhooks.",
       "hiddenNonAdmin": "(oculto — no eres administrador)",
       "loadError": "Error al cargar los webhooks",
       "name": "Nombre",
       "namePlaceholder": "CI de producción",
+      "nameRequired": "Ingresa un nombre para este webhook.",
       "noWebhooksYet": "Aún no hay webhooks.",
       "reveal": "Mostrar",
       "rotate": "Rotar",
       "rotateConfirm": "¿Rotar el secreto de firma? Los receptores existentes necesitarán el nuevo valor.",
+      "rotateError": "No se pudo rotar el secreto de firma",
+      "secretCopied": "Secreto de firma copiado",
       "secretRotated": "Secreto de firma rotado",
+      "selectAllEvents": "Seleccionar todo",
       "signingSecret": "Secreto de firma:",
       "title": "Webhooks",
       "updateError": "Error al actualizar el webhook",
       "url": "URL",
+      "urlRequired": "Ingresa la URL que recibirá los eventos.",
       "webhookCreated": "Webhook creado",
-      "webhookDeleted": "Webhook eliminado"
+      "webhookDeleted": "Webhook eliminado",
+      "webhookDisabled": "Webhook desactivado",
+      "webhookEnabled": "Webhook activado"
     },
     "workspace": {
       "accentDescription": "El color de acento usado para la selección, el foco y las acciones principales.",
@@ -1971,6 +2157,7 @@
       "cycleCalendarFeed": "Fuente de calendario de ciclos",
       "cycleCalendarFeedDescription": "Suscríbete a tus ciclos en Google Calendar, Apple Calendar o cualquier cliente .ics.",
       "dataRegion": "Región de datos",
+      "description": "Nombre, URL y notificaciones predeterminadas de este espacio de trabajo.",
       "emailNotifications": "Notificaciones por correo",
       "emailNotificationsDescription": "Recibe correos por asignaciones, menciones y cambios de estado",
       "expires": "Expira",
@@ -2020,6 +2207,7 @@
       "noMembersFound": "No se encontraron miembros.",
       "noTeamsYet": "Aún no hay equipos.",
       "notificationPrefsError": "Error al actualizar las preferencias de notificaciones",
+      "notificationPrefsSaved": "Preferencia de notificaciones guardada",
       "organization": "Organización",
       "orgLoadError": "No se pudieron cargar los detalles de la organización.",
       "orgUpdated": "Espacio de trabajo actualizado",
@@ -2050,6 +2238,8 @@
       "revokeToken": "Revocar token",
       "revokeTokenConfirm": "¿Revocar el token \"{label}\"?",
       "rotate": "Rotar",
+      "rotateCalendarConfirm": "Todas las aplicaciones de calendario suscritas a la URL actual dejarán de actualizarse hasta que te suscribas de nuevo con la nueva.",
+      "rotateCalendarTitle": "¿Rotar la URL del calendario?",
       "security": "Seguridad",
       "securityDescription": "SSO SAML y políticas de autenticación",
       "teams": "Equipos",
@@ -2093,6 +2283,7 @@
     "noMatches": "Sin coincidencias",
     "optional": "opcional",
     "owner": "Propietario",
+    "ownersOnlyHint": "Las acciones sobre miembros están limitadas a los propietarios del equipo.",
     "privateTeam": "Equipo privado",
     "privateTeamHint": "Solo los miembros del equipo pueden ver este equipo y sus issues",
     "removeConfirm": "¿Quitar a {name} de este equipo?",

@@ -71,3 +71,16 @@ export const PROJECT_HEALTH_LABEL_KEYS: Record<string, string> = {
   offTrack: 'properties.updateForm.health.offTrack',
   onTrack: 'properties.updateForm.health.onTrack',
 };
+
+/**
+ * List grouping for a project status. Every status lands in exactly one group:
+ * a status in neither set makes the project vanish from the list. `paused` is
+ * unfinished work, so it sits with the active group (its status label still
+ * reads "Paused"); anything unrecognised also falls back to active rather than
+ * being hidden.
+ */
+export const COMPLETED_PROJECT_STATUSES: readonly string[] = ['completed', 'canceled'];
+
+export function projectListGroup(statusType: string): 'active' | 'completed' {
+  return COMPLETED_PROJECT_STATUSES.includes(statusType) ? 'completed' : 'active';
+}

@@ -9,7 +9,7 @@ import { AssigneeSelect } from '@/components/properties/assignee-select';
 import { CycleSelect } from '@/components/properties/cycle-select';
 import { DueDatePicker } from '@/components/properties/due-date-picker';
 import { EstimatePicker } from '@/components/properties/estimate-picker';
-import { LabelDot, LabelSelect } from '@/components/properties/label-select';
+import { LabelSelect } from '@/components/properties/label-select';
 import { MilestoneSelect } from '@/components/properties/milestone-select';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { PrioritySelect } from '@/components/properties/priority-select';
@@ -20,7 +20,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import { getCycleDisplayName } from '@/lib/cycle-utils';
-import { getBranchName, getDueDateColor } from '@/lib/issue-utils';
+import { getBranchName } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -73,7 +73,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
   onUpdate,
 }: IssueDetailContentProps) {
   const t = useTranslations();
-  const { formatDueDate, formatDate } = useFormatters();
+  const { formatDate } = useFormatters();
   const { userStore, teamStore, issueStore, cycleStore } = useStore();
   const currentUserId = userStore.currentUser?.id;
   const currentUserName = userStore.currentUser?.displayName ?? t('issueDetail.defaultUserName');
@@ -90,7 +90,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
   const [activityKey, setActivityKey] = useState(0);
   const [branchCopied, setBranchCopied] = useState(false);
   const [tab, setTab] = useState<DiscussionTab>('comments');
-  const titleRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
 
   const handleUpdate = useCallback(
     (id: string, patch: Record<string, unknown>) => {
@@ -141,7 +141,6 @@ export const IssueDetailContent = observer(function IssueDetailContent({
   }, [issue.id, issue.title, issue.description]);
 
   const assignee = users.find(u => u.id === issue.assigneeId);
-  const dueDateColor = getDueDateColor(issue.dueDate);
   const currentCycle = issue.cycleId ? cycleStore.findById(issue.cycleId) : null;
   const isPage = layout === 'page';
   // `IssueDetail` is the narrow list-row shape; the fields only the detail view
@@ -175,30 +174,34 @@ export const IssueDetailContent = observer(function IssueDetailContent({
   };
 
   const title = editingTitle ? (
-    <input
+    <textarea
+      aria-label={t('issueDetail.createModal.titlePlaceholder')}
       className={cn(
-        'w-full bg-transparent font-semibold tracking-tight text-foreground outline-none',
+        'field-sizing-content block w-full resize-none break-words bg-transparent font-semibold leading-snug tracking-tight text-foreground outline-none',
         isPage ? 'text-2xl' : 'text-xl',
       )}
       onBlur={saveTitle}
-      onChange={e => setTitleDraft(e.target.value)}
+      onChange={e => setTitleDraft(e.target.value.replace(/\s*\n+\s*/g, ' '))}
       onKeyDown={e => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
           saveTitle();
         }
         if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
           setTitleDraft(issue.title);
           setEditingTitle(false);
         }
       }}
       ref={titleRef}
-      type="text"
+      rows={1}
       value={titleDraft}
     />
   ) : (
     <button
       className={cn(
-        'cursor-text text-left font-semibold leading-snug tracking-tight text-foreground',
+        'cursor-text break-words text-left font-semibold leading-snug tracking-tight text-foreground',
         isPage ? 'text-2xl' : 'text-xl',
       )}
       onClick={() => {
@@ -265,14 +268,10 @@ export const IssueDetailContent = observer(function IssueDetailContent({
         <LabelSelect
           labels={labels}
           onChange={labelIds => handleUpdate(issue.id, { labelIds })}
+          showNames
+          teamId={issue.teamId}
           value={issue.labels.map(l => l.id)}
         />
-        {issue.labels.map(l => (
-          <span className="flex items-center gap-1 text-xs text-muted-foreground" key={l.id}>
-            <LabelDot color={l.color} />
-            {l.name}
-          </span>
-        ))}
       </div>
 
       <span className="text-muted-foreground">{t('issueDetail.properties.project')}</span>
@@ -313,6 +312,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
       <span className="text-muted-foreground">{t('issueDetail.properties.startDate')}</span>
       <DueDatePicker
         onChange={startDate => handleUpdate(issue.id, { startDate })}
+        tone="neutral"
         value={issue.startDate}
       />
 
@@ -322,11 +322,6 @@ export const IssueDetailContent = observer(function IssueDetailContent({
           onChange={dueDate => handleUpdate(issue.id, { dueDate })}
           value={issue.dueDate}
         />
-        {issue.dueDate && (
-          <span className={cn('truncate text-xs', dueDateColor)}>
-            {formatDueDate(issue.dueDate)}
-          </span>
-        )}
       </div>
 
       {/* Estimate — only shown when the team uses estimation */}
@@ -464,16 +459,22 @@ export const IssueDetailContent = observer(function IssueDetailContent({
 
   if (isPage) {
     return (
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-8 lg:flex-row lg:gap-12">
-        <div className="flex min-w-0 flex-1 flex-col gap-6">
-          {title}
-          {snoozedBadge}
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8 lg:flex-row lg:gap-12">
+        {/* Below lg the column dissolves (`contents`) so the title, then the
+            property rail, then the body can be ordered as siblings: otherwise
+            status/assignee/priority landed after the entire comment thread. */}
+        <div className="contents lg:flex lg:min-w-0 lg:flex-1 lg:flex-col lg:gap-6">
+          <div className="order-[-2] flex flex-col gap-6 lg:order-none">
+            {/* The full page needs a document heading; the panel is a dialog. */}
+            <h1 className="m-0 text-base font-normal">{title}</h1>
+            {snoozedBadge}
+          </div>
           {description}
           {sections}
         </div>
         {/* Sticky so the properties stay reachable while reading a long
             description or comment thread — the panel had to scroll them away. */}
-        <aside className="w-full shrink-0 lg:sticky lg:top-8 lg:w-72 lg:self-start">
+        <aside className="order-[-1] w-full shrink-0 lg:sticky lg:top-8 lg:order-none lg:w-72 lg:self-start">
           <div className="flex flex-col gap-6">
             {properties}
             <CustomFieldsEditor issueId={issue.id} teamId={issue.teamId} />

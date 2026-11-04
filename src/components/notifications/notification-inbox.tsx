@@ -5,20 +5,21 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
+import { fetchNotifications } from '@/components/notifications/use-notification-sync';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SectionHeader } from '@/components/shared/section-header';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { SelectPopover } from '@/components/ui/select-popover';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
-import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBNotification } from '@/lib/db';
-import { gql, gqlQuery } from '@/lib/graphql';
+import { gql } from '@/lib/graphql';
 import {
-  GET_NOTIFICATIONS_QUERY,
   NOTIFICATION_MARK_ALL_READ_MUTATION,
   NOTIFICATION_MARK_READ_MUTATION,
   NOTIFICATION_SNOOZE_MUTATION,
@@ -176,6 +177,14 @@ const NotificationItem = observer(function NotificationItem({
           <Link
             className="mt-0.5 flex min-w-0 items-baseline gap-2 text-sm hover:underline"
             href={`/${workspace}/issue/${issue.id}`}
+            // Following the notification is reading it. Without this the row
+            // stayed unread after the user had opened the issue, and they had
+            // to come back and press the check.
+            onClick={() => {
+              if (!read) {
+                onMarkRead(id);
+              }
+            }}
           >
             <span className="shrink-0 font-mono text-xs text-muted-foreground">
               {issue.identifier}
@@ -192,38 +201,40 @@ const NotificationItem = observer(function NotificationItem({
 
       {/* Revealed on hover at pointer sizes, always present on touch — the row
           is a link, so permanently-visible per-row buttons competed with it. */}
-      {!read && (
-        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100">
-          <SelectPopover
-            align="right"
-            disabled={isSnoozingThis}
-            panelClassName="w-44 py-1 shadow-e3"
-            triggerChildren={<Clock className="h-3.5 w-3.5" />}
-            triggerClassName={cn(
-              'p-1 text-muted-foreground hover:text-foreground-secondary',
-              TOUCH_TARGET,
-            )}
-            triggerTitle={t('notifications.snooze.buttonTitle')}
-          >
-            {close => (
-              <>
-                {SNOOZE_PRESETS.map(preset => (
-                  <button
-                    className="w-full px-3 py-1.5 text-left text-xs text-foreground-secondary hover:bg-accent"
-                    key={preset.labelKey}
-                    onClick={() => {
-                      close();
-                      onSnooze(id, preset.getUntil());
-                    }}
-                    type="button"
-                  >
-                    {t(preset.labelKey)}
-                  </button>
-                ))}
-              </>
-            )}
-          </SelectPopover>
+      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100">
+        <SelectPopover
+          align="right"
+          disabled={isSnoozingThis}
+          panelClassName="w-44 py-1 shadow-e3"
+          triggerChildren={<Clock className="h-3.5 w-3.5" />}
+          triggerClassName={cn(
+            'p-1 text-muted-foreground hover:text-foreground-secondary',
+            TOUCH_TARGET,
+          )}
+          triggerTitle={t('notifications.snooze.buttonTitle')}
+        >
+          {close => (
+            <>
+              {SNOOZE_PRESETS.map(preset => (
+                <button
+                  className="w-full px-3 py-1.5 text-left text-xs text-foreground-secondary hover:bg-accent"
+                  key={preset.labelKey}
+                  onClick={() => {
+                    close();
+                    onSnooze(id, preset.getUntil());
+                  }}
+                  type="button"
+                >
+                  {t(preset.labelKey)}
+                </button>
+              ))}
+            </>
+          )}
+        </SelectPopover>
 
+        {/* Read rows keep Snooze (they used to render no actions at all).
+              "Mark unread" needs a server mutation that does not exist yet. */}
+        {!read && (
           <button
             className={cn(
               'rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand disabled:opacity-50',
@@ -236,8 +247,8 @@ const NotificationItem = observer(function NotificationItem({
           >
             <Check className="h-3.5 w-3.5" />
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 });
@@ -258,38 +269,22 @@ export const NotificationInbox = observer(function NotificationInbox() {
   const [markingAll, setMarkingAll] = useState(false);
   const [snoozingId, setSnoozingId] = useState<string | null>(null);
 
-  // Fetch on mount and whenever the inbox reopens. Note that new notifications
-  // do NOT arrive over WebSocket: `NotificationService` emits no 'I' SyncAction,
-  // and it deliberately shouldn't while SyncActions broadcast org-wide — a
-  // notification belongs to one recipient. Live delivery needs a per-user
-  // channel; until then this fetch is the only path.
-  //
-  // Rows land in the MobX store, not in the hook's `data` — the list below is
-  // read reactively from the store. A rejected read must not render the
-  // "You're all caught up" empty state while assigned issues and @mentions
-  // are silently invisible.
-  const {
-    error: loadError,
-    loading,
-    refetch: retryLoad,
-  } = useRetryableFetch<DBNotification[]>(
-    async () => {
-      try {
-        const data = await gqlQuery<DBNotification[] | null>(
-          GET_NOTIFICATIONS_QUERY,
-          { limit: 50 },
-          'notifications',
-        );
-        notificationStore.upsertMany(data ?? []);
-        return data ?? [];
-      } catch (err) {
+  // The shell's `useNotificationSync` already fetches on mount, on focus and
+  // every minute, so the Inbox only reads the store (a second fetch here just
+  // doubled the request on every visit). New notifications do NOT arrive over
+  // WebSocket: a notification belongs to one recipient and SyncActions
+  // broadcast org-wide. A rejected first read must not render "You're all
+  // caught up" while assigned issues and @mentions are silently invisible.
+  const loading = notificationStore.loadState === 'idle';
+  const loadError = notificationStore.loadState === 'error';
+  const retryLoad = () => {
+    notificationStore.setLoadState('idle');
+    void fetchNotifications(notificationStore).then(() => {
+      if (notificationStore.loadState === 'error') {
         toast.error(t('notifications.toasts.loadFailed'));
-        throw err;
       }
-    },
-    [notificationStore, t],
-    [],
-  );
+    });
+  };
 
   // Reactive — re-renders when the store is updated (e.g. via WS sync actions)
   const notifications = notificationStore.all;
@@ -366,6 +361,9 @@ export const NotificationInbox = observer(function NotificationInbox() {
   const unread = active.filter(n => !n.read);
   const read = active.filter(n => n.read);
   const hasUnread = unread.length > 0;
+  // Only the newest 50 rows are fetched and the server sends no unread total, so
+  // past one full page the honest count is a lower bound, not a number.
+  const unreadLabel = notificationStore.hasMore ? `${unread.length}+` : unread.length;
   const visible = tab === 'unread' ? unread : active;
 
   return (
@@ -381,8 +379,18 @@ export const NotificationInbox = observer(function NotificationInbox() {
             </Button>
           )
         }
-        count={unread.length}
-        title={t('notifications.title')}
+        // The badge here means "unread", not "rows listed" like every other
+        // page, so it is brand-toned and labelled, and absent at zero.
+        title={
+          <>
+            {t('notifications.title')}
+            {hasUnread && (
+              <Badge className="ml-2 align-middle font-mono tabular-nums" tone="brand">
+                {t('notifications.unreadBadge', { count: unreadLabel })}
+              </Badge>
+            )}
+          </>
+        }
       />
 
       <Toolbar>
@@ -397,11 +405,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
       </Toolbar>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {loading && (
-          <div className="flex items-center justify-center py-16">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-brand" />
-          </div>
-        )}
+        {loading && <RowsSkeleton className="px-4 py-4" count={6} />}
 
         {/* Load failure — never render the empty state for a rejected read */}
         {!loading && loadError && (
@@ -433,7 +437,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
               onMarkRead={handleMarkRead}
               onSnooze={handleSnooze}
               snoozingId={snoozingId}
-              title={t('notifications.unreadCount', { count: unread.length })}
+              title={t('notifications.unreadCount', { count: unreadLabel })}
               workspace={workspace}
             />
           ) : (
@@ -445,7 +449,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
                   onMarkRead={handleMarkRead}
                   onSnooze={handleSnooze}
                   snoozingId={snoozingId}
-                  title={t('notifications.unreadCount', { count: unread.length })}
+                  title={t('notifications.unreadCount', { count: unreadLabel })}
                   workspace={workspace}
                 />
               )}

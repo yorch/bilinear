@@ -19,7 +19,7 @@ interface InlineRetryProps {
 export function InlineRetry({ message, onRetry, className }: InlineRetryProps) {
   const t = useTranslations();
   return (
-    <div className={cn('flex items-center gap-2 py-4 text-xs text-destructive', className)}>
+    <div className={cn('flex items-center gap-2 py-4 text-xs text-danger', className)}>
       <AlertCircle className="h-3.5 w-3.5 shrink-0" />
       <span>{message}</span>
       <button className="font-medium text-primary hover:underline" onClick={onRetry} type="button">

@@ -73,7 +73,8 @@ test.describe('Platform admin — console UI', () => {
     test('admin opens the users page', async ({ page }) => {
       await page.goto('/admin/users');
       await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
-      await expect(page.getByText(ADMIN_EMAIL)).toBeVisible();
+      // Scoped to the table: the admin header also shows the signed-in email.
+      await expect(page.getByRole('table').getByText(ADMIN_EMAIL)).toBeVisible();
     });
   });
 

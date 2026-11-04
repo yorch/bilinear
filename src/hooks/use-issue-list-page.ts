@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type { BoardGroupBy, BoardSwimlaneBy } from '@/components/issues/board-view';
 import type { OpenProperty } from '@/components/issues/issue-row';
 import type { ViewMode } from '@/components/issues/view-toggle';
+import { stepVisualOrder } from '@/components/issues/visual-order';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useTranslations } from '@/hooks/use-translations';
 import { ISSUE_ARCHIVE_MUTATION, ISSUE_UNARCHIVE_MUTATION } from '@/lib/graphql-queries';
@@ -37,6 +38,23 @@ interface UseIssueListPageOptions {
   issues: IssueDetail[];
   /** Extra side effect to run when an issue is opened (e.g. recent-items tracking). */
   onOpen?: (id: string) => void;
+}
+
+/** Row cells that `IssueRow` hides below the `lg` breakpoint. */
+const ROW_HIDDEN_BELOW_LG: ReadonlySet<string> = new Set([
+  'assignee',
+  'cycle',
+  'dueDate',
+  'estimate',
+  'label',
+]);
+
+function isLargeViewport(): boolean {
+  return (
+    typeof window === 'undefined' ||
+    typeof window.matchMedia !== 'function' ||
+    window.matchMedia('(min-width: 1024px)').matches
+  );
 }
 
 /**
@@ -89,13 +107,21 @@ export function useIssueListPage({
     null,
   );
 
-  const selectedIndex = issues.findIndex(i => i.id === selectedId);
   const hasSelection = selectedId !== null;
 
   const closeDetail = useCallback(() => {
     setDetailIssueId(null);
     syncUrl(basePath);
   }, [basePath]);
+
+  const handleOpen = useCallback(
+    (id: string) => {
+      setDetailIssueId(id);
+      syncUrl(buildHref(id));
+      onOpen?.(id);
+    },
+    [buildHref, onOpen],
+  );
 
   // ── Archive / delete ───────────────────────────────────────────────────────
 
@@ -233,21 +259,29 @@ export function useIssueListPage({
   // J / K — navigate list
   useHotkeys(
     'j',
-    () => {
-      const next = Math.min(selectedIndex + 1, issues.length - 1);
-      setSelectedId(issues[next]?.id ?? null);
-    },
+    () =>
+      setSelectedId(
+        stepVisualOrder(
+          selectedId,
+          1,
+          issues.map(i => i.id),
+        ),
+      ),
     {},
-    [selectedIndex, issues],
+    [selectedId, issues],
   );
   useHotkeys(
     'k',
-    () => {
-      const prev = Math.max(selectedIndex - 1, 0);
-      setSelectedId(issues[prev]?.id ?? null);
-    },
+    () =>
+      setSelectedId(
+        stepVisualOrder(
+          selectedId,
+          -1,
+          issues.map(i => i.id),
+        ),
+      ),
     {},
-    [selectedIndex, issues],
+    [selectedId, issues],
   );
 
   // Enter — open detail
@@ -268,21 +302,48 @@ export function useIssueListPage({
     closeDetail,
   ]);
 
-  // Issue context shortcuts — only active when an issue is selected
-  useHotkeys('s', () => setOpenProperty('status'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('a', () => setOpenProperty('assignee'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('p', () => setOpenProperty('priority'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('l', () => setOpenProperty('label'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('d', () => setOpenProperty('dueDate'), { enabled: hasSelection }, [hasSelection]);
-  useHotkeys('shift+e', () => setOpenProperty('estimate'), { enabled: hasSelection }, [
+  // Issue context shortcuts — only active when an issue is selected.
+  //
+  // Below `lg` the row hides the assignee / labels / due date / cycle / estimate
+  // cells (`max-lg:hidden`), so a popover forced open on one would open inside a
+  // `display:none` parent: nothing visible, focus lost, listeners armed. There
+  // the shortcut opens the detail panel instead, where every property is shown.
+  const openPropertyOrDetail = (property: NonNullable<OpenProperty>) => {
+    if (selectedId && ROW_HIDDEN_BELOW_LG.has(property) && !isLargeViewport()) {
+      handleOpen(selectedId);
+      return;
+    }
+    setOpenProperty(property);
+  };
+  useHotkeys('s', () => openPropertyOrDetail('status'), { enabled: hasSelection }, [hasSelection]);
+  useHotkeys('a', () => openPropertyOrDetail('assignee'), { enabled: hasSelection }, [
     hasSelection,
+    selectedId,
+  ]);
+  useHotkeys('p', () => openPropertyOrDetail('priority'), { enabled: hasSelection }, [
+    hasSelection,
+  ]);
+  useHotkeys('l', () => openPropertyOrDetail('label'), { enabled: hasSelection }, [
+    hasSelection,
+    selectedId,
+  ]);
+  useHotkeys('d', () => openPropertyOrDetail('dueDate'), { enabled: hasSelection }, [
+    hasSelection,
+    selectedId,
+  ]);
+  useHotkeys('shift+e', () => openPropertyOrDetail('estimate'), { enabled: hasSelection }, [
+    hasSelection,
+    selectedId,
   ]);
   // Shift+P / Q — project and cycle pickers. Rows without a cycle cell (a
   // page spanning teams) simply have nothing to open, so this is safe everywhere.
-  useHotkeys('shift+p', () => setOpenProperty('project'), { enabled: hasSelection }, [
+  useHotkeys('shift+p', () => openPropertyOrDetail('project'), { enabled: hasSelection }, [
     hasSelection,
   ]);
-  useHotkeys('q', () => setOpenProperty('cycle'), { enabled: hasSelection }, [hasSelection]);
+  useHotkeys('q', () => openPropertyOrDetail('cycle'), { enabled: hasSelection }, [
+    hasSelection,
+    selectedId,
+  ]);
 
   // Backspace / Delete — archive the selected issue (undoable via toast)
   useHotkeys(
@@ -300,15 +361,6 @@ export function useIssueListPage({
   useHotkeys('alt+1', () => setViewMode('list'), {}, []);
   useHotkeys('alt+2', () => setViewMode('board'), {}, []);
   useHotkeys('alt+3', () => setViewMode('timeline'), {}, []);
-
-  const handleOpen = useCallback(
-    (id: string) => {
-      setDetailIssueId(id);
-      syncUrl(buildHref(id));
-      onOpen?.(id);
-    },
-    [buildHref, onOpen],
-  );
 
   const detailIssue: IssueDetail | null = (() => {
     if (!detailIssueId) {

@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useAdminId } from '@/components/admin/admin-shell';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
 import { ModalDialog } from '@/components/ui/modal-dialog';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -38,7 +40,13 @@ export default function AdminUsersPage() {
   const [query, setQuery] = useState('');
   const [applied, setApplied] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [confirmingRevoke, setConfirmingRevoke] = useState<PlatformUser | null>(null);
+  const adminId = useAdminId();
+  // Suspend and the two admin-flag changes all take effect platform-wide the
+  // moment they land, so each one asks first.
+  const [confirming, setConfirming] = useState<{
+    type: 'makeAdmin' | 'revokeAdmin' | 'suspend';
+    user: PlatformUser;
+  } | null>(null);
   const [pickingOrgFor, setPickingOrgFor] = useState<PlatformUser | null>(null);
 
   const {
@@ -49,6 +57,8 @@ export default function AdminUsersPage() {
     cause,
     refetch: load,
   } = useRetryableFetch<PlatformUser[]>(() => fetchUsers(applied), [applied], []);
+
+  const isSelf = (u: PlatformUser) => adminId !== null && u.id === adminId;
 
   function replaceRow(updated: PlatformUser) {
     setUsers(prev => prev.map(u => (u.id === updated.id ? updated : u)));
@@ -121,18 +131,17 @@ export default function AdminUsersPage() {
           setApplied(query);
         }}
       >
-        <input
-          className="rounded border border-input bg-transparent px-2 py-1 text-sm focus:border-ring focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-subtle)]"
+        <Input
+          aria-label={t('admin.users.searchPlaceholder')}
+          className="w-full sm:w-64"
           onChange={e => setQuery(e.target.value)}
           placeholder={t('admin.users.searchPlaceholder')}
+          type="search"
           value={query}
         />
-        <button
-          className="rounded bg-primary px-3 py-1 text-xs text-primary-foreground hover:bg-primary/90"
-          type="submit"
-        >
+        <Button size="sm" type="submit">
           {t('common.search')}
-        </button>
+        </Button>
       </form>
 
       {loading ? (
@@ -163,7 +172,7 @@ export default function AdminUsersPage() {
                       <p className="font-medium text-foreground">{u.displayName}</p>
                       {u.isPlatformAdmin && (
                         <Badge
-                          className="text-[10px] font-semibold uppercase"
+                          className="font-semibold text-xs uppercase"
                           tone="brand"
                           variant="square"
                         >
@@ -198,44 +207,66 @@ export default function AdminUsersPage() {
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex flex-wrap justify-end gap-1.5">
-                      <button
-                        className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
-                        disabled={busyId === u.id || u.organizations.length === 0 || !u.active}
+                      <Button
+                        disabled={
+                          busyId === u.id || u.organizations.length === 0 || !u.active || isSelf(u)
+                        }
                         onClick={() => handleImpersonate(u)}
+                        size="xs"
                         title={
-                          u.organizations.length === 0
-                            ? t('admin.users.impersonateNoOrg')
-                            : t('admin.users.impersonateActive')
+                          isSelf(u)
+                            ? t('admin.users.selfActionBlocked')
+                            : u.organizations.length === 0
+                              ? t('admin.users.impersonateNoOrg')
+                              : t('admin.users.impersonateActive')
                         }
                         type="button"
+                        variant="outline"
                       >
                         {t('admin.users.impersonate')}
-                      </button>
-                      <button
-                        className="rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
-                        disabled={busyId === u.id}
+                      </Button>
+                      <Button
+                        disabled={busyId === u.id || (isSelf(u) && u.isPlatformAdmin)}
                         onClick={() =>
-                          u.isPlatformAdmin ? setConfirmingRevoke(u) : void handleToggleAdmin(u)
+                          setConfirming({
+                            type: u.isPlatformAdmin ? 'revokeAdmin' : 'makeAdmin',
+                            user: u,
+                          })
+                        }
+                        size="xs"
+                        title={
+                          isSelf(u) && u.isPlatformAdmin
+                            ? t('admin.users.selfActionBlocked')
+                            : undefined
                         }
                         type="button"
+                        variant="outline"
                       >
                         {u.isPlatformAdmin
                           ? t('admin.users.revokeAdmin')
                           : t('admin.users.makeAdmin')}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         className={cn(
-                          'rounded border border-border px-2 py-1 text-xs disabled:opacity-50',
                           u.active
                             ? 'border-warning/40 text-warning-subtle-foreground hover:bg-warning-subtle'
                             : 'border-success/40 text-success-subtle-foreground hover:bg-success-subtle',
                         )}
-                        disabled={busyId === u.id}
-                        onClick={() => handleToggleActive(u)}
+                        disabled={busyId === u.id || (isSelf(u) && u.active)}
+                        onClick={() =>
+                          u.active
+                            ? setConfirming({ type: 'suspend', user: u })
+                            : void handleToggleActive(u)
+                        }
+                        size="xs"
+                        title={
+                          isSelf(u) && u.active ? t('admin.users.selfActionBlocked') : undefined
+                        }
                         type="button"
+                        variant="outline"
                       >
                         {u.active ? t('admin.users.suspend') : t('admin.users.reactivate')}
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -245,19 +276,42 @@ export default function AdminUsersPage() {
         </div>
       )}
       <ConfirmDialog
-        confirmLabel={t('admin.users.revokeAdmin')}
-        message={t('admin.users.revokeAdminConfirm', {
-          name: confirmingRevoke?.displayName ?? '',
-        })}
-        onCancel={() => setConfirmingRevoke(null)}
+        confirmLabel={
+          confirming?.type === 'suspend'
+            ? t('admin.users.suspend')
+            : confirming?.type === 'makeAdmin'
+              ? t('admin.users.makeAdmin')
+              : t('admin.users.revokeAdmin')
+        }
+        message={t(
+          confirming?.type === 'suspend'
+            ? 'admin.users.suspendConfirm'
+            : confirming?.type === 'makeAdmin'
+              ? 'admin.users.makeAdminConfirm'
+              : 'admin.users.revokeAdminConfirm',
+          { name: confirming?.user.displayName ?? '' },
+        )}
+        onCancel={() => setConfirming(null)}
         onConfirm={() => {
-          if (confirmingRevoke) {
-            void handleToggleAdmin(confirmingRevoke);
+          const target = confirming;
+          setConfirming(null);
+          if (!target) {
+            return;
           }
-          setConfirmingRevoke(null);
+          if (target.type === 'suspend') {
+            void handleToggleActive(target.user);
+          } else {
+            void handleToggleAdmin(target.user);
+          }
         }}
-        open={confirmingRevoke !== null}
-        title={t('admin.users.revokeAdmin')}
+        open={confirming !== null}
+        title={
+          confirming?.type === 'suspend'
+            ? t('admin.users.suspend')
+            : confirming?.type === 'makeAdmin'
+              ? t('admin.users.makeAdmin')
+              : t('admin.users.revokeAdmin')
+        }
       />
       <ModalDialog
         aria-label={t('admin.users.pickOrgPrompt', {
@@ -274,7 +328,7 @@ export default function AdminUsersPage() {
             {pickingOrgFor?.organizations.map(o => (
               <li key={o.id}>
                 <button
-                  className="flex w-full items-center justify-between gap-3 rounded border border-border px-3 py-2 text-left text-sm hover:bg-accent"
+                  className="flex min-h-11 w-full items-center justify-between gap-3 rounded border border-border px-3 py-2 text-left text-sm hover:bg-accent"
                   onClick={() => {
                     if (pickingOrgFor) {
                       void impersonateInto(pickingOrgFor, o.id);
@@ -283,7 +337,7 @@ export default function AdminUsersPage() {
                   type="button"
                 >
                   <span className="text-foreground">{o.name}</span>
-                  <span className="text-xs text-muted-foreground">{o.role}</span>
+                  <span className="text-muted-foreground text-xs capitalize">{o.role}</span>
                 </button>
               </li>
             ))}

@@ -333,11 +333,7 @@ export function CommentCard({
             </div>
           </div>
         ) : (
-          <TipTapEditor
-            className="prose prose-sm dark:prose-invert max-w-none text-foreground-secondary"
-            content={comment.body}
-            readOnly
-          />
+          <TipTapEditor className="max-w-none" content={comment.body} readOnly />
         )}
 
         {/* Reaction summary */}

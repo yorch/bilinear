@@ -1,9 +1,10 @@
 'use client';
 
+import { StatCard } from '@/components/analytics/stat-card';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
-import { RowsSkeleton } from '@/components/ui/skeleton';
+import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -58,16 +59,6 @@ const WORKSPACE_OVERVIEW_QUERY = `
 // Components
 // ---------------------------------------------------------------------------
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-card p-4">
-      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
-    </div>
-  );
-}
-
 function ProgressBar({ pct, color }: { pct: number; color: string }) {
   return (
     <div className="h-1.5 w-full rounded-full bg-muted">
@@ -106,7 +97,18 @@ export default function WorkspaceAnalyticsPage() {
       />
 
       <div className="flex-1 overflow-y-auto px-6 py-5">
-        {loading && <RowsSkeleton count={6} />}
+        {loading && (
+          // Shaped like the page (stat tiles, then the teams table) rather
+          // than a bare stack of grey bars.
+          <LoadingRegion>
+            <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[0, 1, 2, 3].map(i => (
+                <Skeleton className="h-[88px]" key={i} />
+              ))}
+            </div>
+            <Skeleton className="h-64" />
+          </LoadingRegion>
+        )}
 
         {error && (
           <InlineRetry message={t('analytics.workspace.failedToLoad')} onRetry={() => refetch()} />
@@ -146,73 +148,77 @@ export default function WorkspaceAnalyticsPage() {
                   title={t('analytics.workspace.noTeamsFound')}
                 />
               ) : (
-                <div className="divide-y divide-border">
-                  {/* Table header */}
-                  <div className="grid grid-cols-12 gap-2 px-5 py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    <span className="col-span-3">{t('analytics.workspace.team')}</span>
-                    <span className="col-span-2 text-right">{t('analytics.workspace.total')}</span>
-                    <span className="col-span-2 text-right">{t('analytics.workspace.open')}</span>
-                    <span className="col-span-2 text-right">
-                      {t('analytics.workspace.completedCol')}
-                    </span>
-                    <span className="col-span-2 text-right">
-                      {t('analytics.workspace.avgCycle')}
-                    </span>
-                    <span className="col-span-1" />
-                  </div>
-
-                  {data.teams.map(team => (
-                    <div
-                      className="grid grid-cols-12 items-center gap-2 px-5 py-3"
-                      key={team.teamId}
-                    >
-                      <span
-                        className="col-span-3 truncate text-sm font-medium text-foreground"
-                        title={team.teamName}
-                      >
-                        {team.teamName}
+                <div className="overflow-x-auto">
+                  <div className="min-w-[30rem] divide-y divide-border">
+                    {/* Table header */}
+                    <div className="grid grid-cols-12 gap-2 px-5 py-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                      <span className="col-span-3">{t('analytics.workspace.team')}</span>
+                      <span className="col-span-2 text-right">
+                        {t('analytics.workspace.total')}
                       </span>
-                      <span className="col-span-2 text-right text-sm text-muted-foreground">
-                        {team.totalCount}
+                      <span className="col-span-2 text-right">{t('analytics.workspace.open')}</span>
+                      <span className="col-span-2 text-right">
+                        {t('analytics.workspace.completedCol')}
                       </span>
-                      <span className="col-span-2 text-right text-sm text-muted-foreground">
-                        {team.openCount}
+                      <span className="col-span-2 text-right">
+                        {t('analytics.workspace.avgCycle')}
                       </span>
-                      <span
-                        className={cn(
-                          'col-span-2 text-right text-sm font-medium',
-                          team.completionRate >= 70
-                            ? 'text-success-subtle-foreground'
-                            : team.completionRate >= 40
-                              ? 'text-warning-subtle-foreground'
-                              : 'text-muted-foreground',
-                        )}
-                      >
-                        {team.completedCount}
-                        <span className="ml-1 text-xs font-normal text-muted-foreground">
-                          ({Math.round(team.completionRate)}%)
-                        </span>
-                      </span>
-                      <span className="col-span-2 text-right text-sm text-muted-foreground">
-                        {team.avgCycleTimeDays > 0 ? `${team.avgCycleTimeDays.toFixed(1)}d` : '—'}
-                      </span>
-                      <div className="col-span-1" />
-
-                      {/* Completion bar */}
-                      <div className="col-span-12 -mt-1">
-                        <ProgressBar
-                          color={
-                            team.completionRate >= 70
-                              ? 'var(--chart-actual)'
-                              : team.completionRate >= 40
-                                ? 'var(--chart-warning)'
-                                : 'var(--chart-grid)'
-                          }
-                          pct={team.completionRate}
-                        />
-                      </div>
+                      <span className="col-span-1" />
                     </div>
-                  ))}
+
+                    {data.teams.map(team => (
+                      <div
+                        className="grid grid-cols-12 items-center gap-2 px-5 py-3"
+                        key={team.teamId}
+                      >
+                        <span
+                          className="col-span-3 truncate text-sm font-medium text-foreground"
+                          title={team.teamName}
+                        >
+                          {team.teamName}
+                        </span>
+                        <span className="col-span-2 text-right text-sm text-muted-foreground">
+                          {team.totalCount}
+                        </span>
+                        <span className="col-span-2 text-right text-sm text-muted-foreground">
+                          {team.openCount}
+                        </span>
+                        <span
+                          className={cn(
+                            'col-span-2 text-right text-sm font-medium',
+                            team.completionRate >= 70
+                              ? 'text-success-subtle-foreground'
+                              : team.completionRate >= 40
+                                ? 'text-warning-subtle-foreground'
+                                : 'text-muted-foreground',
+                          )}
+                        >
+                          {team.completedCount}
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">
+                            ({Math.round(team.completionRate)}%)
+                          </span>
+                        </span>
+                        <span className="col-span-2 text-right text-sm text-muted-foreground">
+                          {team.avgCycleTimeDays > 0 ? `${team.avgCycleTimeDays.toFixed(1)}d` : '—'}
+                        </span>
+                        <div className="col-span-1" />
+
+                        {/* Completion bar */}
+                        <div className="col-span-12 -mt-1">
+                          <ProgressBar
+                            color={
+                              team.completionRate >= 70
+                                ? 'var(--chart-actual)'
+                                : team.completionRate >= 40
+                                  ? 'var(--chart-warning)'
+                                  : 'var(--chart-grid)'
+                            }
+                            pct={team.completionRate}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

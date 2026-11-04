@@ -4,21 +4,27 @@ import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 test.use({ storageState: ADMIN_STATE });
 
 /**
- * X toggles the selection state on the currently-active issue (the one
- * highlighted by J/K). A second X clears it.
+ * X toggles the bulk-select checkbox on the currently-active issue (the one
+ * highlighted by J/K) without moving the cursor. A second X unchecks it.
  */
 test.describe('Bulk Selection', () => {
   test.beforeEach(async ({ page }) => {
     await openWorkspace(page);
   });
 
-  test('X clears selection on the active issue', async ({ page }) => {
-    await page.keyboard.press('j'); // select first issue
+  test('X toggles the checkbox on the active issue', async ({ page }) => {
+    await page.keyboard.press('j'); // move the cursor to the first issue
     const firstRow = page.locator('[data-testid="issue-row"]').first();
     await expect(firstRow).toHaveAttribute('data-selected', 'true');
+    const checkbox = firstRow.locator('input[type="checkbox"]');
+    await expect(checkbox).not.toBeChecked();
 
-    await page.keyboard.press('x'); // toggle off
-    await expect(firstRow).not.toHaveAttribute('data-selected', 'true');
+    await page.keyboard.press('x'); // check it; the cursor stays put
+    await expect(checkbox).toBeChecked();
+    await expect(firstRow).toHaveAttribute('data-selected', 'true');
+
+    await page.keyboard.press('x'); // uncheck
+    await expect(checkbox).not.toBeChecked();
   });
 
   test('clicking the row checkbox toggles selection without opening detail', async ({ page }) => {

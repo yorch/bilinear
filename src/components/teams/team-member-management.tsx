@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { RoleSelect } from '@/components/shared/role-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { avatarPresentation } from '@/components/ui/user-avatar';
 import { useTranslations } from '@/hooks/use-translations';
 import { roleTone } from '@/lib/role-badges';
 import { toast } from '@/lib/toast';
@@ -70,13 +72,12 @@ function Avatar({
       />
     );
   }
+  // Initials ink is derived from the swatch so it clears contrast on any colour.
+  const { background, ink } = avatarPresentation(user.avatarBackgroundColor);
   return (
     <span
-      className={cn(
-        'flex shrink-0 items-center justify-center rounded-full font-medium text-white',
-        dim,
-      )}
-      style={{ backgroundColor: user.avatarBackgroundColor }}
+      className={cn('flex shrink-0 items-center justify-center rounded-full font-medium', dim)}
+      style={{ backgroundColor: background, color: ink }}
     >
       {user.initials}
     </span>
@@ -225,29 +226,34 @@ export function TeamMemberManagement({
                     <span className="text-xs text-muted-foreground">
                       {isSelf ? t('teams.leaveConfirm') : t('teams.removeConfirm')}
                     </span>
-                    <button
-                      className="rounded bg-destructive px-2 py-0.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                    <Button
                       disabled={isLoading}
                       onClick={() => {
                         setPendingRemoveId(null);
                         handleRemove(member.membershipId);
                       }}
+                      size="xs"
                       type="button"
+                      variant="destructive"
                     >
                       {isLoading ? '…' : t('teams.yes')}
-                    </button>
-                    <button
-                      className="rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent"
+                    </Button>
+                    <Button
                       onClick={() => setPendingRemoveId(null)}
+                      size="xs"
                       type="button"
+                      variant="ghost"
                     >
                       {t('common.cancel')}
-                    </button>
+                    </Button>
                   </>
                 ) : (
                   <>
                     {canManageMembers && (
                       <button
+                        aria-label={
+                          member.isOwner ? t('teams.removeOwnerRole') : t('teams.makeOwner')
+                        }
                         className={cn(
                           'flex h-7 w-7 items-center justify-center rounded text-xs transition-colors disabled:opacity-50',
                           TOUCH_TARGET_SQUARE,
@@ -265,6 +271,7 @@ export function TeamMemberManagement({
                     )}
                     {(canManageMembers || isSelf) && (
                       <button
+                        aria-label={isSelf ? t('teams.leaveTeam') : t('teams.removeMember')}
                         className={cn(
                           'flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-danger-subtle hover:text-danger-subtle-foreground disabled:opacity-50',
                           TOUCH_TARGET_SQUARE,
@@ -291,12 +298,11 @@ export function TeamMemberManagement({
 
       {addOpen ? (
         <div className="rounded-md border border-border bg-card p-2">
-          <input
-            className="w-full bg-transparent px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground outline-none"
+          <Input
+            aria-label={t('teams.searchMembersToAdd')}
             onChange={e => setSearch(e.target.value)}
             placeholder={t('teams.searchMembersToAdd')}
             ref={searchRef}
-            type="text"
             value={search}
           />
           <ul className="mt-1 max-h-48 overflow-y-auto">
@@ -330,14 +336,21 @@ export function TeamMemberManagement({
           </div>
         </div>
       ) : (
-        <button
-          className="flex items-center gap-1.5 self-start rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
-          onClick={() => setAddOpen(true)}
-          type="button"
-        >
-          <UserPlus className="h-4 w-4" />
-          {t('teams.addMember')}
-        </button>
+        <>
+          <Button
+            className="self-start text-muted-foreground"
+            onClick={() => setAddOpen(true)}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            <UserPlus className="h-4 w-4" />
+            {t('teams.addMember')}
+          </Button>
+          {!canManageMembers && (
+            <p className="text-xs text-muted-foreground">{t('teams.ownersOnlyHint')}</p>
+          )}
+        </>
       )}
     </div>
   );

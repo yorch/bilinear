@@ -151,6 +151,13 @@ export class LastPlatformAdminError extends Error {
   }
 }
 
+export class SelfTargetError extends Error {
+  constructor() {
+    super('You cannot suspend or revoke your own platform-admin account');
+    this.name = 'SelfTargetError';
+  }
+}
+
 export class InvalidTenantLimitsError extends Error {
   constructor(message: string) {
     super(message);
@@ -370,7 +377,12 @@ export class PlatformAdminService {
     return row ? this.toUserSummary(row) : null;
   }
 
-  async setUserActive(id: string, active: boolean): Promise<User> {
+  async setUserActive(id: string, active: boolean, actorId?: string): Promise<User> {
+    // An admin suspending themselves would be logged out and locked out of
+    // the console; compare by user id, never by email.
+    if (!active && actorId !== undefined && actorId === id) {
+      throw new SelfTargetError();
+    }
     await this.assertUserExists(id);
     // Suspending a user sets active=false, and an inactive user fails the
     // `requirePlatformAdmin` gate (extractAuthContext logs them out). So
@@ -394,7 +406,10 @@ export class PlatformAdminService {
     return this.prisma.user.update({ data: { active }, where: { id } });
   }
 
-  async setPlatformAdmin(id: string, value: boolean): Promise<User> {
+  async setPlatformAdmin(id: string, value: boolean, actorId?: string): Promise<User> {
+    if (!value && actorId !== undefined && actorId === id) {
+      throw new SelfTargetError();
+    }
     await this.assertUserExists(id);
     // Guard against locking everyone out: never revoke the final admin.
     if (!value) {

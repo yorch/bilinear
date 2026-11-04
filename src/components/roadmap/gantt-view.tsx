@@ -2,8 +2,10 @@
 
 import { addDays, addMonths, differenceInDays, format, startOfMonth } from 'date-fns';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { avatarPresentation } from '@/components/ui/user-avatar';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
+import { parseDate } from '@/lib/date-parse';
 import { cn } from '@/lib/utils';
 
 export interface GanttItem {
@@ -39,6 +41,11 @@ interface GanttViewProps {
   onChange?: (id: string, startDate: string | null, endDate: string | null) => void;
 }
 
+/** True when the item carries at least one real date (else its bar is a placeholder). */
+function isSchedulable(item: { endDate: string | null; startDate: string | null }): boolean {
+  return parseDate(item.startDate) !== null || parseDate(item.endDate) !== null;
+}
+
 type DragMode = 'move' | 'resize-start' | 'resize-end';
 
 interface DragState {
@@ -47,20 +54,6 @@ interface DragState {
   mode: DragMode;
   startDateInitial: Date | null;
   startX: number;
-}
-
-function parseDate(value: string | null): Date | null {
-  if (!value) {
-    return null;
-  }
-  // Treat plain YYYY-MM-DD as a local date so the bar lines up with the day
-  // label the user sees. new Date('YYYY-MM-DD') is UTC-midnight which can
-  // shift across DST in some locales.
-  const [y, m, d] = value.split('-').map(Number);
-  if (!y || !m || !d) {
-    return null;
-  }
-  return new Date(y, m - 1, d);
 }
 
 function fmtIso(date: Date): string {
@@ -243,7 +236,7 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
   }, [windowStart, pxPerDay]);
 
   const onMouseMove = useCallback(
-    (e: MouseEvent) => {
+    (e: PointerEvent) => {
       if (!drag) {
         return;
       }
@@ -279,14 +272,15 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
   const nudge = (
     item: GanttItem & { _effectiveEnd: Date; _effectiveStart: Date },
     days: number,
+    mode: DragMode = 'move',
   ) => {
-    if (!onChange) {
+    if (!onChange || !isSchedulable(item)) {
       return;
     }
     const { end, start } = shiftRange(
-      'move',
-      parseDate(item.startDate) ?? item._effectiveStart,
-      parseDate(item.endDate) ?? item._effectiveEnd,
+      mode,
+      parseDate(item.startDate),
+      parseDate(item.endDate),
       days,
     );
     onChange(item.id, start ? fmtIso(start) : null, end ? fmtIso(end) : null);
@@ -296,31 +290,36 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
     if (!drag) {
       return;
     }
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('pointermove', onMouseMove);
+    window.addEventListener('pointerup', onMouseUp);
+    window.addEventListener('pointercancel', onMouseUp);
     return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('pointermove', onMouseMove);
+      window.removeEventListener('pointerup', onMouseUp);
+      window.removeEventListener('pointercancel', onMouseUp);
     };
   }, [drag, onMouseMove, onMouseUp]);
 
-  const startDrag = (item: GanttItem, mode: DragMode, e: React.MouseEvent) => {
-    if (!onChange) {
+  const startDrag = (item: GanttItem, mode: DragMode, e: React.PointerEvent) => {
+    // A bar with no real date is drawn at "today" purely as a placeholder;
+    // dragging it would persist dates nobody chose.
+    if (!onChange || !isSchedulable(item)) {
       return;
     }
     e.preventDefault();
     e.stopPropagation();
-    // Fall back to the effective (synthesized) date when the underlying
-    // item has only one side set or none at all. Without this, dragging
-    // a resize handle on a one-sided bar produces a moving visual
-    // preview but `newStart = null ? addDays(...) : null` short-circuits
-    // to null on mouseup, so the change is silently discarded.
+    // Real dates only. A synthesized side is persisted solely when the user
+    // explicitly resizes that side (the other side stays untouched), so a
+    // plain move of a one-sided bar moves only the date that exists.
     const effective = resolved.find(r => r.id === item.id);
+    const start = parseDate(item.startDate);
+    const end = parseDate(item.endDate);
     setDrag({
-      endDateInitial: parseDate(item.endDate) ?? effective?._effectiveEnd ?? null,
+      endDateInitial: end ?? (mode === 'resize-end' ? (effective?._effectiveEnd ?? null) : null),
       id: item.id,
       mode,
-      startDateInitial: parseDate(item.startDate) ?? effective?._effectiveStart ?? null,
+      startDateInitial:
+        start ?? (mode === 'resize-start' ? (effective?._effectiveStart ?? null) : null),
       startX: e.clientX,
     });
   };
@@ -468,7 +467,24 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                 }
               }
 
-              const color = item.color ?? 'var(--brand)';
+              // Ink is derived from the bar colour so a light project colour still
+              // clears contrast; an unset colour uses the primary fill + its ink.
+              const customColor = item.color && /^#[0-9a-fA-F]{6}$/.test(item.color);
+              const presentation = customColor ? avatarPresentation(item.color as string) : null;
+              const bar = presentation
+                ? {
+                    className: '',
+                    style: {
+                      backgroundColor: presentation.background,
+                      borderColor: presentation.background,
+                      color: presentation.ink,
+                      left: x,
+                    },
+                  }
+                : {
+                    className: 'bg-primary border-primary text-primary-foreground',
+                    style: { left: x },
+                  };
               const isDragging = drag?.id === item.id;
 
               return (
@@ -481,31 +497,39 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                   <div
                     aria-label={t('roadmap.gantt.dragBar', { name: item.name })}
                     className={cn(
-                      'absolute flex h-6 items-center gap-1.5 rounded-md border border-border px-2 text-xs font-medium text-white shadow-e1 transition-shadow',
-                      !isDragging && 'cursor-grab',
+                      'absolute flex h-6 touch-none items-center gap-1.5 rounded-md border border-border px-2 text-xs font-medium shadow-e1 transition-shadow',
+                      bar.className,
+                      !isDragging && isSchedulable(item) && 'cursor-grab',
+                      !isSchedulable(item) && 'opacity-50',
                       isDragging && 'cursor-grabbing shadow-e2',
                     )}
                     onKeyDown={e => {
                       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
                         e.preventDefault();
-                        nudge(item, e.key === 'ArrowRight' ? 1 : -1);
+                        const dir = e.key === 'ArrowRight' ? 1 : -1;
+                        // Shift+Arrow resizes the end; Shift+Alt+Arrow the start.
+                        nudge(
+                          item,
+                          dir,
+                          e.shiftKey ? (e.altKey ? 'resize-start' : 'resize-end') : 'move',
+                        );
                       }
                     }}
-                    onMouseDown={e => startDrag(item, 'move', e)}
+                    onPointerDown={e => startDrag(item, 'move', e)}
                     role="button"
                     style={{
-                      backgroundColor: color,
-                      borderColor: color,
-                      left: x,
+                      ...bar.style,
                       width: Math.max(w, pxPerDay * 1.5),
                     }}
                     tabIndex={0}
+                    title={`${item.name} (${item.startDate?.slice(0, 10) ?? '…'} – ${item.endDate?.slice(0, 10) ?? '…'})`}
                   >
                     {/* Resize handle - left */}
                     <button
                       aria-label={t('roadmap.gantt.resizeStart')}
-                      className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize rounded-l-md bg-black/10 opacity-0 transition-opacity group-hover:opacity-100"
-                      onMouseDown={e => startDrag(item, 'resize-start', e)}
+                      className="absolute inset-y-0 left-0 w-1.5 touch-none cursor-ew-resize rounded-l-md bg-foreground/20 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                      onKeyDown={e => e.stopPropagation()}
+                      onPointerDown={e => startDrag(item, 'resize-start', e)}
                       tabIndex={-1}
                       type="button"
                     />
@@ -519,8 +543,9 @@ export function GanttView({ items, onChange, defaultSpanDays = 14, emptyMessage 
                     {/* Resize handle - right */}
                     <button
                       aria-label={t('roadmap.gantt.resizeEnd')}
-                      className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize rounded-r-md bg-black/10 opacity-0 transition-opacity group-hover:opacity-100"
-                      onMouseDown={e => startDrag(item, 'resize-end', e)}
+                      className="absolute inset-y-0 right-0 w-1.5 touch-none cursor-ew-resize rounded-r-md bg-foreground/20 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                      onKeyDown={e => e.stopPropagation()}
+                      onPointerDown={e => startDrag(item, 'resize-end', e)}
                       tabIndex={-1}
                       type="button"
                     />

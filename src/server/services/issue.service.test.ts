@@ -83,6 +83,51 @@ describe('IssueService', () => {
       expect(result).toEqual(TEST_ISSUE);
     });
 
+    it('stamps completedAt/startedAt/canceledAt when created straight into a terminal state', async () => {
+      prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1, key: 'ENG' });
+      prisma.issue.create.mockResolvedValue(TEST_ISSUE);
+      const createdData = async (type: string) => {
+        prisma.issue.create.mockClear();
+        prisma.workflowState.findFirst.mockResolvedValue({ teamId: TEST_TEAM.id, type });
+        await service.create(TEST_ORG.id, TEST_USER.id, {
+          stateId: 'state-x',
+          teamId: TEST_TEAM.id,
+          title: 'T',
+        });
+        return prisma.issue.create.mock.calls[0][0].data;
+      };
+      expect((await createdData('completed')).completedAt).toBeInstanceOf(Date);
+      expect((await createdData('canceled')).canceledAt).toBeInstanceOf(Date);
+      expect((await createdData('started')).startedAt).toBeInstanceOf(Date);
+      const open = await createdData('unstarted');
+      expect(open.completedAt).toBeUndefined();
+      expect(open.startedAt).toBeUndefined();
+    });
+
+    it('stamps lifecycle timestamps from the team default state when no stateId is supplied', async () => {
+      const createdData = async (type: string) => {
+        prisma.issue.create.mockClear();
+        prisma.team.update.mockResolvedValue({
+          ...TEST_TEAM,
+          defaultIssueStateId: 'default-state',
+          issueCount: 1,
+          key: 'ENG',
+          triageEnabled: false,
+        });
+        prisma.issue.create.mockResolvedValue(TEST_ISSUE);
+        prisma.workflowState.findFirst.mockResolvedValue({ teamId: TEST_TEAM.id, type });
+        await service.create(TEST_ORG.id, TEST_USER.id, { teamId: TEST_TEAM.id, title: 'T' });
+        return prisma.issue.create.mock.calls[0][0].data;
+      };
+      expect((await createdData('started')).startedAt).toBeInstanceOf(Date);
+      expect((await createdData('completed')).completedAt).toBeInstanceOf(Date);
+      expect((await createdData('canceled')).canceledAt).toBeInstanceOf(Date);
+      const open = await createdData('backlog');
+      expect(open.startedAt).toBeUndefined();
+      expect(open.completedAt).toBeUndefined();
+      expect(open.canceledAt).toBeUndefined();
+    });
+
     it('invokes the txHook with the transaction client and created issue before returning', async () => {
       prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1, key: 'ENG' });
       prisma.issue.create.mockResolvedValue(TEST_ISSUE);
