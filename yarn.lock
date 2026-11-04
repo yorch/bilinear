@@ -906,42 +906,42 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@hocuspocus/common@npm:^4.7.0":
-  version: 4.7.0
-  resolution: "@hocuspocus/common@npm:4.7.0"
+"@hocuspocus/common@npm:^4.8.0":
+  version: 4.8.0
+  resolution: "@hocuspocus/common@npm:4.8.0"
   dependencies:
-    lib0: "npm:^0.2.117"
-  checksum: 10c0/1ecd3b3b3045405b323ae3a7da0ed430e0428b7a15570c9dde24bad63e96e775fa2a8c558007a151fef4f66d1f393b508f81be17935d35aaa3c88b9c791f8f57
+    lib0: "npm:^0.2.119"
+  checksum: 10c0/251e84d107c531febf2d00d449f0799fa601f627f2221f17a447b7dc5a1a169199365973a505ce0be5b5fd06346c25e7eec214d50e65637a2f9d37cdd1c1682a
   languageName: node
   linkType: hard
 
-"@hocuspocus/provider@npm:4.7.0":
-  version: 4.7.0
-  resolution: "@hocuspocus/provider@npm:4.7.0"
+"@hocuspocus/provider@npm:4.8.0":
+  version: 4.8.0
+  resolution: "@hocuspocus/provider@npm:4.8.0"
   dependencies:
-    "@hocuspocus/common": "npm:^4.7.0"
+    "@hocuspocus/common": "npm:^4.8.0"
     "@lifeomic/attempt": "npm:^3.1.0"
-    lib0: "npm:^0.2.117"
+    lib0: "npm:^0.2.119"
   peerDependencies:
     y-protocols: ^1.0.6
     yjs: ^13.6.8
-  checksum: 10c0/20ab6e5fd1d2799943520099c334deed18ba2c25aa02b16bcde9c468fc418e1fa1b59d18ee40c55453d5e96d98aec53a600bf6b062cb1240571ad20903f70210
+  checksum: 10c0/c39b305952a802dc949e96c699b0a1a762e260703390f2cfb7e85df61be12ff62a08de2978af479ee9a77fd1cdf206997e1dfc2b351c3ceb9fe082fc49a21336
   languageName: node
   linkType: hard
 
-"@hocuspocus/server@npm:4.7.0":
-  version: 4.7.0
-  resolution: "@hocuspocus/server@npm:4.7.0"
+"@hocuspocus/server@npm:4.8.0":
+  version: 4.8.0
+  resolution: "@hocuspocus/server@npm:4.8.0"
   dependencies:
-    "@hocuspocus/common": "npm:^4.7.0"
+    "@hocuspocus/common": "npm:^4.8.0"
     async-mutex: "npm:^0.5.0"
-    crossws: "npm:^0.4.4"
+    crossws: "npm:^0.4.16"
     kleur: "npm:^4.1.5"
-    lib0: "npm:^0.2.117"
+    lib0: "npm:^0.2.119"
   peerDependencies:
     y-protocols: ^1.0.6
     yjs: ^13.6.8
-  checksum: 10c0/60da02f9f04e701524002ffac3a6a1607b45c8aecc4a18361c0970eb9094ab40270ebb5833f8d706a0a1f2f8df46808ebaba3a0b379457fadc3551c8c3e02385
+  checksum: 10c0/4330bf8a81946a0d4247fed262138f195a7a66f51b0b233f7db88a53fd12676bdb8e5f421e1c10aac9e64e83fc30277b1726f06b9d6dc927b48596ba109bda83
   languageName: node
   linkType: hard
 
@@ -4281,8 +4281,8 @@ __metadata:
     "@dnd-kit/core": "npm:6.3.1"
     "@dnd-kit/sortable": "npm:10.0.0"
     "@dnd-kit/utilities": "npm:3.2.2"
-    "@hocuspocus/provider": "npm:4.7.0"
-    "@hocuspocus/server": "npm:4.7.0"
+    "@hocuspocus/provider": "npm:4.8.0"
+    "@hocuspocus/server": "npm:4.8.0"
     "@next/bundle-analyzer": "npm:16.3.8"
     "@playwright/test": "npm:1.63.0"
     "@prisma/adapter-pg": "npm:7.10.0"
@@ -4639,15 +4639,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"crossws@npm:^0.4.4":
-  version: 0.4.5
-  resolution: "crossws@npm:0.4.5"
+"crossws@npm:^0.4.16":
+  version: 0.4.17
+  resolution: "crossws@npm:0.4.17"
   peerDependencies:
     srvx: ">=0.11.5"
   peerDependenciesMeta:
     srvx:
       optional: true
-  checksum: 10c0/e90fe3f863a76559e67e8c3e978432aa2670ad0606daadf7ab88a54b87841dff200633e979471d5c428c6d0af68a2fdc5715bccca8e1d7edc43cff0ce6b29e2c
+  checksum: 10c0/e3405e5ad4adf01db38f0dd64ed7390cc631de882996645d2f312cec3a4e5e6496fad0a6f8e4e35e47b3e3fc362fcc9f3137ef8f661efd210322686e38966679
   languageName: node
   linkType: hard
 
@@ -6229,7 +6229,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lib0@npm:^0.2.100, lib0@npm:^0.2.109, lib0@npm:^0.2.117, lib0@npm:^0.2.85, lib0@npm:^0.2.99":
+"lib0@npm:^0.2.100, lib0@npm:^0.2.109, lib0@npm:^0.2.85, lib0@npm:^0.2.99":
   version: 0.2.117
   resolution: "lib0@npm:0.2.117"
   dependencies:
@@ -6239,6 +6239,19 @@ __metadata:
     0gentesthtml: bin/gentesthtml.js
     0serve: bin/0serve.js
   checksum: 10c0/d1b9205890d5d0cbd95ffdb0d6df6f9fd2c315b89e195fc9b015f3778046fb34bc12e94205ccf410a3073b836444045dcef6671fa2f6d5a7f70ebf8b6b0c0616
+  languageName: node
+  linkType: hard
+
+"lib0@npm:^0.2.119":
+  version: 0.2.119
+  resolution: "lib0@npm:0.2.119"
+  dependencies:
+    isomorphic.js: "npm:^0.2.4"
+  bin:
+    0ecdsa-generate-keypair: bin/0ecdsa-generate-keypair.js
+    0gentesthtml: bin/gentesthtml.js
+    0serve: bin/0serve.js
+  checksum: 10c0/722277c01158cc560c4cdc6093803435d5c1c1ed278a7ccfca4693968cc8a8ff361a0bbfcf7d76d6085c8b65716d381af81cf8d415bd9b5e48428df8896393bf
   languageName: node
   linkType: hard
 
