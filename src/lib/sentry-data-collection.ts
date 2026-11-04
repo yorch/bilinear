@@ -39,6 +39,9 @@ export const SENTRY_DATA_COLLECTION: DataCollection = {
   graphQL: { document: false, variables: false },
   httpBodies: [],
   httpHeaders: false,
+  // New in 11.10, default on; the app wires no MCP server, but name it so the
+  // posture stays an explicit list.
+  mcp: { inputs: false, outputs: false },
   queues: false,
   stackFrameVariables: false,
   urlQueryParams: false,
