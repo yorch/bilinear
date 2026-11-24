@@ -16,6 +16,7 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
+import { formatAvgCycleDays } from '@/lib/format-cycle-days';
 import { gqlQuery } from '@/lib/graphql';
 import { stateChartColor } from '@/lib/planning-utils';
 import { cn } from '@/lib/utils';
@@ -471,9 +472,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
     if (durations.length === 0) {
       return null;
     }
-    const avg = (durations.reduce((s, d) => s + d, 0) / durations.length).toFixed(1);
-    // "0.0d" is a rounding artefact, not a measurement.
-    return avg === '0.0' ? null : avg;
+    return durations.reduce((s, d) => s + d, 0) / durations.length;
   }, [rangeIssues]);
 
   // ── Team health (fetched from GraphQL, not MobX store) ────────────────────
@@ -566,7 +565,7 @@ const TeamAnalyticsPage = observer(function TeamAnalyticsPage() {
           <StatCard
             label={t('analytics.team.avgCycleTime')}
             sub={t('analytics.team.startedToCompleted')}
-            value={avgCycleTimeDays !== null ? `${avgCycleTimeDays}d` : '—'}
+            value={formatAvgCycleDays(avgCycleTimeDays)}
           />
         </div>
 

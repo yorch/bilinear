@@ -513,6 +513,7 @@ export class AnalyticsService {
           WHERE team_id = ${team.id}::uuid
             AND completed_at IS NOT NULL
             AND started_at IS NOT NULL
+            AND completed_at > started_at
             AND archived_at IS NULL
             AND trashed = false
         `;

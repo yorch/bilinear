@@ -13,6 +13,7 @@ import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
+import { formatAvgCycleDays } from '@/lib/format-cycle-days';
 import { gqlQuery } from '@/lib/graphql';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -248,7 +249,7 @@ const WorkspaceAnalyticsPage = observer(function WorkspaceAnalyticsPage() {
                           </span>
                         </span>
                         <span className="col-span-2 text-right text-sm text-muted-foreground">
-                          {team.avgCycleTimeDays > 0 ? `${team.avgCycleTimeDays.toFixed(1)}d` : '—'}
+                          {formatAvgCycleDays(team.avgCycleTimeDays)}
                         </span>
                         <div className="col-span-1" />
 
