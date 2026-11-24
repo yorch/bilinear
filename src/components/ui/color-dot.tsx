@@ -23,7 +23,13 @@ interface ColorDotProps {
 export function ColorDot({ color, size = 'md', className, title }: ColorDotProps) {
   return (
     <span
-      className={cn('inline-block flex-shrink-0 rounded-full', DOT_SIZES[size], className)}
+      className={cn(
+        // A hairline inset ring keeps pale entity colours (the default Todo grey)
+        // visible on a light surface.
+        'inline-block flex-shrink-0 rounded-full ring-1 ring-inset ring-foreground/15',
+        DOT_SIZES[size],
+        className,
+      )}
       style={{ backgroundColor: color }}
       title={title}
     />

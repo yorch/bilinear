@@ -130,7 +130,7 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
       <ModalHeader title={t('layout.shortcutHelp.title')} />
 
       {/* Body — two-column grid of sections */}
-      <div className="max-h-[70vh] overflow-y-auto p-6">
+      <div className="max-h-[70vh] overflow-y-auto rounded-md p-6 focus-visible:outline-offset-[-2px]">
         <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2 gap-y-6">
           {SECTIONS.map(section => (
             <div key={section.titleKey}>
