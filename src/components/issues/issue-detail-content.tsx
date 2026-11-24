@@ -391,6 +391,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
 
       <span className={labelClass}>{t('issueDetail.properties.startDate')}</span>
       <DueDatePicker
+        iconBelowLg
         kind="start"
         onChange={startDate => handleUpdate(issue.id, { startDate })}
         tone="neutral"
@@ -401,6 +402,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
       <div className="flex min-w-0 items-center gap-1.5">
         <DueDatePicker
           forceOpen={openProperty === 'dueDate'}
+          iconBelowLg
           onChange={dueDate => handleUpdate(issue.id, { dueDate })}
           onClose={closeOpened}
           stateType={states.find(st => st.id === issue.stateId)?.type}
@@ -415,6 +417,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
           <EstimatePicker
             estimationType={estimationType}
             forceOpen={openProperty === 'estimate'}
+            iconBelowLg
             onChange={estimate => handleUpdate(issue.id, { estimate: estimate ?? undefined })}
             onClose={closeOpened}
             value={issue.estimate}

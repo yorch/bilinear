@@ -13,6 +13,11 @@ interface DueDatePickerProps {
   className?: string;
   forceOpen?: boolean;
   /**
+   * Prefix a set value with its icon below `lg`, where the detail view hides the
+   * property labels and a bare "Nov 16" would be unlabelled.
+   */
+  iconBelowLg?: boolean;
+  /**
    * Which date this picks. `start` gets its own icon, title and accessible
    * name so it is never confused with the due-date chip beside it.
    * @default 'due'
@@ -44,6 +49,7 @@ export function DueDatePicker({
   onChange,
   className,
   forceOpen,
+  iconBelowLg,
   kind = 'due',
   label,
   onClose,
@@ -71,9 +77,19 @@ export function DueDatePicker({
       panelClassName="min-w-[180px] p-1"
       triggerAriaLabel={title}
       triggerChildren={
-        value
-          ? formatDueDate(value)
-          : (label ?? <PropertyPlaceholder icon={isStart ? CalendarClock : CalendarDays} />)
+        value ? (
+          <>
+            {iconBelowLg &&
+              (isStart ? (
+                <CalendarClock aria-hidden="true" className="h-3 w-3 shrink-0 lg:hidden" />
+              ) : (
+                <CalendarDays aria-hidden="true" className="h-3 w-3 shrink-0 lg:hidden" />
+              ))}
+            {formatDueDate(value)}
+          </>
+        ) : (
+          (label ?? <PropertyPlaceholder icon={isStart ? CalendarClock : CalendarDays} />)
+        )
       }
       triggerClassName={cn(
         'px-1.5 py-1 text-xs',
