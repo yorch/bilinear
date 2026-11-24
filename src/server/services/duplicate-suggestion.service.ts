@@ -244,7 +244,11 @@ export class DuplicateSuggestionService {
       // suggesting it would build duplicate-of-duplicate chains. Follow the
       // `duplicate` relation to the live canonical issue; a declined issue (no
       // relation) or a chain that dead-ends is dropped.
-      for (let hop = 0; issue && issue.state.type === 'canceled' && hop < MAX_CANONICAL_HOPS; hop++) {
+      for (
+        let hop = 0;
+        issue && issue.state.type === 'canceled' && hop < MAX_CANONICAL_HOPS;
+        hop++
+      ) {
         const link = await this.prisma.issueRelation.findFirst({
           orderBy: { createdAt: 'desc' },
           select: { relatedIssueId: true },
@@ -257,7 +261,12 @@ export class DuplicateSuggestionService {
             })) ?? undefined)
           : undefined;
       }
-      if (!issue || issue.state.type === 'canceled' || issue.id === source.id || taken.has(issue.id)) {
+      if (
+        !issue ||
+        issue.state.type === 'canceled' ||
+        issue.id === source.id ||
+        taken.has(issue.id)
+      ) {
         continue;
       }
       if (scope.guestTeamIds.includes(issue.teamId)) {

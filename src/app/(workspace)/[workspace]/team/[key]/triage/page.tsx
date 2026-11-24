@@ -4,11 +4,21 @@ import { ArrowLeft, Inbox } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { TipTapEditor } from '@/components/editor/tiptap-editor.lazy';
 import { IssuePicker } from '@/components/issues/issue-picker';
 import { TriageDuplicateSuggestions } from '@/components/issues/triage-duplicate-suggestions';
 import { TriageKeyHint } from '@/components/issues/triage-key-hint';
+import {
+  fetchIssueState,
+  TRIAGE_ACCEPT_MUTATION,
+  TRIAGE_DECLINE_MUTATION,
+  TRIAGE_MARK_DUPLICATE_MUTATION,
+  TRIAGE_REVERT_MUTATION,
+  TRIAGE_SNOOZE_MUTATION,
+  TriageStaleError,
+  triageMutate,
+} from '@/components/issues/triage-mutations';
 import { TriageSnoozeMenu } from '@/components/issues/triage-snooze-menu';
 import { AssigneeSelect } from '@/components/properties/assignee-select';
 import { LabelSelect } from '@/components/properties/label-select';
@@ -20,15 +30,14 @@ import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
-import { useHotkeys } from '@/hooks/use-hotkeys';
+import { isOverlayOpen, useHotkeys } from '@/hooks/use-hotkeys';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
-import { gql } from '@/lib/graphql';
 import { toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildIssueHref } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /**
@@ -40,54 +49,11 @@ import { useStore } from '@/providers/store-provider';
  *   - Mark dup → mark as duplicate of another issue and cancel        [2 / M]
  *   - Decline  → cancel the issue                                      [3 / D]
  *   - Snooze   → hide from queue until a future timestamp (menu)       [H / S]
- *   - J / K move through the queue. Keys are inert while typing or while a
- *     popover is open (see `useHotkeys` and `isPopoverOpen`).
+ *   - J / K move through the queue. Keys are inert while typing, while a
+ *     popover or dialog is open (`isOverlayOpen`), and the decision keys
+ *     ignore key auto-repeat so a held key cannot walk the whole queue.
+ *   - Accept / Decline / Duplicate show an Undo toast (`issueTriageRevert`).
  */
-
-const TRIAGE_ACCEPT_MUTATION = `
-  mutation TriageAccept($issueId: ID!, $input: IssueTriageAcceptInput!) {
-    issueTriageAccept(issueId: $issueId, input: $input) {
-      success
-      lastSyncId
-      issue { id stateId triagedAt }
-    }
-  }
-`;
-
-const TRIAGE_DECLINE_MUTATION = `
-  mutation TriageDecline($issueId: ID!) {
-    issueTriageDecline(issueId: $issueId) {
-      success
-      lastSyncId
-      issue { id stateId canceledAt triagedAt }
-    }
-  }
-`;
-
-const TRIAGE_MARK_DUPLICATE_MUTATION = `
-  mutation TriageMarkDuplicate($issueId: ID!, $canonicalIssueId: ID!) {
-    issueTriageMarkDuplicate(issueId: $issueId, canonicalIssueId: $canonicalIssueId) {
-      success
-      lastSyncId
-      issue { id stateId canceledAt triagedAt }
-    }
-  }
-`;
-
-const TRIAGE_SNOOZE_MUTATION = `
-  mutation TriageSnooze($issueId: ID!, $until: DateTime!) {
-    issueTriageSnooze(issueId: $issueId, until: $until) {
-      success
-      lastSyncId
-      issue { id snoozedUntilAt }
-    }
-  }
-`;
-
-/** True while any popover (priority, label, duplicate picker, snooze…) is open. */
-function isPopoverOpen(): boolean {
-  return document.querySelector('[aria-haspopup][aria-expanded="true"]') !== null;
-}
 
 const TriagePage = observer(function TriagePage() {
   const { key: teamKey, workspace } = useParams<{ workspace: string; key: string }>();
@@ -156,93 +122,157 @@ const TriagePage = observer(function TriagePage() {
   const users = toIssueUsers(userStore.all);
   const labels = toIssueLabels(labelStore.all);
 
-  /** Snapshot the issue so we can roll back optimistic edits on error. */
-  const handleAccept = useCallback(
+  // Latest queue for handlers that run after an await (focus hand-off).
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
+
+  /** The row that should take focus once `issueId` leaves the queue: next, else previous. */
+  const neighbourOf = useCallback((issueId: string): string | null => {
+    const q = queueRef.current;
+    const idx = q.findIndex(i => i.id === issueId);
+    return q[idx + 1]?.id ?? q[idx - 1]?.id ?? null;
+  }, []);
+
+  /** Re-read one issue's lifecycle fields from the server into the store. */
+  const adoptServerState = useCallback(
     async (issueId: string) => {
-      if (!defaultTargetStateId) {
+      const server = await fetchIssueState(issueId);
+      if (server) {
+        issueStore.optimisticUpdate(issueId, {
+          canceledAt: server.canceledAt,
+          snoozedUntilAt: server.snoozedUntilAt,
+          stateId: server.stateId,
+          triagedAt: server.triagedAt,
+        });
+      } else {
+        // Unreadable (gone, or no access): the safe move is to stop offering it.
+        issueStore.optimisticUpdate(issueId, {
+          snoozedUntilAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        });
+      }
+    },
+    [issueStore],
+  );
+
+  /** Undo a decision: the server puts the issue back in triage, we mirror it. */
+  const handleUndo = useCallback(
+    async (issueId: string) => {
+      if (!triageStateId) {
         return;
       }
+      const before = issueStore.findById(issueId);
+      issueStore.optimisticUpdate(issueId, {
+        canceledAt: null,
+        snoozedUntilAt: null,
+        stateId: triageStateId,
+        triagedAt: null,
+      });
+      setFocusedId(issueId);
+      try {
+        await triageMutate(TRIAGE_REVERT_MUTATION, { issueId }, t('settings.triage.undoFailed'));
+      } catch (err) {
+        if (err instanceof TriageStaleError) {
+          await adoptServerState(issueId);
+          toast.error(t('settings.triage.undoExpired'));
+        } else {
+          if (before) {
+            issueStore.optimisticUpdate(issueId, before);
+          }
+          toast.error(getErrorMessage(err, t('settings.triage.undoFailed')));
+        }
+      }
+    },
+    [adoptServerState, issueStore, t, triageStateId],
+  );
+
+  /**
+   * One path for every decision. Optimistic patch → mutation → on a lost race
+   * (`TriageStaleError`) adopt the server's state and say so, never restore
+   * the stale snapshot; on any other error roll back to the snapshot.
+   */
+  const decide = useCallback(
+    async (
+      issueId: string,
+      d: {
+        failure: string;
+        optimistic: Partial<DBIssue>;
+        query: string;
+        success?: (identifier: string) => string;
+        variables: Record<string, unknown>;
+      },
+    ): Promise<boolean> => {
       const snapshot = issueStore.findById(issueId);
       setBusyId(issueId);
-      // Optimistic: remove from triage queue immediately.
-      issueStore.optimisticUpdate(issueId, { stateId: defaultTargetStateId });
+      setFocusedId(neighbourOf(issueId));
+      issueStore.optimisticUpdate(issueId, d.optimistic);
       try {
-        const res = await gql(TRIAGE_ACCEPT_MUTATION, {
-          input: { stateId: defaultTargetStateId },
-          issueId,
-        });
-        if (res.errors?.length) {
-          throw new Error(
-            (res.errors[0] as { message?: string })?.message ?? t('settings.triage.acceptFailed'),
-          );
+        await triageMutate(d.query, { issueId, ...d.variables }, d.failure);
+        if (d.success && snapshot) {
+          toast.undo(d.success(snapshot.identifier), t('settings.triage.undo'), () => {
+            void handleUndo(issueId);
+          });
         }
+        return true;
       } catch (err) {
-        if (snapshot) {
-          issueStore.optimisticUpdate(issueId, snapshot);
+        if (err instanceof TriageStaleError) {
+          await adoptServerState(issueId);
+          toast.info(t('settings.triage.alreadyHandled'));
+        } else {
+          if (snapshot) {
+            issueStore.optimisticUpdate(issueId, snapshot);
+            setFocusedId(issueId);
+          }
+          toast.error(getErrorMessage(err, d.failure));
         }
-        toast.error(getErrorMessage(err, t('settings.triage.acceptFailed')));
+        return false;
       } finally {
         setBusyId(null);
       }
     },
-    [defaultTargetStateId, issueStore, t],
+    [adoptServerState, handleUndo, issueStore, neighbourOf, t],
+  );
+
+  const handleAccept = useCallback(
+    (issueId: string) => {
+      if (!defaultTargetStateId) {
+        return Promise.resolve(false);
+      }
+      return decide(issueId, {
+        failure: t('settings.triage.acceptFailed'),
+        optimistic: { stateId: defaultTargetStateId },
+        query: TRIAGE_ACCEPT_MUTATION,
+        success: identifier => t('settings.triage.accepted', { identifier }),
+        variables: { input: { stateId: defaultTargetStateId } },
+      });
+    },
+    [decide, defaultTargetStateId, t],
   );
 
   const handleDecline = useCallback(
-    async (issueId: string) => {
-      const snapshot = issueStore.findById(issueId);
-      setBusyId(issueId);
-      // Optimistic: hide from queue while the request is in flight.
-      // We mark with a synthetic snoozedUntilAt far in the future so the
-      // queue filter excludes it; the real cancel arrives via WS.
-      issueStore.optimisticUpdate(issueId, {
-        snoozedUntilAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      });
-      try {
-        const res = await gql(TRIAGE_DECLINE_MUTATION, { issueId });
-        if (res.errors?.length) {
-          throw new Error(
-            (res.errors[0] as { message?: string })?.message ?? t('settings.triage.declineFailed'),
-          );
-        }
-      } catch (err) {
-        if (snapshot) {
-          issueStore.optimisticUpdate(issueId, snapshot);
-        }
-        toast.error(getErrorMessage(err, t('settings.triage.declineFailed')));
-      } finally {
-        setBusyId(null);
-      }
-    },
-    [issueStore, t],
+    (issueId: string) =>
+      // Optimistic: hide from the queue with a synthetic snooze; the real
+      // cancel arrives over the sync socket.
+      decide(issueId, {
+        failure: t('settings.triage.declineFailed'),
+        optimistic: { snoozedUntilAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() },
+        query: TRIAGE_DECLINE_MUTATION,
+        success: identifier => t('settings.triage.declined', { identifier }),
+        variables: {},
+      }),
+    [decide, t],
   );
 
   const handleSnooze = useCallback(
-    async (issueId: string, hours: number) => {
-      const snapshot = issueStore.findById(issueId);
+    (issueId: string, hours: number) => {
       const until = new Date(Date.now() + hours * 60 * 60 * 1000);
-      setBusyId(issueId);
-      issueStore.optimisticUpdate(issueId, { snoozedUntilAt: until.toISOString() });
-      try {
-        const res = await gql(TRIAGE_SNOOZE_MUTATION, {
-          issueId,
-          until: until.toISOString(),
-        });
-        if (res.errors?.length) {
-          throw new Error(
-            (res.errors[0] as { message?: string })?.message ?? t('settings.triage.snoozeFailed'),
-          );
-        }
-      } catch (err) {
-        if (snapshot) {
-          issueStore.optimisticUpdate(issueId, snapshot);
-        }
-        toast.error(getErrorMessage(err, t('settings.triage.snoozeFailed')));
-      } finally {
-        setBusyId(null);
-      }
+      return decide(issueId, {
+        failure: t('settings.triage.snoozeFailed'),
+        optimistic: { snoozedUntilAt: until.toISOString() },
+        query: TRIAGE_SNOOZE_MUTATION,
+        variables: { until: until.toISOString() },
+      });
     },
-    [issueStore, t],
+    [decide, t],
   );
 
   const submitMarkDuplicate = useCallback(
@@ -251,34 +281,20 @@ const TriagePage = observer(function TriagePage() {
         toast.error(t('settings.triage.cannotMarkDuplicateOfItself'));
         return;
       }
-      const snapshot = issueStore.findById(issueId);
-      setBusyId(issueId);
-      issueStore.optimisticUpdate(issueId, {
-        snoozedUntilAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      });
       try {
-        const res = await gql(TRIAGE_MARK_DUPLICATE_MUTATION, {
-          canonicalIssueId: canonical.id,
-          issueId,
+        await decide(issueId, {
+          failure: t('settings.triage.markDuplicateFailed'),
+          optimistic: { snoozedUntilAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() },
+          query: TRIAGE_MARK_DUPLICATE_MUTATION,
+          success: () =>
+            t('settings.triage.markedAsDuplicate', { identifier: canonical.identifier }),
+          variables: { canonicalIssueId: canonical.id },
         });
-        if (res.errors?.length) {
-          throw new Error(
-            (res.errors[0] as { message?: string })?.message ??
-              t('settings.triage.markDuplicateFailed'),
-          );
-        }
-        toast.success(t('settings.triage.markedAsDuplicate', { identifier: canonical.identifier }));
-      } catch (err) {
-        if (snapshot) {
-          issueStore.optimisticUpdate(issueId, snapshot);
-        }
-        toast.error(getErrorMessage(err, t('settings.triage.markDuplicateFailed')));
       } finally {
-        setBusyId(null);
         setDuplicatePickerFor(null);
       }
     },
-    [issueStore, t],
+    [decide, t],
   );
 
   const handleMarkDuplicate = useCallback((issueId: string) => {
@@ -287,11 +303,12 @@ const TriagePage = observer(function TriagePage() {
 
   // j/k move within the queue. 1/2/3 and a/m/d are the decisions (Accept,
   // Duplicate, Decline); h/s open the snooze menu, whose rows are then picked
-  // with the arrow keys + Enter. Every action is skipped while another
-  // popover is open so a digit typed at a menu can't also decide the issue.
+  // with the arrow keys + Enter. Every action is skipped while a popover or
+  // dialog is open so a digit typed at a menu — or behind the `?` help / `c`
+  // create modal — can't also decide the hidden focused issue.
   const act = useCallback(
     (run: (issueId: string) => void) => {
-      if (effectiveFocusedId && !busyId && !isPopoverOpen()) {
+      if (effectiveFocusedId && !busyId && !isOverlayOpen()) {
         run(effectiveFocusedId);
       }
     },
@@ -304,34 +321,37 @@ const TriagePage = observer(function TriagePage() {
   const duplicate = useCallback(() => act(handleMarkDuplicate), [act, handleMarkDuplicate]);
   const snooze = useCallback(() => act(setSnoozeOpenFor), [act]);
 
+  // The row that LOOKS focused (the first one when nothing is explicitly
+  // focused), so the first `j` moves off it rather than appearing to do nothing.
+  const shownIndex = queue.findIndex(i => i.id === effectiveFocusedId);
   useHotkeys(
     'j',
     () => {
-      if (isPopoverOpen()) {
+      if (isOverlayOpen()) {
         return;
       }
-      const next = Math.min(focusedIndex + 1, queue.length - 1);
+      const next = Math.min(shownIndex + 1, queue.length - 1);
       setFocusedId(queue[next]?.id ?? null);
     },
     { enabled: hasQueue },
-    [focusedIndex, queue],
+    [shownIndex, queue],
   );
   useHotkeys(
     'k',
     () => {
-      if (isPopoverOpen()) {
+      if (isOverlayOpen()) {
         return;
       }
-      const prev = Math.max(focusedIndex - 1, 0);
+      const prev = Math.max(shownIndex - 1, 0);
       setFocusedId(queue[prev]?.id ?? null);
     },
     { enabled: hasQueue },
-    [focusedIndex, queue],
+    [shownIndex, queue],
   );
-  useHotkeys(['1', 'a'], accept, { enabled: acceptEnabled }, [accept]);
-  useHotkeys(['2', 'm'], duplicate, { enabled: hasQueue }, [duplicate]);
-  useHotkeys(['3', 'd'], decline, { enabled: hasQueue }, [decline]);
-  useHotkeys(['h', 's'], snooze, { enabled: hasQueue }, [snooze]);
+  useHotkeys(['1', 'a'], accept, { enabled: acceptEnabled, ignoreRepeat: true }, [accept]);
+  useHotkeys(['2', 'm'], duplicate, { enabled: hasQueue, ignoreRepeat: true }, [duplicate]);
+  useHotkeys(['3', 'd'], decline, { enabled: hasQueue, ignoreRepeat: true }, [decline]);
+  useHotkeys(['h', 's'], snooze, { enabled: hasQueue, ignoreRepeat: true }, [snooze]);
 
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
 
@@ -440,17 +460,20 @@ const TriagePage = observer(function TriagePage() {
               {/* One set of actions, for the issue on screen — not four buttons
                   on every row of the queue. */}
               <Toolbar className="justify-between">
-                <button
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground md:hidden"
+                <Button
+                  className={cn('gap-1 text-muted-foreground md:hidden', TOUCH_TARGET)}
                   onClick={() => setPreviewOpen(false)}
+                  size="xs"
                   type="button"
+                  variant="ghost"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
                   {t('settings.triage.backToQueue')}
-                </button>
+                </Button>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     aria-keyshortcuts="1 A"
+                    className={TOUCH_TARGET}
                     disabled={Boolean(busyId) || !defaultTargetStateId}
                     onClick={() => handleAccept(focusedIssue.id)}
                     size="sm"
@@ -461,6 +484,7 @@ const TriagePage = observer(function TriagePage() {
                   </Button>
                   <Button
                     aria-keyshortcuts="3 D"
+                    className={TOUCH_TARGET}
                     disabled={Boolean(busyId)}
                     onClick={() => handleDecline(focusedIssue.id)}
                     size="sm"
@@ -488,6 +512,7 @@ const TriagePage = observer(function TriagePage() {
                     triggerClassName={cn(
                       buttonVariants({ size: 'sm', variant: 'outline' }),
                       'text-foreground',
+                      TOUCH_TARGET,
                     )}
                     triggerTitle={t('settings.triage.markDuplicateTitle')}
                   />
@@ -499,7 +524,10 @@ const TriagePage = observer(function TriagePage() {
                   />
                 </div>
                 <Link
-                  className="text-xs text-muted-foreground hover:text-foreground"
+                  className={cn(
+                    'text-xs text-muted-foreground hover:text-foreground',
+                    TOUCH_TARGET,
+                  )}
                   href={buildIssueHref(workspace, focusedIssue.id, {
                     label: t('nav.triage'),
                     path: pathname,

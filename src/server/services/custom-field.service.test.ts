@@ -184,6 +184,14 @@ describe('CustomFieldService', () => {
         { numberFormat: { currency: 'USDX', kind: 'currency' as const }, type: 'number' as const },
       ],
       [
+        'an unassigned 3-letter currency (QQQ)',
+        { numberFormat: { currency: 'QQQ', kind: 'currency' as const }, type: 'number' as const },
+      ],
+      [
+        'the test-only currency XXX',
+        { numberFormat: { currency: 'XXX', kind: 'currency' as const }, type: 'number' as const },
+      ],
+      [
         'a currency on a percent kind',
         { numberFormat: { currency: 'USD', kind: 'percent' as const }, type: 'number' as const },
       ],
@@ -204,6 +212,17 @@ describe('CustomFieldService', () => {
         CustomFieldInvalidFormatError,
       );
       expect(prisma.customFieldDefinition.create).not.toHaveBeenCalled();
+    });
+
+    it.each(['USD', 'EUR', 'MXN', 'JPY'])('accepts the real currency %s', async code => {
+      prisma.customFieldDefinition.count.mockResolvedValue(0);
+      prisma.customFieldDefinition.create.mockResolvedValue(NUMBER_DEF);
+      await service.createDefinition({
+        ...base,
+        numberFormat: { currency: code, kind: 'currency' },
+        type: 'number',
+      });
+      expect(prisma.customFieldDefinition.create).toHaveBeenCalled();
     });
 
     it('accepts the decimals bounds 0 and 6', async () => {

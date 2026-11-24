@@ -118,6 +118,26 @@ export function isChordPending(): boolean {
   return chordPending;
 }
 
+/**
+ * Whether a modal surface or open popover currently owns the keyboard.
+ *
+ * Page-level single-key shortcuts that decide something irreversible-ish (the
+ * triage keys) must not fire from behind a dialog: with the `?` help or the
+ * `c` create modal open and a button focused, the keydown still reaches
+ * `window`. Covers native `<dialog open>`, ARIA dialogs/modals, any expanded
+ * or `aria-haspopup` trigger.
+ */
+export function isOverlayOpen(): boolean {
+  if (typeof document === 'undefined') {
+    return false;
+  }
+  return (
+    document.querySelector(
+      'dialog[open], [role="dialog"]:not(dialog), [role="alertdialog"], [aria-modal="true"], [aria-haspopup][aria-expanded="true"]',
+    ) !== null
+  );
+}
+
 export interface HotkeyOptions {
   /**
    * When true, the shortcut fires even when focus is inside an input,
@@ -132,6 +152,14 @@ export interface HotkeyOptions {
    * @default true
    */
   enabled?: boolean;
+  /**
+   * When true, auto-repeat keydowns (`e.repeat`, from holding the key) are
+   * ignored. Set it on shortcuts that perform a decision (accept / decline),
+   * where holding the key would otherwise act on successive items. Navigation
+   * (J / K) leaves it off so holding the key keeps scrolling the list.
+   * @default false
+   */
+  ignoreRepeat?: boolean;
 }
 
 /**
@@ -153,7 +181,7 @@ export function useHotkeys(
   options: HotkeyOptions = {},
   deps: unknown[] = [],
 ) {
-  const { allowInInput = false, enabled = true } = options;
+  const { allowInInput = false, enabled = true, ignoreRepeat = false } = options;
   const keys = Array.isArray(key) ? key : [key];
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: keys tracked via join; keys.some is stable
@@ -167,6 +195,10 @@ export function useHotkeys(
       // consumes a key claims it via preventDefault, and any other
       // window-level listener on the same event must back off.
       if (e.defaultPrevented) {
+        return;
+      }
+
+      if (ignoreRepeat && e.repeat) {
         return;
       }
 
@@ -219,7 +251,7 @@ export function useHotkeys(
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [keys.join(','), enabled, allowInInput, handler, ...deps]);
+  }, [keys.join(','), enabled, allowInInput, ignoreRepeat, handler, ...deps]);
 }
 
 /**

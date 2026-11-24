@@ -23,12 +23,32 @@ describe('extractQueryTerms', () => {
     const terms = extractQueryTerms("foo' & !bar | (baz:*) <-> qux; DROP TABLE issues");
     expect(terms).toEqual(['foo', 'bar', 'baz', 'qux', 'drop', 'table', 'issues']);
     for (const t of terms) {
-      expect(t).toMatch(/^[a-z0-9]+$/);
+      expect(t).toMatch(/^[\p{L}\p{N}\p{M}]+$/u);
     }
+  });
+
+  it('keeps accented and non-Latin words whole instead of cutting at the first non-ASCII letter', () => {
+    expect(extractQueryTerms('Error al iniciar sesión')).toEqual(['error', 'iniciar', 'sesión']);
+    expect(extractQueryTerms('El botón de exportación')).toEqual(['botón', 'exportación']);
+    expect(extractQueryTerms('Die Größe der Straße')).toEqual(['die', 'größe', 'der', 'straße']);
+    expect(extractQueryTerms('导出失败 报告')).toEqual(['导出失败', '报告']);
+    // Decomposed (NFD) input is normalised, not split at the combining mark.
+    expect(extractQueryTerms('sesio\u0301n')).toEqual(['sesión']);
+  });
+
+  it('keeps two-character all-caps acronyms but not ordinary short words', () => {
+    expect(extractQueryTerms('CI broken, UI is an eyesore')).toEqual([
+      'ci',
+      'broken',
+      'ui',
+      'eyesore',
+    ]);
+    expect(extractQueryTerms('is an of 42')).toEqual([]);
   });
 
   it('drops short terms, dedupes and caps the term count', () => {
     expect(extractQueryTerms('a an Login login LOGIN')).toEqual(['login']);
+    expect(extractQueryTerms('x yz')).toEqual([]);
     const many = Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ');
     expect(extractQueryTerms(many)).toHaveLength(12);
   });
@@ -46,14 +66,25 @@ describe('FtsDuplicateScorer', () => {
     });
     expect(out).toEqual([{ issueId: 'x', matchedTerms: ['crash'], score: 0.4 }]);
     const { sql, values } = sqlOf(prisma.$queryRaw.mock.calls[0][0]);
-    expect(values).toContain('crash | login');
+    // Terms travel as a bound array and are re-parsed by plainto_tsquery in SQL;
+    // no user text is ever concatenated into a tsquery string.
     expect(values).toContainEqual(['crash', 'login']);
-    expect(values).toContain(1);
+    expect(values).toContain(3);
+    expect(sql).toContain("plainto_tsquery('english', t.term)");
+    expect(sql).not.toMatch(/(?<!plain)to_tsquery\(/);
     expect(values).toContainEqual(['team-a']);
     expect(values).toContain('src');
     expect(sql).toContain('archived_at IS NULL');
     expect(sql).toContain('trashed = false');
-    expect(sql).toContain("ws.type::text != 'triage'");
+    // Triage peers are candidates; declined (canceled, no duplicate relation) are not.
+    expect(sql).not.toContain("'triage'");
+    expect(sql).toContain("ws.type::text != 'canceled'");
+    expect(sql).toContain("r.type = 'duplicate'");
+    // Stop words are dropped before the threshold is derived; the threshold is
+    // enforced by the index gate (pairs) rather than a post-filter.
+    expect(sql).toContain('numnode(tq) > 0');
+    expect(sql).toContain('count(*) >= 3');
+    expect(sql).toContain('MATERIALIZED');
     expect(sql).toContain('i.id !=');
   });
 
@@ -106,6 +137,7 @@ describe('DuplicateSuggestionService', () => {
   const row = (id: string, extra: Record<string, unknown> = {}) => ({
     ...TEST_ISSUE,
     id,
+    state: { type: 'backlog' },
     teamId: 'team-a',
     title: `Login ${id}`,
     ...extra,
@@ -150,7 +182,6 @@ describe('DuplicateSuggestionService', () => {
       archivedAt: null,
       id: { in: ['b', 'a', 'gone'], not: 'src' },
       organizationId: TEST_ORG.id,
-      state: { type: { not: 'triage' } },
       teamId: { in: ['team-a'] },
       trashed: false,
     });
@@ -166,5 +197,74 @@ describe('DuplicateSuggestionService', () => {
     );
     const out = await service.suggest(TEST_ORG.id, 'src', { ...SCOPE, guestTeamIds: ['team-a'] });
     expect(out.map(r => r.issue.id)).toEqual(['mine']);
+  });
+
+  it('flags triage peers and strips the joined state from the issue', async () => {
+    const { service } = setup(
+      [{ issueId: 'peer', score: 0.9 }],
+      [row('peer', { state: { type: 'triage' } })],
+    );
+    const [hit] = await service.suggest(TEST_ORG.id, 'src', SCOPE);
+    expect(hit.inTriage).toBe(true);
+    expect(hit.issue).not.toHaveProperty('state');
+  });
+
+  it('follows a canceled duplicate to its canonical issue and never offers a declined one', async () => {
+    const { prisma, service } = setup(
+      [
+        { issueId: 'dup', score: 0.9 },
+        { issueId: 'declined', score: 0.8 },
+        { issueId: 'canon', score: 0.7 },
+      ],
+      [
+        row('dup', { state: { type: 'canceled' } }),
+        row('declined', { state: { type: 'canceled' } }),
+        row('canon'),
+      ],
+    );
+    prisma.issueRelation.findFirst.mockImplementation(
+      async (args: { where: { issueId: string } }) =>
+        args.where.issueId === 'dup' ? { relatedIssueId: 'canon' } : null,
+    );
+    prisma.issue.findFirst.mockImplementation(async (args: { where: { id: string } }) =>
+      args.where.id === 'canon' ? row('canon') : SOURCE,
+    );
+    const out = await service.suggest(TEST_ORG.id, 'src', SCOPE);
+    // 'dup' resolves to 'canon' (kept once, at the better score); 'declined' is dropped.
+    expect(out.map(r => r.issue.id)).toEqual(['canon']);
+    expect(out[0].score).toBe(0.9);
+  });
+
+  it('stops at a canonical that is itself canceled, and never suggests the source', async () => {
+    const { prisma, service } = setup(
+      [{ issueId: 'dup', score: 0.9 }],
+      [row('dup', { state: { type: 'canceled' } })],
+    );
+    prisma.issueRelation.findFirst.mockResolvedValue({ relatedIssueId: 'src' });
+    prisma.issue.findFirst.mockImplementation(async (args: { where: { id: string } }) =>
+      args.where.id === 'src' ? row('src') : SOURCE,
+    );
+    expect(await service.suggest(TEST_ORG.id, 'src', SCOPE)).toEqual([]);
+  });
+
+  it('applies visibility when following a duplicate link', async () => {
+    const { prisma, service } = setup(
+      [{ issueId: 'dup', score: 0.9 }],
+      [row('dup', { state: { type: 'canceled' } })],
+    );
+    prisma.issueRelation.findFirst.mockResolvedValue({ relatedIssueId: 'hidden' });
+    prisma.issue.findFirst.mockImplementation(async (args: { where: Record<string, unknown> }) =>
+      args.where.id === 'hidden' ? null : SOURCE,
+    );
+    expect(await service.suggest(TEST_ORG.id, 'src', SCOPE)).toEqual([]);
+    const lookup = prisma.issue.findFirst.mock.calls.find(
+      c => (c[0] as { where: { id: string } }).where.id === 'hidden',
+    );
+    expect(lookup?.[0].where).toMatchObject({
+      archivedAt: null,
+      organizationId: TEST_ORG.id,
+      teamId: { in: ['team-a'] },
+      trashed: false,
+    });
   });
 });

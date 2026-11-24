@@ -25,17 +25,69 @@ export const NUMBER_FORMAT_KINDS: readonly NumberFormatKind[] = [
 
 export const DEFAULT_NUMBER_FORMAT: NumberFieldFormat = { kind: 'plain' };
 
+/** Fallback when `Intl.supportedValuesOf` is missing from the runtime. */
+const FALLBACK_CURRENCIES = [
+  'AUD',
+  'BRL',
+  'CAD',
+  'CHF',
+  'CNY',
+  'CZK',
+  'DKK',
+  'EUR',
+  'GBP',
+  'HKD',
+  'HUF',
+  'IDR',
+  'ILS',
+  'INR',
+  'JPY',
+  'KRW',
+  'MXN',
+  'NOK',
+  'NZD',
+  'PLN',
+  'RON',
+  'SEK',
+  'SGD',
+  'THB',
+  'TRY',
+  'TWD',
+  'UAH',
+  'USD',
+  'ZAR',
+] as const;
+
+let knownCurrencies: ReadonlySet<string> | null = null;
+
+/**
+ * Real ISO 4217 codes the runtime knows. `Intl.NumberFormat` alone accepts any
+ * three letters, so membership in this set is the actual validity test.
+ */
+export function supportedCurrencyCodes(): ReadonlySet<string> {
+  if (!knownCurrencies) {
+    let codes: readonly string[] = FALLBACK_CURRENCIES;
+    try {
+      const supported = (
+        Intl as unknown as { supportedValuesOf?: (key: string) => string[] }
+      ).supportedValuesOf?.('currency');
+      if (supported?.length) {
+        codes = supported;
+      }
+    } catch {
+      // Unsupported runtime: keep the fallback list.
+    }
+    knownCurrencies = new Set(codes);
+  }
+  return knownCurrencies;
+}
+
 /** True for a well-formed, recognised ISO 4217 code. */
 export function isValidCurrencyCode(code: string | undefined): boolean {
   if (!code || !/^[A-Za-z]{3}$/.test(code)) {
     return false;
   }
-  try {
-    new Intl.NumberFormat('en', { currency: code, style: 'currency' });
-    return true;
-  } catch {
-    return false;
-  }
+  return supportedCurrencyCodes().has(code.toUpperCase());
 }
 
 function clampDecimals(d: number | undefined): number | undefined {
@@ -90,6 +142,10 @@ export function formatNumberValue(
     return value > 0 ? '∞' : '-∞';
   }
   const decimals = clampDecimals(format.decimals);
+  // `signDisplay: 'negative'` drops the sign from -0 and from values that
+  // round to zero ("-$0.00", "-0"); a bare `-0` input is zeroed for the
+  // same reason.
+  const signDisplay = 'negative' as const;
   switch (format.kind) {
     case 'currency': {
       const code = format.currency?.trim().toUpperCase();
@@ -98,17 +154,20 @@ export function formatNumberValue(
           currency: code,
           maximumFractionDigits: decimals,
           minimumFractionDigits: decimals,
+          signDisplay,
           style: 'currency',
         }).format(value);
       }
       const plain = new Intl.NumberFormat(locale, {
         maximumFractionDigits: decimals ?? 2,
+        signDisplay,
       }).format(value);
       return code ? `${plain} ${code}` : plain;
     }
     case 'percent':
       return new Intl.NumberFormat(locale, {
         maximumFractionDigits: decimals ?? 2,
+        signDisplay,
         style: 'unit',
         unit: 'percent',
       }).format(value);
@@ -118,9 +177,13 @@ export function formatNumberValue(
       return new Intl.NumberFormat(locale, {
         maximumFractionDigits: decimals ?? 1,
         notation: 'compact',
+        signDisplay,
       }).format(value);
     default:
-      return new Intl.NumberFormat(locale, { maximumFractionDigits: decimals ?? 20 }).format(value);
+      return new Intl.NumberFormat(locale, {
+        maximumFractionDigits: decimals ?? 20,
+        signDisplay,
+      }).format(value);
   }
 }
 

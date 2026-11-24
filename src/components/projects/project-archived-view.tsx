@@ -112,6 +112,9 @@ export const ProjectArchivedView = observer(function ProjectArchivedView() {
     .sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
 
   const restore = async (row: ArchivedProjectRow) => {
+    if (restoring.has(row.id)) {
+      return;
+    }
     setRestoring(prev => new Set(prev).add(row.id));
     projectStore.optimisticUpdate(row.id, { archivedAt: null });
     try {
@@ -165,7 +168,12 @@ export const ProjectArchivedView = observer(function ProjectArchivedView() {
               {row.icon || <Target aria-hidden="true" className="h-3.5 w-3.5" />}
             </span>
             <span className="min-w-0 flex-1 truncate text-sm text-foreground">{row.name}</span>
-            <Button onClick={() => void restore(row)} size="sm" variant="outline">
+            <Button
+              disabled={restoring.has(row.id)}
+              onClick={() => void restore(row)}
+              size="sm"
+              variant="outline"
+            >
               <Undo2 className="h-3.5 w-3.5" />
               {t('common.restore')}
             </Button>

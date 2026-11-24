@@ -122,7 +122,11 @@ describe('CycleService', () => {
   });
 
   describe('unarchive', () => {
-    it('clears archivedAt', async () => {
+    const ARCHIVED = { ...TEST_CYCLE, archivedAt: new Date('2026-03-20T00:00:00Z') };
+
+    it('clears archivedAt when the range is free', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(ARCHIVED);
+      prisma.cycle.findFirst.mockResolvedValue(null);
       prisma.cycle.update.mockResolvedValue({ ...TEST_CYCLE, archivedAt: null });
 
       const result = await service.unarchive(TEST_CYCLE.id);
@@ -131,6 +135,37 @@ describe('CycleService', () => {
         data: { archivedAt: null },
         where: { id: TEST_CYCLE.id },
       });
+    });
+
+    it('runs the same overlap query as create/update (active, not self, same team, range)', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(ARCHIVED);
+      prisma.cycle.findFirst.mockResolvedValue(null);
+      prisma.cycle.update.mockResolvedValue(TEST_CYCLE);
+
+      await service.unarchive(TEST_CYCLE.id);
+
+      expect(prisma.cycle.findFirst).toHaveBeenCalledWith({
+        where: {
+          archivedAt: null,
+          endsAt: { gt: ARCHIVED.startsAt },
+          id: { not: TEST_CYCLE.id },
+          startsAt: { lt: ARCHIVED.endsAt },
+          teamId: ARCHIVED.teamId,
+        },
+      });
+    });
+
+    it('refuses with CycleOverlapError when an active cycle took the dates', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(ARCHIVED);
+      prisma.cycle.findFirst.mockResolvedValue({ ...TEST_CYCLE, id: 'other' });
+
+      await expect(service.unarchive(TEST_CYCLE.id)).rejects.toThrow(CycleOverlapError);
+      expect(prisma.cycle.update).not.toHaveBeenCalled();
+    });
+
+    it('throws CycleNotFoundError for an unknown id', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(null);
+      await expect(service.unarchive('nope')).rejects.toThrow(CycleNotFoundError);
     });
   });
 
@@ -719,6 +754,27 @@ describe('CycleService', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    it('starts after the latest cycle even when it is archived (so restore cannot be blocked)', async () => {
+      prisma.team.findUnique.mockResolvedValue(CYCLES_TEAM);
+      prisma.cycle.findFirst.mockResolvedValue({
+        ...TEST_CYCLE,
+        archivedAt: new Date(),
+        endsAt: new Date('2031-01-15T00:00:00Z'),
+      });
+      prisma.cycle.findMany.mockResolvedValue([]);
+      prisma.cycle.create.mockImplementation(({ data }) =>
+        Promise.resolve({ ...TEST_CYCLE, ...data }),
+      );
+
+      const [first] = await service.autoCreateUpcomingCycles(TEST_ORG.id, TEST_TEAM.id, 1);
+
+      expect(first.startsAt.toISOString()).toBe('2031-01-15T00:00:00.000Z');
+      expect(prisma.cycle.findFirst).toHaveBeenCalledWith({
+        orderBy: { endsAt: 'desc' },
+        where: { teamId: TEST_TEAM.id },
+      });
     });
 
     it('returns no cycles when the team does not have cycles enabled', async () => {

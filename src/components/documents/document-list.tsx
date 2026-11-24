@@ -135,13 +135,24 @@ export const DocumentList = observer(function DocumentList({
   // Optimistic: the row leaves at once (the store filters on `archivedAt`) and a
   // refusal puts it back. The toast offers the undo that the old confirm copy
   // ("it will be hidden") never admitted was possible.
+  const [restoringIds, setRestoringIds] = useState<ReadonlySet<string>>(new Set());
   const restore = async (id: string) => {
+    if (restoringIds.has(id)) {
+      return;
+    }
+    setRestoringIds(prev => new Set(prev).add(id));
     documentStore.optimisticUpdate(id, { archivedAt: null });
     try {
       await gqlMutate(DOCUMENT_UNARCHIVE_MUTATION, { id });
     } catch {
       documentStore.optimisticUpdate(id, { archivedAt: new Date().toISOString() });
       toast.error(t('documents.restoreFailed'));
+    } finally {
+      setRestoringIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -280,6 +291,7 @@ export const DocumentList = observer(function DocumentList({
           {archivedView ? (
             <Button
               className="mr-1 shrink-0"
+              disabled={restoringIds.has(doc.id)}
               onClick={() => void restore(doc.id)}
               size="sm"
               variant="outline"

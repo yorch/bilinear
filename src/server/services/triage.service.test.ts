@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_WORKFLOW_STATES, TEST_ISSUE, TEST_TEAM } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
+  TRIAGE_REVERT_WINDOW_MS,
   TriageCrossOrgError,
   TriageDuplicateSelfError,
   TriageIssueNotFoundError,
   TriageNotEnabledError,
   TriageNotInQueueError,
+  TriageNotRevertableError,
   TriageService,
   TriageSnoozeInvalidDateError,
 } from './triage.service';
@@ -237,6 +239,58 @@ describe('TriageService', () => {
       await expect(service.snooze(TRIAGE_ISSUE.id, future, 'user-id')).rejects.toThrow(
         TriageNotInQueueError,
       );
+    });
+  });
+
+  describe('revert', () => {
+    const decidedAt = new Date(Date.now() - 60_000);
+    const accepted = { ...TEST_ISSUE, stateId: 'backlog-state', triagedAt: decidedAt };
+
+    function arm(issue: unknown, count = 1) {
+      prisma.issue.findUnique.mockResolvedValueOnce(issue).mockResolvedValue({
+        ...TRIAGE_ISSUE,
+        triagedAt: null,
+      });
+      prisma.workflowState.findFirst.mockResolvedValue({ id: TRIAGE_STATE.id });
+      prisma.issue.updateMany.mockResolvedValue({ count });
+      prisma.issueRelation.findMany.mockResolvedValue([{ id: 'rel-1' }]);
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prisma));
+    }
+
+    it('returns a recently decided issue to the triage state and drops its duplicate relation', async () => {
+      arm(accepted);
+      const out = await service.revert(TEST_ISSUE.id);
+      expect(prisma.issue.updateMany).toHaveBeenCalledWith({
+        data: { canceledAt: null, stateId: TRIAGE_STATE.id, triagedAt: null },
+        // CAS on the decision being undone: a later decision must win.
+        where: { id: TEST_ISSUE.id, stateId: 'backlog-state', triagedAt: decidedAt },
+      });
+      expect(prisma.issueRelation.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: ['rel-1'] } },
+      });
+      expect(out.removedRelationIds).toEqual(['rel-1']);
+    });
+
+    it('refuses an issue that is still in the queue', async () => {
+      arm({ ...accepted, stateId: TRIAGE_STATE.id });
+      await expect(service.revert(TEST_ISSUE.id)).rejects.toBeInstanceOf(TriageNotRevertableError);
+    });
+
+    it('refuses once the undo window has passed', async () => {
+      arm({ ...accepted, triagedAt: new Date(Date.now() - TRIAGE_REVERT_WINDOW_MS - 1000) });
+      await expect(service.revert(TEST_ISSUE.id)).rejects.toBeInstanceOf(TriageNotRevertableError);
+      expect(prisma.issue.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses an issue that was never triaged', async () => {
+      arm({ ...accepted, triagedAt: null });
+      await expect(service.revert(TEST_ISSUE.id)).rejects.toBeInstanceOf(TriageNotRevertableError);
+    });
+
+    it('loses the CAS when another decision landed first', async () => {
+      arm(accepted, 0);
+      await expect(service.revert(TEST_ISSUE.id)).rejects.toBeInstanceOf(TriageNotRevertableError);
+      expect(prisma.issueRelation.deleteMany).not.toHaveBeenCalled();
     });
   });
 });

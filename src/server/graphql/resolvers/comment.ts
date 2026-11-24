@@ -107,9 +107,9 @@ export const commentResolvers = {
       );
 
       // Notify subscribers
-      await ctx.services.notification
+      const subscriberResult = await ctx.services.notification
         .notifyCommentSubscribers(ctx.orgId, comment.issueId, ctx.userId, comment.id)
-        .catch(() => {}); // non-fatal
+        .catch(() => undefined); // non-fatal
 
       // Mention notifications: parse @user mentions out of the comment's
       // TipTap doc (bodyData) and notify anyone mentioned who isn't already
@@ -125,6 +125,8 @@ export const commentResolvers = {
           issueId: issue.id,
           mentionedUserIds: extractMentionedUserIds(input.bodyData),
           orgId: ctx.orgId,
+          // The reply target already got an ISSUE_COMMENTED row above.
+          skipUserIds: subscriberResult?.replyToUserId ? [subscriberResult.replyToUserId] : [],
           teamId: issue.teamId,
         })
         .catch(err => logger.error({ err }, 'Failed to create mention notifications'));

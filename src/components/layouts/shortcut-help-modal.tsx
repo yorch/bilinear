@@ -5,6 +5,8 @@ import { useModKey } from '@/hooks/use-mod-key';
 import { useTranslations } from '@/hooks/use-translations';
 
 interface ShortcutEntry {
+  /** A second, equivalent binding, shown after the primary one ("1 / A"). */
+  alias?: string[];
   descriptionKey: string;
   keys: string[];
 }
@@ -73,10 +75,10 @@ const SECTIONS: ShortcutSection[] = [
     // Live only on a team's Triage page (`triage/page.tsx`); J / K move
     // through the queue there exactly as in the issue list.
     shortcuts: [
-      { descriptionKey: 'layout.shortcutHelp.triageAccept', keys: ['1'] },
-      { descriptionKey: 'layout.shortcutHelp.triageDuplicate', keys: ['2'] },
-      { descriptionKey: 'layout.shortcutHelp.triageDecline', keys: ['3'] },
-      { descriptionKey: 'layout.shortcutHelp.triageSnooze', keys: ['H'] },
+      { alias: ['A'], descriptionKey: 'layout.shortcutHelp.triageAccept', keys: ['1'] },
+      { alias: ['M'], descriptionKey: 'layout.shortcutHelp.triageDuplicate', keys: ['2'] },
+      { alias: ['D'], descriptionKey: 'layout.shortcutHelp.triageDecline', keys: ['3'] },
+      { alias: ['S'], descriptionKey: 'layout.shortcutHelp.triageSnooze', keys: ['H'] },
     ],
     titleKey: 'layout.shortcutHelp.sections.triage',
   },
@@ -144,7 +146,17 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
                     <span className="text-sm text-foreground-secondary">
                       {t(shortcut.descriptionKey)}
                     </span>
-                    <KbdGroup keys={shortcut.keys.map(k => (k === MOD ? modKey : k))} />
+                    <span className="flex shrink-0 items-center gap-1">
+                      <KbdGroup keys={shortcut.keys.map(k => (k === MOD ? modKey : k))} />
+                      {shortcut.alias ? (
+                        <>
+                          <span aria-hidden="true" className="text-xs text-muted-foreground">
+                            /
+                          </span>
+                          <KbdGroup keys={shortcut.alias} />
+                        </>
+                      ) : null}
+                    </span>
                   </div>
                 ))}
               </div>

@@ -4,6 +4,7 @@ import { TriageKeyHint } from '@/components/issues/triage-key-hint';
 import { buttonVariants } from '@/components/ui/button';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 
 export const SNOOZE_PRESETS: ReadonlyArray<{ hours: number; labelKey: string }> = [
   { hours: 4, labelKey: 'settings.triage.snooze4Hours' },
@@ -17,6 +18,8 @@ interface TriageSnoozeMenuProps {
   forceOpen?: boolean;
   onClose?: () => void;
   onSelect: (hours: number) => void;
+  /** Override the preset list (tests; a future per-team setting). */
+  presets?: ReadonlyArray<{ hours: number; labelKey: string }>;
 }
 
 /**
@@ -30,6 +33,7 @@ export function TriageSnoozeMenu({
   forceOpen,
   onClose,
   onSelect,
+  presets = SNOOZE_PRESETS,
 }: TriageSnoozeMenuProps) {
   const t = useTranslations();
   return (
@@ -45,10 +49,10 @@ export function TriageSnoozeMenu({
           <TriageKeyHint>H</TriageKeyHint>
         </>
       }
-      triggerClassName={buttonVariants({ size: 'sm', variant: 'outline' })}
+      triggerClassName={cn(buttonVariants({ size: 'sm', variant: 'outline' }), TOUCH_TARGET)}
     >
       {close =>
-        SNOOZE_PRESETS.map(p => (
+        presets.map(p => (
           <button
             aria-selected={false}
             className={POPOVER_ITEM_CLASS}

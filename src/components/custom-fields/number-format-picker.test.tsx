@@ -16,6 +16,20 @@ describe('NumberFormatPicker', () => {
     expect(screen.getByTestId('number-format-preview')).toHaveTextContent('€1,234.50');
   });
 
+  it('flags a well-formed but unassigned code (QQQ), which Intl alone would accept', () => {
+    render(
+      <NumberFormatPicker onChange={() => {}} value={{ currency: 'QQQ', kind: 'currency' }} />,
+    );
+    expect(screen.getByText('customFields.numberFormat.invalidCurrency')).toBeInTheDocument();
+  });
+
+  it('does not flag a real code', () => {
+    render(
+      <NumberFormatPicker onChange={() => {}} value={{ currency: 'MXN', kind: 'currency' }} />,
+    );
+    expect(screen.queryByText('customFields.numberFormat.invalidCurrency')).toBeNull();
+  });
+
   it('flags an unknown currency code and degrades the preview', () => {
     render(<NumberFormatPicker onChange={() => {}} value={{ currency: 'ZZ', kind: 'currency' }} />);
     expect(screen.getByText('customFields.numberFormat.invalidCurrency')).toBeInTheDocument();

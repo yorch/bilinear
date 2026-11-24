@@ -24,9 +24,8 @@ function str(value: unknown): string | null {
  * Unknown types fall to Other so a new notification type is never promoted by
  * accident. The server marks a reply with ONE field,
  * `replyToUserId` (the parent comment's author); the row is Priority only for
- * that viewer. Legacy rows may carry `parentAuthorId` (same meaning) or a bare
- * `isReply: true`, which are still honoured. A comment notification with none
- * of them is ordinary subscribed activity.
+ * that viewer. A comment notification without it is ordinary subscribed
+ * activity.
  */
 export function classifyNotification(
   notification: Pick<DBNotification, 'data' | 'issueId' | 'type'>,
@@ -43,8 +42,7 @@ export function classifyNotification(
       if (!viewerId) {
         return 'other';
       }
-      const repliedTo = str(data.replyToUserId) ?? str(data.parentAuthorId);
-      return data.isReply === true || repliedTo === viewerId ? 'priority' : 'other';
+      return str(data.replyToUserId) === viewerId ? 'priority' : 'other';
     }
     case 'ISSUE_STATUS_CHANGED':
     case 'ISSUE_PRIORITY_CHANGED': {
@@ -77,21 +75,30 @@ export function reminderTime(notification: Pick<DBNotification, 'data'>): string
   return raw && !Number.isNaN(new Date(raw).getTime()) ? raw : null;
 }
 
-const LANE_STORAGE_KEY = 'inbox.lane';
+/** Keyed per user: a shared browser must not hand one person another's lane. */
+export function laneStorageKey(userId: string): string {
+  return `inbox.lane.${userId}`;
+}
 
 /** Last-used lane (a per-viewer convenience; null when storage is unavailable). */
-export function readStoredLane(): InboxLane | null {
+export function readStoredLane(userId: string | null): InboxLane | null {
+  if (!userId) {
+    return null;
+  }
   try {
-    const v = window.localStorage.getItem(LANE_STORAGE_KEY);
+    const v = window.localStorage.getItem(laneStorageKey(userId));
     return v === 'priority' || v === 'other' ? v : null;
   } catch {
     return null;
   }
 }
 
-export function writeStoredLane(lane: InboxLane): void {
+export function writeStoredLane(lane: InboxLane, userId: string | null): void {
+  if (!userId) {
+    return;
+  }
   try {
-    window.localStorage.setItem(LANE_STORAGE_KEY, lane);
+    window.localStorage.setItem(laneStorageKey(userId), lane);
   } catch {
     // Storage blocked: the lane just won't be remembered.
   }

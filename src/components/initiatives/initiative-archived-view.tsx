@@ -42,6 +42,9 @@ export const InitiativeArchivedView = observer(function InitiativeArchivedView()
   const rows = initiativeStore.archived;
 
   const restore = async (row: DBInitiative) => {
+    if (restoringIds.has(row.id)) {
+      return;
+    }
     setRestoringIds(prev => new Set(prev).add(row.id));
     initiativeStore.optimisticUpdate(row.id, { archivedAt: null });
     try {

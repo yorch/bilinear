@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { TriageSnoozeMenu } from './triage-snooze-menu';
+import { SNOOZE_PRESETS, TriageSnoozeMenu } from './triage-snooze-menu';
 
 vi.mock('@/hooks/use-translations', () => ({
   useTranslations: () => (key: string) => key,
@@ -27,15 +27,22 @@ describe('TriageSnoozeMenu', () => {
     expect(screen.queryByRole('option')).toBeNull();
   });
 
-  it('keeps the same DOM nodes across re-renders (no remount churn)', () => {
-    const { rerender } = render(<TriageSnoozeMenu disabled={false} onSelect={vi.fn()} />);
+  it("keeps each row's DOM node tied to its preset, even when the list reorders", () => {
+    // Index keys would hand "4 hours" the node that used to be "1 day" (and
+    // remount under a mid-click pointer); keys by hours keep identity.
+    const forward = SNOOZE_PRESETS;
+    const reversed = [...SNOOZE_PRESETS].reverse();
+    const { rerender } = render(
+      <TriageSnoozeMenu disabled={false} onSelect={vi.fn()} presets={forward} />,
+    );
     fireEvent.click(screen.getByRole('button'));
-    const before = screen.getAllByRole('option');
-    rerender(<TriageSnoozeMenu disabled={false} onSelect={vi.fn()} />);
+    const byLabel = new Map(screen.getAllByRole('option').map(o => [o.textContent, o]));
+    rerender(<TriageSnoozeMenu disabled={false} onSelect={vi.fn()} presets={reversed} />);
     const after = screen.getAllByRole('option');
-    after.forEach((node, i) => {
-      expect(node).toBe(before[i]);
-    });
+    expect(after.map(o => o.textContent)).toEqual(reversed.map(p => p.labelKey));
+    for (const node of after) {
+      expect(node).toBe(byLabel.get(node.textContent));
+    }
   });
 
   it('claims Escape: closes the menu and stops the event reaching other listeners', () => {

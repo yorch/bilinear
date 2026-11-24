@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testAuthGuard } from '../../../test/auth-guard-helper';
 import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
 import { TEST_ISSUE, TEST_ORG, TEST_TEAM, TEST_USER, TEST_USER_2 } from '../../../test/fixtures';
@@ -90,6 +90,33 @@ describe('commentResolvers', () => {
         { input: { body: 'hi', issueId: TEST_ISSUE.id } },
         ctx,
         'FORBIDDEN',
+      );
+    });
+
+    it('passes the reply target to notifyMentions so a reply that @mentions its parent author notifies once', async () => {
+      ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
+        teamId: TEST_TEAM.id,
+        userId: TEST_USER.id,
+      });
+      vi.spyOn(ctx.services.comment, 'create').mockResolvedValue(TEST_COMMENT as never);
+      vi.spyOn(ctx.services.notification, 'notifyCommentSubscribers').mockResolvedValue({
+        count: 1,
+        replyToUserId: TEST_USER_2.id,
+      });
+      const mentions = vi
+        .spyOn(ctx.services.notification, 'notifyMentions')
+        .mockResolvedValue(undefined);
+
+      await commentResolvers.Mutation.commentCreate(
+        null,
+        { input: { body: 'hi', issueId: TEST_ISSUE.id } },
+        ctx as never,
+      );
+
+      expect(mentions).toHaveBeenCalledWith(
+        expect.objectContaining({ skipUserIds: [TEST_USER_2.id] }),
       );
     });
 

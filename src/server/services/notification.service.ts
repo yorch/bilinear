@@ -264,8 +264,14 @@ export class NotificationService {
     mentionedUserIds: string[];
     actorId: string;
     excerpt?: string;
+    /**
+     * Users already notified for this same comment by another path (the reply
+     * target `notifyCommentSubscribers` returns) — skipped so a reply that
+     * also @mentions its parent's author yields one notification, not two.
+     */
+    skipUserIds?: readonly string[];
   }): Promise<void> {
-    const { orgId, teamId, issueId, mentionedUserIds, actorId, excerpt } = params;
+    const { orgId, teamId, issueId, mentionedUserIds, actorId, excerpt, skipUserIds } = params;
     if (mentionedUserIds.length === 0) {
       return;
     }
@@ -279,8 +285,9 @@ export class NotificationService {
     });
     const authorizedMentionedIds = new Set(teamMembers.map(m => m.userId));
     const subscribers = new Set(await this.getSubscribers(issueId));
+    const skip = new Set(skipUserIds ?? []);
     const recipientIds = mentionedUserIds.filter(
-      userId => authorizedMentionedIds.has(userId) && !subscribers.has(userId),
+      userId => authorizedMentionedIds.has(userId) && !subscribers.has(userId) && !skip.has(userId),
     );
     await Promise.all(
       recipientIds.map(userId => this.createForMention(orgId, issueId, userId, actorId, excerpt)),
@@ -361,11 +368,16 @@ export class NotificationService {
    * Author of the comment `commentId` replies to, or null when it is a
    * top-level comment, the parent is gone, the author is the actor, or the
    * author is no longer a member of the issue's team (so a reply never leaks
-   * to someone who lost access).
+   * to someone who lost access). A guest parent author only counts while they
+   * still created or are assigned the issue — the same visibility rule guests
+   * get everywhere else.
    */
   private async resolveReplyTarget(commentId: string, actorId: string): Promise<string | null> {
     const comment = await this.prisma.comment.findUnique({
-      select: { issue: { select: { teamId: true } }, parent: { select: { authorId: true } } },
+      select: {
+        issue: { select: { assigneeId: true, creatorId: true, teamId: true } },
+        parent: { select: { authorId: true } },
+      },
       where: { id: commentId },
     });
     const parentAuthorId = comment?.parent?.authorId;
@@ -376,7 +388,21 @@ export class NotificationService {
       select: { userId: true },
       where: { teamId: comment.issue.teamId, userId: parentAuthorId },
     });
-    return membership ? parentAuthorId : null;
+    if (!membership) {
+      return null;
+    }
+    const role = await this.prisma.teamMemberRole.findUnique({
+      select: { role: true },
+      where: { teamId_userId: { teamId: comment.issue.teamId, userId: parentAuthorId } },
+    });
+    // Mirrors `getTeamRole`: an unrecognised role is least-privilege (guest).
+    const isGuest = role != null && role.role !== 'member' && role.role !== 'admin';
+    const ownsIssue =
+      comment.issue.creatorId === parentAuthorId || comment.issue.assigneeId === parentAuthorId;
+    if (isGuest && !ownsIssue) {
+      return null;
+    }
+    return parentAuthorId;
   }
 
   async notifyCommentSubscribers(
@@ -385,7 +411,7 @@ export class NotificationService {
     actorId: string,
     commentId: string,
     excerpt?: string,
-  ): Promise<{ count: number }> {
+  ): Promise<{ count: number; replyToUserId?: string }> {
     const subscribers = await this.getSubscribers(issueId);
     const replyToUserId = await this.resolveReplyTarget(commentId, actorId);
     const recipients = new Set(subscribers.filter(id => id !== actorId));
@@ -417,7 +443,7 @@ export class NotificationService {
       log.error({ err }, 'Failed to send comment notification emails'),
     );
 
-    return result;
+    return replyToUserId ? { ...result, replyToUserId } : result;
   }
 
   // ---------------------------------------------------------------------------

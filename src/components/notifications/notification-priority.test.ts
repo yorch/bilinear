@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   classifyNotification,
+  laneStorageKey,
   nextLane,
   partitionByLane,
+  readStoredLane,
   reminderTime,
+  writeStoredLane,
 } from './notification-priority';
 
 const lookups = { issueAssigneeId: (id: string) => (id === 'mine' ? 'me' : 'someone') };
@@ -30,16 +33,13 @@ describe('classifyNotification', () => {
     ).toBe('other');
   });
 
-  it('still honours legacy reply markers on old rows', () => {
+  it('ignores legacy reply fields nothing writes', () => {
     expect(
       classifyNotification(n('ISSUE_COMMENTED', { data: { parentAuthorId: 'me' } }), 'me', lookups),
-    ).toBe('priority');
-    expect(
-      classifyNotification(n('ISSUE_COMMENTED', { data: { parentAuthorId: 'x' } }), 'me', lookups),
     ).toBe('other');
     expect(
       classifyNotification(n('ISSUE_COMMENTED', { data: { isReply: true } }), 'me', lookups),
-    ).toBe('priority');
+    ).toBe('other');
   });
 
   it('promotes status changes only on issues assigned to the viewer', () => {
@@ -82,5 +82,17 @@ describe('reminderTime / nextLane', () => {
     expect(nextLane('other', 'ArrowRight')).toBe('priority');
     expect(nextLane('priority', 'ArrowLeft')).toBe('other');
     expect(nextLane('priority', 'Enter')).toBeNull();
+  });
+});
+
+describe('laneStorageKey', () => {
+  it('is distinct per user', () => {
+    expect(laneStorageKey('u1')).not.toBe(laneStorageKey('u2'));
+    expect(laneStorageKey('u1')).toContain('u1');
+  });
+
+  it('reads and writes nothing without a user (no storage access)', () => {
+    expect(readStoredLane(null)).toBeNull();
+    expect(() => writeStoredLane('other', null)).not.toThrow();
   });
 });

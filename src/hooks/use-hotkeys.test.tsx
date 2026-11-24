@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useChord, useHotkeys } from './use-hotkeys';
+import { isOverlayOpen, useChord, useHotkeys } from './use-hotkeys';
 
 function dispatchKeyDown(init: KeyboardEventInit, target?: EventTarget): KeyboardEvent {
   const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
@@ -290,5 +290,55 @@ describe('chord vs single-key hotkeys', () => {
     });
 
     expect(single).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useHotkeys ignoreRepeat', () => {
+  it('drops auto-repeat keydowns only when asked to', () => {
+    const guarded = vi.fn();
+    const open = vi.fn();
+    renderHook(() => {
+      useHotkeys('1', guarded, { ignoreRepeat: true });
+      useHotkeys('j', open);
+    });
+    act(() => {
+      dispatchKeyDown({ key: '1' });
+      dispatchKeyDown({ key: '1', repeat: true });
+      dispatchKeyDown({ key: '1', repeat: true });
+      dispatchKeyDown({ key: 'j', repeat: true });
+      dispatchKeyDown({ key: 'j', repeat: true });
+    });
+    expect(guarded).toHaveBeenCalledTimes(1);
+    // Navigation keeps scrolling while held.
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('isOverlayOpen', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('is false on a bare page', () => {
+    document.body.innerHTML = '<button id="b">x</button>';
+    expect(isOverlayOpen()).toBe(false);
+  });
+
+  it('sees an open native dialog but not a closed one', () => {
+    document.body.innerHTML = '<dialog id="d"></dialog>';
+    expect(isOverlayOpen()).toBe(false);
+    document.getElementById('d')?.setAttribute('open', '');
+    expect(isOverlayOpen()).toBe(true);
+  });
+
+  it('sees ARIA dialogs, aria-modal surfaces and expanded popover triggers', () => {
+    document.body.innerHTML = '<div role="dialog"></div>';
+    expect(isOverlayOpen()).toBe(true);
+    document.body.innerHTML = '<div aria-modal="true"></div>';
+    expect(isOverlayOpen()).toBe(true);
+    document.body.innerHTML = '<button aria-haspopup="listbox" aria-expanded="true"></button>';
+    expect(isOverlayOpen()).toBe(true);
+    document.body.innerHTML = '<button aria-haspopup="listbox" aria-expanded="false"></button>';
+    expect(isOverlayOpen()).toBe(false);
   });
 });

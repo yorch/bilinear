@@ -188,10 +188,32 @@ export class CycleService {
     });
   }
 
+  /**
+   * Restore an archived cycle. The overlap checks in `create`/`update` ignore
+   * archived rows, so an archived cycle's dates can have been reused since —
+   * restoring it blindly would resurrect two overlapping active cycles. Run the
+   * same overlap query (in one transaction, like `create`) and refuse with
+   * `CycleOverlapError` when the range is taken.
+   */
   async unarchive(id: string): Promise<Cycle> {
-    return this.prisma.cycle.update({
-      data: { archivedAt: null },
-      where: { id },
+    return this.prisma.$transaction(async tx => {
+      const existing = await tx.cycle.findUnique({ where: { id } });
+      if (!existing) {
+        throw new CycleNotFoundError();
+      }
+      const overlap = await tx.cycle.findFirst({
+        where: {
+          archivedAt: null,
+          endsAt: { gt: existing.startsAt },
+          id: { not: id },
+          startsAt: { lt: existing.endsAt },
+          teamId: existing.teamId,
+        },
+      });
+      if (overlap) {
+        throw new CycleOverlapError();
+      }
+      return tx.cycle.update({ data: { archivedAt: null }, where: { id } });
     });
   }
 
@@ -698,10 +720,12 @@ export class CycleService {
     const durationWeeks = team.cycleDuration ?? 2;
     const cooldownDays = team.cycleCooldownTime ?? 0;
 
-    // Find the latest cycle to start from
+    // Find the latest cycle to start from. Archived cycles count: skipping them
+    // would let the generator refill an archived cycle's range, and that
+    // cycle could then never be restored (unarchive refuses an overlap).
     const latestCycle = await this.prisma.cycle.findFirst({
       orderBy: { endsAt: 'desc' },
-      where: { archivedAt: null, teamId },
+      where: { teamId },
     });
 
     const existingUpcoming = await this.getUpcomingCycles(teamId);

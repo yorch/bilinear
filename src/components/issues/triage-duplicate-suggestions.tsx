@@ -2,15 +2,27 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SectionHeader } from '@/components/shared/section-header';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
 import { buildIssueHref } from '@/lib/issue-nav';
+import { TOUCH_TARGET } from '@/lib/utils';
+
+/**
+ * Quiet period before suggestions are fetched. Holding J/K moves focus ~30
+ * times a second; each new focus restarts the timer, so only the row the user
+ * settles on costs a query (and an in-flight answer for a row they have
+ * already left is discarded by `useRetryableFetch`'s request id).
+ */
+export const SUGGESTION_DEBOUNCE_MS = 250;
 
 export interface DuplicateSuggestion {
+  inTriage: boolean;
   issue: { id: string; identifier: string; title: string };
   matchedTerms: string[];
   score: number;
@@ -21,6 +33,7 @@ const DUPLICATE_SUGGESTIONS_QUERY = `
     triageDuplicateSuggestions(issueId: $issueId, first: 3) {
       score
       matchedTerms
+      inTriage
       issue { id identifier title }
     }
   }
@@ -32,6 +45,16 @@ interface TriageDuplicateSuggestionsProps {
   /** Title is part of the cache key: editing it can change what is similar. */
   issueTitle: string;
   onMarkDuplicate: (canonical: DuplicateSuggestion['issue']) => void;
+}
+
+/** `value`, but only after it has stopped changing for SUGGESTION_DEBOUNCE_MS. */
+function useSettledKey(value: string): string {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), SUGGESTION_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [value]);
+  return settled;
 }
 
 /**
@@ -49,17 +72,33 @@ export function TriageDuplicateSuggestions({
 }: TriageDuplicateSuggestionsProps) {
   const t = useTranslations();
   const { workspace } = useParams<{ workspace: string }>();
-  const { data, error, loading, refetch } = useRetryableFetch<DuplicateSuggestion[]>(
-    () =>
-      gqlQuery<DuplicateSuggestion[]>(
+  const key = `${issueId}\u0000${issueTitle}`;
+  const settled = useSettledKey(key);
+  // The result carries the key it was fetched for, so a render between the key
+  // changing and the new fetch starting never shows the previous issue's rows.
+  const {
+    data: result,
+    error,
+    loading,
+    refetch,
+  } = useRetryableFetch<{ key: string; list: DuplicateSuggestion[] }>(
+    async () => ({
+      key: settled,
+      // `settled` is "<issueId>\0<title>"; the id is the part before the NUL.
+      list: await gqlQuery<DuplicateSuggestion[]>(
         DUPLICATE_SUGGESTIONS_QUERY,
-        { issueId },
+        { issueId: settled.split('\u0000')[0] },
         'triageDuplicateSuggestions',
       ),
-    [issueId, issueTitle],
-    [],
+    }),
+    [settled],
+    { key: '', list: [] },
   );
+  const data = result.key === key ? result.list : [];
 
+  if (settled !== key) {
+    return null;
+  }
   if (error) {
     return (
       <InlineRetry
@@ -91,6 +130,11 @@ export function TriageDuplicateSuggestions({
                   {s.issue.identifier}
                 </Link>
                 <span className="truncate text-foreground">{s.issue.title}</span>
+                {s.inTriage ? (
+                  <Badge className="shrink-0" tone="info" variant="pill">
+                    {t('settings.triage.inTriage')}
+                  </Badge>
+                ) : null}
               </div>
               {s.matchedTerms.length > 0 ? (
                 <p className="truncate text-xs text-foreground-faint">
@@ -99,6 +143,7 @@ export function TriageDuplicateSuggestions({
               ) : null}
             </div>
             <Button
+              className={TOUCH_TARGET}
               disabled={disabled}
               onClick={() => onMarkDuplicate(s.issue)}
               size="xs"
@@ -110,6 +155,9 @@ export function TriageDuplicateSuggestions({
           </li>
         ))}
       </ul>
+      <p className="mt-1.5 text-xs text-foreground-faint">
+        {t('settings.triage.suggestionsLanguageHint')}
+      </p>
     </section>
   );
 }

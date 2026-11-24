@@ -33,6 +33,19 @@ describe('ShortcutHelpModal', () => {
     expect(screen.getByText('⌫')).toBeInTheDocument();
   });
 
+  it('lists each triage key together with its letter alias', () => {
+    render(<ShortcutHelpModal onClose={() => {}} open />);
+    for (const [key, alias] of [
+      ['triageAccept', ['1', 'A']],
+      ['triageDuplicate', ['2', 'M']],
+      ['triageDecline', ['3', 'D']],
+      ['triageSnooze', ['H', 'S']],
+    ] as const) {
+      const row = screen.getByText(`layout.shortcutHelp.${key}`).parentElement as HTMLElement;
+      expect(Array.from(row.querySelectorAll('kbd')).map(k => k.textContent)).toEqual([...alias]);
+    }
+  });
+
   it('renders nothing while closed', () => {
     render(<ShortcutHelpModal onClose={() => {}} open={false} />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

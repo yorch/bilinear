@@ -2,6 +2,7 @@
 
 import { Archive, RefreshCw, Undo2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import { useState } from 'react';
 import { ARCHIVED_CYCLES_QUERY } from '@/components/cycles/cycle-mutations';
 import { useCycleArchive } from '@/components/cycles/use-cycle-archive';
 import { InlineRetry } from '@/components/shared/inline-retry';
@@ -29,6 +30,18 @@ export const CycleArchivedView = observer(function CycleArchivedView({
   const { formatDate } = useFormatters();
   const { cycleStore } = useStore();
   const { restore } = useCycleArchive();
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const handleRestore = async (cycle: DBCycle) => {
+    if (pendingId) {
+      return;
+    }
+    setPendingId(cycle.id);
+    try {
+      await restore(cycle);
+    } finally {
+      setPendingId(null);
+    }
+  };
 
   const load = useArchivedLoad<DBCycle>(
     true,
@@ -74,7 +87,12 @@ export const CycleArchivedView = observer(function CycleArchivedView({
               {formatDate(cycle.endsAt, { day: 'numeric', month: 'short', year: 'numeric' })}
             </span>
           </div>
-          <Button onClick={() => void restore(cycle)} size="sm" variant="outline">
+          <Button
+            disabled={pendingId !== null}
+            onClick={() => void handleRestore(cycle)}
+            size="sm"
+            variant="outline"
+          >
             <Undo2 className="h-3.5 w-3.5" />
             {t('common.restore')}
           </Button>

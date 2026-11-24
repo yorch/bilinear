@@ -29,6 +29,26 @@ const TRIAGE_ERROR_MAP = {
   NOT_FOUND: ['TriageIssueNotFoundError'],
 } as const;
 
+/** `extensions.reason` for "someone else already decided this issue". */
+export const TRIAGE_STALE_REASON = 'TRIAGE_STALE';
+
+/**
+ * Like `mapServiceError`, but a lost race (the issue already left the queue, or
+ * can no longer be reverted) keeps `BAD_USER_INPUT` and adds
+ * `extensions.reason = TRIAGE_STALE`. The client must tell "someone else
+ * handled this" (drop the row, do NOT roll back to the stale state) from every
+ * other BAD_USER_INPUT (the issue is still in the queue; roll back).
+ */
+function mapTriageError(err: unknown): never {
+  const name = (err as { name?: string }).name;
+  if (name === 'TriageNotInQueueError' || name === 'TriageNotRevertableError') {
+    throw new GraphQLError((err as Error).message, {
+      extensions: { code: 'BAD_USER_INPUT', reason: TRIAGE_STALE_REASON },
+    });
+  }
+  return mapServiceError(err, TRIAGE_ERROR_MAP);
+}
+
 /**
  * Compute the IssueActivity rows that should be written for a triage
  * transition. The activity rows mirror what `issueUpdate` writes for the
@@ -133,7 +153,7 @@ export const triageResolvers = {
         );
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapServiceError(err, TRIAGE_ERROR_MAP);
+        mapTriageError(err);
       }
     },
 
@@ -164,7 +184,7 @@ export const triageResolvers = {
         );
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapServiceError(err, TRIAGE_ERROR_MAP);
+        mapTriageError(err);
       }
     },
 
@@ -225,7 +245,7 @@ export const triageResolvers = {
         );
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapServiceError(err, TRIAGE_ERROR_MAP);
+        mapTriageError(err);
       }
     },
 
@@ -265,7 +285,7 @@ export const triageResolvers = {
         );
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapServiceError(err, TRIAGE_ERROR_MAP);
+        mapTriageError(err);
       }
     },
 
@@ -301,7 +321,7 @@ export const triageResolvers = {
           .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated'));
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapServiceError(err, TRIAGE_ERROR_MAP);
+        mapTriageError(err);
       }
     },
   },

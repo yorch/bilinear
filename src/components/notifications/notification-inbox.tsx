@@ -367,15 +367,16 @@ export const NotificationInbox = observer(function NotificationInbox() {
   // Priority vs Other. Starts on Priority (SSR-safe) and adopts the last-used
   // lane once mounted, so the hydration markup never depends on storage.
   const [lane, setLaneState] = useState<InboxLane>('priority');
+  const viewerId = store.userStore.currentUserId;
   useEffect(() => {
-    const stored = readStoredLane();
+    const stored = readStoredLane(viewerId);
     if (stored) {
       setLaneState(stored);
     }
-  }, []);
+  }, [viewerId]);
   const setLane = (next: InboxLane) => {
     setLaneState(next);
-    writeStoredLane(next);
+    writeStoredLane(next, viewerId);
   };
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
@@ -522,7 +523,6 @@ export const NotificationInbox = observer(function NotificationInbox() {
     }
   };
 
-  const viewerId = store.userStore.currentUserId;
   const priorityLookups = {
     issueAssigneeId: (issueId: string) => store.issueStore.findById(issueId)?.assigneeId ?? null,
   };
@@ -533,6 +533,9 @@ export const NotificationInbox = observer(function NotificationInbox() {
     other: activeByLane.other.filter(n => !n.read).length,
     priority: activeByLane.priority.filter(n => !n.read).length,
   };
+  // Lane counts only see the loaded page, while the badge is the server's
+  // total — so while more pages exist they are a lower bound, and say so.
+  const laneSuffix = notificationStore.hasMore ? '+' : '';
   const active = activeByLane[lane];
   const unread = active.filter(n => !n.read);
   const read = active.filter(n => n.read);
@@ -582,6 +585,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
                   {t('notifications.lanes.priority')}
                   <span className="font-mono tabular-nums" data-testid="lane-count-priority">
                     {laneUnread.priority}
+                    {laneSuffix}
                   </span>
                 </>
               ),
@@ -593,6 +597,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
                   {t('notifications.lanes.other')}
                   <span className="font-mono tabular-nums" data-testid="lane-count-other">
                     {laneUnread.other}
+                    {laneSuffix}
                   </span>
                 </>
               ),

@@ -110,6 +110,26 @@ describe('cycleResolvers Mutation.cycleUnarchive', () => {
     expect(ctx.prisma.cycle.update).not.toHaveBeenCalled();
   });
 
+  it('refuses with BAD_USER_INPUT when an active cycle now covers the dates, writing nothing', async () => {
+    ctx.prisma.cycle.findUnique.mockResolvedValue({
+      ...ARCHIVED_CYCLE,
+      endsAt: new Date('2031-01-15T00:00:00Z'),
+      startsAt: new Date('2031-01-01T00:00:00Z'),
+    });
+    ctx.prisma.cycle.findFirst.mockResolvedValue({ id: 'cycle-b' });
+    memberOf(ctx);
+    const syncSpy = vi.spyOn(ctx.services.sync, 'createSyncAction');
+
+    await testAuthGuard(
+      cycleResolvers.Mutation.cycleUnarchive,
+      { id: ARCHIVED_CYCLE.id },
+      ctx,
+      'BAD_USER_INPUT',
+    );
+    expect(ctx.prisma.cycle.update).not.toHaveBeenCalled();
+    expect(syncSpy).not.toHaveBeenCalled();
+  });
+
   it('restores the cycle and emits a U SyncAction carrying it', async () => {
     const restored = { ...ARCHIVED_CYCLE, archivedAt: null };
     ctx.prisma.cycle.findUnique.mockResolvedValue(ARCHIVED_CYCLE);
@@ -139,6 +159,7 @@ describe('cycleResolvers Mutation.cycleUnarchive', () => {
     ['cycleDelete', { id: ARCHIVED_CYCLE.id }],
     ['cycleUpdate', { id: ARCHIVED_CYCLE.id, input: { name: 'x' } }],
     ['cycleCreate', { input: { teamId: TEST_TEAM.id } }],
+    ['cycleRollover', { cycleId: ARCHIVED_CYCLE.id }],
   ] as const)('%s rejects a guest-role team member', async (name, args) => {
     ctx.prisma.cycle.findUnique.mockResolvedValue(ARCHIVED_CYCLE);
     memberOf(ctx);
@@ -154,5 +175,96 @@ describe('cycleResolvers Mutation.cycleUnarchive', () => {
     expect(ctx.prisma.cycle.update).not.toHaveBeenCalled();
     expect(ctx.prisma.cycle.create).not.toHaveBeenCalled();
     expect(ctx.prisma.cycle.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('cycleResolvers issue-scoped mutations honour guest scope', () => {
+  const ISSUE_ID = '00000000-0000-0000-0000-000000000d01';
+  const CYCLE = { ...ARCHIVED_CYCLE, archivedAt: null };
+  const issueRow = (over: Record<string, unknown> = {}) => ({
+    assigneeId: null,
+    creatorId: '00000000-0000-0000-0000-0000000000aa',
+    id: ISSUE_ID,
+    organizationId: TEST_ORG.id,
+    teamId: TEST_TEAM.id,
+    ...over,
+  });
+  const calls = {
+    cycleAddIssue: (c: CtxWithCycle) =>
+      cycleResolvers.Mutation.cycleAddIssue(
+        null,
+        { cycleId: CYCLE.id, issueId: ISSUE_ID },
+        c as never,
+      ),
+    cycleRemoveIssue: (c: CtxWithCycle) =>
+      cycleResolvers.Mutation.cycleRemoveIssue(null, { issueId: ISSUE_ID }, c as never),
+  };
+
+  function setup(opts: { guest?: boolean; member?: boolean; issue?: Record<string, unknown> }) {
+    const ctx = createCtx();
+    ctx.prisma.cycle.findUnique.mockResolvedValue(CYCLE);
+    ctx.prisma.issue.findUnique.mockResolvedValue(issueRow(opts.issue));
+    ctx.prisma.issue.update.mockResolvedValue({});
+    if (opts.member === false) {
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue(null);
+    } else {
+      memberOf(ctx);
+    }
+    ctx.prisma.teamMemberRole.findUnique.mockResolvedValue(
+      opts.guest ? { role: 'guest' } : { role: 'member' },
+    );
+    return ctx;
+  }
+
+  describe.each(['cycleAddIssue', 'cycleRemoveIssue'] as const)('%s', name => {
+    it('rejects a non-member', async () => {
+      const ctx = setup({ member: false });
+      await expect(calls[name](ctx)).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
+      expect(ctx.prisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a guest for an issue they neither created nor are assigned to, leaking nothing', async () => {
+      const ctx = setup({ guest: true });
+      await expect(calls[name](ctx)).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
+      expect(ctx.prisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it('lets a guest act on an issue they created', async () => {
+      const ctx = setup({ guest: true, issue: { creatorId: TEST_USER.id } });
+      const result = await calls[name](ctx);
+      expect(result.success).toBe(true);
+      expect(ctx.prisma.issue.update).toHaveBeenCalled();
+    });
+
+    it('lets a guest act on an issue assigned to them', async () => {
+      const ctx = setup({ guest: true, issue: { assigneeId: TEST_USER.id } });
+      expect((await calls[name](ctx)).success).toBe(true);
+    });
+
+    it('lets a regular member act on any team issue', async () => {
+      const ctx = setup({});
+      expect((await calls[name](ctx)).success).toBe(true);
+    });
+  });
+
+  it('cycleRollover lets a regular member through to the service', async () => {
+    const ctx = setup({});
+    const rollover = vi
+      .spyOn(ctx.services.cycle, 'rollover')
+      .mockResolvedValue({ movedCount: 0, movedIssueIds: [], nextCycleId: null });
+    const result = await cycleResolvers.Mutation.cycleRollover(
+      null,
+      { cycleId: CYCLE.id },
+      ctx as never,
+    );
+    expect(result.success).toBe(true);
+    expect(rollover).toHaveBeenCalled();
+  });
+
+  it('cycleRollover rejects a non-member', async () => {
+    const ctx = setup({ member: false });
+    await expect(
+      cycleResolvers.Mutation.cycleRollover(null, { cycleId: CYCLE.id }, ctx as never),
+    ).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
   });
 });

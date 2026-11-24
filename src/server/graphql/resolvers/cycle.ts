@@ -1,7 +1,12 @@
 import { GraphQLError } from 'graphql';
 import type { Cycle } from '../../../generated/prisma';
 import { logger } from '../../lib/logger';
-import { requireAuth, requireTeamMember, requireTeamMemberNotGuest } from '../../middleware/auth';
+import {
+  requireAuth,
+  requireIssueAccessNotGuestOrOwn,
+  requireTeamMember,
+  requireTeamMemberNotGuest,
+} from '../../middleware/auth';
 import type { CycleCreateInput, CycleUpdateInput } from '../../services/cycle.service';
 import { IssueService } from '../../services/issue.service';
 import type { GraphQLContext } from '../context';
@@ -82,6 +87,10 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
+      // Same rule `issueUpdate` applies: a guest may only touch issues they
+      // created or are assigned to. Without it the payload below leaks the
+      // full issue row to a guest who cannot see it.
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
       // The service enforces the team-consistency invariant (CycleCrossTeamError).
       try {
         await ctx.services.cycle.addIssueToCycle(cycleId, issueId, cycle.teamId, issue.teamId);
@@ -201,7 +210,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
 
       await ctx.services.cycle.removeIssueFromCycle(issueId);
       const updatedIssue = await ctx.services.issue.findById(issueId);
@@ -232,7 +241,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
       try {
         const result = await ctx.services.cycle.rollover(ctx.orgId, cycleId);
@@ -305,11 +314,20 @@ export const cycleResolvers = {
       }
       await requireTeamMemberNotGuest(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
-      const cycle = await ctx.services.cycle.unarchive(id);
-      // 'U', not 'A': clients upsert on both, but the sync log should not read
-      // "archived" for the opposite operation.
-      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Cycle', id, cycle);
-      return { cycle, lastSyncId: sync.id.toString(), success: true };
+      try {
+        const cycle = await ctx.services.cycle.unarchive(id);
+        // 'U', not 'A': clients upsert on both, but the sync log should not read
+        // "archived" for the opposite operation.
+        const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Cycle', id, cycle);
+        return { cycle, lastSyncId: sync.id.toString(), success: true };
+      } catch (err) {
+        if ((err as Error).name === 'CycleOverlapError') {
+          throw new GraphQLError((err as Error).message, {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+        throw err;
+      }
     },
 
     cycleUpdate: async (

@@ -30,6 +30,25 @@ describe('formatNumberValue', () => {
     expect(isValidCurrencyCode('$$$')).toBe(false);
   });
 
+  it('only accepts real ISO 4217 codes, not any three letters', () => {
+    for (const ok of ['USD', 'EUR', 'MXN', 'JPY', 'usd']) {
+      expect(isValidCurrencyCode(ok)).toBe(true);
+    }
+    for (const bad of ['QQQ', 'XXX', 'ZZZ', 'US', 'USDX', '']) {
+      expect(isValidCurrencyCode(bad)).toBe(false);
+    }
+    expect(f({ currency: 'QQQ', kind: 'currency' }, 12.5)).toBe('12.5 QQQ');
+  });
+
+  it('never renders a negative zero', () => {
+    expect(f({ decimals: 2, kind: 'plain' }, -0)).toBe('0');
+    expect(f({ currency: 'USD', kind: 'currency' }, -0.001)).toBe('$0.00');
+    expect(f({ decimals: 0, kind: 'plain' }, -0.4)).toBe('0');
+    expect(f({ kind: 'percent' }, -0)).toBe('0%');
+    expect(f({ decimals: 0, kind: 'compact' }, -0.2)).toBe('0');
+    expect(f({ currency: 'USD', kind: 'currency' }, -0.5)).toBe('-$0.50');
+  });
+
   it('formats percent as typed, not scaled', () => {
     expect(f({ kind: 'percent' }, 45)).toBe('45%');
     expect(f({ decimals: 0, kind: 'percent' }, 12.6)).toBe('13%');

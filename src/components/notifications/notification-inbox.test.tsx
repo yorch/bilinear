@@ -186,7 +186,8 @@ describe('NotificationInbox lanes', () => {
     seed(MIXED);
     const first = render(<NotificationInbox />);
     fireEvent.click(otherBtn());
-    expect(window.localStorage.getItem('inbox.lane')).toBe('other');
+    expect(window.localStorage.getItem(`inbox.lane.${ME}`)).toBe('other');
+    expect(window.localStorage.getItem('inbox.lane')).toBeNull();
     first.unmount();
 
     render(<NotificationInbox />);
@@ -194,8 +195,31 @@ describe('NotificationInbox lanes', () => {
     expect(screen.getByText('notifications.labels.issueStatusChanged')).toBeInTheDocument();
   });
 
+  it("does not adopt another user's stored lane", () => {
+    window.localStorage.setItem(`inbox.lane.${OTHER_USER}`, 'other');
+    seed(MIXED);
+    render(<NotificationInbox />);
+    expect(priorityBtn()).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('marks lane counts as a lower bound while more pages exist', () => {
+    seed(MIXED);
+    runInAction(() => {
+      storeHolder.current.notificationStore.hasMore = true;
+    });
+    render(<NotificationInbox />);
+    expect(count('priority')).toBe('2+');
+    expect(count('other')).toBe('3+');
+  });
+
+  it('shows exact lane counts once everything is loaded', () => {
+    seed(MIXED);
+    render(<NotificationInbox />);
+    expect(count('priority')).toBe('2');
+  });
+
   it('ignores a junk stored lane and opens on Priority', () => {
-    window.localStorage.setItem('inbox.lane', 'nonsense');
+    window.localStorage.setItem(`inbox.lane.${ME}`, 'nonsense');
     seed(MIXED);
     render(<NotificationInbox />);
     expect(priorityBtn()).toHaveAttribute('aria-selected', 'true');

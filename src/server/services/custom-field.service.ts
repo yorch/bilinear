@@ -1,4 +1,5 @@
 import { numericSettingDefault } from '@/lib/config';
+import { isValidCurrencyCode } from '@/lib/custom-field-format';
 import type {
   CustomFieldDefinition,
   CustomFieldType,
@@ -102,7 +103,6 @@ export class CustomFieldInvalidFormatError extends Error {
 }
 
 const NUMBER_FORMAT_KINDS = new Set(['compact', 'currency', 'duration', 'percent', 'plain']);
-const ISO_4217 = /^[A-Z]{3}$/;
 
 /**
  * Strictly validate a number format for a field of `type` and return the
@@ -124,9 +124,13 @@ export function validateNumberFormat(
     kind: format.kind,
   };
   if (format.kind === 'currency') {
-    if (typeof format.currency !== 'string' || !ISO_4217.test(format.currency)) {
+    if (
+      typeof format.currency !== 'string' ||
+      format.currency !== format.currency.toUpperCase() ||
+      !isValidCurrencyCode(format.currency)
+    ) {
       throw new CustomFieldInvalidFormatError(
-        'currency must be a 3-letter upper-case ISO 4217 code',
+        'currency must be a recognised upper-case ISO 4217 code',
       );
     }
     out.currency = format.currency;

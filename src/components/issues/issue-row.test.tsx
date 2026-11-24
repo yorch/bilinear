@@ -167,6 +167,23 @@ describe('IssueRow grid alignment', () => {
     expect(trackCount(row)).toBe(row.children.length);
   });
 
+  it('renders a number custom field with its stored format, and raw without one', () => {
+    const formatted = {
+      id: 'budget',
+      name: 'Budget',
+      options: { numberFormat: { currency: 'USD', decimals: 2, kind: 'currency' } },
+      type: 'number',
+    } as unknown as DBCustomFieldDefinition;
+    const unformatted = { id: 'qty', name: 'Qty', type: 'number' } as DBCustomFieldDefinition;
+    const { row } = renderRow({
+      customFields: [formatted, unformatted],
+      getCustomFieldValue: () => 1234.5,
+      isColumnVisible: () => true,
+    });
+    expect(row.textContent).toContain('$1,234.50');
+    expect(row.textContent).toContain('1234.5');
+  });
+
   it('only renders the cycle column when the row belongs to a team', () => {
     const withTeam = renderRow({ teamId: 'team-1' });
     const withoutTeam = renderRow();

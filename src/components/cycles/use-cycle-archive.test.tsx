@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DBCycle } from '@/lib/db';
 
 const gqlMutateMock = vi.fn();
-vi.mock('@/lib/graphql', () => ({ gqlMutate: gqlMutateMock }));
+vi.mock('@/lib/graphql', () => ({
+  gqlMutate: gqlMutateMock,
+  isGqlErrorCode: (err: { code?: string }, ...codes: string[]) =>
+    !!err.code && codes.includes(err.code),
+}));
 vi.mock('@/hooks/use-translations', () => ({ useTranslations: () => (key: string) => key }));
 const toastErrorMock = vi.fn();
 const toastUndoMock = vi.fn();
@@ -68,5 +72,36 @@ describe('useCycleArchive', () => {
     await act(() => result.current.restore(store.findById('c1') as DBCycle));
     expect(store.archived).toHaveLength(1);
     expect(toastErrorMock).toHaveBeenCalled();
+  });
+
+  it('ignores a second restore of the same cycle while the first is in flight', async () => {
+    store.optimisticUpdate('c1', { archivedAt: '2026-02-01T00:00:00Z' });
+    let resolve: (v: unknown) => void = () => {};
+    gqlMutateMock.mockReturnValue(new Promise(r => (resolve = r)));
+    const { result } = renderHook(() => useCycleArchive());
+    const cycle = store.findById('c1') as DBCycle;
+    let first: Promise<boolean> = Promise.resolve(false);
+    await act(async () => {
+      first = result.current.restore(cycle);
+      expect(await result.current.restore(cycle)).toBe(false);
+    });
+    expect(gqlMutateMock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolve({});
+      await first;
+    });
+  });
+
+  it('shows localized copy for a restore refused as an overlap', async () => {
+    store.optimisticUpdate('c1', { archivedAt: '2026-02-01T00:00:00Z' });
+    gqlMutateMock.mockRejectedValue(
+      Object.assign(new Error('Cycle dates overlap with an existing cycle'), {
+        code: 'BAD_USER_INPUT',
+      }),
+    );
+    const { result } = renderHook(() => useCycleArchive());
+    await act(() => result.current.restore(store.findById('c1') as DBCycle));
+    expect(toastErrorMock).toHaveBeenCalledWith('cycles.list.restoreOverlap');
+    expect(store.archived).toHaveLength(1);
   });
 });
