@@ -60,7 +60,7 @@ which is nowhere near the cause.
 
 Specs create issues and mostly do not remove them, so the list grows within a
 run and across runs. The `cleanup` teardown project
-(`tests/e2e/cleanup.teardown.ts`) archives everything but the seeded six after
+(`tests/e2e/cleanup.teardown.ts`) archives everything but the seeded nine (ENG-1..9; ENG-7..9 sit in Backlog so the backlog page is never empty on a fresh database) after
 each run, which is what keeps the suite re-runnable against one database.
 Don't remove it, and don't let it fail quietly: an earlier version queried
 `issues` without the required `filter.teamId`, and the unchecked `errors[]`
