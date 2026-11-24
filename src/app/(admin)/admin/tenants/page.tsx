@@ -177,7 +177,7 @@ function TenantsInner() {
         <EmptyState size="compact" title={t('admin.tenants.empty')} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[44rem] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted text-left text-xs font-medium text-muted-foreground">
                 <th className="px-4 py-2">{t('admin.tenants.colOrganization')}</th>
@@ -229,7 +229,7 @@ function TenantsInner() {
                       {formatDate(tenant.createdAt)}
                     </td>
                     <td className="px-4 py-2">
-                      <div className="flex justify-end gap-1.5">
+                      <div className="flex flex-nowrap justify-end gap-1.5 whitespace-nowrap">
                         {status === 'suspended' ? (
                           <Button
                             disabled={busyId === tenant.id}

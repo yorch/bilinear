@@ -177,7 +177,7 @@ export default function AdminUsersPage() {
         <EmptyState size="compact" title={t('admin.users.empty')} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[44rem] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted text-left text-xs font-medium text-muted-foreground">
                 <th className="px-4 py-2">{t('admin.users.colUser')}</th>
@@ -228,7 +228,7 @@ export default function AdminUsersPage() {
                     </Badge>
                   </td>
                   <td className="px-4 py-2">
-                    <div className="flex flex-wrap justify-end gap-1.5">
+                    <div className="flex flex-nowrap justify-end gap-1.5 whitespace-nowrap">
                       <Button
                         disabled={
                           busyId === u.id || u.organizations.length === 0 || !u.active || isSelf(u)
