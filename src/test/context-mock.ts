@@ -70,6 +70,10 @@ class MockWebhookService {
   ) {
     return [];
   }
+
+  async isTeamPrivate(_orgId: string, _teamId: string) {
+    return false;
+  }
 }
 
 export interface MockGraphQLContext {

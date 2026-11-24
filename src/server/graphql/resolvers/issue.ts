@@ -845,6 +845,11 @@ export const issueResolvers = {
         // They get a redacted "moved out" event, never the post-move row: that
         // carries the destination's identifier, teamId and stateId, and the
         // destination may be a private team the old team's subscriber cannot see.
+        //
+        // Org-wide hooks already got the full row above UNLESS the destination
+        // is private (dispatchEvent withholds private-team events from them), so
+        // in that case they receive the redacted event too.
+        const destPrivate = await ctx.services.webhook.isTeamPrivate(ctx.orgId, issue.teamId);
         void ctx.services.webhook
           .dispatchEvent(
             ctx.orgId,
@@ -857,7 +862,7 @@ export const issueResolvers = {
               teamId: existing.teamId,
             },
             existing.teamId,
-            { teamScopedOnly: true },
+            { teamScopedOnly: !destPrivate },
           )
           .catch(err => log.error({ err }, 'webhook dispatch failed: issue.updated (old team)'));
       }

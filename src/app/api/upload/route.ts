@@ -122,15 +122,12 @@ export async function POST(req: NextRequest) {
   const projectId = isAvatar ? null : formData.get('projectId');
 
   // Verify the caller can attach to the given issue/project (parallel lookups).
+  // The issue check is the same visibility rule reads apply (private team,
+  // guest narrowing) — org membership alone let any member attach a file to a
+  // private team's issue. Projects are org-wide entities, so org is the gate.
+  const fileService = new FileService(prisma);
   const [issueOk, projectOk] = await Promise.all([
-    typeof issueId === 'string'
-      ? prisma.issue
-          .findUnique({
-            select: { organizationId: true },
-            where: { id: issueId },
-          })
-          .then(r => r?.organizationId === orgId)
-      : true,
+    typeof issueId === 'string' ? fileService.canAttachToIssue(issueId, orgId, userId) : true,
     typeof projectId === 'string'
       ? prisma.project
           .findUnique({
@@ -204,7 +201,6 @@ export async function POST(req: NextRequest) {
 
   const url = `${getAppUrl()}/api/uploads/${key}`;
 
-  const fileService = new FileService(prisma);
   const record = await fileService.createFile(userId, {
     issueId: typeof issueId === 'string' ? issueId : undefined,
     key,

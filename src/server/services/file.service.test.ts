@@ -87,6 +87,44 @@ describe('FileService.getIssueFiles', () => {
   });
 });
 
+describe('FileService.canAttachToIssue (upload write gate)', () => {
+  let prisma: MockPrismaClient;
+  let svc: FileService;
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    prisma.team.findMany.mockResolvedValue([]);
+    prisma.teamMemberRole.findMany.mockResolvedValue([]);
+    svc = new FileService(prisma as never);
+  });
+
+  it('allows a member on a visible issue', async () => {
+    prisma.issue.findFirst.mockResolvedValue(ISSUE);
+    expect(await svc.canAttachToIssue(ISSUE_ID, TEST_ORG.id, USER_ID)).toBe(true);
+  });
+
+  it('refuses an issue in another org or a missing issue', async () => {
+    prisma.issue.findFirst.mockResolvedValue(null);
+    expect(await svc.canAttachToIssue(ISSUE_ID, TEST_ORG.id, USER_ID)).toBe(false);
+  });
+
+  it('refuses a non-member of the issue private team', async () => {
+    prisma.issue.findFirst.mockResolvedValue(ISSUE);
+    hidePrivateTeam(prisma, TEAM_ID);
+    expect(await svc.canAttachToIssue(ISSUE_ID, TEST_ORG.id, USER_ID)).toBe(false);
+  });
+
+  it('refuses a guest on an issue that is not theirs, allows their own', async () => {
+    prisma.teamMemberRole.findMany.mockResolvedValue([
+      { team: { organizationId: TEST_ORG.id }, teamId: TEAM_ID, userId: USER_ID },
+    ]);
+    prisma.issue.findFirst.mockResolvedValue(ISSUE);
+    expect(await svc.canAttachToIssue(ISSUE_ID, TEST_ORG.id, USER_ID)).toBe(false);
+    prisma.issue.findFirst.mockResolvedValue({ ...ISSUE, creatorId: USER_ID });
+    expect(await svc.canAttachToIssue(ISSUE_ID, TEST_ORG.id, USER_ID)).toBe(true);
+  });
+});
+
 describe('FileService.findByKeyInOrg', () => {
   let prisma: MockPrismaClient;
   let svc: FileService;

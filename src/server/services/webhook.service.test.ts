@@ -414,6 +414,24 @@ describe('WebhookService', () => {
       expect(where.OR).toBeUndefined();
     });
 
+    it('an event from a PRIVATE team goes only to hooks scoped to that team', async () => {
+      prisma.webhook.findMany.mockResolvedValue([]);
+      prisma.team.findFirst.mockResolvedValue({ private: true });
+      await service.dispatchEvent(TEST_ORG.id, 'issue.updated', { id: 'x' }, 'team-priv');
+      const where = prisma.webhook.findMany.mock.calls[0][0].where;
+      expect(where.teamId).toBe('team-priv');
+      expect(where.OR).toBeUndefined();
+    });
+
+    it('an event from a public team still reaches org-wide hooks', async () => {
+      prisma.webhook.findMany.mockResolvedValue([]);
+      prisma.team.findFirst.mockResolvedValue({ private: false });
+      await service.dispatchEvent(TEST_ORG.id, 'issue.updated', { id: 'x' }, 'team-pub');
+      expect(prisma.webhook.findMany.mock.calls[0][0].where).toMatchObject({
+        OR: [{ teamId: null }, { teamId: 'team-pub' }],
+      });
+    });
+
     it('batches deliveries with createMany and fires processDelivery per row', async () => {
       const TEST_WEBHOOK_2 = { ...TEST_WEBHOOK, id: '00000000-0000-0000-0000-000000000a01' };
       prisma.webhook.findMany.mockResolvedValue([TEST_WEBHOOK, TEST_WEBHOOK_2]);

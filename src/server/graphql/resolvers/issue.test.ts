@@ -371,6 +371,16 @@ describe('issueResolvers', () => {
         expect(newTeamCall?.[2]).toMatchObject({ identifier: 'OPS-7', teamId: OPS });
       });
 
+      it('a move into a PRIVATE team sends org-wide hooks the redacted event, not the row', async () => {
+        vi.spyOn(ctx.services.webhook, 'isTeamPrivate').mockResolvedValue(true);
+        const { webhook } = await move();
+        await vi.waitFor(() => expect(webhook).toHaveBeenCalledTimes(2));
+        const oldTeamCall = webhook.mock.calls.find(c => c[3] === TEST_TEAM.id);
+        // Not scoped-only: org-wide hooks must still learn the issue left.
+        expect(oldTeamCall?.[4]?.teamScopedOnly).toBe(false);
+        expect(oldTeamCall?.[2]).toMatchObject({ movedOut: true });
+      });
+
       it('reports the labels dropped by the move', async () => {
         ctx.prisma.issueLabelAssignment.findMany.mockResolvedValue([
           { label: { name: 'eng-only', teamId: TEST_TEAM.id }, labelId: 'l1' },

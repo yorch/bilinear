@@ -103,6 +103,19 @@ export class FileService {
     return isIssueVisible(await getSyncVisibility(this.prisma, userId, orgId), issue);
   }
 
+  /**
+   * Write gate for `/api/upload`: the issue exists in `orgId` AND is visible to
+   * `userId` (not in a private team they are outside of; as a guest, only their
+   * own work). A hidden and a missing issue are indistinguishable to the caller.
+   */
+  async canAttachToIssue(issueId: string, orgId: string, userId: string): Promise<boolean> {
+    const issue = await this.prisma.issue.findFirst({
+      select: { assigneeId: true, creatorId: true, teamId: true },
+      where: { id: issueId, organizationId: orgId },
+    });
+    return !!issue && (await this.canReadIssue(issue, orgId, userId));
+  }
+
   async getIssueFiles(issueId: string, orgId: string, userId?: string): Promise<PrismaFile[]> {
     // Scope to the caller's org AND the caller's visibility before returning
     // file metadata. Org membership alone let any member list (and then

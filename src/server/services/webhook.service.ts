@@ -301,6 +301,15 @@ export class WebhookService {
 
   // ─── Dispatch ─────────────────────────────────────────────────────────────
 
+  /** Whether `teamId` (in `orgId`) is a private team. Unknown teams count as public. */
+  async isTeamPrivate(orgId: string, teamId: string): Promise<boolean> {
+    const team = await this.prisma.team.findFirst({
+      select: { private: true },
+      where: { id: teamId, organizationId: orgId },
+    });
+    return team?.private === true;
+  }
+
   /**
    * Enqueue a webhook event for every matching subscriber in `orgId`.
    * `teamId`, when supplied, additionally filters out webhooks scoped to a
@@ -315,6 +324,14 @@ export class WebhookService {
     teamId?: string | null,
     opts: { teamScopedOnly?: boolean } = {},
   ): Promise<WebhookDelivery[]> {
+    // Private-team rule: an event from a PRIVATE team goes only to hooks scoped
+    // to that team. An org-wide hook has no per-team membership, so delivering
+    // a private team's rows to it would hand them to whoever owns the endpoint
+    // regardless of team membership (the same leak the sync filter closes).
+    // Deliberately conservative: a hook created by a team member is still
+    // org-wide unless it was scoped to the team.
+    const teamScopedOnly =
+      opts.teamScopedOnly === true || (teamId != null && (await this.isTeamPrivate(orgId, teamId)));
     // Team-scoped filter:
     //  - Team-level event (teamId passed): include org-wide hooks AND
     //    hooks scoped to that specific team.
@@ -329,7 +346,7 @@ export class WebhookService {
         organizationId: orgId,
         ...(teamId == null
           ? { teamId: null }
-          : opts.teamScopedOnly
+          : teamScopedOnly
             ? { teamId }
             : { OR: [{ teamId: null }, { teamId }] }),
       },
