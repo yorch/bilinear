@@ -14,6 +14,15 @@ export const INSIGHT_SLICES = [
   'team',
 ] as const;
 export type InsightMeasure = (typeof INSIGHT_MEASURES)[number];
+
+/**
+ * Whether the table/CSV needs a separate "Issues" column. For the `count`
+ * measure the value column already *is* the issue count, so a trailing one
+ * would repeat it verbatim.
+ */
+export function showsIssueCountColumn(measure: InsightMeasure): boolean {
+  return measure !== 'count';
+}
 export type InsightSlice = (typeof INSIGHT_SLICES)[number];
 
 /** Upper bound on issues scanned per Insights call (the UI quotes it). */

@@ -21,6 +21,7 @@ import {
   type InsightMeasure,
   type InsightSlice,
   NONE_KEY,
+  showsIssueCountColumn,
 } from '@/lib/insights-aggregate';
 
 interface Row {
@@ -101,6 +102,7 @@ export function InsightsExplorer() {
       {t('analytics.explorer.scanCapped', { count: INSIGHTS_SCAN_LIMIT.toLocaleString() })}
     </p>
   );
+  const showIssues = showsIssueCountColumn(measure);
   const valueHeader = t(`analytics.explorer.valueHeader.${measure}`);
 
   const exportCsv = () => {
@@ -112,13 +114,13 @@ export function InsightsExplorer() {
         t(`analytics.explorer.slices.${slice}`),
         valueHeader,
         ...(measure === 'cycleTime' ? [t('analytics.explorer.sampleHeader')] : []),
-        t('analytics.explorer.issues'),
+        ...(showIssues ? [t('analytics.explorer.issues')] : []),
       ],
       data.rows.map(r => [
         csvSafeText(groupLabel(r)),
         r.value,
         ...(measure === 'cycleTime' ? [r.sampleSize] : []),
-        r.issueCount,
+        ...(showIssues ? [r.issueCount] : []),
       ]),
     );
     downloadCsv(`insights-${measure}-by-${slice}`, csv);
@@ -263,9 +265,11 @@ export function InsightsExplorer() {
                         {t('analytics.explorer.sampleHeader')}
                       </th>
                     )}
-                    <th className="py-2 pl-2 text-right font-medium" scope="col">
-                      {t('analytics.explorer.issues')}
-                    </th>
+                    {showIssues && (
+                      <th className="py-2 pl-2 text-right font-medium" scope="col">
+                        {t('analytics.explorer.issues')}
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -285,9 +289,11 @@ export function InsightsExplorer() {
                           {r.sampleSize}
                         </td>
                       )}
-                      <td className="py-2 pl-2 text-right font-mono tabular-nums text-muted-foreground">
-                        {r.issueCount}
-                      </td>
+                      {showIssues && (
+                        <td className="py-2 pl-2 text-right font-mono tabular-nums text-muted-foreground">
+                          {r.issueCount}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

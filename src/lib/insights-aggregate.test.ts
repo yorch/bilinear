@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateInsights, type InsightIssue, NONE_KEY } from './insights-aggregate';
+import {
+  aggregateInsights,
+  type InsightIssue,
+  NONE_KEY,
+  showsIssueCountColumn,
+} from './insights-aggregate';
 
 const team = { id: 't1', name: 'Eng' };
 const mk = (over: Partial<InsightIssue> = {}): InsightIssue => ({
@@ -108,5 +113,13 @@ describe('aggregateInsights edge cases', () => {
       'team',
     );
     expect(r.rows[0].value).toBe(1.7); // 5/3 = 1.666...
+  });
+});
+
+describe('showsIssueCountColumn', () => {
+  it('omits the duplicate Issues column only for the count measure', () => {
+    expect(showsIssueCountColumn('count')).toBe(false);
+    expect(showsIssueCountColumn('estimate')).toBe(true);
+    expect(showsIssueCountColumn('cycleTime')).toBe(true);
   });
 });
