@@ -3,12 +3,13 @@
 import { Plus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BoardControls } from '@/components/issues/board-controls';
 import { BoardView } from '@/components/issues/board-view';
 import { FilterBuilder } from '@/components/issues/filter-builder';
-import { IssueListView } from '@/components/issues/issue-list-view';
+import { IssueListView, type ListGroupBy } from '@/components/issues/issue-list-view';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
+import { ALL_GROUP_OPTIONS, ListDisplayControls } from '@/components/issues/list-display-controls';
 import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -18,12 +19,25 @@ import { Button } from '@/components/ui/button';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { IssueListSkeleton } from '@/components/ui/skeleton';
+import { type ListOrderBy, orderByToSort } from '@/components/views/view-layout';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { buildFilterContext, useFilterLookups } from '@/hooks/use-filter-lookups';
 import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
+import { useListDisplayPrefs } from '@/hooks/use-list-display-prefs';
 import { useTranslations } from '@/hooks/use-translations';
-import { applyFilters, createEmptyFilterSet, type FilterSet } from '@/lib/filter-engine';
+import {
+  applyFilters,
+  applySorting,
+  createEmptyFilterSet,
+  type FilterSet,
+} from '@/lib/filter-engine';
+import {
+  type CompletedIssuesMode,
+  filterCompletedIssues,
+  stateIdsOfType,
+} from '@/lib/issue-list-visibility';
 import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildIssueHref } from '@/lib/issue-nav';
 import { disambiguateStateNames, groupIssuesByTeam } from '@/lib/multi-team-issues';
@@ -48,6 +62,10 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   // UI state
   const [filterSet, setFilterSet] = useState<FilterSet>(createEmptyFilterSet());
   const [scope, setScope] = useState<MyIssuesScope>('assigned');
+  const { initial: displayPrefs, save: saveDisplayPrefs } = useListDisplayPrefs('my-issues');
+  const [listGroupBy, setListGroupBy] = useState<ListGroupBy>(displayPrefs.listGroupBy);
+  const [orderBy, setOrderBy] = useState<ListOrderBy>(displayPrefs.orderBy);
+  const [completed, setCompleted] = useState<CompletedIssuesMode>(displayPrefs.completed);
 
   // ── Store-derived values ─────────────────────────────────────────────────
 
@@ -65,11 +83,24 @@ const MyIssuesPage = observer(function MyIssuesPage() {
     }
     const mine = (i: { assigneeId?: string | null; creatorId?: string | null }) =>
       scope === 'created' ? i.creatorId === currentUser.id : i.assigneeId === currentUser.id;
-    return Array.from(issueStore.pool.values())
-      .filter(i => mine(i) && !i.trashed && !i.archivedAt)
+    return filterCompletedIssues(
+      Array.from(issueStore.pool.values()).filter(i => mine(i) && !i.trashed && !i.archivedAt),
+      completed,
+      stateIdsOfType(workflowStateStore.all, ['completed', 'canceled']),
+    )
       .map(i => toIssueDetail(i, labelStore))
       .sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [issueStore.pool.size, userStore.pool.size, currentUser, issueStore, labelStore, scope]);
+  }, [
+    issueStore.pool.size,
+    userStore.pool.size,
+    workflowStateStore.pool.size,
+    currentUser,
+    issueStore,
+    labelStore,
+    scope,
+    completed,
+    workflowStateStore,
+  ]);
 
   // Every active state across all teams — filter options and the timeline only.
   // Names shared by several teams get a team suffix so the filter doesn't offer
@@ -81,7 +112,11 @@ const MyIssuesPage = observer(function MyIssuesPage() {
     [workflowStateStore.pool.size, teamStore.pool.size],
   );
 
-  const filteredIssues = applyFilters(allMyIssues, filterSet);
+  const lookups = useFilterLookups();
+  const filteredIssues = applySorting(
+    applyFilters(allMyIssues, filterSet, undefined, buildFilterContext(workflowStateStore.all)),
+    orderByToSort(orderBy),
+  );
   const teamGroups = groupIssuesByTeam(
     filteredIssues,
     teamStore.all.map(team => team.id),
@@ -134,8 +169,39 @@ const MyIssuesPage = observer(function MyIssuesPage() {
     basePath: `/${workspace}/my-issues`,
     buildHref: id =>
       buildIssueHref(workspace, id, { label: t('nav.myIssues'), path: `/${workspace}/my-issues` }),
+    initialBoardGroupBy: displayPrefs.boardGroupBy,
+    initialSwimlaneBy: displayPrefs.swimlaneBy,
+    initialViewMode: displayPrefs.viewMode,
     issues,
   });
+
+  useEffect(() => {
+    saveDisplayPrefs({
+      ...displayPrefs,
+      boardGroupBy,
+      completed,
+      listGroupBy,
+      orderBy,
+      swimlaneBy,
+      viewMode,
+    });
+  }, [
+    boardGroupBy,
+    completed,
+    displayPrefs,
+    listGroupBy,
+    orderBy,
+    saveDisplayPrefs,
+    swimlaneBy,
+    viewMode,
+  ]);
+
+  // On the Assigned tab every row's assignee is the viewer, so that column (and
+  // grouping by it) would be the same face / one section — noise, not signal.
+  const isColumnVisible = (key: string) => !(scope === 'assigned' && key === 'assignee');
+  const groupOptions = ALL_GROUP_OPTIONS.filter(g => scope !== 'assigned' || g !== 'assignee');
+  const effectiveGroupBy: ListGroupBy =
+    scope === 'assigned' && listGroupBy === 'assignee' ? 'status' : listGroupBy;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -155,6 +221,17 @@ const MyIssuesPage = observer(function MyIssuesPage() {
       <PageHeader
         actions={
           <>
+            {viewMode === 'list' && (
+              <ListDisplayControls
+                completed={completed}
+                groupBy={effectiveGroupBy}
+                groupOptions={groupOptions}
+                onCompleted={setCompleted}
+                onGroupBy={setListGroupBy}
+                onOrderBy={setOrderBy}
+                orderBy={orderBy}
+              />
+            )}
             {viewMode === 'board' && (
               <BoardControls
                 groupBy={boardGroupBy}
@@ -184,9 +261,11 @@ const MyIssuesPage = observer(function MyIssuesPage() {
           value={scope}
         />
         <FilterBuilder
+          cycles={lookups.cycles}
           filterSet={filterSet}
           labels={labels}
           onChange={setFilterSet}
+          projects={lookups.projects}
           states={states}
           users={users}
         />
@@ -223,6 +302,10 @@ const MyIssuesPage = observer(function MyIssuesPage() {
               )}
               {viewMode === 'list' ? (
                 <IssueListView
+                  cycles={lookups.cycles}
+                  groupBy={effectiveGroupBy}
+                  hasActiveFilters={filterSet.conditions.length > 0}
+                  isColumnVisible={isColumnVisible}
                   issues={section.issues}
                   labels={labels}
                   onArchive={handleArchive}
@@ -234,6 +317,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
                   onSelect={setSelectedId}
                   onUpdate={handleUpdate}
                   openProperty={openProperty}
+                  projects={lookups.projects}
                   selectedId={selectedId}
                   states={section.states}
                   users={users}

@@ -2,6 +2,7 @@
 
 import { Check, ChevronDown, Plus, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { SCALE_OPTIONS } from '@/components/properties/estimate-picker';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
@@ -43,12 +44,69 @@ function useOperators(): { label: string; value: FilterOperator }[] {
     { label: t('issues.operatorIsNoneOf'), value: 'nin' },
     { label: t('issues.operatorIsSet'), value: 'is_set' },
     { label: t('issues.operatorIsNotSet'), value: 'is_not_set' },
+    { label: t('issues.operatorBefore'), value: 'before' },
+    { label: t('issues.operatorAfter'), value: 'after' },
+    { label: t('issues.operatorOverdue'), value: 'overdue' },
   ];
+}
+
+const BASE_OPERATORS: readonly FilterOperator[] = [
+  'eq',
+  'neq',
+  'in',
+  'nin',
+  'is_set',
+  'is_not_set',
+];
+const DATE_OPERATORS: readonly FilterOperator[] = [
+  'before',
+  'after',
+  'eq',
+  'overdue',
+  'is_set',
+  'is_not_set',
+];
+
+/** The operators that make sense for a field; the date field swaps in before/after/overdue. */
+function operatorsFor(field: FilterField): readonly FilterOperator[] {
+  return field === 'dueDate' ? DATE_OPERATORS : BASE_OPERATORS;
+}
+
+/** Operators that take no value. */
+function isValueless(operator: FilterOperator): boolean {
+  return operator === 'is_set' || operator === 'is_not_set' || operator === 'overdue';
+}
+
+/** Picker data for the entity-backed fields; every prop is optional so existing callers keep working. */
+export interface FilterLookups {
+  cycles?: { id: string; label: string; number?: number }[];
+  /** The team's estimation scale, so the estimate picker offers its points. */
+  estimationType?: string;
+  projects?: { id: string; name: string }[];
+}
+
+/** The estimate scale points to offer: the team's scale, else every distinct point across scales. */
+function estimateOptions(estimationType?: string): ValueOption[] {
+  const scale = estimationType ? SCALE_OPTIONS[estimationType] : undefined;
+  if (scale) {
+    return scale.map(o => ({ label: o.label, value: String(o.value) }));
+  }
+  const seen = new Map<number, string>();
+  for (const points of Object.values(SCALE_OPTIONS)) {
+    for (const o of points) {
+      if (!seen.has(o.value) && /^\d+$/.test(o.label)) {
+        seen.set(o.value, o.label);
+      }
+    }
+  }
+  return [...seen.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([v, l]) => ({ label: l, value: String(v) }));
 }
 
 // ─── Filter Pill ────────────────────────────────────────────────────────────
 
-interface FilterPillProps {
+interface FilterPillProps extends FilterLookups {
   condition: FilterCondition;
   customFields?: DBCustomFieldDefinition[];
   labels: IssueLabel[];
@@ -64,6 +122,9 @@ function FilterPill({
   users,
   labels,
   customFields,
+  cycles,
+  estimationType,
+  projects,
   onEdit,
   onRemove,
 }: FilterPillProps) {
@@ -96,6 +157,12 @@ function FilterPill({
         return labels.find(l => l.id === v)?.name ?? String(v);
       case 'priority':
         return t(priorityLabelKey(Number(v)));
+      case 'project':
+        return projects?.find(p => p.id === v)?.name ?? String(v);
+      case 'cycle':
+        return cycles?.find(c => c.id === v)?.label ?? String(v);
+      case 'estimate':
+        return estimateOptions(estimationType).find(o => o.value === String(v))?.label ?? String(v);
       case 'custom':
         if (customDef?.type === 'checkbox') {
           return v === true || v === 'true' ? t('issues.true') : t('issues.false');
@@ -105,10 +172,7 @@ function FilterPill({
         return String(v ?? '');
     }
   };
-  const valueLabel =
-    condition.operator === 'is_set' || condition.operator === 'is_not_set'
-      ? ''
-      : rawValues.map(labelOf).join(', ');
+  const valueLabel = isValueless(condition.operator) ? '' : rawValues.map(labelOf).join(', ');
 
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-foreground-secondary">
@@ -138,7 +202,7 @@ function FilterPill({
 
 // ─── Add Filter Popover ─────────────────────────────────────────────────────
 
-interface AddFilterFormProps {
+interface AddFilterFormProps extends FilterLookups {
   customFields?: DBCustomFieldDefinition[];
   /** Pre-fills the form when editing an existing pill. */
   initial?: FilterCondition;
@@ -263,6 +327,9 @@ function AddFilterForm({
   users,
   labels,
   customFields,
+  cycles,
+  estimationType,
+  projects,
   initial,
   onAdd,
   onCancel,
@@ -354,18 +421,24 @@ function AddFilterForm({
           label: t(priorityLabelKey(p)),
           value: String(p),
         }));
+      case 'project':
+        return (projects ?? []).map(p => ({ label: p.name, value: p.id }));
+      case 'cycle':
+        return (cycles ?? []).map(c => ({ label: c.label, value: c.id }));
+      case 'estimate':
+        return estimateOptions(estimationType);
       default:
         return [];
     }
   };
 
   const valueOptions = getValueOptions();
-  const needsValue = operator !== 'is_set' && operator !== 'is_not_set';
+  const needsValue = !isValueless(operator);
   const isMulti = operator === 'in' || operator === 'nin';
   const hasValue = values.some(v => v !== '');
 
   const resolveValue = (raw: string): string | number | boolean => {
-    if (field === 'priority') {
+    if (field === 'priority' || field === 'estimate') {
       return Number.parseInt(raw, 10);
     }
     if (customDef?.type === 'number') {
@@ -423,6 +496,12 @@ function AddFilterForm({
                 onClick={() => {
                   setFieldValue(f.value);
                   setValues([]);
+                  // Keep the operator valid for the new field (a date field has
+                  // before/after, not any-of).
+                  const nextField = f.value.startsWith('custom:') ? 'custom' : f.value;
+                  if (!operatorsFor(nextField as FilterField).includes(operator)) {
+                    setOperator(nextField === 'dueDate' ? 'before' : 'eq');
+                  }
                   close();
                 }}
                 type="button"
@@ -440,26 +519,28 @@ function AddFilterForm({
       >
         {close => (
           <div className="max-h-64 w-44 overflow-y-auto py-1">
-            {operators.map(o => (
-              <button
-                className={cn(
-                  POPOVER_ITEM_CLASS,
-                  'text-xs',
-                  o.value === operator && 'bg-accent/50',
-                )}
-                key={o.value}
-                onClick={() => {
-                  setOperator(o.value);
-                  if (o.value !== 'in' && o.value !== 'nin') {
-                    setValues(prev => prev.slice(0, 1));
-                  }
-                  close();
-                }}
-                type="button"
-              >
-                {o.label}
-              </button>
-            ))}
+            {operators
+              .filter(o => operatorsFor(field).includes(o.value))
+              .map(o => (
+                <button
+                  className={cn(
+                    POPOVER_ITEM_CLASS,
+                    'text-xs',
+                    o.value === operator && 'bg-accent/50',
+                  )}
+                  key={o.value}
+                  onClick={() => {
+                    setOperator(o.value);
+                    if (o.value !== 'in' && o.value !== 'nin') {
+                      setValues(prev => prev.slice(0, 1));
+                    }
+                    close();
+                  }}
+                  type="button"
+                >
+                  {o.label}
+                </button>
+              ))}
           </div>
         )}
       </SelectPopover>
@@ -502,7 +583,7 @@ function AddFilterForm({
             className="w-28 rounded border border-input px-2 py-1 text-xs dark:bg-muted text-foreground"
             onChange={e => setValues([e.target.value])}
             placeholder={t('issues.valueEllipsis')}
-            type="text"
+            type={field === 'dueDate' ? 'date' : 'text'}
             value={values[0] ?? ''}
           />
         ))}
@@ -528,7 +609,7 @@ function AddFilterForm({
 
 // ─── Main Filter Builder ────────────────────────────────────────────────────
 
-interface FilterBuilderProps {
+interface FilterBuilderProps extends FilterLookups {
   customFields?: DBCustomFieldDefinition[];
   filterSet: FilterSet;
   labels: IssueLabel[];
@@ -544,6 +625,9 @@ export function FilterBuilder({
   users,
   labels,
   customFields,
+  cycles,
+  estimationType,
+  projects,
 }: FilterBuilderProps) {
   const t = useTranslations();
   const [showAddForm, setShowAddForm] = useState(false);
@@ -592,11 +676,14 @@ export function FilterBuilder({
   const formFor = (initial?: FilterCondition) => (
     <AddFilterForm
       customFields={customFields}
+      cycles={cycles}
+      estimationType={estimationType}
       initial={initial}
       key={editingIndex ?? 'new'}
       labels={labels}
       onAdd={handleAdd}
       onCancel={closeForm}
+      projects={projects}
       states={states}
       users={users}
     />
@@ -626,6 +713,8 @@ export function FilterBuilder({
           <FilterPill
             condition={condition}
             customFields={customFields}
+            cycles={cycles}
+            estimationType={estimationType}
             key={`${condition.field}-${condition.customFieldId ?? ''}-${condition.operator}-${String(condition.value)}`}
             labels={labels}
             onEdit={() => {
@@ -636,6 +725,7 @@ export function FilterBuilder({
               closeForm();
               handleRemove(index);
             }}
+            projects={projects}
             states={states}
             users={users}
           />

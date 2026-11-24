@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
+import { AdminListFooter } from '@/components/admin/admin-list-footer';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { PromptDialog } from '@/components/shared/prompt-dialog';
@@ -16,7 +17,9 @@ import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import {
+  type AdminPage,
   deleteTenant,
+  emptyAdminPage,
   fetchTenants,
   type PlatformTenant,
   restoreTenant,
@@ -55,18 +58,40 @@ function TenantsInner() {
   const [confirmingDelete, setConfirmingDelete] = useState<PlatformTenant | null>(null);
   const [suspending, setSuspending] = useState<PlatformTenant | null>(null);
 
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const {
-    data: tenants,
-    setData: setTenants,
+    data: page,
+    setData: setPage,
     loading,
     error,
     cause,
     refetch: load,
-  } = useRetryableFetch<PlatformTenant[]>(
+  } = useRetryableFetch<AdminPage<PlatformTenant>>(
     () => fetchTenants(applied, includeArchived),
     [applied, includeArchived],
-    [],
+    emptyAdminPage<PlatformTenant>(),
   );
+  const tenants = page.items;
+
+  function setTenants(update: (prev: PlatformTenant[]) => PlatformTenant[]) {
+    setPage(prev => ({ ...prev, items: update(prev.items) }));
+  }
+
+  async function handleLoadMore() {
+    if (!page.nextCursor) {
+      return;
+    }
+    setLoadingMore(true);
+    try {
+      const next = await fetchTenants(applied, includeArchived, page.nextCursor);
+      setPage(prev => ({ ...next, items: [...prev.items, ...next.items] }));
+    } catch (e) {
+      toast.error(getErrorMessage(e, t('common.somethingWentWrong')));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   function replaceRow(updated: PlatformTenant) {
     setTenants(prev => prev.map(t => (t.id === updated.id ? updated : t)));
@@ -254,6 +279,15 @@ function TenantsInner() {
             </tbody>
           </table>
         </div>
+      )}
+      {!loading && !error && tenants.length > 0 && (
+        <AdminListFooter
+          hasMore={page.hasMore}
+          loadingMore={loadingMore}
+          onLoadMore={() => void handleLoadMore()}
+          shown={tenants.length}
+          total={page.total}
+        />
       )}
       <ConfirmDialog
         confirmLabel={t('admin.tenants.archive')}

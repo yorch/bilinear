@@ -1,14 +1,14 @@
 'use client';
 
 import { ChevronDown, Copy } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
+import { WebhookForm, type WebhookFormValues } from '@/components/settings/webhook-form';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { LoadError } from '@/components/shared/load-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Input } from '@/components/ui/input';
+import { ModalDialog } from '@/components/ui/modal-dialog';
 import { PageHeader } from '@/components/ui/page-header';
 import { PageSkeleton, RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -17,7 +17,7 @@ import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql, gqlQuery, isPermissionError } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn, TOUCH_ROW, TOUCH_TARGET } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { deliveryTone } from '@/lib/webhook-delivery';
 
 /**
@@ -91,6 +91,23 @@ const WEBHOOK_UPDATE_MUTATION = `
     }
   }
 `;
+
+const WEBHOOK_TEST_MUTATION = `
+  mutation WebhookTest($id: ID!) {
+    webhookTest(id: $id) {
+      success
+      delivery { id status responseStatus errorMessage attempts }
+    }
+  }
+`;
+
+interface WebhookTestResult {
+  attempts: number;
+  errorMessage: string | null;
+  id: string;
+  responseStatus: number | null;
+  status: string;
+}
 
 const WEBHOOK_ROTATE_SECRET_MUTATION = `
   mutation WebhookRotateSecret($id: ID!) {
@@ -197,16 +214,12 @@ export default function WebhooksSettingsPage() {
   const t = useTranslations();
   useDocumentTitle(t('settings.webhooks.title'));
   const [creating, setCreating] = useState(false);
-  const [name, setName] = useState('');
-  const [url, setUrl] = useState('');
-  const [selectedEvents, setSelectedEvents] = useState<Set<string>>(new Set());
   const [creatingBusy, setCreatingBusy] = useState(false);
-  const [formErrors, setFormErrors] = useState<{ events?: string; name?: string; url?: string }>(
-    {},
-  );
-  const nameRef = useRef<HTMLInputElement>(null);
-  const urlRef = useRef<HTMLInputElement>(null);
-  const eventsRef = useRef<HTMLDivElement>(null);
+  const [editing, setEditing] = useState<Webhook | null>(null);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, WebhookTestResult>>({});
+  // Bumped after a test so an open deliveries list refetches and shows the ping.
+  const [deliveriesVersion, setDeliveriesVersion] = useState(0);
   const [revealedSecrets, setRevealedSecrets] = useState<Set<string>>(new Set());
   const [expandedDeliveries, setExpandedDeliveries] = useState<Set<string>>(new Set());
   const [pendingAction, setPendingAction] = useState<{
@@ -261,37 +274,10 @@ export default function WebhooksSettingsPage() {
     });
   };
 
-  const handleCreate = async () => {
-    const errs: typeof formErrors = {};
-    if (!name.trim()) {
-      errs.name = t('settings.webhooks.nameRequired');
-    }
-    if (!url.trim()) {
-      errs.url = t('settings.webhooks.urlRequired');
-    }
-    if (selectedEvents.size === 0) {
-      errs.events = t('settings.webhooks.eventsRequired');
-    }
-    setFormErrors(errs);
-    if (errs.name || errs.url || errs.events) {
-      if (errs.name) {
-        nameRef.current?.focus();
-      } else if (errs.url) {
-        urlRef.current?.focus();
-      } else {
-        eventsRef.current?.focus();
-      }
-      return;
-    }
+  const handleCreate = async (values: WebhookFormValues) => {
     setCreatingBusy(true);
     try {
-      const res = await gql(WEBHOOK_CREATE_MUTATION, {
-        input: {
-          events: Array.from(selectedEvents),
-          name: name.trim(),
-          url: url.trim(),
-        },
-      });
+      const res = await gql(WEBHOOK_CREATE_MUTATION, { input: values });
       if (res.errors?.length) {
         toast.error(
           (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.createError'),
@@ -306,14 +292,65 @@ export default function WebhooksSettingsPage() {
         setRevealedSecrets(s => new Set(s).add(created.id));
         toast.success(t('settings.webhooks.webhookCreated'));
       }
-      setName('');
-      setUrl('');
-      setSelectedEvents(new Set());
       setCreating(false);
     } catch {
       toast.error(t('settings.webhooks.createError'));
     } finally {
       setCreatingBusy(false);
+    }
+  };
+
+  const handleEdit = async (hook: Webhook, values: WebhookFormValues) => {
+    setCreatingBusy(true);
+    try {
+      const res = await gql(WEBHOOK_UPDATE_MUTATION, { id: hook.id, input: values });
+      if (res.errors?.length) {
+        toast.error(
+          (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.updateError'),
+        );
+        return;
+      }
+      const updated = (res.data as { webhookUpdate?: { webhook?: Webhook | null } } | undefined)
+        ?.webhookUpdate?.webhook;
+      if (updated) {
+        setWebhooks(w => w.map(h => (h.id === hook.id ? { ...h, ...updated } : h)));
+      }
+      setEditing(null);
+      toast.success(t('settings.webhooks.webhookUpdated'));
+    } catch {
+      toast.error(t('settings.webhooks.updateError'));
+    } finally {
+      setCreatingBusy(false);
+    }
+  };
+
+  const handleTest = async (hook: Webhook) => {
+    setTestingId(hook.id);
+    try {
+      const res = await gql(WEBHOOK_TEST_MUTATION, { id: hook.id });
+      if (res.errors?.length) {
+        toast.error(
+          (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.testError'),
+        );
+        return;
+      }
+      const delivery = (res.data as { webhookTest?: { delivery?: WebhookTestResult } } | undefined)
+        ?.webhookTest?.delivery;
+      if (delivery) {
+        setTestResults(r => ({ ...r, [hook.id]: delivery }));
+        setDeliveriesVersion(v => v + 1);
+        if (delivery.status === 'success') {
+          toast.success(
+            t('settings.webhooks.testSucceeded', { status: delivery.responseStatus ?? '' }),
+          );
+        } else {
+          toast.error(t('settings.webhooks.testFailed'));
+        }
+      }
+    } catch {
+      toast.error(t('settings.webhooks.testError'));
+    } finally {
+      setTestingId(null);
     }
   };
 
@@ -429,127 +466,11 @@ export default function WebhooksSettingsPage() {
 
         {creating ? (
           <div className="mb-6 rounded-lg border border-border bg-card p-4">
-            <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="text-xs">
-                <label className="mb-1 block text-foreground-secondary" htmlFor="webhook-name">
-                  {t('settings.webhooks.name')} <span className="text-danger">*</span>
-                </label>
-                <Input
-                  aria-describedby={formErrors.name ? 'webhook-name-error' : undefined}
-                  aria-invalid={formErrors.name ? true : undefined}
-                  id="webhook-name"
-                  onChange={e => {
-                    setName(e.target.value);
-                    setFormErrors(f => ({ ...f, name: undefined }));
-                  }}
-                  placeholder={t('settings.webhooks.namePlaceholder')}
-                  ref={nameRef}
-                  value={name}
-                />
-                {formErrors.name && (
-                  <p
-                    className="mt-1 text-danger-subtle-foreground"
-                    id="webhook-name-error"
-                    role="alert"
-                  >
-                    {formErrors.name}
-                  </p>
-                )}
-              </div>
-              <div className="text-xs">
-                <label className="mb-1 block text-foreground-secondary" htmlFor="webhook-url">
-                  {t('settings.webhooks.url')} <span className="text-danger">*</span>
-                </label>
-                <Input
-                  aria-describedby={formErrors.url ? 'webhook-url-error' : undefined}
-                  aria-invalid={formErrors.url ? true : undefined}
-                  id="webhook-url"
-                  onChange={e => {
-                    setUrl(e.target.value);
-                    setFormErrors(f => ({ ...f, url: undefined }));
-                  }}
-                  placeholder="https://example.com/hook"
-                  ref={urlRef}
-                  value={url}
-                />
-                {formErrors.url && (
-                  <p
-                    className="mt-1 text-danger-subtle-foreground"
-                    id="webhook-url-error"
-                    role="alert"
-                  >
-                    {formErrors.url}
-                  </p>
-                )}
-              </div>
-            </div>
-            <fieldset className="mb-3">
-              <legend className="mb-1 flex w-full items-center justify-between text-xs text-foreground-secondary">
-                <span>
-                  {t('settings.webhooks.events')} <span className="text-danger">*</span>
-                </span>
-                <button
-                  className="text-brand hover:underline"
-                  onClick={() => {
-                    setSelectedEvents(
-                      selectedEvents.size === availableEvents.length
-                        ? new Set()
-                        : new Set(availableEvents),
-                    );
-                    setFormErrors(f => ({ ...f, events: undefined }));
-                  }}
-                  type="button"
-                >
-                  {selectedEvents.size === availableEvents.length
-                    ? t('settings.webhooks.clearAllEvents')
-                    : t('settings.webhooks.selectAllEvents')}
-                </button>
-              </legend>
-              <div
-                aria-describedby={formErrors.events ? 'webhook-events-error' : undefined}
-                className="grid grid-cols-1 gap-1 rounded-md border border-input p-2 sm:grid-cols-2 md:grid-cols-3"
-                ref={eventsRef}
-                tabIndex={-1}
-              >
-                {availableEvents.map(e => (
-                  <label
-                    className={cn('flex min-w-0 items-center gap-1.5 text-xs', TOUCH_ROW)}
-                    htmlFor={`webhook-event-${e}`}
-                    key={e}
-                  >
-                    <Checkbox
-                      checked={selectedEvents.has(e)}
-                      id={`webhook-event-${e}`}
-                      onChange={() => {
-                        setFormErrors(f => ({ ...f, events: undefined }));
-                        setSelectedEvents(prev => {
-                          const next = new Set(prev);
-                          if (next.has(e)) {
-                            next.delete(e);
-                          } else {
-                            next.add(e);
-                          }
-                          return next;
-                        });
-                      }}
-                    />
-                    <span className="truncate font-mono">{e}</span>
-                  </label>
-                ))}
-              </div>
-              {formErrors.events && (
-                <p
-                  className="mt-1 text-xs text-danger-subtle-foreground"
-                  id="webhook-events-error"
-                  role="alert"
-                >
-                  {formErrors.events}
-                </p>
-              )}
-            </fieldset>
-            <Button disabled={creatingBusy} onClick={handleCreate} size="sm" type="button">
-              {t('settings.webhooks.createWebhook')}
-            </Button>
+            <WebhookForm
+              availableEvents={availableEvents}
+              busy={creatingBusy}
+              onSubmit={values => void handleCreate(values)}
+            />
           </div>
         ) : null}
 
@@ -635,6 +556,27 @@ export default function WebhooksSettingsPage() {
                           </button>
                         )}
                       </div>
+                      {testResults[hook.id] && (
+                        <p
+                          aria-live="polite"
+                          className={cn(
+                            'mt-2 text-xs',
+                            testResults[hook.id]?.status === 'success'
+                              ? 'text-success-subtle-foreground'
+                              : 'text-danger-subtle-foreground',
+                          )}
+                        >
+                          {testResults[hook.id]?.status === 'success'
+                            ? t('settings.webhooks.testSucceeded', {
+                                status: testResults[hook.id]?.responseStatus ?? '',
+                              })
+                            : t('settings.webhooks.testFailedDetail', {
+                                detail:
+                                  testResults[hook.id]?.errorMessage ??
+                                  `HTTP ${testResults[hook.id]?.responseStatus ?? '—'}`,
+                              })}
+                        </p>
+                      )}
                     </div>
                     <div className="flex shrink-0 flex-wrap justify-end gap-1">
                       <Button
@@ -646,6 +588,26 @@ export default function WebhooksSettingsPage() {
                         {hook.enabled
                           ? t('settings.webhooks.disable')
                           : t('settings.webhooks.enable')}
+                      </Button>
+                      <Button
+                        onClick={() => setEditing(hook)}
+                        size="xs"
+                        type="button"
+                        variant="outline"
+                      >
+                        {t('common.edit')}
+                      </Button>
+                      <Button
+                        disabled={!hook.enabled || testingId === hook.id}
+                        onClick={() => void handleTest(hook)}
+                        size="xs"
+                        title={hook.enabled ? undefined : t('settings.webhooks.testNeedsEnabled')}
+                        type="button"
+                        variant="outline"
+                      >
+                        {testingId === hook.id
+                          ? t('settings.webhooks.testing')
+                          : t('settings.webhooks.sendTest')}
                       </Button>
                       <Button
                         onClick={() => setPendingAction({ hook, type: 'rotate' })}
@@ -687,7 +649,7 @@ export default function WebhooksSettingsPage() {
                     </button>
                     {showDeliveries && (
                       <div className="mt-2">
-                        <WebhookDeliveries webhookId={hook.id} />
+                        <WebhookDeliveries key={deliveriesVersion} webhookId={hook.id} />
                       </div>
                     )}
                   </div>
@@ -696,6 +658,28 @@ export default function WebhooksSettingsPage() {
             })}
           </div>
         )}
+        <ModalDialog
+          aria-label={t('settings.webhooks.editWebhook')}
+          maxWidth="xl"
+          onClose={() => setEditing(null)}
+          open={editing !== null}
+        >
+          {editing && (
+            <div className="px-5 py-4">
+              <h2 className="mb-3 text-sm font-semibold text-foreground">
+                {t('settings.webhooks.editWebhook')}
+              </h2>
+              <WebhookForm
+                availableEvents={availableEvents}
+                busy={creatingBusy}
+                initial={{ events: editing.events, name: editing.name, url: editing.url }}
+                onCancel={() => setEditing(null)}
+                onSubmit={values => void handleEdit(editing, values)}
+                submitLabel={t('common.save')}
+              />
+            </div>
+          )}
+        </ModalDialog>
         <ConfirmDialog
           confirmLabel={
             pendingAction?.type === 'rotate' ? t('settings.webhooks.rotate') : t('common.delete')

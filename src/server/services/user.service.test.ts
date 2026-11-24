@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TEST_ORG, TEST_USER, TEST_USER_2 } from '../../test/fixtures';
 import { createMockPrisma } from '../../test/prisma-mock';
-import { InvalidAccentError, UserService } from './user.service';
+import { InvalidAccentError, InvalidProfileError, UserService } from './user.service';
 
 describe('UserService', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
@@ -320,6 +320,44 @@ describe('UserService', () => {
     it('rejects a differently-cased accent rather than coercing it', async () => {
       await expect(service.updateAccent(TEST_USER.id, 'Ion')).rejects.toThrow(InvalidAccentError);
       expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateProfile', () => {
+    it('trims the name, mirrors displayName and recomputes initials', async () => {
+      prisma.user.update.mockResolvedValue({ ...TEST_USER, name: 'Ada Lovelace' });
+
+      await service.updateProfile(TEST_USER.id, { name: '  Ada   Lovelace ' });
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        data: { displayName: 'Ada   Lovelace', initials: 'AL', name: 'Ada   Lovelace' },
+        where: { id: TEST_USER.id },
+      });
+    });
+
+    it.each(['', '   ', 'x'.repeat(256)])('rejects an out-of-range name (%#)', async name => {
+      await expect(service.updateProfile(TEST_USER.id, { name })).rejects.toThrow(
+        InvalidProfileError,
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('accepts a 255-char name', async () => {
+      prisma.user.update.mockResolvedValue(TEST_USER);
+      await service.updateProfile(TEST_USER.id, { name: 'x'.repeat(255) });
+      expect(prisma.user.update).toHaveBeenCalled();
+    });
+
+    it('rejects a non-http avatar and allows null to clear', async () => {
+      await expect(
+        service.updateProfile(TEST_USER.id, { avatarUrl: 'javascript:alert(1)' }),
+      ).rejects.toThrow(InvalidProfileError);
+      prisma.user.update.mockResolvedValue(TEST_USER);
+      await service.updateProfile(TEST_USER.id, { avatarUrl: null });
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        data: { avatarUrl: null },
+        where: { id: TEST_USER.id },
+      });
     });
   });
 });

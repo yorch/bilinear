@@ -11,6 +11,8 @@ interface IssuePickerProps {
   disabled?: boolean;
   /** Issue id to exclude from results (typically the issue being linked itself). */
   excludeId?: string;
+  /** Further ids to hide (e.g. an issue's descendants when choosing its parent). */
+  excludeIds?: ReadonlySet<string>;
   /** Forces the popover open once (e.g. a keyboard shortcut) — see StatusSelect. */
   forceOpen?: boolean;
   onClose?: () => void;
@@ -30,6 +32,7 @@ interface IssuePickerProps {
 export const IssuePicker = observer(function IssuePicker({
   disabled,
   excludeId,
+  excludeIds,
   forceOpen,
   onClose,
   onSelect,
@@ -48,7 +51,12 @@ export const IssuePicker = observer(function IssuePicker({
       getKey={issue => issue.id}
       listClassName="max-h-56"
       onClose={onClose}
-      onSearch={query => issueStore.search(query, 20).filter(i => i.id !== excludeId)}
+      onSearch={query =>
+        issueStore
+          .search(query, excludeIds ? 50 : 20)
+          .filter(i => i.id !== excludeId && !excludeIds?.has(i.id))
+          .slice(0, 20)
+      }
       onSelect={onSelect}
       panelClassName="w-72"
       renderItem={issue => (

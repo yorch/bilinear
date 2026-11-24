@@ -1,6 +1,7 @@
 import { isAccent } from '@/lib/accent';
 import { isLocale } from '@/lib/i18n';
 import type { PrismaClient, User } from '../../generated/prisma';
+import { MAX_LOGO_URL_LENGTH } from '../lib/limits';
 
 /**
  * Whether the given (transaction or root) Prisma client sees an empty users
@@ -186,6 +187,62 @@ export class UserService {
       throw new InvalidAccentError(accent);
     }
     return this.prisma.user.update({ data: { accent }, where: { id: userId } });
+  }
+
+  /**
+   * Edit the viewer's own profile. `name` is required to be 1-255 chars after
+   * trimming; initials are recomputed from it so the avatar fallback follows a
+   * rename. `avatarUrl` is optional: omitted leaves it alone, `null` clears it,
+   * a string must be a bounded http(s) URL (the upload route returns one).
+   * `displayName` mirrors `name` — nothing in the product distinguishes them.
+   */
+  async updateProfile(
+    userId: string,
+    input: { avatarUrl?: string | null; name?: string },
+  ): Promise<User> {
+    const data: {
+      avatarUrl?: string | null;
+      displayName?: string;
+      initials?: string;
+      name?: string;
+    } = {};
+    if (input.name !== undefined) {
+      const name = input.name.trim();
+      if (name.length < 1 || name.length > MAX_PROFILE_NAME_LENGTH) {
+        throw new InvalidProfileError(`Name must be 1-${MAX_PROFILE_NAME_LENGTH} characters`);
+      }
+      data.name = name;
+      data.displayName = name;
+      data.initials = deriveInitials(name);
+    }
+    if (input.avatarUrl !== undefined) {
+      if (input.avatarUrl !== null && !isHttpUrl(input.avatarUrl)) {
+        throw new InvalidProfileError('Avatar must be an http(s) URL');
+      }
+      data.avatarUrl = input.avatarUrl;
+    }
+    return this.prisma.user.update({ data, where: { id: userId } });
+  }
+}
+
+export const MAX_PROFILE_NAME_LENGTH = 255;
+
+function isHttpUrl(value: string): boolean {
+  if (value.length > MAX_LOGO_URL_LENGTH) {
+    return false;
+  }
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export class InvalidProfileError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidProfileError';
   }
 }
 

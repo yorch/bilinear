@@ -739,7 +739,7 @@ export const CycleDetailView = observer(function CycleDetailView({
               ) : burndownError ? (
                 <InlineRetry message={t('common.somethingWentWrong')} onRetry={fetchBurndown} />
               ) : chartView === 'burndown' ? (
-                <BurndownChart data={burndown ?? []} />
+                <BurndownChart data={burndown ?? []} endsAt={cycle.endsAt} />
               ) : (
                 <BurnupChart data={burndown ?? []} />
               )}

@@ -8,6 +8,8 @@ vi.mock('@/hooks/use-translations', () => ({
 
 vi.mock('@/lib/transaction-queue', () => ({ TransactionQueue: class {} }));
 
+vi.mock('@/hooks/use-issue-update', () => ({ useIssueUpdate: () => vi.fn() }));
+
 vi.mock('@/hooks/use-issue-create', () => ({ useIssueCreate: () => async () => undefined }));
 
 const baseIssue = {
@@ -79,5 +81,11 @@ describe('SubIssueList', () => {
     expect(screen.getByText('Unknown-category child')).toBeInTheDocument();
     // …under a labelled triage group.
     expect(screen.getByText('issueDetail.subIssues.categories.triage')).toBeInTheDocument();
+  });
+
+  it('offers an "Add existing" action next to "Add sub-issue"', () => {
+    render(<SubIssueList parentIssueId="p" />);
+    expect(screen.getByText('issueDetail.subIssues.addExisting')).toBeInTheDocument();
+    expect(screen.getByText('issueDetail.subIssues.addSubIssue')).toBeInTheDocument();
   });
 });

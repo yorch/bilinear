@@ -3,7 +3,8 @@
 import { useCallback, useMemo } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
-import { ISSUES_BULK_UPDATE_MUTATION } from '@/lib/graphql-queries';
+import { ISSUE_UPDATE_MUTATION, ISSUES_BULK_UPDATE_MUTATION } from '@/lib/graphql-queries';
+import { toIssueSyncRow } from '@/lib/issue-mappers';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { getErrorMessage } from '@/lib/utils';
@@ -25,6 +26,35 @@ export function useIssuesBulkUpdate(): (ids: string[], patch: Record<string, unk
       const snapshots = ids.map(id => ({ id, snapshot: issueStore.findById(id) }));
       for (const id of ids) {
         issueStore.optimisticUpdate(id, patch as Partial<DBIssue>);
+      }
+      // A team move allocates a new number/identifier per issue and remaps its
+      // workflow state, which the batch mutation deliberately refuses — so it
+      // goes out as one issueUpdate per row (each its own SyncAction).
+      if ('teamId' in patch) {
+        for (const id of ids) {
+          txQueue.enqueue(
+            ISSUE_UPDATE_MUTATION,
+            { id, input: patch },
+            {
+              onError: err => {
+                toast.error(getErrorMessage(err, t('issues.bulkUpdateFailed')));
+                const snapshot = snapshots.find(s => s.id === id)?.snapshot;
+                if (snapshot) {
+                  issueStore.optimisticUpdate(id, snapshot);
+                }
+              },
+              onSuccess: data => {
+                const updated = (data as { issueUpdate?: { issue?: Record<string, unknown> } })
+                  ?.issueUpdate?.issue;
+                const row = updated ? toIssueSyncRow(updated) : null;
+                if (row) {
+                  issueStore.applySyncAction('U', id, row);
+                }
+              },
+            },
+          );
+        }
+        return;
       }
       txQueue.enqueue(
         ISSUES_BULK_UPDATE_MUTATION,

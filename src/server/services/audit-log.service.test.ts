@@ -242,4 +242,59 @@ describe('AuditLogService', () => {
       expect(result.nextCursor).toBe('2026-05-01T08:30:00.000Z');
     });
   });
+  describe('exportCsv', () => {
+    it('exports the filtered set with a header, user emails and ISO timestamps', async () => {
+      prisma.auditLogEntry.findMany.mockResolvedValue([
+        makeEntry({ action: 'team.created', metadata: { name: 'Eng' }, resourceType: 'Team' }),
+      ]);
+      prisma.user.findMany.mockResolvedValue([{ email: 'a@x.test', id: TEST_USER.id }]);
+
+      const out = await service.exportCsv({
+        action: 'team.created',
+        from: '2026-01-01T00:00:00Z',
+        orgId: TEST_ORG.id,
+      });
+
+      const lines = out.csv.replace('\uFEFF', '').split('\r\n');
+      expect(lines[0]).toBe(
+        'timestamp,action,user_id,user_email,resource_type,resource_id,ip_address,metadata',
+      );
+      expect(lines[1]).toContain('2026-03-01T00:00:00.000Z,team.created');
+      expect(lines[1]).toContain('a@x.test');
+      expect(out).toMatchObject({ rows: 1, truncated: false });
+      // The filter is applied in the query, not after the fact.
+      const where = prisma.auditLogEntry.findMany.mock.calls[0][0].where;
+      expect(where.action).toBe('team.created');
+      expect(where.createdAt.gte).toEqual(new Date('2026-01-01T00:00:00Z'));
+    });
+
+    it('neutralises spreadsheet formulas in free-text cells', async () => {
+      prisma.auditLogEntry.findMany.mockResolvedValue([
+        makeEntry({ resourceId: '=HYPERLINK("http://evil")', userId: null }),
+      ]);
+
+      const out = await service.exportCsv({ orgId: TEST_ORG.id });
+
+      expect(out.csv).toContain("'=HYPERLINK");
+      expect(out.csv).not.toMatch(/,=HYPERLINK/);
+    });
+
+    it('pages through batches and follows nextCursor', async () => {
+      const full = Array.from({ length: 201 }, (_, i) =>
+        makeEntry({ createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, 1000 - i)), id: `e${i}` }),
+      );
+      prisma.auditLogEntry.findMany
+        .mockResolvedValueOnce(full)
+        .mockResolvedValueOnce([makeEntry({ id: 'last' })]);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      const out = await service.exportCsv({ orgId: TEST_ORG.id });
+
+      expect(out.rows).toBe(201);
+      expect(prisma.auditLogEntry.findMany).toHaveBeenCalledTimes(2);
+      expect(prisma.auditLogEntry.findMany.mock.calls[1][0].where.createdAt.lt).toEqual(
+        full[199].createdAt,
+      );
+    });
+  });
 });

@@ -50,17 +50,52 @@ export class NotificationService {
     userId: string,
     orgId: string,
     limit = DEFAULT_LIST_LIMIT,
+    opts: { before?: Date; snoozed?: boolean } = {},
   ): Promise<Notification[]> {
     const now = new Date();
     return this.prisma.notification.findMany({
       orderBy: { createdAt: 'desc' },
       take: limit,
       where: {
-        OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: now } }],
+        // `snoozed` flips the visibility rule: the default list hides rows
+        // until they wake, the Snoozed view shows exactly those rows.
+        ...(opts.snoozed
+          ? { snoozedUntilAt: { gt: now } }
+          : { OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: now } }] }),
+        ...(opts.before ? { createdAt: { lt: opts.before } } : {}),
         organizationId: orgId,
         userId,
       },
     });
+  }
+
+  /** Put a read notification back to unread (clears `readAt`). */
+  async markUnread(id: string, userId: string, orgId?: string): Promise<Notification> {
+    await this.assertOwned(id, userId, orgId);
+    return this.prisma.notification.update({
+      data: { read: false, readAt: null },
+      where: { id },
+    });
+  }
+
+  /** Wake a snoozed notification immediately. */
+  async unsnooze(id: string, userId: string, orgId?: string): Promise<Notification> {
+    await this.assertOwned(id, userId, orgId);
+    return this.prisma.notification.update({
+      data: { snoozedUntilAt: null },
+      where: { id },
+    });
+  }
+
+  private async assertOwned(id: string, userId: string, orgId?: string): Promise<void> {
+    const notification = await this.prisma.notification.findUnique({ where: { id } });
+    if (
+      !notification ||
+      notification.userId !== userId ||
+      (orgId !== undefined && notification.organizationId !== orgId)
+    ) {
+      throw new NotificationNotFoundError();
+    }
   }
 
   async markRead(id: string, userId: string, orgId?: string): Promise<Notification> {

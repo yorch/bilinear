@@ -10,6 +10,7 @@ import {
   type OAuthStartConfig,
 } from '@/components/auth/oauth-start';
 import { GitHubIcon, GoogleIcon } from '@/components/auth/provider-icons';
+import { SsoEntry } from '@/components/auth/sso-entry';
 import { Button } from '@/components/ui/button';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -115,42 +116,39 @@ export function LoginForm({ providers }: { providers: LoginProviders }) {
         {loading ? t('auth.sending') : t('auth.continueWithEmail')}
       </Button>
 
-      {(providers.google || providers.github) && (
-        <>
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs text-muted-foreground">
-              <span className="bg-background px-2">{t('common.or')}</span>
-            </div>
-          </div>
-          {providers.google && (
-            <Button
-              className="w-full"
-              disabled={busy}
-              onClick={() => startOAuth(GOOGLE_OAUTH)}
-              type="button"
-              variant="outline"
-            >
-              <GoogleIcon />
-              {t('auth.continueWithGoogle')}
-            </Button>
-          )}
-          {providers.github && (
-            <Button
-              className="w-full"
-              disabled={busy}
-              onClick={() => startOAuth(GITHUB_OAUTH)}
-              type="button"
-              variant="outline"
-            >
-              <GitHubIcon />
-              {t('auth.continueWithGitHub')}
-            </Button>
-          )}
-        </>
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center text-xs text-muted-foreground">
+          <span className="bg-background px-2">{t('common.or')}</span>
+        </div>
+      </div>
+      {providers.google && (
+        <Button
+          className="w-full"
+          disabled={busy}
+          onClick={() => startOAuth(GOOGLE_OAUTH)}
+          type="button"
+          variant="outline"
+        >
+          <GoogleIcon />
+          {t('auth.continueWithGoogle')}
+        </Button>
       )}
+      {providers.github && (
+        <Button
+          className="w-full"
+          disabled={busy}
+          onClick={() => startOAuth(GITHUB_OAUTH)}
+          type="button"
+          variant="outline"
+        >
+          <GitHubIcon />
+          {t('auth.continueWithGitHub')}
+        </Button>
+      )}
+      <SsoEntry busy={busy} next={next} />
     </form>
   );
 

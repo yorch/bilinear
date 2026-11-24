@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
+  decodeCreatedAtCursor,
+  encodeCreatedAtCursor,
   ImpersonationTargetError,
   InvalidTenantLimitsError,
   LastPlatformAdminError,
@@ -286,6 +288,92 @@ describe('PlatformAdminService', () => {
         ),
       ).rejects.toBeInstanceOf(InvalidTenantLimitsError);
       expect(prisma.setting.upsert).not.toHaveBeenCalled();
+    });
+  });
+  describe('cursor pagination', () => {
+    const mkUser = (n: number) => ({
+      active: true,
+      createdAt: new Date(Date.UTC(2026, 0, 100 - n)),
+      displayName: `U${n}`,
+      email: `u${n}@x.test`,
+      id: `u${n}`,
+      isPlatformAdmin: false,
+      lastSeen: null,
+      orgMemberships: [],
+    });
+
+    it('listUsersPage returns the page, total and a cursor when more rows remain', async () => {
+      // limit 2 -> service asks for 3 rows to detect a further page
+      prisma.user.findMany.mockResolvedValue([mkUser(1), mkUser(2), mkUser(3)]);
+      prisma.user.count.mockResolvedValue(7);
+
+      const page = await service.listUsersPage({ limit: 2 });
+
+      expect(page.items.map(u => u.id)).toEqual(['u1', 'u2']);
+      expect(page.total).toBe(7);
+      expect(page.hasMore).toBe(true);
+      expect(page.nextCursor).toBe(encodeCreatedAtCursor(mkUser(2)));
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 3 }));
+    });
+
+    it('listUsersPage reports no further page on the last slice', async () => {
+      prisma.user.findMany.mockResolvedValue([mkUser(1)]);
+      prisma.user.count.mockResolvedValue(1);
+
+      const page = await service.listUsersPage({ limit: 2 });
+
+      expect(page.hasMore).toBe(false);
+      expect(page.nextCursor).toBeNull();
+    });
+
+    it('listUsersPage continues strictly after the cursor row (keyset on createdAt, id)', async () => {
+      prisma.user.findMany.mockResolvedValue([]);
+      prisma.user.count.mockResolvedValue(0);
+      const cursor = encodeCreatedAtCursor(mkUser(2));
+
+      await service.listUsersPage({ cursor, query: 'bob' });
+
+      const args = prisma.user.findMany.mock.calls[0]?.[0] as {
+        where: { AND: Array<Record<string, unknown>> };
+      };
+      expect(args.where.AND[1]).toEqual({
+        OR: [
+          { createdAt: { lt: mkUser(2).createdAt } },
+          { createdAt: mkUser(2).createdAt, id: { lt: 'u2' } },
+        ],
+      });
+      // total counts the filter only, never the cursor
+      expect(prisma.user.count).toHaveBeenCalledWith({
+        where: expect.not.objectContaining({ AND: expect.anything() }),
+      });
+    });
+
+    it('listTenantsPage paginates the same way and honours includeArchived', async () => {
+      const org = (n: number) => ({
+        _count: { issues: 0, members: 1 },
+        archivedAt: null,
+        createdAt: new Date(Date.UTC(2026, 0, 100 - n)),
+        id: `o${n}`,
+        name: `Org ${n}`,
+        suspendedAt: null,
+        suspendedReason: null,
+        urlKey: `org-${n}`,
+      });
+      prisma.organization.findMany.mockResolvedValue([org(1), org(2), org(3)]);
+      prisma.organization.count.mockResolvedValue(9);
+
+      const page = await service.listTenantsPage({ limit: 2 });
+
+      expect(page.items).toHaveLength(2);
+      expect(page.total).toBe(9);
+      expect(page.nextCursor).toBe(encodeCreatedAtCursor(org(2)));
+      expect(prisma.organization.count).toHaveBeenCalledWith({ where: { archivedAt: null } });
+    });
+
+    it('decodeCreatedAtCursor ignores malformed cursors instead of throwing', () => {
+      expect(decodeCreatedAtCursor('garbage')).toBeNull();
+      expect(decodeCreatedAtCursor('not-a-date|id')).toBeNull();
+      expect(decodeCreatedAtCursor(null)).toBeNull();
     });
   });
 });

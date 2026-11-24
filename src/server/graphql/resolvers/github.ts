@@ -1,6 +1,9 @@
+import crypto from 'node:crypto';
 import { GraphQLError } from 'graphql';
 import type { Issue } from '../../../generated/prisma';
+import { getIntegrationAvailability } from '../../lib/integration-availability';
 import { requireAuth, requireOrgRole } from '../../middleware/auth';
+import { GitHubIntegrationNotFoundError } from '../../services/github.service';
 import type { GraphQLContext } from '../context';
 import { mapServiceError } from '../types/errors';
 
@@ -34,23 +37,37 @@ export const githubResolvers = {
       }
     },
 
+    githubRevealWebhookSecret: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
+      const auth = await requireOrgAdmin(ctx);
+      try {
+        const integration = await ctx.services.github.findByOrg(auth.orgId);
+        if (!integration) {
+          throw new GitHubIntegrationNotFoundError();
+        }
+        return { success: true, webhookSecret: integration.webhookSecret };
+      } catch (err) {
+        mapServiceError(err, GITHUB_ERROR_MAP);
+      }
+    },
+
     githubRotateWebhookSecret: async (
       _parent: unknown,
-      { newSecret }: { newSecret: string },
+      { newSecret }: { newSecret?: string | null },
       ctx: GraphQLContext,
     ) => {
       const auth = await requireOrgAdmin(ctx);
-      if (!newSecret || newSecret.trim().length < 16) {
+      const supplied = newSecret?.trim();
+      if (newSecret != null && (!supplied || supplied.length < 16)) {
         throw new GraphQLError('Webhook secret must be at least 16 characters', {
           extensions: { code: 'BAD_USER_INPUT' },
         });
       }
+      // No secret supplied: generate one server-side (CSPRNG) so it is never
+      // chosen, typed or transported by the browser.
+      const secret = supplied ?? crypto.randomBytes(32).toString('hex');
       try {
-        const integration = await ctx.services.github.rotateWebhookSecret(
-          auth.orgId,
-          newSecret.trim(),
-        );
-        return { integration, success: true };
+        const integration = await ctx.services.github.rotateWebhookSecret(auth.orgId, secret);
+        return { integration, success: true, webhookSecret: supplied ? null : secret };
       } catch (err) {
         mapServiceError(err, GITHUB_ERROR_MAP);
       }
@@ -61,6 +78,10 @@ export const githubResolvers = {
     githubIntegration: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
       requireAuth(ctx);
       return ctx.services.github.findByOrg(ctx.orgId);
+    },
+    integrationAvailability: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      return getIntegrationAvailability();
     },
   },
 };

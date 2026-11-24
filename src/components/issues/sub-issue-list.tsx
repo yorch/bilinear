@@ -1,13 +1,17 @@
 'use client';
 
+import { Link2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useMemo, useRef, useState } from 'react';
 import type { CreateIssueInput } from '@/components/issues/create-issue-modal';
+import { IssuePicker } from '@/components/issues/issue-picker';
 import { PriorityIcon } from '@/components/properties/priority-icon';
 import { SectionAddButton, SectionHeader } from '@/components/shared/section-header';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useIssueCreate } from '@/hooks/use-issue-create';
+import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
+import { collectDescendantIds } from '@/lib/issue-hierarchy';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -63,6 +67,17 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
     teamId ? workflowStateStore.findByTeamId(teamId) : [],
   );
 
+  const updateIssue = useIssueUpdate();
+  // "Add existing" must not offer the parent's own ancestors-by-loop: anything
+  // beneath this issue (already a descendant) or the issue itself is excluded;
+  // direct children are excluded below since they are already sub-issues.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the reactive trigger
+  const unlinkable = useMemo(() => {
+    const ids = collectDescendantIds(issueStore.pool.values(), parentIssueId);
+    ids.add(parentIssueId);
+    return ids;
+  }, [parentIssueId, issueStore.pool.size]);
+
   // pool.size is the MobX reactive dependency per repo convention.
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size values are the intentional reactive triggers
   const { subIssues, grouped, completedCount } = useMemo(() => {
@@ -109,10 +124,24 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
       <SectionHeader
         action={
           !showCreateForm && (
-            <SectionAddButton
-              label={t('issueDetail.subIssues.addSubIssue')}
-              onClick={() => setShowCreateForm(true)}
-            />
+            <>
+              <IssuePicker
+                excludeId={parentIssueId}
+                excludeIds={unlinkable}
+                onSelect={picked => updateIssue(picked.id, { parentId: parentIssueId })}
+                triggerChildren={
+                  <span className="flex items-center gap-1 text-xs">
+                    <Link2 className="h-3.5 w-3.5" />
+                    {t('issueDetail.subIssues.addExisting')}
+                  </span>
+                }
+                triggerClassName="rounded px-2 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary"
+              />
+              <SectionAddButton
+                label={t('issueDetail.subIssues.addSubIssue')}
+                onClick={() => setShowCreateForm(true)}
+              />
+            </>
           )
         }
         collapsed={collapsed}

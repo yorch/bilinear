@@ -33,6 +33,9 @@ export const WEBHOOK_EVENTS = [
   'initiative.updated',
 ] as const;
 
+/** Synthetic event used by `sendTest`; not subscribable, never fan-out dispatched. */
+export const WEBHOOK_PING_EVENT = 'ping';
+
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
 export interface WebhookCreateInput {
@@ -200,6 +203,52 @@ export class WebhookService {
       throw new WebhookNotFoundError();
     }
     return updated;
+  }
+
+  /**
+   * Send a signed `ping` event to one webhook and wait for the first attempt,
+   * so the admin sees the HTTP status (or the failure) immediately. The ping
+   * goes through the normal signing/SSRF-pinned delivery path, but a failed
+   * test is closed out as `failed` rather than left on the retry schedule —
+   * nobody wants a "test" that keeps firing in the background.
+   */
+  async sendTest(orgId: string, id: string): Promise<WebhookDelivery> {
+    const webhook = await this.findById(orgId, id);
+    if (!webhook) {
+      throw new WebhookNotFoundError();
+    }
+    if (webhook.archivedAt || !webhook.enabled) {
+      throw new WebhookTestUnavailableError();
+    }
+    this.validateUrl(webhook.url);
+
+    const deliveryId = randomUUID();
+    await this.prisma.webhookDelivery.create({
+      data: {
+        event: WEBHOOK_PING_EVENT,
+        id: deliveryId,
+        nextAttemptAt: new Date(),
+        payload: this.buildPayload(deliveryId, orgId, WEBHOOK_PING_EVENT, {
+          message: 'Test event from Bilinear',
+          webhookId: webhook.id,
+        }),
+        status: 'pending',
+        webhookId: webhook.id,
+      },
+    });
+    await this.processDelivery(deliveryId);
+
+    const delivery = await this.prisma.webhookDelivery.findUnique({ where: { id: deliveryId } });
+    if (!delivery) {
+      throw new WebhookNotFoundError();
+    }
+    if (delivery.status === 'pending' || delivery.status === 'in_flight') {
+      return this.prisma.webhookDelivery.update({
+        data: { nextAttemptAt: null, status: 'failed' },
+        where: { id: deliveryId },
+      });
+    }
+    return delivery;
   }
 
   async findById(orgId: string, id: string): Promise<Webhook | null> {
@@ -894,6 +943,13 @@ export class WebhookInvalidEventError extends Error {
   constructor(eventName: string) {
     super(`Unknown webhook event: ${eventName}`);
     this.name = 'WebhookInvalidEventError';
+  }
+}
+
+export class WebhookTestUnavailableError extends Error {
+  constructor() {
+    super('Enable the webhook before sending a test event');
+    this.name = 'WebhookTestUnavailableError';
   }
 }
 

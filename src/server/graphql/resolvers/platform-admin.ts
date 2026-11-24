@@ -194,6 +194,20 @@ export const platformAdminResolvers = {
       return ctx.services.platformAdmin.listTenants(args);
     },
 
+    platformTenantsPage: async (
+      _parent: unknown,
+      args: {
+        query?: string | null;
+        includeArchived?: boolean | null;
+        limit?: number | null;
+        cursor?: string | null;
+      },
+      ctx: GraphQLContext,
+    ) => {
+      await requirePlatformAdmin(ctx.prisma, ctx);
+      return ctx.services.platformAdmin.listTenantsPage(args);
+    },
+
     platformUser: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       await requirePlatformAdmin(ctx.prisma, ctx);
       return ctx.services.platformAdmin.getUser(id);
@@ -206,6 +220,15 @@ export const platformAdminResolvers = {
     ) => {
       await requirePlatformAdmin(ctx.prisma, ctx);
       return ctx.services.platformAdmin.listUsers(args);
+    },
+
+    platformUsersPage: async (
+      _parent: unknown,
+      args: { query?: string | null; limit?: number | null; cursor?: string | null },
+      ctx: GraphQLContext,
+    ) => {
+      await requirePlatformAdmin(ctx.prisma, ctx);
+      return ctx.services.platformAdmin.listUsersPage(args);
     },
   },
 };

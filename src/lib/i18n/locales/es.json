@@ -45,6 +45,11 @@
       "stopping": "Deteniendo…",
       "viewingAs": "Viendo {org} como {user} — sesión iniciada por {admin}. Las acciones quedan auditadas."
     },
+    "list": {
+      "loadingMore": "Cargando…",
+      "loadMore": "Cargar más",
+      "showing": "Mostrando {shown} de {total}"
+    },
     "nav": {
       "adminTitle": "Administración",
       "audit": "Registro de auditoría",
@@ -233,15 +238,16 @@
   },
   "auth": {
     "backToSignIn": "Volver a iniciar sesión",
+    "backToWorkspace": "Volver a {workspace}",
     "canvas": {
       "headline": "Incidencias siempre sincronizadas, aunque tú no lo estés.",
       "statLocalesLabel": "idiomas",
       "statLocalesValue": "2",
-      "statOfflineLabel": "sin conexión",
-      "statOfflineValue": "100%",
+      "statOfflineLabel": "escrituras sin conexión",
+      "statOfflineValue": "En cola",
       "statSyncLabel": "escritura optimista",
       "statSyncValue": "<40 ms",
-      "subhead": "Diseñado para funcionar sin conexión. Escribe en pleno vuelo, aterriza y encuentra la cola ya vacía."
+      "subhead": "Tu espacio de trabajo se guarda en este dispositivo. Los cambios que hagas sin conexión se ponen en cola y se sincronizan al reconectar."
     },
     "checkYourEmail": "Revisa tu correo",
     "codeHint": "El código caduca en 15 minutos. Revisa la carpeta de spam si no lo ves.",
@@ -269,10 +275,39 @@
     "retryWithProvider": "Reintentar con {provider}",
     "sending": "Enviando…",
     "sessionExpiredOrTampered": "Tu sesión expiró. Inténtalo de nuevo.",
+    "setup": {
+      "createTeam": "Crear equipo",
+      "creatingTeam": "Creando equipo…",
+      "finish": "Ir al espacio de trabajo",
+      "inviteFailed": "No se pudo invitar a: {emails}. Inténtalo de nuevo u omítelo.",
+      "inviteHint": "Separa varias direcciones con comas.",
+      "inviteInvalid": "Estas no parecen direcciones de correo: {emails}",
+      "inviteLabel": "Correos electrónicos",
+      "invitePlaceholder": "ada@example.com, grace@example.com",
+      "inviteSubtitle": "Recibirán un correo con un enlace para unirse. También puedes hacerlo más tarde.",
+      "inviteTitle": "Invita a tu equipo",
+      "sendInvites": "Enviar invitaciones",
+      "sendingInvites": "Enviando…",
+      "skip": "Omitir por ahora",
+      "stepOf": "Paso {current} de {total}",
+      "teamKey": "Clave del equipo",
+      "teamKeyHint": "Prefijo de los identificadores, como ENG-12. Solo letras.",
+      "teamName": "Nombre del equipo",
+      "teamNamePlaceholder": "Ingeniería",
+      "teamSubtitle": "Los equipos agrupan incidencias, ciclos y flujos. Puedes añadir más después.",
+      "teamTitle": "Crea tu primer equipo"
+    },
     "signInSubtitle": "Te enviaremos por correo un código de acceso de 6 dígitos",
     "signInTitle": "Inicia sesión en {appName}",
     "signingInWithProvider": "Iniciando sesión con {provider}…",
     "signOutSwitch": "Usar otra cuenta",
+    "sso": {
+      "button": "Continuar con SSO",
+      "checking": "Comprobando…",
+      "continue": "Continuar",
+      "hint": "La URL de tu espacio de trabajo, p. ej. acme",
+      "unavailable": "El inicio de sesión único no está disponible para ese espacio de trabajo. Revisa la URL o inicia sesión de otra forma."
+    },
     "urlKeyMinLength": "Debe tener al menos 3 caracteres",
     "urlKeyTaken": "Esa URL ya está en uso. Prueba con otra.",
     "urlKeyTakenSuggestion": "Prueba con «{suggestion}»",
@@ -280,7 +315,9 @@
     "verificationCode": "Código de verificación",
     "verifyCode": "Verificar código",
     "verifying": "Verificando…",
-    "workspaceUrl": "URL del espacio de trabajo"
+    "workspaceUrl": "URL del espacio de trabajo",
+    "yourName": "Tu nombre",
+    "yourNameHint": "Lo verán tus compañeros. Puedes cambiarlo después en ajustes."
   },
   "commandPalette": {
     "actions": {
@@ -300,6 +337,9 @@
       "goToRoadmap": "Ir a la configuración del Roadmap",
       "goToSecurity": "Ir a Seguridad",
       "goToSettings": "Ir a Configuración",
+      "goToTeamBacklog": "Ir al backlog de {team}",
+      "goToTeamCycles": "Ir a los ciclos de {team}",
+      "goToTeamIssues": "Ir a las incidencias de {team}",
       "goToWebhooks": "Ir a Webhooks",
       "keyboardShortcuts": "Atajos de teclado",
       "switchAccent": "Cambiar al acento {accent}",
@@ -327,12 +367,20 @@
     },
     "submenu": {
       "actions": "Acciones de la tarea…",
+      "addSubIssue": "Añadir subincidencia…",
       "current": "Actual",
+      "markDuplicate": "Marcar como duplicada…",
+      "moveToTeam": "Mover a otro equipo…",
       "noAssignee": "Sin responsable",
       "noOptions": "Sin opciones",
       "setAssignee": "Establecer responsable…",
+      "setCycle": "Establecer ciclo…",
+      "setDueDate": "Establecer fecha límite…",
+      "setEstimate": "Establecer estimación…",
       "setLabel": "Establecer etiqueta…",
+      "setParent": "Establecer incidencia padre…",
       "setPriority": "Establecer prioridad…",
+      "setProject": "Establecer proyecto…",
       "setStatus": "Establecer estado…"
     }
   },
@@ -352,6 +400,7 @@
       "weeksAgo": "hace {count}sem",
       "yesterday": "ayer"
     },
+    "restore": "Restaurar",
     "retry": "Reintentar",
     "save": "Guardar",
     "saving": "Guardando…",
@@ -625,7 +674,9 @@
   },
   "documents": {
     "archive": "Archivar",
-    "archiveConfirm": "¿Archivar \"{title}\"? Se ocultará de la lista.",
+    "archiveConfirm": "¿Archivar \"{title}\"? Se oculta de la lista junto con sus subpáginas. Puedes restaurarlo desde la vista Archivados.",
+    "archivedEmptyDescription": "Los documentos que archives aparecerán aquí, donde podrás restaurarlos.",
+    "archivedEmptyTitle": "No hay documentos archivados",
     "archiveFailed": "Error al archivar el documento",
     "backToDocs": "Volver a documentos",
     "breadcrumb": "Ruta de navegación",
@@ -640,10 +691,15 @@
     "documentNotFound": "Documento no encontrado.",
     "emptyDescription": "Los documentos son notas extensas que viven junto a tus tareas: especificaciones, retros, guías.",
     "emptyState": "Aún no hay documentos",
+    "loadArchivedFailed": "No se pudieron cargar los documentos archivados",
     "loadFailed": "No se pudieron cargar los datos. Actualiza la página.",
     "moreActions": "Más acciones",
     "newDocument": "Nuevo documento",
+    "newProjectDocument": "Nuevo documento",
+    "newSubPage": "Nueva subpágina",
+    "projectSection": "Documentos",
     "rename": "Renombrar",
+    "restoreFailed": "No se pudo restaurar el documento",
     "saved": "Guardado",
     "saveFailed": "Error al guardar",
     "saving": "Guardando…",
@@ -652,7 +708,11 @@
     "teamNotFound": "Equipo no encontrado.",
     "title": "Documentos",
     "titleLabel": "Título del documento",
-    "untitled": "Sin título"
+    "untitled": "Sin título",
+    "views": {
+      "active": "Activos",
+      "archived": "Archivados"
+    }
   },
   "editor": {
     "embed": {
@@ -819,22 +879,43 @@
     "removed": "Eliminado de favoritos"
   },
   "initiatives": {
+    "detail": {
+      "back": "Volver a iniciativas",
+      "description": "Descripción",
+      "descriptionPlaceholder": "Añade una descripción…",
+      "noOwner": "Sin responsable",
+      "noParent": "Sin superior",
+      "notFound": "Iniciativa no encontrada",
+      "owner": "Responsable",
+      "parent": "Iniciativa superior",
+      "properties": "Propiedades",
+      "status": "Estado",
+      "targetDate": "Fecha objetivo",
+      "updateFailed": "No se pudo guardar el cambio"
+    },
     "page": {
+      "archivedEmptyDescription": "Las iniciativas que archives aparecerán aquí, donde podrás restaurarlas.",
+      "archivedEmptyTitle": "No hay iniciativas archivadas",
       "createdSuccess": "Iniciativa creada",
       "createFailed": "No se pudo crear la iniciativa",
       "empty": "Aún no hay iniciativas. Crea una para empezar a agrupar proyectos.",
       "emptyDescription": "Las iniciativas agrupan proyectos relacionados bajo un objetivo, para seguir un trimestre sin revisar cada proyecto.",
       "emptyTitle": "Aún no hay iniciativas",
+      "loadArchivedFailed": "No se pudieron cargar las iniciativas archivadas",
       "namePlaceholder": "Nombre de la iniciativa",
       "newInitiative": "Nueva iniciativa",
-      "title": "Iniciativas"
+      "title": "Iniciativas",
+      "views": {
+        "active": "Activas",
+        "archived": "Archivadas"
+      }
     },
     "row": {
       "addedProject": "Se agregó {name}",
       "addProject": "+ Agregar proyecto",
       "addProjectFailed": "No se pudo agregar el proyecto",
       "archive": "Archivar",
-      "archiveConfirm": "¿Archivar \"{name}\"? Sus proyectos se quedan donde están.",
+      "archiveConfirm": "¿Archivar \"{name}\"? Se oculta de la lista junto con sus subiniciativas. Sus proyectos se quedan donde están y puedes restaurarla desde la vista Archivadas.",
       "archived": "Iniciativa archivada",
       "archiveFailed": "Error al archivar la iniciativa",
       "deleteConfirm": "¿Eliminar \"{name}\"? Esta acción no se puede deshacer.",
@@ -843,6 +924,7 @@
       "moreActions": "Más acciones",
       "noProjectsToAdd": "No hay proyectos para agregar.",
       "noProjectsYet": "Aún no hay proyectos.",
+      "open": "Abrir detalles",
       "projectCount_one": "{count} proyecto",
       "projectCount_other": "{count} proyectos",
       "projects": "Proyectos ({count})",
@@ -851,6 +933,7 @@
       "removeProjectTitle": "Quitar {name} de esta iniciativa",
       "rename": "Renombrar",
       "renameFailed": "No se pudo renombrar la iniciativa",
+      "restored": "\"{name}\" restaurada",
       "statusUpdateFailed": "No se pudo actualizar el estado",
       "unarchiveFailed": "No se pudo restaurar la iniciativa"
     },
@@ -999,8 +1082,11 @@
       "labels": "Etiquetas",
       "milestone": "Hito",
       "noAssignee": "Sin responsable",
+      "parent": "Incidencia padre",
       "priority": "Prioridad",
       "project": "Proyecto",
+      "removeParent": "Quitar incidencia padre",
+      "setParent": "Establecer incidencia padre…",
       "startDate": "Fecha de inicio",
       "status": "Estado"
     },
@@ -1037,6 +1123,7 @@
     },
     "subIssues": {
       "add": "Agregar",
+      "addExisting": "Añadir existente",
       "adding": "Agregando…",
       "addSubIssue": "Agregar subtarea",
       "categories": {
@@ -1115,8 +1202,11 @@
     "archivedToast": "Tarea archivada",
     "archiveFailed": "Error al archivar la tarea",
     "assignee": "Responsable",
+    "backlogDescription": "Incidencias en estados de backlog, aún sin planificar. Las de Todo están en la página del equipo.",
     "boardViewShortcut": "Vista de tablero (Alt+2)",
     "builtIn": "Integradas",
+    "bulkDeleteConfirmBody": "Se eliminarán {count} incidencias de forma permanente. Esta acción no se puede deshacer.",
+    "bulkDeleteConfirmTitle": "¿Eliminar {count} incidencias?",
     "bulkUpdateFailed": "Error al actualizar las tareas",
     "clear": "Limpiar",
     "clearAll": "Limpiar todo",
@@ -1125,6 +1215,11 @@
     "columnPicker": "Selector de columnas",
     "columns": "Columnas",
     "columnsWideOnly": "Las columnas se muestran en pantallas de 1024px o más; el panel de detalle tiene todas las propiedades.",
+    "completedAll": "Todas las incidencias completadas",
+    "completedIssuesLabel": "Incidencias completadas",
+    "completedNone": "Ninguna incidencia completada",
+    "completedPastWeek": "Completadas en la última semana",
+    "copyAsMarkdown": "Copiar como Markdown",
     "copyBranchName": "Copiar nombre de rama",
     "copyIssueId": "Copiar ID de la tarea",
     "copyIssueUrl": "Copiar URL de la tarea",
@@ -1140,6 +1235,7 @@
     "deleteConfirmTitle": "¿Eliminar tarea?",
     "deletedToast": "Issue eliminado",
     "deleteFailed": "Error al eliminar la tarea",
+    "display": "Vista",
     "draggingCount_one": "Arrastrando {count} tarea",
     "draggingCount_other": "Arrastrando {count} tareas",
     "dueDate": "Fecha de entrega",
@@ -1156,10 +1252,15 @@
     "ganttEmptyMessage": "No hay tareas con fechas de inicio o entrega. Agrega fechas a las tareas para completar el cronograma.",
     "groupBy": "Agrupar por",
     "groupByAssignee": "Agrupar por responsable",
+    "groupByCycle": "Agrupar por ciclo",
     "groupByLabel": "Agrupar por",
+    "groupByLabelOption": "Agrupar por etiqueta",
     "groupByNone": "Sin agrupar",
     "groupByPriority": "Agrupar por prioridad",
+    "groupByProject": "Agrupar por proyecto",
     "groupByStatus": "Agrupar por estado",
+    "idCopied": "Copiado {identifier}",
+    "inTriageLink": "{count} en triaje",
     "issuesCount_one": "{count} tarea",
     "issuesCount_other": "{count} tareas",
     "issuesGroupName": "Tareas",
@@ -1171,28 +1272,36 @@
     "layoutList": "Lista",
     "layoutTimeline": "Cronograma",
     "listViewShortcut": "Vista de lista (Alt+1)",
+    "markedDuplicateToast": "Marcada como duplicada de {identifier}",
     "moreActions": "Más acciones",
     "moveIssue": "Mover {identifier}",
+    "moveToTeam": "Mover a otro equipo",
     "myIssues": "Mis tareas",
     "newIssue": "Nueva tarea",
     "noBacklogIssues": "Sin tareas pendientes",
     "noBacklogIssuesDescription": "El backlog contiene el trabajo aceptado que todavía no está planificado en un ciclo.",
+    "noCycle": "Sin ciclo",
     "noIssues": "Sin tareas",
     "noIssuesDescription": "Nada coincide con esta vista. Crea una tarea o amplía los filtros.",
     "noIssuesFoundPrefix": "No se encontraron tareas. Presiona",
     "noIssuesFoundSuffix": "para crear una.",
     "noIssuesMatchFilters": "Ninguna tarea coincide con estos filtros",
     "noIssuesMatchFiltersDescription": "Prueba a quitar un filtro para ver más tareas.",
+    "noLabel": "Sin etiqueta",
+    "noProject": "Sin proyecto",
     "noSwimlanes": "Sin carriles",
     "nothingToExport": "Nada para exportar — aplica otros filtros o agrega tareas.",
     "openInNewTab": "Abrir en pestaña nueva",
     "openIssue": "Abrir tarea",
+    "operatorAfter": "es posterior a",
+    "operatorBefore": "es anterior a",
     "operatorIs": "es",
     "operatorIsAnyOf": "es cualquiera de",
     "operatorIsNoneOf": "no es ninguno de",
     "operatorIsNot": "no es",
     "operatorIsNotSet": "no está definido",
     "operatorIsSet": "está definido",
+    "operatorOverdue": "está vencida",
     "or": "O",
     "orderByCreated": "Más recientes",
     "orderByDueDate": "Fecha de vencimiento",
@@ -1264,13 +1373,18 @@
   "layout": {
     "shortcutHelp": {
       "archiveIssue": "Archivar tarea",
+      "assignToMe": "Asignarme",
       "boardView": "Vista de tablero",
       "closeAriaLabel": "Cerrar atajos",
       "closeDeselect": "Cerrar / deseleccionar",
       "commandPalette": "Paleta de comandos",
+      "copyIssueId": "Copiar ID de la incidencia",
       "createIssue": "Crear tarea",
       "goToInbox": "Ir a la bandeja de entrada",
       "goToMyIssues": "Ir a Mis tareas",
+      "goToTeamBacklog": "Ir al backlog del equipo",
+      "goToTeamCycles": "Ir a los ciclos del equipo",
+      "goToTeamIssues": "Ir a las incidencias del equipo",
       "listView": "Vista de lista",
       "moveDown": "Mover hacia abajo",
       "moveUp": "Mover hacia arriba",
@@ -1355,6 +1469,8 @@
     "allNotifications": "Todas las notificaciones",
     "emptyState": {
       "detail": "Todavía no hay notificaciones. Te avisaremos cuando algo necesite tu atención.",
+      "snoozedDetail": "Las notificaciones pospuestas esperan aquí hasta que vuelvan.",
+      "snoozedTitle": "Nada pospuesto",
       "title": "Todo al día",
       "unreadDetail": "Ya has leído todo. Cambia a Todas para ver el resto.",
       "unreadTitle": "Nada sin leer"
@@ -1366,9 +1482,12 @@
       "issueMentioned": "te mencionó en una tarea",
       "issueStatusChanged": "cambió el estado de una tarea"
     },
+    "loadMore": "Cargar más",
     "markAllRead": "Marcar todo como leído",
     "markAsRead": "Marcar como leído",
+    "markAsUnread": "Marcar como no leída",
     "marking": "Marcando…",
+    "openLink": "Abrir",
     "read": "Leídas",
     "snooze": {
       "buttonTitle": "Posponer",
@@ -1377,8 +1496,11 @@
       "oneHour": "1 hora",
       "tomorrow9am": "Mañana 9am"
     },
+    "snoozedCount": "Pospuestas ({count})",
+    "snoozedUntil": "Pospuesta hasta {when}",
     "tabs": {
       "all": "Todas",
+      "snoozed": "Pospuestas",
       "unread": "Sin leer"
     },
     "title": "Bandeja de entrada",
@@ -1386,11 +1508,15 @@
       "loadFailed": "No se pudieron cargar las notificaciones",
       "markAllReadFailed": "No se pudieron marcar todas las notificaciones como leídas",
       "markReadFailed": "No se pudo marcar la notificación como leída",
+      "markUnreadFailed": "No se pudo marcar la notificación como no leída",
       "snoozed": "Notificación pospuesta",
-      "snoozeFailed": "No se pudo posponer la notificación"
+      "snoozeFailed": "No se pudo posponer la notificación",
+      "unsnoozed": "Notificación reactivada",
+      "unsnoozeFailed": "No se pudo reactivar la notificación"
     },
     "unreadBadge": "{count} sin leer",
-    "unreadCount": "Sin leer ({count})"
+    "unreadCount": "Sin leer ({count})",
+    "unsnooze": "Reactivar"
   },
   "projects": {
     "active": "Activos",
@@ -1400,7 +1526,11 @@
     "addTeam": "Añadir equipo",
     "addUpdate": "Agregar actualización",
     "archive": "Archivar",
-    "archiveConfirm": "¿Archivar \"{name}\"? Sus issues se quedan donde están.",
+    "archiveConfirm": "¿Archivar \"{name}\"? Se oculta de las listas y deja de contar en el progreso de sus iniciativas. Sus issues se quedan donde están y puedes restaurarlo desde la vista Archivados.",
+    "archivedEmptyDescription": "Los proyectos que archives aparecerán aquí, donde podrás restaurarlos.",
+    "archivedEmptyTitle": "No hay proyectos archivados",
+    "archivedTab": "Archivados",
+    "archivedView": "Proyectos archivados",
     "backToProjects": "Volver a proyectos",
     "completed": "Completados",
     "createProject": "Crear proyecto",
@@ -1432,6 +1562,7 @@
     "lead": "Responsable",
     "list": "Lista",
     "listView": "Vista de lista",
+    "loadArchivedFailed": "No se pudieron cargar los proyectos archivados",
     "members": "Miembros",
     "milestoneName": "Nombre del hito",
     "milestonesCount": "Hitos ({count})",
@@ -1453,6 +1584,7 @@
     "projectCreated": "Proyecto creado",
     "projectDeleted": "Proyecto eliminado",
     "projectNotFound": "Proyecto no encontrado.",
+    "projectRestored": "\"{name}\" restaurado",
     "projectUpdated": "Proyecto actualizado",
     "properties": "Propiedades",
     "removeMember": "Quitar miembro {name}",
@@ -1648,6 +1780,60 @@
   },
   "settings": {
     "auditLog": {
+      "actions": {
+        "api_key": {
+          "created": "Clave de API creada",
+          "revoked": "Clave de API revocada"
+        },
+        "auth": {
+          "login": "Inicio de sesión",
+          "login_failed": "Inicio de sesión fallido",
+          "logout": "Cierre de sesión"
+        },
+        "issue": {
+          "archived": "Incidencia archivada",
+          "bulk_updated": "Incidencias actualizadas en lote",
+          "created": "Incidencia creada",
+          "deleted": "Incidencia eliminada"
+        },
+        "member": {
+          "invite_accepted": "Invitación aceptada",
+          "invite_revoked": "Invitación revocada",
+          "invited": "Miembro invitado",
+          "left": "Miembro salió",
+          "removed": "Miembro eliminado",
+          "role_changed": "Rol de miembro cambiado"
+        },
+        "project": {
+          "created": "Proyecto creado",
+          "deleted": "Proyecto eliminado"
+        },
+        "saml": {
+          "configured": "SAML configurado",
+          "disabled": "SAML desactivado",
+          "enabled": "SAML activado"
+        },
+        "scim": {
+          "token_created": "Token SCIM creado",
+          "token_revoked": "Token SCIM revocado"
+        },
+        "settings": {
+          "config_changed": "Configuración cambiada",
+          "security_changed": "Seguridad modificada"
+        },
+        "team": {
+          "created": "Equipo creado",
+          "deleted": "Equipo eliminado"
+        },
+        "webhook": {
+          "archived": "Webhook archivado",
+          "created": "Webhook creado",
+          "deleted": "Webhook eliminado",
+          "secret_rotated": "Secreto de webhook rotado",
+          "tested": "Prueba de webhook enviada",
+          "updated": "Webhook actualizado"
+        }
+      },
       "allActions": "Todas las acciones",
       "allUsers": "Todos los usuarios",
       "apply": "Aplicar",
@@ -1657,7 +1843,14 @@
       "columnResource": "Recurso",
       "columnTimestamp": "Fecha y hora",
       "columnUser": "Usuario",
+      "dateFrom": "Desde",
+      "dateTo": "Hasta",
       "description": "Eventos relevantes para la seguridad de tu organización. Solo los administradores pueden ver este registro.",
+      "exportCsv": "Exportar CSV",
+      "exportError": "No se pudo exportar el registro de auditoría",
+      "exported": "{rows} entradas exportadas",
+      "exporting": "Exportando…",
+      "exportTruncated": "La exportación se limitó a las {rows} entradas más recientes.",
       "filterByUserId": "Filtrar por ID de usuario",
       "forbidden": "Necesitas acceso de administrador para ver el registro de auditoría.",
       "loadMore": "Cargar más",
@@ -1736,6 +1929,32 @@
       "fieldPriority": "Prioridad",
       "fieldState": "Estado (nombre)",
       "fieldTitle": "Título",
+      "github": {
+        "check": "Comprobar repositorio",
+        "checkFailed": "No se pudo acceder al repositorio",
+        "checking": "Comprobando…",
+        "done": "Terminado. Los responsables se asignan por el correo público del perfil de GitHub; el resto queda sin asignar.",
+        "extras": "{labels} etiquetas y {comments} comentarios creados",
+        "heading": "Importar incidencias desde GitHub",
+        "hint": "Importa las incidencias de un repositorio (se omiten los pull requests). Repetirlo es seguro: las incidencias ya importadas se omiten, así que una importación interrumpida puede reanudarse.",
+        "includeClosed": "Incluir incidencias cerradas",
+        "includeComments": "Importar comentarios (más lento)",
+        "previewCount_one": "{repo} tiene {count} incidencia.",
+        "previewCount_other": "{repo} tiene {count} incidencias.",
+        "previewUnknown": "{repo} es accesible (recuento no disponible).",
+        "progress": "Leídas {processed} · creadas {created} · ya importadas {existing}",
+        "repo": "Repositorio",
+        "repoRequired": "Introduce un repositorio como propietario/nombre",
+        "source": {
+          "integration": "Usando la cuenta de GitHub conectada.",
+          "none": "Sin token: solo datos públicos y límite de uso estricto.",
+          "personal": "Usando tu token de acceso personal."
+        },
+        "start": "Iniciar importación",
+        "stop": "Detener tras esta página",
+        "token": "Token de acceso personal (opcional)",
+        "tokenHint": "Solo se usa en esta importación y nunca se guarda. Necesario para repositorios privados; la cuenta de GitHub conectada solo puede leer los públicos. Sin token GitHub permite muy pocas solicitudes."
+      },
       "importCount_one": "Importar {count} tarea",
       "importCount_other": "Importar {count} tareas",
       "importedCount_one": "Se importó {count} tarea",
@@ -1776,9 +1995,10 @@
       "githubDisconnectError": "Error al desconectar GitHub",
       "githubDisconnected": "GitHub desconectado",
       "loadGithubError": "Error al cargar la integración de GitHub",
-      "newSecretTooShort": "El nuevo secreto debe tener al menos 16 caracteres",
-      "newWebhookSecretPlaceholder": "Nuevo secreto del webhook (mín. 16 caracteres)",
-      "rotateWebhookSecret": "Rotar secreto del webhook",
+      "notConfigured": "No configurado en este servidor",
+      "notConfiguredHint": "{provider} necesita {envVars} en el entorno del servidor. Pide a quien administra esta instalación que los defina; consulta .env.example.",
+      "rotateWebhookSecret": "Generar nuevo secreto del webhook",
+      "showWebhookSecret": "Mostrar secreto del webhook",
       "slack": "Slack",
       "slackDescriptionPrefix": "Crea issues desde Slack con el comando",
       "slackDescriptionSuffix": ".",
@@ -1786,13 +2006,25 @@
       "slackDisconnected": "Slack desconectado",
       "slackRequestUrlLabel": "URL de solicitud de Slack",
       "title": "Integraciones",
-      "webhookSecretInstructions": "Ingresa un secreto de webhook que configurarás en GitHub al crear el webhook. Debe tener al menos 16 caracteres. Mantenlo en secreto: se usa para verificar que los eventos entrantes son realmente de GitHub.",
-      "webhookSecretPlaceholder": "Secreto del webhook (mín. 16 caracteres)",
-      "webhookSecretTooShort": "El secreto del webhook debe tener al menos 16 caracteres",
+      "webhookSecretInstructions": "Al conectar se genera un secreto de webhook. Después de conectar, usa «Mostrar secreto del webhook» y pégalo en tu webhook de GitHub para verificar los eventos entrantes.",
+      "webhookSecretLabel": "Secreto del webhook",
+      "webhookSecretRevealError": "No se pudo cargar el secreto del webhook",
       "webhookSecretUpdated": "Secreto del webhook actualizado",
       "webhookSecretUpdateError": "Error al rotar el secreto del webhook",
       "webhookUrlHint": "URL del webhook (configúralo en tu repositorio de GitHub o en la configuración de tu organización):",
       "webhookUrlLabel": "URL del webhook"
+    },
+    "profile": {
+      "avatar": "Foto",
+      "avatarError": "No se pudo actualizar tu foto.",
+      "avatarRemove": "Quitar",
+      "avatarUpload": "Subir foto",
+      "avatarUploading": "Subiendo…",
+      "email": "Correo electrónico",
+      "name": "Nombre",
+      "saved": "Perfil actualizado",
+      "saveError": "No se pudo actualizar tu perfil.",
+      "title": "Perfil"
     },
     "roles": {
       "admin": "Administrador",
@@ -2104,6 +2336,7 @@
       "description": "Envía eventos a endpoints HTTP externos. Cada entrega se firma con HMAC SHA-256 (encabezado X-Bilinear-Signature).",
       "disable": "Desactivar",
       "disabled": "Desactivado",
+      "editWebhook": "Editar webhook",
       "enable": "Activar",
       "enabled": "Activado",
       "events": "Eventos",
@@ -2122,7 +2355,14 @@
       "secretCopied": "Secreto de firma copiado",
       "secretRotated": "Secreto de firma rotado",
       "selectAllEvents": "Seleccionar todo",
+      "sendTest": "Enviar evento de prueba",
       "signingSecret": "Secreto de firma:",
+      "testError": "No se pudo enviar el evento de prueba",
+      "testFailed": "El evento de prueba falló",
+      "testFailedDetail": "El evento de prueba falló: {detail}",
+      "testing": "Enviando…",
+      "testNeedsEnabled": "Activa el webhook para enviar un evento de prueba",
+      "testSucceeded": "Evento de prueba entregado (HTTP {status})",
       "title": "Webhooks",
       "updateError": "Error al actualizar el webhook",
       "url": "URL",
@@ -2130,7 +2370,8 @@
       "webhookCreated": "Webhook creado",
       "webhookDeleted": "Webhook eliminado",
       "webhookDisabled": "Webhook desactivado",
-      "webhookEnabled": "Webhook activado"
+      "webhookEnabled": "Webhook activado",
+      "webhookUpdated": "Webhook actualizado"
     },
     "workspace": {
       "accentDescription": "El color de acento usado para la selección, el foco y las acciones principales.",
@@ -2254,6 +2495,11 @@
       "tokenRevoked": "Token revocado",
       "tokenRevokeError": "Error al revocar el token",
       "urlKey": "Clave de URL",
+      "urlKeyChangeConfirm": "Cambiar URL",
+      "urlKeyChangeMessage": "Los enlaces que usan /{old} (marcadores, enlaces compartidos a incidencias, integraciones) dejarán de funcionar. Tu espacio de trabajo pasará a /{next}.",
+      "urlKeyChangeTitle": "¿Cambiar la URL del espacio de trabajo?",
+      "urlKeyHint": "Minúsculas, números y guiones. Cambiarla rompe los enlaces existentes.",
+      "urlKeyUpdateError": "No se pudo cambiar la URL del espacio de trabajo.",
       "webhooks": "Webhooks",
       "webhooksDescription": "Envía eventos HTTP salientes"
     }

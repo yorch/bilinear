@@ -1,8 +1,10 @@
 import { GraphQLError } from 'graphql';
 import type { Webhook } from '../../../generated/prisma';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../../lib/limits';
+import { childLogger } from '../../lib/logger';
 import { clampLimit } from '../../lib/pagination';
 import { isOrgAdmin, requireAuth, requireOrgRole } from '../../middleware/auth';
+import type { AuditAction } from '../../services/audit-log.service';
 import {
   WEBHOOK_EVENTS,
   type WebhookCreateInput,
@@ -11,6 +13,8 @@ import {
 import type { GraphQLContext } from '../context';
 import { mapServiceError } from '../types/errors';
 
+const log = childLogger({ module: 'resolver/webhook' });
+
 const WEBHOOK_ERROR_MAP = {
   BAD_USER_INPUT: [
     'WebhookInvalidUrlError',
@@ -18,6 +22,7 @@ const WEBHOOK_ERROR_MAP = {
     'WebhookInvalidEventError',
     'WebhookNoEventsError',
     'WebhookInvalidNameError',
+    'WebhookTestUnavailableError',
   ],
   NOT_FOUND: ['WebhookNotFoundError'],
 } as const;
@@ -39,12 +44,37 @@ async function requireOrgAdmin(
   return ctx as GraphQLContext & { orgId: string; userId: string };
 }
 
+/**
+ * Fire-and-forget audit entry for a webhook change. Deliberately records only
+ * the name and non-sensitive facts — never the signing secret, and not the URL
+ * (receiver URLs commonly embed tokens).
+ */
+function auditWebhook(
+  ctx: GraphQLContext & { orgId: string; userId: string },
+  action: AuditAction,
+  webhook: { id: string; name: string },
+  extra: Record<string, unknown> = {},
+): void {
+  ctx.services.auditLog
+    .log({
+      action,
+      ipAddress: ctx.clientIp,
+      metadata: { name: webhook.name, ...extra },
+      orgId: ctx.orgId,
+      resourceId: webhook.id,
+      resourceType: 'Webhook',
+      userId: ctx.userId,
+    })
+    .catch(err => log.warn({ err }, 'audit log failed'));
+}
+
 export const webhookResolvers = {
   Mutation: {
     webhookArchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       const auth = await requireOrgAdmin(ctx);
       try {
         const webhook = await ctx.services.webhook.archive(auth.orgId, id);
+        auditWebhook(auth, 'webhook.archived', webhook);
         return { success: true, webhook };
       } catch (err) {
         mapServiceError(err, WEBHOOK_ERROR_MAP);
@@ -59,6 +89,7 @@ export const webhookResolvers = {
       const auth = await requireOrgAdmin(ctx);
       try {
         const webhook = await ctx.services.webhook.create(auth.orgId, auth.userId, input);
+        auditWebhook(auth, 'webhook.created', webhook, { events: webhook.events });
         return { success: true, webhook };
       } catch (err) {
         mapServiceError(err, WEBHOOK_ERROR_MAP);
@@ -68,7 +99,8 @@ export const webhookResolvers = {
     webhookDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       const auth = await requireOrgAdmin(ctx);
       try {
-        await ctx.services.webhook.delete(auth.orgId, id);
+        const deleted = await ctx.services.webhook.delete(auth.orgId, id);
+        auditWebhook(auth, 'webhook.deleted', deleted);
         return { success: true };
       } catch (err) {
         mapServiceError(err, WEBHOOK_ERROR_MAP);
@@ -79,7 +111,24 @@ export const webhookResolvers = {
       const auth = await requireOrgAdmin(ctx);
       try {
         const webhook = await ctx.services.webhook.rotateSecret(auth.orgId, id);
+        auditWebhook(auth, 'webhook.secret_rotated', webhook);
         return { success: true, webhook };
+      } catch (err) {
+        mapServiceError(err, WEBHOOK_ERROR_MAP);
+      }
+    },
+
+    webhookTest: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
+      const auth = await requireOrgAdmin(ctx);
+      try {
+        const delivery = await ctx.services.webhook.sendTest(auth.orgId, id);
+        auditWebhook(
+          auth,
+          'webhook.tested',
+          { id, name: (await ctx.services.webhook.findById(auth.orgId, id))?.name ?? '' },
+          { status: delivery.status },
+        );
+        return { delivery, success: delivery.status === 'success' };
       } catch (err) {
         mapServiceError(err, WEBHOOK_ERROR_MAP);
       }
@@ -93,6 +142,11 @@ export const webhookResolvers = {
       const auth = await requireOrgAdmin(ctx);
       try {
         const webhook = await ctx.services.webhook.update(auth.orgId, id, input);
+        auditWebhook(auth, 'webhook.updated', webhook, {
+          changed: Object.keys(input).filter(
+            k => (input as Record<string, unknown>)[k] !== undefined,
+          ),
+        });
         return { success: true, webhook };
       } catch (err) {
         mapServiceError(err, WEBHOOK_ERROR_MAP);

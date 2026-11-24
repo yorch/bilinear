@@ -19,13 +19,22 @@ import { IssueRow } from './issue-row';
 import { drawnIdsOf, getVisualOrder, setVisualOrder } from './visual-order';
 
 /** How the list is sectioned. `none` renders one flat, headerless list. */
-export type ListGroupBy = 'status' | 'assignee' | 'priority' | 'none';
+export type ListGroupBy =
+  | 'status'
+  | 'assignee'
+  | 'priority'
+  | 'project'
+  | 'cycle'
+  | 'label'
+  | 'none';
 
 interface IssueListViewProps {
   customFields?: DBCustomFieldDefinition[];
   /** The team's estimation scale; supplying it adds an Estimate action to the bulk bar. */
   estimationType?: string;
   getCustomFieldValue?: (issueId: string, definitionId: string) => unknown;
+  /** Cycle names for `groupBy='cycle'`. */
+  cycles?: { id: string; label: string; number?: number }[];
   /** Section the list by this property (default: status). */
   groupBy?: ListGroupBy;
   /** True when a filter is narrowing the list: an empty result is then "no match", not "no issues". */
@@ -45,6 +54,8 @@ interface IssueListViewProps {
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
   /** Which property popover to force-open on the selected issue (keyboard shortcut). */
   openProperty?: OpenProperty;
+  /** Project names for `groupBy='project'`. */
+  projects?: { id: string; name: string }[];
   selectedId: string | null;
   states: WorkflowState[];
   teamId?: string;
@@ -68,6 +79,8 @@ interface ContextMenuState {
 }
 
 export function IssueListView({
+  cycles,
+  projects,
   estimationType,
   groupBy = 'status',
   hasActiveFilters,
@@ -228,7 +241,7 @@ export function IssueListView({
     lastCheckedIdRef.current = issueId;
   }
 
-  const groups = buildGroups(issues, groupBy, { states, t, users });
+  const groups = buildGroups(issues, groupBy, { cycles, projects, states, t, users });
   const drawnIds = drawnIdsOf(groups, collapsedGroups, groupBy === 'none');
   const drawnKey = drawnIds.join(',');
   // biome-ignore lint/correctness/useExhaustiveDependencies: drawnKey is the change signal for drawnIds
@@ -306,6 +319,7 @@ export function IssueListView({
                 allLabels={labels}
                 checked={checkedIds.has(issue.id)}
                 customFields={customFields}
+                cycle={issue.cycleId ? cycles?.find(c => c.id === issue.cycleId) : undefined}
                 getCustomFieldValue={
                   getCustomFieldValue ? defId => getCustomFieldValue(issue.id, defId) : undefined
                 }
@@ -414,9 +428,15 @@ export function IssueListView({
 function buildGroups(
   issues: IssueRowData[],
   groupBy: ListGroupBy,
-  ctx: { states: WorkflowState[]; t: (key: string) => string; users: IssueUser[] },
+  ctx: {
+    cycles?: { id: string; label: string }[];
+    projects?: { id: string; name: string }[];
+    states: WorkflowState[];
+    t: (key: string) => string;
+    users: IssueUser[];
+  },
 ): Group[] {
-  const { states, t, users } = ctx;
+  const { cycles, projects, states, t, users } = ctx;
   const mutedColor = 'var(--muted-foreground)';
 
   if (groupBy === 'none') {
@@ -441,6 +461,66 @@ function buildGroups(
       name: t('issues.unassigned'),
     };
     return [...named, unassigned].filter(g => g.issues.length > 0);
+  }
+
+  if (groupBy === 'project' || groupBy === 'cycle') {
+    const field = groupBy === 'project' ? 'projectId' : 'cycleId';
+    const named = (
+      groupBy === 'project'
+        ? (projects ?? []).map(p => ({ id: p.id, name: p.name }))
+        : (cycles ?? []).map(c => ({ id: c.id, name: c.label }))
+    ).map<Group>(entity => ({
+      color: mutedColor,
+      issues: issues.filter(i => i[field] === entity.id),
+      key: `${groupBy}-${entity.id}`,
+      name: entity.name,
+    }));
+    const known = new Set(named.map(g => g.key));
+    const none: Group = {
+      color: mutedColor,
+      // Also catches an id whose entity is archived or not loaded, so no row vanishes.
+      issues: issues.filter(i => !i[field] || !known.has(`${groupBy}-${i[field]}`)),
+      key: `__no-${groupBy}__`,
+      name: t(groupBy === 'project' ? 'issues.noProject' : 'issues.noCycle'),
+    };
+    return [...named, none].filter(g => g.issues.length > 0);
+  }
+
+  if (groupBy === 'label') {
+    // An issue sits under its FIRST label only. Repeating a multi-label issue
+    // under every label would draw the same id several times, which breaks the
+    // shift-range selection order and double-counts the header totals.
+    const byLabel = new Map<string, Group>();
+    const unlabelled: IssueRowData[] = [];
+    for (const issue of issues) {
+      const first = issue.labels[0];
+      if (!first) {
+        unlabelled.push(issue);
+        continue;
+      }
+      const group = byLabel.get(first.id) ?? {
+        color: first.color,
+        issues: [],
+        key: `label-${first.id}`,
+        name: first.name,
+      };
+      group.issues.push(issue);
+      byLabel.set(first.id, group);
+    }
+    const named = [...byLabel.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [
+      ...named,
+      ...(unlabelled.length > 0
+        ? [
+            {
+              color: mutedColor,
+              issues: unlabelled,
+              key: '__no-label__',
+              name: t('issues.noLabel'),
+            },
+          ]
+        : []),
+    ];
   }
 
   if (groupBy === 'priority') {

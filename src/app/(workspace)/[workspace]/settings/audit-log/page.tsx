@@ -3,10 +3,17 @@
 import { ChevronRight } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { Fragment, useState } from 'react';
+import {
+  AUDIT_ACTIONS,
+  auditActionLabel,
+  endOfDayIso,
+  startOfDayIso,
+} from '@/components/settings/audit-action';
 import { LoadError } from '@/components/shared/load-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
 import { SimpleSelect } from '@/components/ui/select';
 import { RowsSkeleton } from '@/components/ui/skeleton';
@@ -14,6 +21,7 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
+import { downloadCsv } from '@/lib/csv-export';
 import { gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage } from '@/lib/utils';
@@ -50,6 +58,12 @@ interface AuditLogPage {
   nextCursor: string | null;
 }
 
+const AUDIT_EXPORT_QUERY = `
+  query AuditLogExport($filter: AuditLogFilter) {
+    auditLogExport(filter: $filter) { csv rows truncated }
+  }
+`;
+
 const AUDIT_LOGS_QUERY = `
   query AuditLogs($filter: AuditLogFilter) {
     auditLogs(filter: $filter) {
@@ -69,39 +83,6 @@ const AUDIT_LOGS_QUERY = `
     }
   }
 `;
-
-const AUDIT_ACTIONS = [
-  'api_key.created',
-  'api_key.revoked',
-  'auth.login',
-  'auth.login_failed',
-  'auth.logout',
-  'issue.archived',
-  'issue.bulk_updated',
-  'issue.created',
-  'issue.deleted',
-  'member.invited',
-  'member.removed',
-  'member.role_changed',
-  'project.created',
-  'project.deleted',
-  'saml.configured',
-  'saml.disabled',
-  'saml.enabled',
-  'scim.token_created',
-  'scim.token_revoked',
-  'settings.security_changed',
-  'team.created',
-  'team.deleted',
-  'webhook.created',
-  'webhook.deleted',
-] as const;
-
-/** 'member.role_changed' -> 'Member role changed' (the raw id stays on the badge). */
-function humanizeAction(action: string): string {
-  const text = action.replace(/[._]/g, ' ');
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
 
 const AuditLogPage = observer(function AuditLogPage() {
   const t = useTranslations();
@@ -130,6 +111,31 @@ const AuditLogPage = observer(function AuditLogPage() {
   const [userIdFilter, setUserIdFilter] = useState('');
   const [appliedAction, setAppliedAction] = useState('');
   const [appliedUserId, setAppliedUserId] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [appliedFrom, setAppliedFrom] = useState('');
+  const [appliedTo, setAppliedTo] = useState('');
+  const [exporting, setExporting] = useState(false);
+
+  /** The applied filters as the server's `AuditLogFilter`; shared by list, paging and export. */
+  function buildFilter(): Record<string, unknown> {
+    const filter: Record<string, unknown> = {};
+    if (appliedAction) {
+      filter.action = appliedAction;
+    }
+    if (appliedUserId) {
+      filter.userId = appliedUserId;
+    }
+    const from = appliedFrom ? startOfDayIso(appliedFrom) : null;
+    const to = appliedTo ? endOfDayIso(appliedTo) : null;
+    if (from) {
+      filter.from = from;
+    }
+    if (to) {
+      filter.to = to;
+    }
+    return filter;
+  }
 
   const {
     data: page,
@@ -140,13 +146,7 @@ const AuditLogPage = observer(function AuditLogPage() {
     refetch: load,
   } = useRetryableFetch<AuditLogPage>(
     async () => {
-      const filter: Record<string, unknown> = {};
-      if (appliedAction) {
-        filter.action = appliedAction;
-      }
-      if (appliedUserId) {
-        filter.userId = appliedUserId;
-      }
+      const filter = buildFilter();
       // The cursor travels inside the returned value rather than in its own
       // state. Setting it here would put it outside the hook's monotonic
       // request-id guard: a stale response has its `data` discarded, but would
@@ -163,7 +163,7 @@ const AuditLogPage = observer(function AuditLogPage() {
         nextCursor: first?.nextCursor ?? null,
       };
     },
-    [appliedAction, appliedUserId],
+    [appliedAction, appliedUserId, appliedFrom, appliedTo],
     { entries: [], hasMore: false, nextCursor: null },
   );
 
@@ -174,13 +174,7 @@ const AuditLogPage = observer(function AuditLogPage() {
       return;
     }
     setLoadingMore(true);
-    const filter: Record<string, unknown> = { cursor: nextCursor };
-    if (appliedAction) {
-      filter.action = appliedAction;
-    }
-    if (appliedUserId) {
-      filter.userId = appliedUserId;
-    }
+    const filter = { ...buildFilter(), cursor: nextCursor };
     try {
       const next = await gqlQuery<AuditLogPage | null>(AUDIT_LOGS_QUERY, { filter }, 'auditLogs');
       if (next) {
@@ -201,14 +195,49 @@ const AuditLogPage = observer(function AuditLogPage() {
   function handleApplyFilters() {
     setAppliedAction(actionFilter);
     setAppliedUserId(userIdFilter);
+    setAppliedFrom(fromDate);
+    setAppliedTo(toDate);
   }
 
   function handleClearFilters() {
     setActionFilter('');
     setUserIdFilter('');
+    setFromDate('');
+    setToDate('');
     setAppliedAction('');
     setAppliedUserId('');
+    setAppliedFrom('');
+    setAppliedTo('');
   }
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      // The server applies the filter and builds the file, so the export is
+      // the whole filtered set rather than the rows loaded so far.
+      const filter = buildFilter();
+      const out = await gqlQuery<{ csv: string; rows: number; truncated: boolean } | null>(
+        AUDIT_EXPORT_QUERY,
+        { filter: Object.keys(filter).length ? filter : null },
+        'auditLogExport',
+      );
+      if (!out) {
+        throw new Error('empty export');
+      }
+      downloadCsv('audit-log', out.csv);
+      if (out.truncated) {
+        toast.warning(t('settings.auditLog.exportTruncated', { rows: out.rows }));
+      } else {
+        toast.success(t('settings.auditLog.exported', { rows: out.rows }));
+      }
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('settings.auditLog.exportError')));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const hasFilters = Boolean(appliedAction || appliedUserId || appliedFrom || appliedTo);
 
   // A non-admin's FORBIDDEN is "not for you" — a terminal state with nothing
   // to retry — and `LoadError` tells it apart from a genuine failure by the
@@ -252,7 +281,7 @@ const AuditLogPage = observer(function AuditLogPage() {
             onChange={setActionFilter}
             options={[
               { label: t('settings.auditLog.allActions'), value: '' },
-              ...AUDIT_ACTIONS.map(a => ({ label: humanizeAction(a), value: a })),
+              ...AUDIT_ACTIONS.map(a => ({ label: auditActionLabel(t, a), value: a })),
             ]}
             value={actionFilter}
           />
@@ -263,14 +292,40 @@ const AuditLogPage = observer(function AuditLogPage() {
             options={[{ label: t('settings.auditLog.allUsers'), value: '' }, ...memberOptions]}
             value={userIdFilter}
           />
+          <Input
+            aria-label={t('settings.auditLog.dateFrom')}
+            className="w-full sm:w-40"
+            max={toDate || undefined}
+            onChange={e => setFromDate(e.target.value)}
+            type="date"
+            value={fromDate}
+          />
+          <Input
+            aria-label={t('settings.auditLog.dateTo')}
+            className="w-full sm:w-40"
+            min={fromDate || undefined}
+            onChange={e => setToDate(e.target.value)}
+            type="date"
+            value={toDate}
+          />
           <Button onClick={handleApplyFilters} size="sm" type="button">
             {t('settings.auditLog.apply')}
           </Button>
-          {(appliedAction || appliedUserId) && (
+          {hasFilters && (
             <Button onClick={handleClearFilters} size="sm" type="button" variant="outline">
               {t('settings.auditLog.clear')}
             </Button>
           )}
+          <Button
+            className="sm:ml-auto"
+            disabled={exporting}
+            onClick={() => void handleExport()}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {exporting ? t('settings.auditLog.exporting') : t('settings.auditLog.exportCsv')}
+          </Button>
         </div>
 
         {loading ? (
@@ -328,11 +383,11 @@ const AuditLogPage = observer(function AuditLogPage() {
                             )}
                             <Badge
                               className="font-mono text-foreground-secondary"
-                              title={humanizeAction(entry.action)}
+                              title={entry.action}
                               tone="muted"
                               variant="square"
                             >
-                              {entry.action}
+                              {auditActionLabel(t, entry.action)}
                             </Badge>
                           </div>
                         </td>

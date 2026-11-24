@@ -1461,4 +1461,119 @@ describe('IssueService', () => {
       );
     });
   });
+  describe('parent cycle guard + team move', () => {
+    const A = '00000000-0000-0000-0000-0000000000a1';
+    const B = '00000000-0000-0000-0000-0000000000b2';
+    const C = '00000000-0000-0000-0000-0000000000c3';
+
+    it('update rejects making an issue its own parent', async () => {
+      prisma.issue.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => ({
+        organizationId: TEST_ORG.id,
+        parentId: null,
+        projectId: null,
+        stateId: 's',
+        teamId: TEST_TEAM.id,
+        where: where.id,
+      }));
+      await expect(service.update(A, { parentId: A })).rejects.toThrow(IssueValidationError);
+      expect(prisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it('update rejects re-parenting under its own descendant', async () => {
+      // chain: C -> B -> A  (A is the root); setting A.parent = C closes a loop
+      const parents: Record<string, string | null> = { [A]: null, [B]: A, [C]: B };
+      prisma.issue.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => ({
+        organizationId: TEST_ORG.id,
+        parentId: parents[where.id] ?? null,
+        projectId: null,
+        stateId: 's',
+        teamId: TEST_TEAM.id,
+      }));
+      await expect(service.update(A, { parentId: C })).rejects.toThrow(
+        'cannot be a sub-issue of its own descendant',
+      );
+      expect(prisma.issue.update).not.toHaveBeenCalled();
+    });
+
+    it('update allows a valid parent', async () => {
+      prisma.issue.findUnique.mockResolvedValue({
+        organizationId: TEST_ORG.id,
+        parentId: null,
+        projectId: null,
+        teamId: TEST_TEAM.id,
+      });
+      prisma.issue.update.mockResolvedValue({ ...TEST_ISSUE, parentId: B });
+      const result = await service.update(A, { parentId: B });
+      expect(result.issue.parentId).toBe(B);
+    });
+
+    it('bulkUpdate rejects a parent that is one of the moved issues', async () => {
+      prisma.issue.findMany.mockResolvedValue([
+        { id: A, stateId: 's', teamId: TEST_TEAM.id },
+        { id: B, stateId: 's', teamId: TEST_TEAM.id },
+      ]);
+      prisma.issue.findUnique.mockResolvedValue({ organizationId: TEST_ORG.id, parentId: null });
+      await expect(service.bulkUpdate(TEST_ORG.id, [A, B], { parentId: B })).rejects.toThrow(
+        IssueValidationError,
+      );
+    });
+
+    it('bulkUpdate refuses teamId', async () => {
+      await expect(service.bulkUpdate(TEST_ORG.id, [A], { teamId: 'other' })).rejects.toThrow(
+        IssueValidationError,
+      );
+    });
+
+    it('update moves an issue to another team with a new identifier', async () => {
+      const TARGET = '00000000-0000-0000-0000-0000000000d4';
+      prisma.issue.findUnique.mockResolvedValue({
+        identifier: 'ENG-1',
+        organizationId: TEST_ORG.id,
+        projectId: null,
+        stateId: 'old-state',
+        teamId: TEST_TEAM.id,
+      });
+      prisma.team.findFirst.mockResolvedValue({ id: TARGET });
+      prisma.team.update.mockResolvedValue({
+        defaultIssueStateId: 'tgt-default',
+        issueCount: 7,
+        key: 'OPS',
+      });
+      prisma.workflowState.findUnique.mockResolvedValue({ name: 'Todo', type: 'unstarted' });
+      prisma.workflowState.findMany.mockResolvedValue([
+        { id: 'tgt-todo', name: 'Todo', type: 'unstarted' },
+      ]);
+      prisma.workflowState.findFirst.mockResolvedValue({ teamId: TARGET, type: 'unstarted' });
+      prisma.issue.update.mockResolvedValue(TEST_ISSUE);
+
+      await service.update(A, { teamId: TARGET });
+
+      expect(prisma.issue.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            cycleId: null,
+            identifier: 'OPS-7',
+            number: 7,
+            previousIdentifiers: { push: 'ENG-1' },
+            stateId: 'tgt-todo',
+            teamId: TARGET,
+          }),
+        }),
+      );
+    });
+
+    it('update refuses a team from another organisation', async () => {
+      prisma.issue.findUnique.mockResolvedValue({
+        identifier: 'ENG-1',
+        organizationId: TEST_ORG.id,
+        projectId: null,
+        stateId: 's',
+        teamId: TEST_TEAM.id,
+      });
+      prisma.team.findFirst.mockResolvedValue(null);
+      await expect(service.update(A, { teamId: 'foreign' })).rejects.toThrow(
+        IssueInvalidReferenceError,
+      );
+    });
+  });
 });

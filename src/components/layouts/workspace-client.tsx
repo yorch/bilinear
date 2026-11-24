@@ -39,7 +39,7 @@ export const WorkspaceClient = observer(function WorkspaceClient({
 }) {
   const { uiStore, teamStore, workflowStateStore } = useStore();
   const t = useTranslations();
-  const params = useParams<{ workspace: string }>();
+  const params = useParams<{ key?: string; workspace: string }>();
   const workspaceKey = params.workspace;
   const { items: recentItems } = useRecentItems(workspaceKey);
   const router = useRouter();
@@ -57,6 +57,29 @@ export const WorkspaceClient = observer(function WorkspaceClient({
   useHotkeys('c', () => uiStore.openCreateIssueModal(), {}, [uiStore]);
   useChord('g', 'i', () => router.push(`/${workspaceKey}/my-issues`), [workspaceKey]);
   useChord('g', 'n', () => router.push(`/${workspaceKey}/inbox`), [workspaceKey]);
+
+  // Team chords: the team on screen, else the first one alphabetically — the
+  // same fallback the create-issue modal uses. A workspace with no team yet
+  // has nowhere to go, so the chord does nothing.
+  const goToTeamPage = (suffix: '' | '/backlog' | '/cycles') => {
+    const team =
+      (params.key ? teamStore.findByKey(params.key) : null) ??
+      [...teamStore.all].sort((a, b) => a.name.localeCompare(b.name))[0];
+    if (team) {
+      router.push(`/${workspaceKey}/team/${team.key}${suffix}`);
+    }
+  };
+  useChord('g', 't', () => goToTeamPage(''), [workspaceKey, params.key, teamStore.pool.size]);
+  useChord('g', 'b', () => goToTeamPage('/backlog'), [
+    workspaceKey,
+    params.key,
+    teamStore.pool.size,
+  ]);
+  useChord('g', 'c', () => goToTeamPage('/cycles'), [
+    workspaceKey,
+    params.key,
+    teamStore.pool.size,
+  ]);
 
   const handleCreateTeam = useCallback(
     async (input: { name: string; key: string; description?: string; private: boolean }) => {

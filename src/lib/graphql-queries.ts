@@ -765,6 +765,16 @@ export const USER_UPDATE_LOCALE_MUTATION = `
   }
 `;
 
+export const USER_UPDATE_PROFILE_MUTATION = `
+  mutation UserUpdateProfile($input: UserUpdateProfileInput!) {
+    userUpdateProfile(input: $input) {
+      success
+      lastSyncId
+      user { id name displayName initials avatarUrl }
+    }
+  }
+`;
+
 export const USER_UPDATE_ACCENT_MUTATION = `
   mutation UserUpdateAccent($accent: String!) {
     userUpdateAccent(accent: $accent) {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AdminListFooter } from '@/components/admin/admin-list-footer';
 import { useAdminId } from '@/components/admin/admin-shell';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
@@ -14,6 +15,8 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import {
+  type AdminPage,
+  emptyAdminPage,
   fetchUsers,
   type PlatformUser,
   reactivateUser,
@@ -49,14 +52,40 @@ export default function AdminUsersPage() {
   } | null>(null);
   const [pickingOrgFor, setPickingOrgFor] = useState<PlatformUser | null>(null);
 
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const {
-    data: users,
-    setData: setUsers,
+    data: page,
+    setData: setPage,
     loading,
     error,
     cause,
     refetch: load,
-  } = useRetryableFetch<PlatformUser[]>(() => fetchUsers(applied), [applied], []);
+  } = useRetryableFetch<AdminPage<PlatformUser>>(
+    () => fetchUsers(applied),
+    [applied],
+    emptyAdminPage<PlatformUser>(),
+  );
+  const users = page.items;
+
+  function setUsers(update: (prev: PlatformUser[]) => PlatformUser[]) {
+    setPage(prev => ({ ...prev, items: update(prev.items) }));
+  }
+
+  async function handleLoadMore() {
+    if (!page.nextCursor) {
+      return;
+    }
+    setLoadingMore(true);
+    try {
+      const next = await fetchUsers(applied, page.nextCursor);
+      setPage(prev => ({ ...next, items: [...prev.items, ...next.items] }));
+    } catch (e) {
+      toast.error(getErrorMessage(e, t('common.somethingWentWrong')));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const isSelf = (u: PlatformUser) => adminId !== null && u.id === adminId;
 
@@ -274,6 +303,15 @@ export default function AdminUsersPage() {
             </tbody>
           </table>
         </div>
+      )}
+      {!loading && !error && users.length > 0 && (
+        <AdminListFooter
+          hasMore={page.hasMore}
+          loadingMore={loadingMore}
+          onLoadMore={() => void handleLoadMore()}
+          shown={users.length}
+          total={page.total}
+        />
       )}
       <ConfirmDialog
         confirmLabel={

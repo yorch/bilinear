@@ -207,12 +207,19 @@ const ResultsList = observer(function ResultsList({
     teamKey: teamStore.findById(issue.teamId)?.key ?? '',
   }));
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: teamStore.all.length is the reactive trigger for the per-team entries
   const baseActions = useMemo<ActionItem[]>(() => {
-    const goTo = (id: string, keywords: string[], labelKey: string, path: string): ActionItem => ({
+    const goTo = (
+      id: string,
+      keywords: string[],
+      labelKey: string,
+      path: string,
+      labelParams?: Record<string, string>,
+    ): ActionItem => ({
       id,
       keywords,
       kind: 'action',
-      label: t(labelKey),
+      label: t(labelKey, labelParams),
       onSelect: () => {
         uiStore.closeCommandPalette();
         router.push(`/${workspaceKey}${path}`);
@@ -273,6 +280,36 @@ const ResultsList = observer(function ResultsList({
         },
       },
       goTo('go-my-issues', ['my issues'], 'commandPalette.actions.goToMyIssues', '/my-issues'),
+      ...[...teamStore.all]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .flatMap(team => {
+          const name = team.displayName || team.name;
+          const base = `/team/${team.key}`;
+          const keywords = [team.key.toLowerCase(), name.toLowerCase()];
+          return [
+            goTo(
+              `go-team-${team.id}`,
+              [...keywords, 'issues', 'team'],
+              'commandPalette.actions.goToTeamIssues',
+              base,
+              { team: name },
+            ),
+            goTo(
+              `go-team-backlog-${team.id}`,
+              [...keywords, 'backlog'],
+              'commandPalette.actions.goToTeamBacklog',
+              `${base}/backlog`,
+              { team: name },
+            ),
+            goTo(
+              `go-team-cycles-${team.id}`,
+              [...keywords, 'cycles', 'sprints'],
+              'commandPalette.actions.goToTeamCycles',
+              `${base}/cycles`,
+              { team: name },
+            ),
+          ];
+        }),
       goTo('go-inbox', ['inbox', 'notifications'], 'commandPalette.actions.goToInbox', '/inbox'),
       goTo('go-projects', ['projects'], 'commandPalette.actions.goToProjects', '/projects'),
       goTo(
@@ -357,7 +394,7 @@ const ResultsList = observer(function ResultsList({
       switchTheme('theme-system', 'system', 'theme.system'),
       ...ACCENT_DEFINITIONS.map(switchAccent),
     ];
-  }, [router, uiStore, workspaceKey, t, setTheme, setAccent]);
+  }, [router, uiStore, workspaceKey, t, setTheme, setAccent, teamStore.all.length]);
   const actionItems: ActionItem[] = query
     ? baseActions.filter(a => {
         const q = query.toLowerCase();

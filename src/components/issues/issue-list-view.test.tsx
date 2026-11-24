@@ -145,3 +145,67 @@ describe('IssueListView', () => {
     expect(checked).toEqual(['A', 'C']);
   });
 });
+
+describe('IssueListView project / cycle / label grouping', () => {
+  const headers = () =>
+    screen
+      .queryAllByRole('button')
+      .map(b => b.textContent ?? '')
+      .filter(Boolean);
+
+  it('groups by project, with a trailing "no project" section', () => {
+    renderList({
+      groupBy: 'project',
+      issues: [
+        issue('A', { projectId: 'p1' }),
+        issue('B', { projectId: 'p2' }),
+        issue('C', { projectId: null }),
+      ],
+      projects: [
+        { id: 'p1', name: 'Alpha' },
+        { id: 'p2', name: 'Beta' },
+      ],
+    });
+    const text = document.body.textContent ?? '';
+    expect(text.indexOf('Alpha')).toBeLessThan(text.indexOf('Beta'));
+    expect(text.indexOf('Beta')).toBeLessThan(text.indexOf('issues.noProject'));
+    expect(headers().length).toBeGreaterThan(0);
+  });
+
+  it('keeps an issue whose project is not loaded under "no project" rather than dropping it', () => {
+    renderList({
+      groupBy: 'project',
+      issues: [issue('A', { projectId: 'gone' })],
+      projects: [],
+    });
+    expect(screen.getByText('issues.noProject')).toBeTruthy();
+    expect(screen.getAllByTestId('row')).toHaveLength(1);
+  });
+
+  it('groups by cycle', () => {
+    renderList({
+      cycles: [{ id: 'c1', label: 'Cycle 1' }],
+      groupBy: 'cycle',
+      issues: [issue('A', { cycleId: 'c1' }), issue('B', { cycleId: null })],
+    });
+    expect(screen.getByText('Cycle 1')).toBeTruthy();
+    expect(screen.getByText('issues.noCycle')).toBeTruthy();
+  });
+
+  it('groups by first label and draws each issue exactly once', () => {
+    const bug = { color: 'c', id: 'l1', name: 'Bug' };
+    const feat = { color: 'c', id: 'l2', name: 'Feature' };
+    renderList({
+      groupBy: 'label',
+      issues: [
+        issue('A', { labels: [feat, bug] }),
+        issue('B', { labels: [bug] }),
+        issue('C', { labels: [] }),
+      ],
+    });
+    expect(screen.getAllByTestId('row')).toHaveLength(3);
+    expect(screen.getByText('Bug')).toBeTruthy();
+    expect(screen.getByText('Feature')).toBeTruthy();
+    expect(screen.getByText('issues.noLabel')).toBeTruthy();
+  });
+});

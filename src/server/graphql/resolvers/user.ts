@@ -2,7 +2,8 @@ import crypto from 'node:crypto';
 import { GraphQLError } from 'graphql';
 import type { User } from '../../../generated/prisma';
 import { env } from '../../lib/env';
-import { requireAuth } from '../../middleware/auth';
+import { requireAuth, requireUserId } from '../../middleware/auth';
+import { USER_SYNC_OMIT } from '../../services/sync.service';
 import type { GraphQLContext } from '../context';
 
 function buildCalendarFeedUrl(token: string | null, appUrl: string): string | null {
@@ -115,6 +116,50 @@ export const userResolvers = {
         where: { id: ctx.userId },
       });
       return { success: true, user };
+    },
+
+    userUpdateProfile: async (
+      _parent: unknown,
+      { input }: { input: { avatarUrl?: string | null; name?: string } },
+      ctx: GraphQLContext,
+    ) => {
+      // Org-less on purpose: onboarding offers the name step before the first
+      // workspace exists, when the session has a user but no org.
+      requireUserId(ctx);
+      try {
+        await ctx.services.user.updateProfile(ctx.userId, input);
+      } catch (err) {
+        if ((err as Error).name === 'InvalidProfileError') {
+          throw new GraphQLError((err as Error).message, {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+        throw err;
+      }
+      // A person is visible in every workspace they belong to, so announce the
+      // change to each (sensitive columns omitted, as in bootstrap). The
+      // current org's id is the one handed back for the client's sync fence.
+      const [user, memberships] = await Promise.all([
+        ctx.prisma.user.findUnique({ omit: USER_SYNC_OMIT, where: { id: ctx.userId } }),
+        ctx.services.user.listOrganizationsForUser(ctx.userId),
+      ]);
+      if (!user) {
+        throw new GraphQLError('User not found', { extensions: { code: 'NOT_FOUND' } });
+      }
+      let lastSyncId: string | null = null;
+      for (const { organization } of memberships) {
+        const sync = await ctx.services.sync.createSyncAction(
+          organization.id,
+          'U',
+          'User',
+          user.id,
+          user,
+        );
+        if (organization.id === ctx.orgId) {
+          lastSyncId = sync.id.toString();
+        }
+      }
+      return { lastSyncId, success: true, user };
     },
   },
 

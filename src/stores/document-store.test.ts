@@ -98,4 +98,31 @@ describe('DocumentStore', () => {
       ).toEqual(['d2', 'd3']);
     });
   });
+
+  describe('getAncestors / getArchived', () => {
+    it('returns the parent chain root-first and survives a cycle', () => {
+      store.upsertMany([
+        makeDocument({ id: 'a', parentId: 'c' }),
+        makeDocument({ id: 'b', parentId: 'a' }),
+        makeDocument({ id: 'c', parentId: 'b' }),
+      ]);
+      expect(store.getAncestors('b').map(d => d.id)).toEqual(['c', 'a']);
+      store.upsertMany([
+        makeDocument({ id: 'r' }),
+        makeDocument({ id: 'm', parentId: 'r' }),
+        makeDocument({ id: 'leaf', parentId: 'm' }),
+      ]);
+      expect(store.getAncestors('leaf').map(d => d.id)).toEqual(['r', 'm']);
+    });
+
+    it('lists archived rows in scope, which all/getByProjectId hide', () => {
+      store.upsertMany([
+        makeDocument({ archivedAt: '2026-04-01T00:00:00Z', id: 'x', projectId: 'p1' }),
+        makeDocument({ archivedAt: '2026-04-01T00:00:00Z', id: 'y', projectId: 'p2' }),
+        makeDocument({ id: 'live', projectId: 'p1' }),
+      ]);
+      expect(store.getArchived({ projectId: 'p1' }).map(d => d.id)).toEqual(['x']);
+      expect(store.getByProjectId('p1').map(d => d.id)).toEqual(['live']);
+    });
+  });
 });

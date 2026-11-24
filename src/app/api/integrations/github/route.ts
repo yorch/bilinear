@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { env } from '@/server/lib/env';
@@ -9,9 +10,9 @@ import { requireAuthContext } from '@/server/middleware/auth';
  * GET /api/integrations/github
  *
  * Initiates the GitHub OAuth flow. Caller must be an org owner or admin.
- * The caller must supply a `webhookSecret` query param — this is the shared
- * secret they will configure in GitHub's webhook settings so we can validate
- * incoming pull_request events.
+ * The webhook secret (the shared secret configured in GitHub's webhook
+ * settings so we can validate incoming pull_request events) is generated
+ * server-side and carried only inside the signed state.
  *
  * Redirects to GitHub's authorize endpoint with a state param that encodes
  * {orgId, userId, webhookSecret} so the callback can complete the connection.
@@ -46,13 +47,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
   }
 
-  const webhookSecret = (req.nextUrl.searchParams.get('webhookSecret') ?? '').trim();
-  if (webhookSecret.length < 16) {
-    return NextResponse.json(
-      { error: 'webhookSecret must be at least 16 characters' },
-      { status: 400 },
-    );
-  }
+  // Generated here, never accepted from the request: a secret in a query
+  // string lands in access logs, browser history and Referer headers, and a
+  // human-typed one is rarely high-entropy. It travels only inside the signed
+  // state JWT and is stored by the callback; the admin reads it back through
+  // the authenticated `githubRevealWebhookSecret` mutation.
+  const webhookSecret = crypto.randomBytes(32).toString('hex');
 
   // Sign the state as a short-lived JWT so the callback can trust the
   // orgId/userId/webhookSecret it carries. An unsigned base64 blob would let

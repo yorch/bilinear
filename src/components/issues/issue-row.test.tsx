@@ -197,3 +197,53 @@ describe('IssueRow grid alignment', () => {
     pending.value = false;
   });
 });
+
+describe('IssueRow list-column and touch fixes', () => {
+  it('shows one label chip plus a +N chip whose tooltip names them all', () => {
+    const labels = [
+      { color: 'c', id: 'l1', name: 'Feature' },
+      { color: 'c', id: 'l2', name: 'Bug' },
+      { color: 'c', id: 'l3', name: 'Infra' },
+    ];
+    const { row } = renderRow({ issue: { ...issue, labels } });
+    const more = row.querySelector('[data-testid="issue-row-label-more"]') as HTMLElement;
+    expect(more.textContent).toBe('+2');
+    expect(more.getAttribute('title')).toBe('Feature, Bug, Infra');
+  });
+
+  it('shows no +N chip for a single label', () => {
+    const { row } = renderRow({
+      issue: { ...issue, labels: [{ color: 'c', id: 'l1', name: 'Bug' }] },
+    });
+    expect(row.querySelector('[data-testid="issue-row-label-more"]')).toBeNull();
+  });
+
+  it('renders the cycle as a short "C2" with the full name as the tooltip', () => {
+    const { row } = renderRow({
+      cycle: { label: 'Sprint 14 - Auth', number: 2 },
+      issue: { ...issue, cycleId: 'c1' },
+      teamId: 'team-1',
+    });
+    expect(row.querySelector('[data-testid="issue-row-cycle-short"]')?.textContent).toBe('C2');
+    expect(row.querySelector('[title="Sprint 14 - Auth"]')).not.toBeNull();
+  });
+
+  it('gives the checkbox a 44px-below-md hit area that also toggles', () => {
+    const onCheck = vi.fn();
+    const { row } = renderRow({ checked: false, onCheck });
+    const area = row.querySelector('[data-testid="issue-row-check-area"]') as HTMLElement;
+    expect(area.className).toContain('max-md:h-11');
+    expect(area.className).toContain('max-md:w-11');
+    fireEvent.click(area, { shiftKey: true });
+    expect(onCheck).toHaveBeenCalledWith(true);
+    // Clicking the box itself must not double-fire through the wrapper.
+    onCheck.mockClear();
+    fireEvent.click(area.querySelector('input') as HTMLElement);
+    expect(onCheck).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks the cursor row with aria-current', () => {
+    expect(renderRow({ selected: true }).row.getAttribute('aria-current')).toBe('true');
+    expect(renderRow({ selected: false }).row.hasAttribute('aria-current')).toBe(false);
+  });
+});

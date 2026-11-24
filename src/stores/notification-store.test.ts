@@ -140,4 +140,43 @@ describe('NotificationStore', () => {
       expect(store.pool.has('a')).toBe(true);
     });
   });
+
+  describe('unreadCount with a server total', () => {
+    it('reports the server total, not the size of the fetched page', () => {
+      store.reconcile([makeNotification({ id: 'a' }), makeNotification({ id: 'b' })], 2, 29);
+      expect(store.unreadCount).toBe(29);
+    });
+
+    it('moves by local read/unread flips since the fetch', () => {
+      store.reconcile([makeNotification({ id: 'a' }), makeNotification({ id: 'b' })], 2, 29);
+      store.markRead('a');
+      expect(store.unreadCount).toBe(28);
+      store.markUnread('a');
+      expect(store.unreadCount).toBe(29);
+    });
+
+    it('does not count older unread rows from Load more twice', () => {
+      store.reconcile([makeNotification({ id: 'a' })], 1, 3);
+      store.appendPage([makeNotification({ createdAt: '2025-01-01T00:00:00Z', id: 'older' })], 1);
+      expect(store.unreadCount).toBe(3);
+    });
+
+    it('stops counting a row once it is snoozed', () => {
+      store.reconcile([makeNotification({ id: 'a' })], 50, 5);
+      store.optimisticUpdate('a', { snoozedUntilAt: '2999-01-01T00:00:00Z' });
+      expect(store.unreadCount).toBe(4);
+      expect(store.snoozed.map(n => n.id)).toEqual(['a']);
+    });
+  });
+
+  describe('reconcile and snoozed rows', () => {
+    it('keeps a snoozed row that the default list omits', () => {
+      store.upsertMany([
+        makeNotification({ id: 'sn', snoozedUntilAt: '2999-01-01T00:00:00Z' }),
+        makeNotification({ id: 'kept' }),
+      ]);
+      store.reconcile([makeNotification({ id: 'kept' })], 50);
+      expect(store.pool.has('sn')).toBe(true);
+    });
+  });
 });

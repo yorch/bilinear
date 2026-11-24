@@ -15,6 +15,29 @@ export const auditLogResolvers = {
   },
 
   Query: {
+    auditLogExport: async (
+      _parent: unknown,
+      { filter }: { filter?: AuditLogFilter | null },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      try {
+        requireOrgRole(ctx, ['owner', 'admin']);
+      } catch {
+        throw new GraphQLError('You need admin access to export audit logs', {
+          extensions: { code: 'FORBIDDEN' },
+        });
+      }
+      return ctx.services.auditLog.exportCsv({
+        action: filter?.action ?? null,
+        from: filter?.from ? String(filter.from) : null,
+        orgId: ctx.orgId,
+        resourceType: filter?.resourceType ?? null,
+        to: filter?.to ? String(filter.to) : null,
+        userId: filter?.userId ?? null,
+      });
+    },
+
     auditLogs: async (
       _parent: unknown,
       { filter }: { filter?: AuditLogFilter | null },

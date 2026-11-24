@@ -7,7 +7,6 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { ReadOnlyField } from '@/components/shared/read-only-field';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
 import { SimpleSelect } from '@/components/ui/select';
 import { RowsSkeleton } from '@/components/ui/skeleton';
@@ -66,13 +65,47 @@ const GITHUB_DISCONNECT_MUTATION = `
 `;
 
 const GITHUB_ROTATE_SECRET_MUTATION = `
-  mutation GitHubRotateWebhookSecret($newSecret: String!) {
-    githubRotateWebhookSecret(newSecret: $newSecret) {
+  mutation GitHubRotateWebhookSecret {
+    githubRotateWebhookSecret {
       success
+      webhookSecret
       integration { id githubLogin createdAt }
     }
   }
 `;
+
+const GITHUB_REVEAL_SECRET_MUTATION = `
+  mutation GitHubRevealWebhookSecret {
+    githubRevealWebhookSecret { success webhookSecret }
+  }
+`;
+
+const INTEGRATION_AVAILABILITY_QUERY = `
+  query IntegrationAvailability {
+    integrationAvailability { githubConfigured slackConfigured }
+  }
+`;
+
+interface IntegrationAvailability {
+  githubConfigured: boolean;
+  slackConfigured: boolean;
+}
+
+/**
+ * Muted stand-in for a Connect button on a server that has no OAuth
+ * credentials for the provider. The button would only lead to a raw 503.
+ */
+function NotConfiguredRow({ envVars, provider }: { envVars: string; provider: string }) {
+  const t = useTranslations();
+  return (
+    <div className="rounded-md bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+      <p className="font-medium">{t('settings.integrations.notConfigured')}</p>
+      <p className="mt-1 text-xs">
+        {t('settings.integrations.notConfiguredHint', { envVars, provider })}
+      </p>
+    </div>
+  );
+}
 
 const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
   const t = useTranslations();
@@ -80,14 +113,24 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
   const { formatDate } = useFormatters();
   const { teamStore } = useStore();
   const teams = teamStore.all;
-  const [connectSecret, setConnectSecret] = useState('');
-  const [rotateSecret, setRotateSecret] = useState('');
-  const [showRotate, setShowRotate] = useState(false);
+  // Shown once on demand; never kept in the URL or persisted client-side.
+  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [pendingDisconnect, setPendingDisconnect] = useState<'github' | 'slack' | null>(null);
 
   const { workspace: orgKey } = useParams<{ workspace: string }>();
   const appUrl = useOrigin();
+
+  const { data: availability } = useRetryableFetch<IntegrationAvailability | null>(
+    () =>
+      gqlQuery<IntegrationAvailability | null>(
+        INTEGRATION_AVAILABILITY_QUERY,
+        {},
+        'integrationAvailability',
+      ),
+    [],
+    null,
+  );
 
   const {
     data: githubData,
@@ -151,15 +194,6 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
     }
   }
 
-  function handleConnect() {
-    if (connectSecret.trim().length < 16) {
-      toast.error(t('settings.integrations.webhookSecretTooShort'));
-      return;
-    }
-    const url = `/api/integrations/github?webhookSecret=${encodeURIComponent(connectSecret.trim())}`;
-    window.location.href = url;
-  }
-
   async function handleDisconnect() {
     setSaving(true);
     try {
@@ -173,26 +207,31 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
     }
   }
 
-  async function handleRotateSecret() {
-    if (rotateSecret.trim().length < 16) {
-      toast.error(t('settings.integrations.newSecretTooShort'));
-      return;
-    }
+  async function handleRevealSecret() {
     setSaving(true);
     try {
-      // gqlMutate throws on a GraphQL-level failure, so the "updated" toast can
-      // never claim a secret the server never stored (which would silently break
-      // HMAC verification for every inbound webhook).
-      const data = (await gqlMutate(GITHUB_ROTATE_SECRET_MUTATION, {
-        newSecret: rotateSecret.trim(),
-      })) as {
-        githubRotateWebhookSecret?: { success: boolean; integration: GitHubIntegration | null };
+      const data = (await gqlMutate(GITHUB_REVEAL_SECRET_MUTATION)) as {
+        githubRevealWebhookSecret?: { webhookSecret: string };
       };
-      if (data.githubRotateWebhookSecret?.integration) {
-        setIntegration(data.githubRotateWebhookSecret.integration);
-      }
-      setRotateSecret('');
-      setShowRotate(false);
+      setRevealedSecret(data.githubRevealWebhookSecret?.webhookSecret ?? null);
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('settings.integrations.webhookSecretRevealError')));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRotateSecret() {
+    setSaving(true);
+    try {
+      // The server generates the secret, so it is never chosen or typed in the
+      // browser. gqlMutate throws on a GraphQL-level failure, so the toast can
+      // never claim a secret the server did not store (which would silently
+      // break HMAC verification for every inbound webhook).
+      const data = (await gqlMutate(GITHUB_ROTATE_SECRET_MUTATION)) as {
+        githubRotateWebhookSecret?: { webhookSecret: string | null };
+      };
+      setRevealedSecret(data.githubRotateWebhookSecret?.webhookSecret ?? null);
       toast.success(t('settings.integrations.webhookSecretUpdated'));
     } catch (err) {
       toast.error(getErrorMessage(err, t('settings.integrations.webhookSecretUpdateError')));
@@ -261,9 +300,27 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
                 </div>
               </div>
 
+              {revealedSecret && (
+                <ReadOnlyField
+                  label={t('settings.integrations.webhookSecretLabel')}
+                  onCopy={() => copyUrl(revealedSecret)}
+                  value={revealedSecret}
+                />
+              )}
+
               <div className="flex flex-wrap gap-2">
                 <Button
-                  onClick={() => setShowRotate(v => !v)}
+                  disabled={saving}
+                  onClick={() => void handleRevealSecret()}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {t('settings.integrations.showWebhookSecret')}
+                </Button>
+                <Button
+                  disabled={saving}
+                  onClick={() => void handleRotateSecret()}
                   size="sm"
                   type="button"
                   variant="outline"
@@ -281,51 +338,34 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
                   {t('settings.integrations.disconnect')}
                 </Button>
               </div>
-
-              {showRotate && (
-                <div className="flex gap-2">
-                  <Input
-                    aria-label={t('settings.integrations.newWebhookSecretPlaceholder')}
-                    autoComplete="off"
-                    className="flex-1"
-                    onChange={e => setRotateSecret(e.target.value)}
-                    placeholder={t('settings.integrations.newWebhookSecretPlaceholder')}
-                    type="password"
-                    value={rotateSecret}
-                  />
-                  <Button disabled={saving} onClick={handleRotateSecret} size="sm" type="button">
-                    {t('common.save')}
-                  </Button>
-                </div>
-              )}
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                {t('settings.integrations.webhookSecretInstructions')}
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  aria-label={t('settings.integrations.webhookSecretPlaceholder')}
-                  autoComplete="off"
-                  className="flex-1"
-                  onChange={e => setConnectSecret(e.target.value)}
-                  placeholder={t('settings.integrations.webhookSecretPlaceholder')}
-                  type="password"
-                  value={connectSecret}
+              {availability && !availability.githubConfigured ? (
+                <NotConfiguredRow
+                  envVars="GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET"
+                  provider={t('settings.integrations.github')}
                 />
-                <Button onClick={handleConnect} size="sm" type="button">
-                  {t('settings.integrations.connectGithub')}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {t('settings.integrations.afterConnectingHint')}
-              </p>
-              <ReadOnlyField
-                label={t('settings.integrations.webhookUrlLabel')}
-                onCopy={() => copyUrl(webhookUrl)}
-                value={webhookUrl}
-              />
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    {t('settings.integrations.webhookSecretInstructions')}
+                  </p>
+                  <Button asChild disabled={!availability} size="sm">
+                    <a href="/api/integrations/github">
+                      {t('settings.integrations.connectGithub')}
+                    </a>
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    {t('settings.integrations.afterConnectingHint')}
+                  </p>
+                  <ReadOnlyField
+                    label={t('settings.integrations.webhookUrlLabel')}
+                    onCopy={() => copyUrl(webhookUrl)}
+                    value={webhookUrl}
+                  />
+                </>
+              )}
             </div>
           )}
         </section>
@@ -394,19 +434,28 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                {t('settings.integrations.connectSlackHintPrefix')}{' '}
-                <code className="font-mono">/bilinear</code>{' '}
-                {t('settings.integrations.connectSlackHintSuffix')}
-              </p>
-              <ReadOnlyField
-                label={t('settings.integrations.slackRequestUrlLabel')}
-                onCopy={() => copyUrl(`${appUrl}/api/integrations/slack/commands`)}
-                value={`${appUrl}/api/integrations/slack/commands`}
-              />
-              <Button asChild size="sm">
-                <a href="/api/integrations/slack">{t('settings.integrations.connectSlack')}</a>
-              </Button>
+              {availability && !availability.slackConfigured ? (
+                <NotConfiguredRow
+                  envVars="SLACK_CLIENT_ID / SLACK_CLIENT_SECRET"
+                  provider={t('settings.integrations.slack')}
+                />
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    {t('settings.integrations.connectSlackHintPrefix')}{' '}
+                    <code className="font-mono">/bilinear</code>{' '}
+                    {t('settings.integrations.connectSlackHintSuffix')}
+                  </p>
+                  <ReadOnlyField
+                    label={t('settings.integrations.slackRequestUrlLabel')}
+                    onCopy={() => copyUrl(`${appUrl}/api/integrations/slack/commands`)}
+                    value={`${appUrl}/api/integrations/slack/commands`}
+                  />
+                  <Button asChild disabled={!availability} size="sm">
+                    <a href="/api/integrations/slack">{t('settings.integrations.connectSlack')}</a>
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </section>

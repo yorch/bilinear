@@ -140,4 +140,39 @@ describe('InitiativeStore', () => {
       expect(store.findById('missing')).toBeNull();
     });
   });
+
+  describe('parent candidates', () => {
+    it('excludes the initiative itself and everything beneath it', () => {
+      const store = new InitiativeStore();
+      store.upsertMany([
+        makeInitiative({ id: 'root' }),
+        makeInitiative({ id: 'child', parentId: 'root' }),
+        makeInitiative({ id: 'grandchild', parentId: 'child' }),
+        makeInitiative({ id: 'other' }),
+      ]);
+      expect([...store.getDescendantIds('root')].sort()).toEqual(['child', 'grandchild']);
+      expect(
+        store
+          .getParentCandidates('root')
+          .map(i => i.id)
+          .sort(),
+      ).toEqual(['other']);
+      expect(
+        store
+          .getParentCandidates('child')
+          .map(i => i.id)
+          .sort(),
+      ).toEqual(['other', 'root']);
+    });
+
+    it('lists archived initiatives separately from all', () => {
+      const store = new InitiativeStore();
+      store.upsertMany([
+        makeInitiative({ archivedAt: '2026-02-01T00:00:00Z', id: 'old' }),
+        makeInitiative({ id: 'live' }),
+      ]);
+      expect(store.archived.map(i => i.id)).toEqual(['old']);
+      expect(store.all.map(i => i.id)).toEqual(['live']);
+    });
+  });
 });

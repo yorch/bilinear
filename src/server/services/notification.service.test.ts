@@ -70,6 +70,51 @@ describe('NotificationService', () => {
     });
   });
 
+  describe('findByUserId snoozed / before', () => {
+    it('lists only still-snoozed rows when snoozed is set', async () => {
+      prisma.notification.findMany.mockResolvedValue([]);
+      await service.findByUserId(TEST_USER.id, TEST_ORG.id, 50, { snoozed: true });
+      const where = (prisma.notification.findMany.mock.calls[0] as [{ where: object }])[0].where;
+      expect(where).toHaveProperty('snoozedUntilAt.gt');
+      expect(where).not.toHaveProperty('OR');
+    });
+
+    it('pages older than the before cursor', async () => {
+      prisma.notification.findMany.mockResolvedValue([]);
+      const before = new Date('2026-01-01T00:00:00Z');
+      await service.findByUserId(TEST_USER.id, TEST_ORG.id, 50, { before });
+      const where = (prisma.notification.findMany.mock.calls[0] as [{ where: object }])[0].where;
+      expect(where).toMatchObject({ createdAt: { lt: before } });
+    });
+  });
+
+  describe('markUnread / unsnooze', () => {
+    it('markUnread clears read and readAt', async () => {
+      prisma.notification.findUnique.mockResolvedValue({
+        ...TEST_NOTIFICATION,
+        organizationId: TEST_ORG.id,
+        userId: TEST_USER.id,
+      });
+      prisma.notification.update.mockResolvedValue(TEST_NOTIFICATION);
+      await service.markUnread(TEST_NOTIFICATION.id, TEST_USER.id, TEST_ORG.id);
+      expect(prisma.notification.update).toHaveBeenCalledWith({
+        data: { read: false, readAt: null },
+        where: { id: TEST_NOTIFICATION.id },
+      });
+    });
+
+    it('unsnooze rejects another user notification', async () => {
+      prisma.notification.findUnique.mockResolvedValue({
+        ...TEST_NOTIFICATION,
+        userId: 'someone-else',
+      });
+      await expect(
+        service.unsnooze(TEST_NOTIFICATION.id, TEST_USER.id, TEST_ORG.id),
+      ).rejects.toThrow('Notification not found');
+      expect(prisma.notification.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('markRead', () => {
     it('marks notification as read', async () => {
       const readNotification = {

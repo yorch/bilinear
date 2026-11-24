@@ -2,25 +2,44 @@ import { action, computed, makeObservable, observable } from 'mobx';
 import type { DBNotification } from '@/lib/db';
 import { applyPoolSyncAction } from './apply-pool-sync-action';
 
+function isSnoozedAt(n: { snoozedUntilAt?: string | null }, now: number): boolean {
+  return n.snoozedUntilAt ? new Date(n.snoozedUntilAt).getTime() > now : false;
+}
+
 export class NotificationStore {
   pool = new Map<string, DBNotification>();
   /** Where the shell's notification fetch stands; the Inbox renders from this. */
   loadState: 'idle' | 'loaded' | 'error' = 'idle';
   /** The last page was full, so older rows exist that were never fetched and counts are lower bounds. */
   hasMore = false;
+  /**
+   * The server's own unread total (`notificationUnreadCount`), or null before
+   * the first fetch. The pool only ever holds the newest page(s), so counting
+   * it undercounts whenever unread rows sit beyond the first 50 — the badge
+   * read "7 unread" while the database held 29.
+   */
+  serverUnread: number | null = null;
+  /** Pool-derived active-unread count at the moment `serverUnread` was read. */
+  baselineUnread = 0;
 
   constructor() {
     makeObservable(this, {
       all: computed,
+      appendPage: action,
       applySyncAction: action,
+      baselineUnread: observable,
       hasMore: observable,
       loadState: observable,
       markAllRead: action,
       markRead: action,
+      markUnread: action,
+      oldestActiveCreatedAt: computed,
       optimisticUpdate: action,
       pool: observable,
       reconcile: action,
+      serverUnread: observable,
       setLoadState: action,
+      snoozed: computed,
       unread: computed,
       unreadCount: computed,
       upsertMany: action,
@@ -37,16 +56,58 @@ export class NotificationStore {
     );
   }
 
+  /** Unread rows that are not currently snoozed. */
   get unread(): DBNotification[] {
-    return this.all.filter(n => !n.read);
+    const now = Date.now();
+    return this.all.filter(n => !n.read && !isSnoozedAt(n, now));
   }
 
+  /**
+   * The badge number. Once the server total is known it is that total moved by
+   * however many pooled rows have flipped since (optimistic mark-read, snooze,
+   * mark-unread) — so it stays exact past the first page and still reacts at
+   * once to local edits. Before the first fetch it falls back to the pool.
+   */
   get unreadCount(): number {
-    return this.unread.length;
+    const pooled = this.unread.length;
+    if (this.serverUnread === null) {
+      return pooled;
+    }
+    return Math.max(0, this.serverUnread + pooled - this.baselineUnread);
+  }
+
+  /** Rows whose snooze has not elapsed, soonest-waking first. */
+  get snoozed(): DBNotification[] {
+    const now = Date.now();
+    return this.all
+      .filter(n => isSnoozedAt(n, now))
+      .sort(
+        (a, b) =>
+          new Date(a.snoozedUntilAt ?? 0).getTime() - new Date(b.snoozedUntilAt ?? 0).getTime(),
+      );
+  }
+
+  /** The oldest unsnoozed row held — the `before` cursor for "Load more". */
+  get oldestActiveCreatedAt(): string | null {
+    const now = Date.now();
+    let oldest: string | null = null;
+    for (const n of this.pool.values()) {
+      if (!isSnoozedAt(n, now) && (oldest === null || n.createdAt < oldest)) {
+        oldest = n.createdAt;
+      }
+    }
+    return oldest;
   }
 
   findById(id: string): DBNotification | null {
     return this.pool.get(id) ?? null;
+  }
+
+  markUnread(id: string) {
+    const existing = this.pool.get(id);
+    if (existing) {
+      this.pool.set(id, { ...existing, read: false, readAt: null });
+    }
   }
 
   markRead(id: string) {
@@ -91,7 +152,7 @@ export class NotificationStore {
     this.loadState = state;
   }
 
-  reconcile(notifications: DBNotification[], limit: number) {
+  reconcile(notifications: DBNotification[], limit: number, serverUnread?: number) {
     this.hasMore = notifications.length >= limit;
     const returned = new Set(notifications.map(n => n.id));
     const oldest =
@@ -99,8 +160,34 @@ export class NotificationStore {
         ? Math.min(...notifications.map(n => new Date(n.createdAt).getTime()))
         : Number.NEGATIVE_INFINITY;
     for (const [id, existing] of this.pool) {
-      if (!returned.has(id) && new Date(existing.createdAt).getTime() >= oldest) {
+      // A snoozed row is absent from the default list by design, not because
+      // it is gone — keep it for the Snoozed view (it wakes by its own date).
+      if (
+        !returned.has(id) &&
+        !isSnoozedAt(existing, Date.now()) &&
+        new Date(existing.createdAt).getTime() >= oldest
+      ) {
         this.pool.delete(id);
+      }
+    }
+    this.upsertMany(notifications);
+    if (serverUnread !== undefined) {
+      this.serverUnread = serverUnread;
+      this.baselineUnread = this.unread.length;
+    }
+  }
+
+  /**
+   * Append an older page ("Load more"). Rows new to the pool that are unread
+   * raise the pooled count without the server total moving, so they are folded
+   * into the baseline.
+   */
+  appendPage(notifications: DBNotification[], limit: number) {
+    this.hasMore = notifications.length >= limit;
+    const now = Date.now();
+    for (const n of notifications) {
+      if (!this.pool.has(n.id) && !n.read && !isSnoozedAt(n, now)) {
+        this.baselineUnread += 1;
       }
     }
     this.upsertMany(notifications);

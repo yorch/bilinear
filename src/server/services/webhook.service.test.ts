@@ -9,8 +9,10 @@ import {
   WebhookInvalidNameError,
   WebhookInvalidUrlError,
   WebhookNoEventsError,
+  WebhookNotFoundError,
   WebhookPrivateUrlError,
   WebhookService,
+  WebhookTestUnavailableError,
 } from './webhook.service';
 
 // Mirrors the private constants in webhook.service.ts (not exported — kept
@@ -145,6 +147,72 @@ describe('WebhookService', () => {
         service.update(TEST_ORG.id, TEST_WEBHOOK.id, { name: 'a'.repeat(257) }),
       ).rejects.toThrow(WebhookInvalidNameError);
       expect(prisma.webhook.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sendTest', () => {
+    const delivery = (over: Record<string, unknown>) => ({
+      ...TEST_DELIVERY,
+      event: 'ping',
+      ...over,
+    });
+
+    it('creates a signed ping delivery, processes it now, and returns the outcome', async () => {
+      prisma.webhook.findFirst.mockResolvedValue(TEST_WEBHOOK_IP);
+      prisma.webhookDelivery.create.mockResolvedValue({});
+      const spy = vi.spyOn(service, 'processDelivery').mockResolvedValue();
+      prisma.webhookDelivery.findUnique.mockResolvedValue(
+        delivery({ responseStatus: 204, status: 'success' }),
+      );
+
+      const result = await service.sendTest(TEST_ORG.id, TEST_WEBHOOK_IP.id);
+
+      expect(result.status).toBe('success');
+      const data = prisma.webhookDelivery.create.mock.calls[0]?.[0].data;
+      expect(data).toMatchObject({
+        event: 'ping',
+        status: 'pending',
+        webhookId: TEST_WEBHOOK_IP.id,
+      });
+      expect(data.payload.deliveryId).toBe(data.id);
+      expect(spy).toHaveBeenCalledWith(data.id);
+      expect(prisma.webhookDelivery.update).not.toHaveBeenCalled();
+    });
+
+    it('closes a failed ping out instead of leaving it on the retry schedule', async () => {
+      prisma.webhook.findFirst.mockResolvedValue(TEST_WEBHOOK_IP);
+      prisma.webhookDelivery.create.mockResolvedValue({});
+      vi.spyOn(service, 'processDelivery').mockResolvedValue();
+      prisma.webhookDelivery.findUnique.mockResolvedValue(
+        delivery({ attempts: 1, errorMessage: 'connect ECONNREFUSED', status: 'pending' }),
+      );
+      prisma.webhookDelivery.update.mockResolvedValue(delivery({ status: 'failed' }));
+
+      const result = await service.sendTest(TEST_ORG.id, TEST_WEBHOOK_IP.id);
+
+      expect(prisma.webhookDelivery.update).toHaveBeenCalledWith({
+        data: { nextAttemptAt: null, status: 'failed' },
+        where: { id: expect.any(String) },
+      });
+      expect(result.status).toBe('failed');
+    });
+
+    it('rejects a disabled or archived webhook without enqueueing anything', async () => {
+      prisma.webhook.findFirst.mockResolvedValue({ ...TEST_WEBHOOK_IP, enabled: false });
+      await expect(service.sendTest(TEST_ORG.id, TEST_WEBHOOK_IP.id)).rejects.toBeInstanceOf(
+        WebhookTestUnavailableError,
+      );
+      expect(prisma.webhookDelivery.create).not.toHaveBeenCalled();
+    });
+
+    it('is org-scoped: an unknown id in this org is NotFound', async () => {
+      prisma.webhook.findFirst.mockResolvedValue(null);
+      await expect(service.sendTest(TEST_ORG.id, 'nope')).rejects.toBeInstanceOf(
+        WebhookNotFoundError,
+      );
+      expect(prisma.webhook.findFirst).toHaveBeenCalledWith({
+        where: { id: 'nope', organizationId: TEST_ORG.id },
+      });
     });
   });
 

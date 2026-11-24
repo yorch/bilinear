@@ -1,10 +1,11 @@
 'use client';
 
-import { LayoutList, Map as MapIcon, Plus } from 'lucide-react';
+import { Archive, LayoutList, Map as MapIcon, Plus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { CreateProjectModal } from '@/components/projects/create-project-modal';
+import { ProjectArchivedView } from '@/components/projects/project-archived-view';
 import { ProjectListView } from '@/components/projects/project-list-view';
 import { ProjectRoadmapView } from '@/components/projects/project-roadmap-view';
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
 import { useStore } from '@/providers/store-provider';
 
-type ProjectsLayout = 'list' | 'roadmap';
+type ProjectsLayout = 'archived' | 'list' | 'roadmap';
 
 const STORAGE_KEY = 'bilinear:projects:layout';
 
@@ -48,7 +49,8 @@ export default observer(function ProjectsPage() {
 
   const setLayoutPersisted = useCallback((next: ProjectsLayout) => {
     setLayout(next);
-    if (typeof window !== 'undefined') {
+    // Archived is a place to visit, not a layout to wake up in.
+    if (typeof window !== 'undefined' && next !== 'archived') {
       window.localStorage.setItem(STORAGE_KEY, next);
     }
   }, []);
@@ -102,6 +104,16 @@ export default observer(function ProjectsPage() {
                   ),
                   value: 'roadmap',
                 },
+                {
+                  ariaLabel: t('projects.archivedView'),
+                  label: (
+                    <>
+                      <Archive className="h-3.5 w-3.5" />
+                      {t('projects.archivedTab')}
+                    </>
+                  ),
+                  value: 'archived',
+                },
               ]}
               size="md"
               value={layout}
@@ -117,6 +129,8 @@ export default observer(function ProjectsPage() {
       />
       {layout === 'list' ? (
         <ProjectListView workspaceKey={workspace} />
+      ) : layout === 'archived' ? (
+        <ProjectArchivedView />
       ) : (
         <ProjectRoadmapView workspaceKey={workspace} />
       )}

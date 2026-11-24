@@ -632,6 +632,11 @@ export const issueResolvers = {
         });
       }
       await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
+      // Moving to another team writes into that team, so the caller needs the
+      // same standing there that issueCreate demands.
+      if (input.teamId && input.teamId !== existing.teamId) {
+        await requireTeamMemberNotGuest(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
+      }
 
       // Snapshot old label set before mutation for diff
       const oldLabels = input.labelIds !== undefined ? await ctx.services.issue.getLabels(id) : [];

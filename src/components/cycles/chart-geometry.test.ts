@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   CHART_HEIGHT,
   CHART_WIDTH,
+  extendAxis,
+  idealSeries,
   makeScales,
   PADDING_BOTTOM,
   PADDING_LEFT,
@@ -9,6 +11,7 @@ import {
   PADDING_TOP,
   PLOT_HEIGHT,
   PLOT_WIDTH,
+  plannedScope,
   toPath,
   xAxisLabels,
   xAxisStep,
@@ -116,5 +119,37 @@ describe('xAxisStep', () => {
   });
   it('never returns less than 1', () => {
     expect(xAxisStep(1, 800)).toBe(1);
+  });
+});
+
+describe('burndown ideal line', () => {
+  it('burns down from the first non-zero scope, not from day 0', () => {
+    // Issues stamped into the cycle after its first day left data[0].scope at 0,
+    // which flattened the ideal line along the axis.
+    const data = [{ scope: 0 }, { scope: 0 }, { scope: 15 }];
+    expect(plannedScope(data)).toBe(15);
+    expect(plannedScope([{ scope: 0 }])).toBe(0);
+  });
+
+  it('is linear from planned scope to zero on the last day', () => {
+    expect(idealSeries(12, 5)).toEqual([12, 9, 6, 3, 0]);
+    expect(idealSeries(12, 1)).toEqual([12]);
+  });
+
+  it('is not flat when the cycle starts with no recorded scope', () => {
+    const ideal = idealSeries(plannedScope([{ scope: 0 }, { scope: 14 }]), 4);
+    expect(new Set(ideal).size).toBeGreaterThan(1);
+  });
+
+  it('extends the axis to the cycle end so the ideal reaches zero then', () => {
+    const axis = extendAxis(
+      [{ date: '2026-11-22' }, { date: '2026-11-23' }, { date: '2026-11-24' }],
+      '2026-11-30T12:00:00.000Z',
+    );
+    expect(axis.length).toBe(9);
+    expect(axis[axis.length - 1].date).toBe('2026-11-30');
+    // No end date, or an end before the data: nothing to add.
+    expect(extendAxis([{ date: '2026-11-24' }], null)).toHaveLength(1);
+    expect(extendAxis([{ date: '2026-11-24' }], '2026-11-20T00:00:00Z')).toHaveLength(1);
   });
 });

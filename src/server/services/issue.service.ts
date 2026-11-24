@@ -76,6 +76,8 @@ export interface IssueUpdateInput {
   sortOrder?: number;
   startDate?: string | null;
   stateId?: string;
+  /** Move the issue to another team of the same organisation (new identifier). */
+  teamId?: string;
   title?: string;
   trashed?: boolean;
 }
@@ -178,6 +180,9 @@ export interface IssuePage {
   };
   totalCount: number;
 }
+
+/** Upper bound on how far up a parent chain the cycle check walks. */
+const MAX_PARENT_DEPTH = 200;
 
 export class IssueService {
   constructor(private prisma: PrismaClient) {}
@@ -572,6 +577,7 @@ export class IssueService {
         select: {
           canceledAt: true,
           completedAt: true,
+          identifier: true,
           organizationId: true,
           projectId: true,
           startedAt: true,
@@ -584,6 +590,43 @@ export class IssueService {
         throw new IssueNotFoundError();
       }
 
+      // Team move: allocate the next number in the target team, remember the
+      // old identifier (so old links keep resolving) and re-home the workflow
+      // state. A cycle belongs to one team, so it never travels with the issue.
+      let effectiveTeamId = existing.teamId;
+      let nextStateId = input.stateId;
+      if (input.teamId !== undefined && input.teamId !== existing.teamId) {
+        const target = await tx.team.findFirst({
+          select: { id: true },
+          where: { id: input.teamId, organizationId: existing.organizationId },
+        });
+        if (!target) {
+          throw new IssueInvalidReferenceError('teamId');
+        }
+        const moved = await tx.team.update({
+          data: { issueCount: { increment: 1 } },
+          where: { id: input.teamId },
+        });
+        effectiveTeamId = input.teamId;
+        data.teamId = input.teamId;
+        data.number = moved.issueCount;
+        data.identifier = `${moved.key}-${moved.issueCount}`;
+        data.previousIdentifiers = { push: existing.identifier };
+        if (!('cycleId' in input)) {
+          data.cycleId = null;
+          data.addedToCycleAt = null;
+        }
+        if (nextStateId === undefined) {
+          nextStateId = await this.resolveStateForTeamMove(
+            tx,
+            existing.stateId,
+            input.teamId,
+            moved.defaultIssueStateId,
+          );
+          data.stateId = nextStateId;
+        }
+      }
+
       // Validate stateId belongs to the same team as the issue. Create
       // already does this; the update path must too, or a member can move
       // their issue into another team's workflow state.
@@ -594,16 +637,16 @@ export class IssueService {
       // Captured from the new-state read below so the auto-close cascade can
       // gate on it without a second workflowState fetch — see the cascade block.
       let newStateType: string | null = null;
-      if (input.stateId !== undefined) {
+      if (nextStateId !== undefined) {
         const state = await tx.workflowState.findFirst({
           select: { teamId: true, type: true },
-          where: { archivedAt: null, id: input.stateId },
+          where: { archivedAt: null, id: nextStateId },
         });
-        if (!state || state.teamId !== existing.teamId) {
+        if (!state || state.teamId !== effectiveTeamId) {
           throw new IssueInvalidStateError();
         }
         newStateType = state.type;
-        if (input.stateId !== existing.stateId) {
+        if (nextStateId !== existing.stateId) {
           const now = new Date();
           // First-set semantics for startedAt/completedAt/canceledAt:
           // stamp on transition into the matching category, clear when
@@ -637,6 +680,9 @@ export class IssueService {
         },
         existing.projectId,
       );
+      if (input.parentId) {
+        await this.assertNoParentCycle(tx, [id], input.parentId);
+      }
 
       const issue = await tx.issue.update({ data, where: { id } });
 
@@ -789,6 +835,11 @@ export class IssueService {
     assertValidTitle(input.title);
     assertValidDescription(input.description);
     assertValidPriority(input.priority);
+    if (input.teamId !== undefined) {
+      // A move allocates a per-issue number and remaps the state, so it goes
+      // through update() one row at a time.
+      throw new IssueValidationError('teamId cannot be changed in a bulk update');
+    }
 
     const data: Parameters<PrismaClient['issue']['update']>[0]['data'] = {};
     if (input.title !== undefined) {
@@ -882,6 +933,9 @@ export class IssueService {
         projectId: input.projectId,
         projectMilestoneId: input.projectMilestoneId,
       });
+      if (input.parentId) {
+        await this.assertNoParentCycle(tx, ids, input.parentId);
+      }
 
       if (input.labelIds !== undefined) {
         // Bulk label replacement: sequential per-row because Prisma's
@@ -1205,6 +1259,67 @@ export class IssueService {
    * which means a milestone with no explicit project reference at all is
    * rejected outright — a milestone can't float free of a project.
    */
+  /**
+   * Reject a parent link that would make an issue its own ancestor: the new
+   * parent must not be one of `ids`, nor sit below one of them. Walks up from
+   * the proposed parent (bounded, and stops on an already-seen row so a
+   * pre-existing loop cannot hang the request).
+   */
+  private async assertNoParentCycle(
+    tx: Pick<PrismaClient, 'issue'>,
+    ids: string[],
+    parentId: string,
+  ): Promise<void> {
+    const moving = new Set(ids);
+    const seen = new Set<string>();
+    let cursor: string | null = parentId;
+    while (cursor && !seen.has(cursor) && seen.size < MAX_PARENT_DEPTH) {
+      if (moving.has(cursor)) {
+        throw new IssueValidationError(
+          cursor === parentId && ids.includes(parentId)
+            ? 'An issue cannot be its own parent'
+            : 'An issue cannot be a sub-issue of its own descendant',
+        );
+      }
+      seen.add(cursor);
+      const row: { parentId: string | null } | null = await tx.issue.findUnique({
+        select: { parentId: true },
+        where: { id: cursor },
+      });
+      cursor = row?.parentId ?? null;
+    }
+  }
+
+  /**
+   * Pick the workflow state an issue lands in when it moves to another team:
+   * the same-named state if the target has one, else the first state of the
+   * same type, else the target's default.
+   */
+  private async resolveStateForTeamMove(
+    tx: Pick<PrismaClient, 'workflowState'>,
+    currentStateId: string,
+    targetTeamId: string,
+    targetDefaultStateId: string | null,
+  ): Promise<string> {
+    const current = await tx.workflowState.findUnique({
+      select: { name: true, type: true },
+      where: { id: currentStateId },
+    });
+    const candidates = await tx.workflowState.findMany({
+      orderBy: { position: 'asc' },
+      select: { id: true, name: true, type: true },
+      where: { archivedAt: null, teamId: targetTeamId },
+    });
+    const match =
+      candidates.find(c => c.name === current?.name) ??
+      candidates.find(c => c.type === current?.type);
+    const resolved = match?.id ?? targetDefaultStateId ?? candidates[0]?.id;
+    if (!resolved) {
+      throw new IssueStateRequiredError();
+    }
+    return resolved;
+  }
+
   private async validateReferences(
     tx: Pick<
       PrismaClient,

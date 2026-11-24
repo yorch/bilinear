@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useMemo, useState } from 'react';
 import { ProgressSparkline } from '@/components/projects/progress-sparkline';
+import { ProjectDocumentsSection } from '@/components/projects/project-documents-section';
 import { ProjectMilestonesSection } from '@/components/projects/project-milestones-section';
 import { ProjectPropertiesPanel } from '@/components/projects/project-properties-panel';
 import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
@@ -317,6 +318,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
             <ProjectPropertiesPanel project={project} />
           </SectionCard>
           <ProjectMilestonesSection projectId={project.id} />
+          <ProjectDocumentsSection projectId={project.id} />
           <div className="mt-6">
             <SectionHeader title={t('projects.issuesCount', { count: projectIssues.length })} />
             <div className="mt-2 flex flex-col gap-0.5">

@@ -2,10 +2,10 @@
 
 import { useEffect } from 'react';
 import type { DBNotification } from '@/lib/db';
-import { gqlQuery } from '@/lib/graphql';
-import { GET_NOTIFICATIONS_QUERY } from '@/lib/graphql-queries';
+import { gqlMutate } from '@/lib/graphql';
 import { useStore } from '@/providers/store-provider';
 import type { NotificationStore } from '@/stores/notification-store';
+import { NOTIFICATIONS_PAGE_QUERY, NOTIFICATIONS_WITH_COUNT_QUERY } from './notification-queries';
 
 /**
  * Keeps `notificationStore` warm for the whole shell, so the Inbox unread
@@ -32,13 +32,13 @@ export async function fetchNotifications(
   isCancelled: () => boolean = () => false,
 ): Promise<void> {
   try {
-    const rows = await gqlQuery<DBNotification[] | null>(
-      GET_NOTIFICATIONS_QUERY,
-      { limit: PAGE_LIMIT },
-      'notifications',
-    );
+    const data = await gqlMutate(NOTIFICATIONS_WITH_COUNT_QUERY, { limit: PAGE_LIMIT });
     if (!isCancelled()) {
-      notificationStore.reconcile(rows ?? [], PAGE_LIMIT);
+      notificationStore.reconcile(
+        (data.notifications as DBNotification[] | null) ?? [],
+        PAGE_LIMIT,
+        typeof data.notificationUnreadCount === 'number' ? data.notificationUnreadCount : undefined,
+      );
       notificationStore.setLoadState('loaded');
     }
   } catch {
@@ -46,6 +46,21 @@ export async function fetchNotifications(
       notificationStore.setLoadState('error');
     }
   }
+}
+
+/** "Load more": the page older than everything the inbox already holds. */
+export async function fetchOlderNotifications(notificationStore: NotificationStore): Promise<void> {
+  const before = notificationStore.oldestActiveCreatedAt;
+  const data = await gqlMutate(NOTIFICATIONS_PAGE_QUERY, { before, limit: PAGE_LIMIT });
+  notificationStore.appendPage((data.notifications as DBNotification[] | null) ?? [], PAGE_LIMIT);
+}
+
+/** The Snoozed view: rows the default list hides until they wake. */
+export async function fetchSnoozedNotifications(
+  notificationStore: NotificationStore,
+): Promise<void> {
+  const data = await gqlMutate(NOTIFICATIONS_PAGE_QUERY, { limit: 200, snoozed: true });
+  notificationStore.upsertMany((data.notifications as DBNotification[] | null) ?? []);
 }
 
 export function useNotificationSync(): void {

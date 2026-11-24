@@ -41,12 +41,12 @@ export class DocumentService {
 
   async findByOrg(
     orgId: string,
-    filters: { teamId?: string; projectId?: string },
+    filters: { teamId?: string; projectId?: string; includeArchived?: boolean },
   ): Promise<Document[]> {
     return this.prisma.document.findMany({
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
       where: {
-        archivedAt: null,
+        ...(filters.includeArchived ? {} : { archivedAt: null }),
         organizationId: orgId,
         ...(filters.teamId ? { teamId: filters.teamId } : {}),
         ...(filters.projectId ? { projectId: filters.projectId } : {}),
@@ -98,6 +98,13 @@ export class DocumentService {
   async archive(id: string): Promise<Document> {
     return this.prisma.document.update({
       data: { archivedAt: new Date() },
+      where: { id },
+    });
+  }
+
+  async unarchive(id: string): Promise<Document> {
+    return this.prisma.document.update({
+      data: { archivedAt: null },
       where: { id },
     });
   }

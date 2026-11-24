@@ -13,7 +13,7 @@ import { usePending } from '@/hooks/use-pending-ids';
 import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
-import { cn } from '@/lib/utils';
+import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { isIssueSnoozed } from './snooze-presets';
 
@@ -29,6 +29,7 @@ export interface IssueRowData {
   identifier: string;
   labels: IssueLabel[];
   priority: number;
+  projectId?: string | null;
   snoozedUntilAt?: string | null;
   stateId: string;
   title: string;
@@ -51,6 +52,11 @@ interface IssueRowProps {
   /** Whether this row is checked in bulk-selection mode. */
   checked?: boolean;
   /** Active custom-field definitions; only those whose column is visible render. */
+  /**
+   * The issue's cycle, when the list knows it. Lets the narrow cycle column
+   * show a short "C2" with the full name as its tooltip.
+   */
+  cycle?: { label: string; number?: number };
   customFields?: DBCustomFieldDefinition[];
   estimationType?: string;
   /** Look up a custom-field value for this issue. */
@@ -135,6 +141,7 @@ export function IssueRow({
   onPropertyClosed,
   isColumnVisible,
   customFields,
+  cycle,
   getCustomFieldValue,
   style,
   trailing,
@@ -199,7 +206,7 @@ export function IssueRow({
    * inline style, which would otherwise win.
    */
   const mobileColumns = [
-    '0.875rem', // selection checkbox
+    '2.75rem', // selection checkbox (44px touch target)
     '2.75rem', // priority (44px touch target)
     '3.25rem', // identifier
     'minmax(0, 1fr)', // title
@@ -230,6 +237,10 @@ export function IssueRow({
         'max-md:[&_[data-prop-empty]]:opacity-100',
         selected && 'bg-brand-subtle',
       )}
+      // The j/k cursor row: `aria-current` is the valid way to mark "the current
+      // item in a set" on a plain element (`aria-selected` needs a row/option
+      // role, which this container of interactive cells cannot take).
+      aria-current={selected ? 'true' : undefined}
       data-issue-id={issue.id}
       data-selected={selected ? 'true' : undefined}
       data-testid="issue-row"
@@ -241,38 +252,53 @@ export function IssueRow({
       }}
     >
       {/* Checkbox */}
-      <input
-        aria-label={t('issues.selectIssue', { identifier: issue.identifier })}
-        checked={isBulkMode ? (checked ?? false) : selected}
-        className={cn(
-          'h-3.5 w-3.5 accent-brand focus:opacity-100',
-          isBulkMode && checked
-            ? 'opacity-100'
-            : 'opacity-0 group-hover:opacity-100 max-md:opacity-100',
-        )}
-        // Toggling happens in `onClick`, not `onChange`.
-        //
-        // This read `(e.nativeEvent as MouseEvent).shiftKey` inside `onChange`.
-        // A checkbox's change event is a plain `Event` with no `shiftKey`
-        // property at all, so the expression was `undefined` forever and
-        // shift-range selection had never once worked anywhere in the app; the
-        // `as MouseEvent` cast is what kept the type-checker quiet about it.
-        // `click` is the event that actually carries the modifier — for pointer
-        // activation and for Space on a focused checkbox alike — and using it
-        // directly avoids depending on the relative order of React's change and
-        // click handlers, which is not something a caller should have to reason
-        // about.
-        onChange={NOOP}
+      {/* A 44px hit area below `md` around the 14px box; the wrapper takes the
+          click so a tap that misses the box still toggles. */}
+      <span
+        className={cn('flex items-center justify-center', TOUCH_TARGET_SQUARE)}
+        data-testid="issue-row-check-area"
         onClick={e => {
-          e.stopPropagation();
           if (isBulkMode) {
             onCheck(e.shiftKey);
           } else {
             onSelect();
           }
         }}
-        type="checkbox"
-      />
+        role="presentation"
+      >
+        <input
+          aria-label={t('issues.selectIssue', { identifier: issue.identifier })}
+          checked={isBulkMode ? (checked ?? false) : selected}
+          className={cn(
+            'h-3.5 w-3.5 accent-brand focus:opacity-100',
+            isBulkMode && checked
+              ? 'opacity-100'
+              : 'opacity-0 group-hover:opacity-100 max-md:opacity-100',
+          )}
+          // Toggling happens in `onClick`, not `onChange`.
+          //
+          // This read `(e.nativeEvent as MouseEvent).shiftKey` inside `onChange`.
+          // A checkbox's change event is a plain `Event` with no `shiftKey`
+          // property at all, so the expression was `undefined` forever and
+          // shift-range selection had never once worked anywhere in the app; the
+          // `as MouseEvent` cast is what kept the type-checker quiet about it.
+          // `click` is the event that actually carries the modifier — for pointer
+          // activation and for Space on a focused checkbox alike — and using it
+          // directly avoids depending on the relative order of React's change and
+          // click handlers, which is not something a caller should have to reason
+          // about.
+          onChange={NOOP}
+          onClick={e => {
+            e.stopPropagation();
+            if (isBulkMode) {
+              onCheck(e.shiftKey);
+            } else {
+              onSelect();
+            }
+          }}
+          type="checkbox"
+        />
+      </span>
 
       {/* Priority */}
       <PrioritySelect
@@ -329,15 +355,28 @@ export function IssueRow({
       {visible('labels') && (
         // Names, not just colour dots (colour alone can't tell two labels
         // apart); the trigger clips at the track, and its title lists them all.
-        <div className="[&_button]:max-w-full [&_button]:flex-nowrap [&_button]:whitespace-nowrap [&_button]:overflow-hidden max-lg:hidden">
-          <LabelSelect
-            forceOpen={openProperty === 'label'}
-            labels={allLabels}
-            onChange={labelIds => onUpdate(issue.id, { labelIds })}
-            onClose={onPropertyClosed}
-            showNames
-            value={issue.labels.map(l => l.id)}
-          />
+        // Only the FIRST label's name fits the track without truncating to
+        // "Fea…", so the rest collapse to a "+N" chip whose tooltip lists them.
+        <div className="flex min-w-0 items-center gap-1 max-lg:hidden">
+          <div className="min-w-0 [&_button>span:not(:first-child)]:hidden [&_button]:max-w-full [&_button]:flex-nowrap [&_button]:overflow-hidden [&_button]:whitespace-nowrap">
+            <LabelSelect
+              forceOpen={openProperty === 'label'}
+              labels={allLabels}
+              onChange={labelIds => onUpdate(issue.id, { labelIds })}
+              onClose={onPropertyClosed}
+              showNames
+              value={issue.labels.map(l => l.id)}
+            />
+          </div>
+          {issue.labels.length > 1 && (
+            <span
+              className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground"
+              data-testid="issue-row-label-more"
+              title={issue.labels.map(l => l.name).join(', ')}
+            >
+              +{issue.labels.length - 1}
+            </span>
+          )}
         </div>
       )}
 
@@ -372,7 +411,15 @@ export function IssueRow({
         // The trigger is content-sized, so a long cycle name ran out of its
         // 4.75rem track and painted over the Status cell. Cap the trigger at
         // the track and let its label shrink/truncate.
-        <div className="[&_button>span]:min-w-0 [&_button]:max-w-full max-lg:hidden">
+        <div
+          className={cn(
+            '[&_button>span]:min-w-0 [&_button]:max-w-full max-lg:hidden',
+            // A number-only chip ("C2") instead of a name clipped to "Sprin…":
+            // the name stays on the button for assistive tech and as the tooltip.
+            cycle?.number !== undefined && 'relative [&_button>span]:sr-only',
+          )}
+          title={cycle?.label}
+        >
           <CycleSelect
             onChange={cycleId => onUpdate(issue.id, { cycleId })}
             onClose={onPropertyClosed}
@@ -380,6 +427,15 @@ export function IssueRow({
             teamId={teamId}
             value={issue.cycleId ?? null}
           />
+          {cycle?.number !== undefined && (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 left-5 flex items-center font-mono text-xs tabular-nums text-foreground-secondary"
+              data-testid="issue-row-cycle-short"
+            >
+              C{cycle.number}
+            </span>
+          )}
         </div>
       )}
 

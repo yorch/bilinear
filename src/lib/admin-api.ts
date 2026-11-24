@@ -115,13 +115,32 @@ export function fetchMetrics(): Promise<PlatformMetrics> {
   );
 }
 
-export function fetchTenants(query: string, includeArchived: boolean): Promise<PlatformTenant[]> {
+export interface AdminPage<T> {
+  hasMore: boolean;
+  items: T[];
+  nextCursor: string | null;
+  /** Rows matching the filter across every page. */
+  total: number;
+}
+
+export function emptyAdminPage<T>(): AdminPage<T> {
+  return { hasMore: false, items: [], nextCursor: null, total: 0 };
+}
+
+export function fetchTenants(
+  query: string,
+  includeArchived: boolean,
+  cursor: string | null = null,
+): Promise<AdminPage<PlatformTenant>> {
   return gqlQuery(
-    `query PlatformTenants($query: String, $includeArchived: Boolean) {
-      platformTenants(query: $query, includeArchived: $includeArchived) { ${TENANT_FIELDS} }
+    `query PlatformTenants($query: String, $includeArchived: Boolean, $cursor: String) {
+      platformTenantsPage(query: $query, includeArchived: $includeArchived, cursor: $cursor) {
+        items { ${TENANT_FIELDS} }
+        total hasMore nextCursor
+      }
     }`,
-    { includeArchived, query: query || null },
-    'platformTenants',
+    { cursor, includeArchived, query: query || null },
+    'platformTenantsPage',
   );
 }
 
@@ -188,13 +207,19 @@ export function deleteTenant(id: string): Promise<PlatformTenant> {
   );
 }
 
-export function fetchUsers(query: string): Promise<PlatformUser[]> {
+export function fetchUsers(
+  query: string,
+  cursor: string | null = null,
+): Promise<AdminPage<PlatformUser>> {
   return gqlQuery(
-    `query PlatformUsers($query: String) {
-      platformUsers(query: $query) { ${USER_FIELDS} }
+    `query PlatformUsers($query: String, $cursor: String) {
+      platformUsersPage(query: $query, cursor: $cursor) {
+        items { ${USER_FIELDS} }
+        total hasMore nextCursor
+      }
     }`,
-    { query: query || null },
-    'platformUsers',
+    { cursor, query: query || null },
+    'platformUsersPage',
   );
 }
 

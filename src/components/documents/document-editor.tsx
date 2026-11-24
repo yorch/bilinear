@@ -32,7 +32,7 @@ interface DocumentEditorProps {
 export const DocumentEditor = observer(function DocumentEditor({
   documentId,
 }: DocumentEditorProps) {
-  const { documentStore, teamStore, userStore } = useStore();
+  const { documentStore, projectStore, teamStore, userStore } = useStore();
   const t = useTranslations();
   const router = useRouter();
   const { workspace } = useParams<{ workspace: string }>();
@@ -158,6 +158,11 @@ export const DocumentEditor = observer(function DocumentEditor({
     }
   };
 
+  // Nested pages show their trail (Docs › Parent › Child). Each ancestor links to
+  // itself, and a project document names its project first.
+  const ancestors = documentStore.getAncestors(documentId);
+  const project = doc.projectId ? projectStore.findById(doc.projectId) : null;
+
   const crumbClass = 'truncate text-xs text-muted-foreground hover:text-foreground';
 
   return (
@@ -249,10 +254,32 @@ export const DocumentEditor = observer(function DocumentEditor({
                 <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground max-sm:hidden" />
               </>
             )}
+            {project && (
+              <>
+                <Link
+                  className={cn(crumbClass, 'max-sm:hidden')}
+                  href={`/${workspace}/project/${project.slugId}`}
+                >
+                  {project.name}
+                </Link>
+                <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground max-sm:hidden" />
+              </>
+            )}
             <Link className={cn(crumbClass, 'max-sm:hidden')} href={docsHref}>
               {t('nav.docs')}
             </Link>
             <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground max-sm:hidden" />
+            {ancestors.map(ancestor => (
+              <span className="contents" key={ancestor.id}>
+                <Link
+                  className={cn(crumbClass, 'max-sm:hidden')}
+                  href={`/${workspace}/docs/${ancestor.id}`}
+                >
+                  {ancestor.title || t('documents.untitled')}
+                </Link>
+                <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground max-sm:hidden" />
+              </span>
+            ))}
             <span aria-current="page" className="truncate">
               {localTitle || t('documents.untitled')}
             </span>

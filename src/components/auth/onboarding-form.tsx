@@ -1,6 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { AuthField } from '@/components/auth/auth-field';
 import { Button } from '@/components/ui/button';
@@ -8,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useTranslations } from '@/hooks/use-translations';
 import { installSessionCookies } from '@/lib/auth-session';
 import { gql } from '@/lib/graphql';
-import { ORGANIZATION_CREATE_MUTATION } from '@/lib/graphql-queries';
+import { ORGANIZATION_CREATE_MUTATION, USER_UPDATE_PROFILE_MUTATION } from '@/lib/graphql-queries';
 import { finalizeUrlKey, isReservedUrlKey, sanitizeUrlKeyInput } from '@/lib/url-key';
 
 interface OrganizationCreateResult {
@@ -22,10 +21,19 @@ export function slugify(value: string): string {
   return finalizeUrlKey(value);
 }
 
-export function OnboardingForm({ host }: { host: string }) {
-  const router = useRouter();
+export function OnboardingForm({
+  defaultName,
+  host,
+  onCreated,
+}: {
+  /** The account's current name — for an email sign-up, the address's local part. */
+  defaultName: string;
+  host: string;
+  onCreated: (organization: { name: string; urlKey: string }) => void;
+}) {
   const { logout, user } = useAuth();
   const t = useTranslations();
+  const [yourName, setYourName] = useState(defaultName);
   const [name, setName] = useState('');
   const [urlKey, setUrlKey] = useState('');
   const [urlKeyManuallyEdited, setUrlKeyManuallyEdited] = useState(false);
@@ -62,6 +70,16 @@ export function OnboardingForm({ host }: { host: string }) {
     setError(null);
 
     try {
+      // Optional "Your name" step: only written when the person changed it.
+      // Runs first and org-less (the session has a user but no workspace yet).
+      const trimmedName = yourName.trim();
+      if (trimmedName && trimmedName !== defaultName) {
+        const profile = await gql(USER_UPDATE_PROFILE_MUTATION, { input: { name: trimmedName } });
+        if (profile.errors?.length) {
+          setError((profile.errors[0] as { message: string }).message);
+          return;
+        }
+      }
       const data = await gql(ORGANIZATION_CREATE_MUTATION, {
         input: { name: name.trim(), urlKey: finalKey },
       });
@@ -90,7 +108,7 @@ export function OnboardingForm({ host }: { host: string }) {
         return;
       }
 
-      router.push(`/${organization.urlKey}`);
+      onCreated({ name: name.trim(), urlKey: organization.urlKey });
     } catch {
       setError(t('common.somethingWentWrong'));
     } finally {
@@ -105,6 +123,17 @@ export function OnboardingForm({ host }: { host: string }) {
 
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+      <AuthField
+        autoComplete="name"
+        hint={t('auth.yourNameHint')}
+        id="your-name"
+        label={t('auth.yourName')}
+        maxLength={255}
+        name="name"
+        onChange={e => setYourName(e.target.value)}
+        value={yourName}
+      />
+
       <AuthField
         autoComplete="organization"
         autoFocus

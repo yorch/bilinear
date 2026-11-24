@@ -13,6 +13,8 @@ import { InlineRetry } from '@/components/shared/inline-retry';
 import { DetailPanelSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useIssueRemoval } from '@/hooks/use-issue-removal';
+import { useIssueShortcuts } from '@/hooks/use-issue-shortcuts';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -160,6 +162,17 @@ const IssueDetailPage = observer(function IssueDetailPage() {
     }
   };
 
+  // The same single-key shortcuts the list pages bind against the selected
+  // row (S/A/P/L/D/Shift+E/Shift+P/Q, Backspace), plus I and Cmd/Ctrl+. — here
+  // the open issue is always the target.
+  const { archive } = useIssueRemoval({ onRemoved: handleClose });
+  const { closeProperty, openProperty } = useIssueShortcuts({
+    identifier: issue?.identifier,
+    issueId: issue?.id,
+    onArchive: issue ? () => archive(issue.id) : undefined,
+    onUpdate: handleUpdate,
+  });
+
   if (!issue && loading) {
     return <DetailPanelSkeleton />;
   }
@@ -244,7 +257,9 @@ const IssueDetailPage = observer(function IssueDetailPage() {
           issue={issue}
           labels={labels}
           layout="page"
+          onPropertyClose={closeProperty}
           onUpdate={handleUpdate}
+          openProperty={openProperty}
           states={states}
           users={users}
         />

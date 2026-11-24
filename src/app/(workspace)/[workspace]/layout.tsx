@@ -1,5 +1,7 @@
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { WorkspaceMismatch } from '@/components/layouts/workspace-mismatch';
+import { loginRedirectPath, REQUEST_PATH_HEADER } from '@/lib/deep-link';
 import { prisma } from '@/server/lib/prisma';
 import { readSessionClaim } from '@/server/lib/session-claim';
 import { UserService } from '@/server/services/user.service';
@@ -39,10 +41,9 @@ export default async function WorkspaceGuardLayout({
   const { workspace } = await params;
   const claim = await readSessionClaim();
   if (!claim) {
-    // Keep the workspace through sign-in. The full deep path is not available
-    // to a layout (and the app deliberately has no edge middleware to stash
-    // it), so the workspace root is the most precise target we can name.
-    redirect(`/login?next=${encodeURIComponent(`/${workspace}`)}`);
+    // Keep the full deep path through sign-in. `src/proxy.ts` forwards it as a
+    // header; the workspace root is the fallback if it is missing or unsafe.
+    redirect(loginRedirectPath((await headers()).get(REQUEST_PATH_HEADER), `/${workspace}`));
   }
 
   const urlOrg = await prisma.organization.findUnique({

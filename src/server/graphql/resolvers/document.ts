@@ -75,6 +75,27 @@ export const documentResolvers = {
       return { lastSyncId: sync.id.toString(), success: true };
     },
 
+    documentUnarchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+
+      const existing = await ctx.services.document.findById(id);
+      if (!existing || existing.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Document not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
+      const document = await ctx.services.document.unarchive(id);
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'U',
+        'Document',
+        id,
+        document,
+      );
+      return { document, lastSyncId: sync.id.toString(), success: true };
+    },
+
     documentUpdate: async (
       _parent: unknown,
       { id, input }: { id: string; input: DocumentUpdateInput },
@@ -113,12 +134,17 @@ export const documentResolvers = {
 
     documents: async (
       _parent: unknown,
-      { teamId, projectId }: { teamId?: string; projectId?: string },
+      {
+        teamId,
+        projectId,
+        includeArchived,
+      }: { teamId?: string; projectId?: string; includeArchived?: boolean },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
 
       return ctx.services.document.findByOrg(ctx.orgId, {
+        includeArchived: includeArchived ?? false,
         projectId: projectId ?? undefined,
         teamId: teamId ?? undefined,
       });

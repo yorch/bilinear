@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testAuthGuard } from '../../../test/auth-guard-helper';
 import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
 import { TEST_ISSUE } from '../../../test/fixtures';
@@ -67,6 +67,39 @@ describe('notificationResolvers', () => {
       await testAuthGuard(
         notificationResolvers.Mutation.notificationSnooze,
         { id: 'missing', until: new Date().toISOString() },
+        ctx,
+        'NOT_FOUND',
+      );
+    });
+  });
+
+  describe('Mutation.notificationUnsnooze / notificationMarkUnread', () => {
+    it('creates a SyncAction so other devices see the change', async () => {
+      const notification = { id: TEST_NOTIFICATION_ID };
+      vi.spyOn(ctx.services.notification, 'unsnooze').mockResolvedValue(notification as never);
+      const createSyncAction = vi.spyOn(ctx.services.sync, 'createSyncAction');
+      const res = await notificationResolvers.Mutation.notificationUnsnooze(
+        null,
+        { id: TEST_NOTIFICATION_ID },
+        ctx as never,
+      );
+      expect(createSyncAction).toHaveBeenCalledWith(
+        expect.anything(),
+        'U',
+        'Notification',
+        TEST_NOTIFICATION_ID,
+        notification,
+      );
+      expect(res.lastSyncId).toBe('1');
+    });
+
+    it('markUnread remaps NotificationNotFoundError to NOT_FOUND', async () => {
+      vi.spyOn(ctx.services.notification, 'markUnread').mockRejectedValue(
+        new NotificationNotFoundError(),
+      );
+      await testAuthGuard(
+        notificationResolvers.Mutation.notificationMarkUnread,
+        { id: 'missing' },
         ctx,
         'NOT_FOUND',
       );

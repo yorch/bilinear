@@ -159,6 +159,26 @@ describe('DocumentService', () => {
     });
   });
 
+  describe('unarchive', () => {
+    it('clears archivedAt on the document', async () => {
+      prisma.document.update.mockResolvedValue(TEST_DOC);
+      await service.unarchive(DOC_ID);
+      expect(prisma.document.update).toHaveBeenCalledWith({
+        data: { archivedAt: null },
+        where: { id: DOC_ID },
+      });
+    });
+  });
+
+  describe('findByOrg includeArchived', () => {
+    it('omits the archivedAt filter only when includeArchived is set', async () => {
+      prisma.document.findMany.mockResolvedValue([]);
+      await service.findByOrg(ORG_ID, { includeArchived: true });
+      const where = (prisma.document.findMany.mock.calls[0] as [{ where: object }])[0].where;
+      expect(where).not.toHaveProperty('archivedAt');
+    });
+  });
+
   describe('delete', () => {
     it('deletes the document when called by the creator', async () => {
       prisma.document.findUnique.mockResolvedValue(TEST_DOC);

@@ -19,6 +19,7 @@ import { useMemo, useRef, useState } from 'react';
 import { AccentToggle } from '@/components/accent-toggle';
 import { LanguageToggle } from '@/components/language-toggle';
 import { MembersSection } from '@/components/settings/members-section';
+import { ProfileCard } from '@/components/settings/profile-card';
 import { WorkspaceCustomFieldsCard } from '@/components/settings/workspace-custom-fields-card';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
@@ -37,6 +38,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { type OrganizationPlanLimits, PLAN_LIMIT_FIELDS } from '@/lib/plan-limits';
 import { toast } from '@/lib/toast';
+import { finalizeUrlKey, isReservedUrlKey, sanitizeUrlKeyInput } from '@/lib/url-key';
 import { cn, getErrorMessage, TOUCH_ROW, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -69,7 +71,7 @@ const ORGANIZATION_UPDATE_MUTATION = `
   mutation OrganizationUpdate($input: OrganizationUpdateInput!) {
     organizationUpdate(input: $input) {
       success
-      organization { id name logoUrl }
+      organization { id name logoUrl urlKey }
     }
   }
 `;
@@ -192,6 +194,9 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
 
   const [orgName, setOrgName] = useState('');
   const [savingOrg, setSavingOrg] = useState(false);
+  const [urlKeyDraft, setUrlKeyDraft] = useState<string | null>(null);
+  const [confirmingUrlKey, setConfirmingUrlKey] = useState(false);
+  const [savingUrlKey, setSavingUrlKey] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -259,6 +264,25 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
       toast.error(getErrorMessage(err, t('settings.workspace.orgUpdateError')));
     } finally {
       setSavingOrg(false);
+    }
+  }
+
+  async function saveUrlKey() {
+    const next = finalizeUrlKey(urlKeyDraft ?? '');
+    if (!orgData || next === orgData.urlKey) {
+      return;
+    }
+    setSavingUrlKey(true);
+    try {
+      await gqlMutate(ORGANIZATION_UPDATE_MUTATION, { input: { urlKey: next } });
+      // Full navigation: the `[workspace]` segment of every open route, the
+      // sync connection and the document title all derive from the old key.
+      window.location.assign(`/${next}/settings`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('settings.workspace.urlKeyUpdateError')));
+      setSavingUrlKey(false);
+    } finally {
+      setConfirmingUrlKey(false);
     }
   }
 
@@ -434,6 +458,13 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-6 md:px-6 md:py-8">
         <section>
           <div className="mb-4">
+            <SectionHeader as="h2" title={t('settings.profile.title')} />
+          </div>
+          <ProfileCard />
+        </section>
+
+        <section>
+          <div className="mb-4">
             <SectionHeader as="h2" title={t('settings.workspace.organization')} />
           </div>
           <div className="rounded-lg border border-border bg-card p-5">
@@ -537,8 +568,50 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
                   <dt className="text-xs font-medium text-muted-foreground pt-0.5">
                     {t('settings.workspace.urlKey')}
                   </dt>
-                  <dd className="col-span-2 font-mono text-sm text-foreground-secondary">
-                    {org.urlKey}
+                  <dd className="col-span-2">
+                    {canManageOrg ? (
+                      <form
+                        className="flex flex-col gap-1.5"
+                        onSubmit={e => {
+                          e.preventDefault();
+                          setConfirmingUrlKey(true);
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Input
+                            aria-label={t('settings.workspace.urlKey')}
+                            autoCapitalize="none"
+                            className="font-mono"
+                            disabled={savingUrlKey}
+                            onBlur={() => setUrlKeyDraft(finalizeUrlKey(urlKeyDraft ?? org.urlKey))}
+                            onChange={e => setUrlKeyDraft(sanitizeUrlKeyInput(e.target.value))}
+                            spellCheck={false}
+                            value={urlKeyDraft ?? org.urlKey}
+                          />
+                          <Button
+                            disabled={
+                              savingUrlKey ||
+                              finalizeUrlKey(urlKeyDraft ?? org.urlKey) === org.urlKey ||
+                              finalizeUrlKey(urlKeyDraft ?? org.urlKey).length < 3 ||
+                              isReservedUrlKey(finalizeUrlKey(urlKeyDraft ?? org.urlKey))
+                            }
+                            size="sm"
+                            type="submit"
+                          >
+                            {t('common.save')}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {isReservedUrlKey(finalizeUrlKey(urlKeyDraft ?? org.urlKey))
+                            ? t('auth.urlKeyTaken')
+                            : t('settings.workspace.urlKeyHint')}
+                        </p>
+                      </form>
+                    ) : (
+                      <span className="font-mono text-sm text-foreground-secondary">
+                        {org.urlKey}
+                      </span>
+                    )}
                   </dd>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
@@ -1003,6 +1076,17 @@ const WorkspaceSettingsPage = observer(function WorkspaceSettingsPage() {
               </ul>
             )}
           </div>
+          <ConfirmDialog
+            confirmLabel={t('settings.workspace.urlKeyChangeConfirm')}
+            message={t('settings.workspace.urlKeyChangeMessage', {
+              next: finalizeUrlKey(urlKeyDraft ?? ''),
+              old: orgData?.urlKey ?? '',
+            })}
+            onCancel={() => setConfirmingUrlKey(false)}
+            onConfirm={() => void saveUrlKey()}
+            open={confirmingUrlKey}
+            title={t('settings.workspace.urlKeyChangeTitle')}
+          />
           <ConfirmDialog
             confirmLabel={t('settings.workspace.rotate')}
             message={t('settings.workspace.rotateCalendarConfirm')}

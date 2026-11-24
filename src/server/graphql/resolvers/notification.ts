@@ -5,6 +5,30 @@ import { clampLimit } from '../../lib/pagination';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
 
+/** Shared tail of the single-row notification mutations: SyncAction + NOT_FOUND remap. */
+async function runOwnedNotificationMutation(
+  ctx: GraphQLContext,
+  orgId: string,
+  run: () => Promise<Notification>,
+) {
+  try {
+    const notification = await run();
+    const sync = await ctx.services.sync.createSyncAction(
+      orgId,
+      'U',
+      'Notification',
+      notification.id,
+      notification,
+    );
+    return { lastSyncId: sync.id.toString(), notification, success: true };
+  } catch (err) {
+    if ((err as Error).name === 'NotificationNotFoundError') {
+      throw new GraphQLError((err as Error).message, { extensions: { code: 'NOT_FOUND' } });
+    }
+    throw err;
+  }
+}
+
 export const notificationResolvers = {
   Mutation: {
     notificationMarkAllRead: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
@@ -47,6 +71,17 @@ export const notificationResolvers = {
         }
         throw err;
       }
+    },
+
+    notificationMarkUnread: async (
+      _parent: unknown,
+      { id }: { id: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      return runOwnedNotificationMutation(ctx, ctx.orgId, () =>
+        ctx.services.notification.markUnread(id, ctx.userId, ctx.orgId),
+      );
     },
 
     notificationSnooze: async (
@@ -110,6 +145,13 @@ export const notificationResolvers = {
       return { lastSyncId: lastSyncId.toString(), success: true };
     },
 
+    notificationUnsnooze: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      return runOwnedNotificationMutation(ctx, ctx.orgId, () =>
+        ctx.services.notification.unsnooze(id, ctx.userId, ctx.orgId),
+      );
+    },
+
     notificationUnsubscribe: async (
       _parent: unknown,
       { issueId }: { issueId: string },
@@ -167,12 +209,17 @@ export const notificationResolvers = {
       return ctx.services.notification.isSubscribed(ctx.userId, issueId);
     },
 
-    notifications: async (_parent: unknown, { limit }: { limit?: number }, ctx: GraphQLContext) => {
+    notifications: async (
+      _parent: unknown,
+      { limit, before, snoozed }: { limit?: number; before?: string; snoozed?: boolean },
+      ctx: GraphQLContext,
+    ) => {
       requireAuth(ctx);
       return ctx.services.notification.findByUserId(
         ctx.userId,
         ctx.orgId,
         clampLimit(limit, MAX_LIST_LIMIT, DEFAULT_LIST_LIMIT),
+        { before: before ? new Date(before) : undefined, snoozed: snoozed ?? false },
       );
     },
     notificationUnreadCount: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {

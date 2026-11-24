@@ -12,6 +12,7 @@ export class InitiativeStore {
       all: computed,
       applyInitiativeProjectSyncAction: action,
       applySyncAction: action,
+      archived: computed,
       optimisticUpdate: action,
       pool: observable,
       projectLinks: observable,
@@ -34,6 +35,42 @@ export class InitiativeStore {
 
   get active(): DBInitiative[] {
     return this.all.filter(i => i.status === 'active' || i.status === 'planned');
+  }
+
+  /** In-session archived initiatives (archived rows never ride the bootstrap). */
+  get archived(): DBInitiative[] {
+    return Array.from(this.pool.values())
+      .filter(i => i.archivedAt)
+      .sort((a, b) => (b.archivedAt ?? '').localeCompare(a.archivedAt ?? ''));
+  }
+
+  /**
+   * Every initiative nested anywhere below `id` (children, grandchildren…),
+   * excluding `id` itself. Guarded against a cyclic chain.
+   */
+  getDescendantIds(id: string): Set<string> {
+    const found = new Set<string>();
+    const queue = [id];
+    while (queue.length > 0) {
+      const current = queue.pop() as string;
+      for (const init of this.pool.values()) {
+        if (init.parentId === current && !found.has(init.id) && init.id !== id) {
+          found.add(init.id);
+          queue.push(init.id);
+        }
+      }
+    }
+    return found;
+  }
+
+  /**
+   * Initiatives that may become `id`'s parent: not itself, not anything below
+   * it (that would be a cycle). The server enforces the same rule; this keeps
+   * the picker from offering a choice that is bound to be refused.
+   */
+  getParentCandidates(id: string): DBInitiative[] {
+    const below = this.getDescendantIds(id);
+    return this.all.filter(i => i.id !== id && !below.has(i.id));
   }
 
   /** Root initiatives (no parent). */

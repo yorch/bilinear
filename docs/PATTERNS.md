@@ -413,7 +413,7 @@ export function requireAuth(ctx: AuthContext): asserts ctx is { userId: string; 
 // After requireAuth(ctx), TypeScript knows ctx.userId is string (not null)
 ```
 
-Route protection is enforced **per page**, not by edge middleware (there is no `src/middleware.ts`). Server components read the `access_token` cookie via `next/headers` and `redirect('/login')` when it is missing or fails verification — see `src/app/page.tsx`:
+Route protection is enforced **per page**, not by edge middleware (there is no `src/middleware.ts`, and `src/proxy.ts` — Next 16's renamed middleware — contains no auth logic). Server components read the `access_token` cookie via `next/headers` and `redirect('/login')` when it is missing or fails verification — see `src/app/page.tsx`:
 
 ```typescript
 const token = (await cookies()).get('access_token')?.value;
@@ -424,6 +424,8 @@ try {
   redirect('/login'); // token invalid/expired
 }
 ```
+
+**The one proxy exception.** `src/proxy.ts` exists for a single reason: a server layout cannot read the request URL, so the `[workspace]` and `(admin)` layouts could only redirect a signed-out visitor to `/login?next=/<workspace>`, losing the deep link (PLT-03). The proxy copies `pathname + search` into the `x-bilinear-path` request header (always overwriting, so a client cannot forge it) and does nothing else — no cookie reads, no redirects, no verification. Layouts read it with `loginRedirectPath()` (`src/lib/deep-link.ts`), which runs it through `safeRelativePath` and falls back to a known-safe path. The matcher excludes `api`, `_next` and anything with a file extension, so API routes, static assets, `sw.js` and `offline.html` never pay for it. Do not add auth or business logic here; keep it a header forwarder.
 
 The `(auth)` route group runs no such check, so its routes are public by construction: `/login`, `/verify`, `/onboarding`, and the OAuth callbacks `/auth/google/callback` and `/auth/github/callback` (each exchanges its `code` + `state` and installs session cookies before redirecting to `/`).
 
