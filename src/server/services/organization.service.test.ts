@@ -56,6 +56,23 @@ describe('OrganizationService.createWithOwner', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it.each(['admin', 'login', 'roadmap', 'api'])(
+    'rejects the reserved route key "%s" as taken without touching the DB',
+    async key => {
+      await expect(
+        svc.createWithOwner(TEST_USER.id, { name: 'Acme', urlKey: key }),
+      ).rejects.toBeInstanceOf(UrlKeyTakenError);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects a reserved key on rename too', async () => {
+    await expect(svc.update(TEST_ORG.id, { urlKey: 'admin' })).rejects.toBeInstanceOf(
+      UrlKeyTakenError,
+    );
+    expect(prisma.organization.update).not.toHaveBeenCalled();
+  });
+
   it('translates Prisma P2002 unique-constraint into UrlKeyTakenError', async () => {
     const p2002 = Object.assign(Object.create(Prisma.PrismaClientKnownRequestError.prototype), {
       code: 'P2002',

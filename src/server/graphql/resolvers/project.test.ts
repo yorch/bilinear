@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testAuthGuard } from '../../../test/auth-guard-helper';
 import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
 import { TEST_ORG, TEST_TEAM, TEST_USER, TEST_USER_2 } from '../../../test/fixtures';
@@ -172,6 +172,50 @@ describe('projectResolvers', () => {
         ctx,
         'NOT_FOUND',
       );
+    });
+  });
+
+  describe('Mutation.projectUnarchive', () => {
+    it('throws NOT_FOUND when the project belongs to another org', async () => {
+      ctx.prisma.project.findUnique.mockResolvedValue({
+        ...TEST_PROJECT,
+        organizationId: 'other-org',
+      });
+
+      await testAuthGuard(
+        projectResolvers.Mutation.projectUnarchive,
+        { id: TEST_PROJECT.id },
+        ctx,
+        'NOT_FOUND',
+      );
+    });
+
+    it('clears archivedAt and creates a SyncAction so other clients see it', async () => {
+      ctx.prisma.project.findUnique.mockResolvedValue({
+        ...TEST_PROJECT,
+        archivedAt: new Date(),
+      });
+      ctx.prisma.project.update.mockResolvedValue(TEST_PROJECT);
+      vi.spyOn(ctx.services.initiative, 'getInitiativesForProject').mockResolvedValue([]);
+      const createSyncAction = vi.spyOn(ctx.services.sync, 'createSyncAction');
+
+      const res = await projectResolvers.Mutation.projectUnarchive(
+        null,
+        { id: TEST_PROJECT.id },
+        ctx as never,
+      );
+
+      expect(ctx.prisma.project.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { archivedAt: null } }),
+      );
+      expect(createSyncAction).toHaveBeenCalledWith(
+        TEST_ORG.id,
+        'U',
+        'Project',
+        TEST_PROJECT.id,
+        TEST_PROJECT,
+      );
+      expect(res.lastSyncId).toBe('1');
     });
   });
 

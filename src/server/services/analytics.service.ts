@@ -328,12 +328,13 @@ export class AnalyticsService {
   /**
    * Scope creep + carryover metrics for a single cycle.
    *
-   * - scopeCreepCount: issues genuinely added mid-sprint (addedToCycleAt IS NOT NULL,
-   *   excluding carried-over issues). Carryover issues are also added after start via
+   * - scopeCreepCount: issues genuinely added mid-sprint (addedToCycleAt after
+   *   cycle.startsAt — issues planned into an upcoming cycle are also stamped, but
+   *   before it starts, so they are not creep — excluding carried-over issues). Carryover issues are also added after start via
    *   rollover and are subtracted out.
    * - carryoverCount: exact count from Cycle.carryoverCount stamped during
    *   rollover. Accurate for cycles run through the new code; 0 for legacy.
-   * - plannedCount: issues that were in scope at cycle start (addedToCycleAt IS NULL)
+   * - plannedCount: issues that were in scope at cycle start (not added after cycle start)
    * - totalCount: total issues assigned to the cycle
    * - completedCount: issues completed during the cycle
    */
@@ -347,7 +348,7 @@ export class AnalyticsService {
     totalCount: number;
   }> {
     const cycle = await this.prisma.cycle.findUnique({
-      select: { carryoverCount: true },
+      select: { carryoverCount: true, startsAt: true },
       where: { id: cycleId },
     });
 
@@ -356,7 +357,13 @@ export class AnalyticsService {
         where: { archivedAt: null, cycleId, trashed: false },
       }),
       this.prisma.issue.count({
-        where: { addedToCycleAt: { not: null }, archivedAt: null, cycleId, trashed: false },
+        where: {
+          // Without a cycle row there is no start to compare against: nothing is creep.
+          addedToCycleAt: cycle ? { gt: cycle.startsAt } : { not: null },
+          archivedAt: null,
+          cycleId,
+          trashed: false,
+        },
       }),
       this.prisma.issue.count({
         where: { archivedAt: null, completedAt: { not: null }, cycleId, trashed: false },

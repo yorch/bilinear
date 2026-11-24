@@ -27,6 +27,15 @@ describe('TeamStore', () => {
     store = new TeamStore();
   });
 
+  it('all orders teams by createdAt regardless of pool insertion order', () => {
+    store.upsertMany([
+      makeTeam({ createdAt: '2026-03-01T00:00:00Z', id: 'c', key: 'C' }),
+      makeTeam({ createdAt: '2026-01-01T00:00:00Z', id: 'a', key: 'A' }),
+      makeTeam({ createdAt: '2026-02-01T00:00:00Z', id: 'b', key: 'B' }),
+    ]);
+    expect(store.all.map(t => t.id)).toEqual(['a', 'b', 'c']);
+  });
+
   it('all excludes archived teams', () => {
     store.upsertMany([
       makeTeam({ id: '1' }),

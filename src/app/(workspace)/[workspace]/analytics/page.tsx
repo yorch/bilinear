@@ -1,6 +1,10 @@
 'use client';
 
+import { observer } from 'mobx-react-lite';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { StatCard } from '@/components/analytics/stat-card';
+import { barPercent, maxCompletedCount } from '@/components/analytics/velocity-utils';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
@@ -10,6 +14,7 @@ import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
 import { cn } from '@/lib/utils';
+import { useStore } from '@/providers/store-provider';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -70,12 +75,41 @@ function ProgressBar({ pct, color }: { pct: number; color: string }) {
   );
 }
 
+function TeamLabel({
+  className,
+  href,
+  name,
+}: {
+  className: string;
+  href: string | null;
+  name: string;
+}) {
+  if (!href) {
+    return (
+      <span className={className} title={name}>
+        {name}
+      </span>
+    );
+  }
+  return (
+    <Link
+      className={cn(className, 'hover:text-brand-subtle-foreground hover:underline')}
+      href={href}
+      title={name}
+    >
+      {name}
+    </Link>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
-export default function WorkspaceAnalyticsPage() {
+const WorkspaceAnalyticsPage = observer(function WorkspaceAnalyticsPage() {
   const t = useTranslations();
+  const { workspace } = useParams<{ workspace: string }>();
+  const { teamStore } = useStore();
   useDocumentTitle(t('analytics.workspace.title'));
   // gqlQuery throws on a GraphQL-level error, which is what makes the
   // InlineRetry branch below reachable — the previous hand-rolled effect
@@ -86,7 +120,14 @@ export default function WorkspaceAnalyticsPage() {
     null,
   );
 
-  const maxCompleted = data ? Math.max(...data.teams.map(t => t.completedCount), 1) : 1;
+  // Rows link to the team's issue list when the team is in the local store
+  // (a team the viewer can't see has no row to open).
+  const teamHref = (teamId: string): string | null => {
+    const key = teamStore.findById(teamId)?.key;
+    return key ? `/${workspace}/team/${key}` : null;
+  };
+
+  const maxCompleted = data ? maxCompletedCount(data.teams) : 0;
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -171,12 +212,11 @@ export default function WorkspaceAnalyticsPage() {
                         className="grid grid-cols-12 items-center gap-2 px-5 py-3"
                         key={team.teamId}
                       >
-                        <span
+                        <TeamLabel
                           className="col-span-3 truncate text-sm font-medium text-foreground"
-                          title={team.teamName}
-                        >
-                          {team.teamName}
-                        </span>
+                          href={teamHref(team.teamId)}
+                          name={team.teamName}
+                        />
                         <span className="col-span-2 text-right text-sm text-muted-foreground">
                           {team.totalCount}
                         </span>
@@ -233,15 +273,14 @@ export default function WorkspaceAnalyticsPage() {
                 </h2>
                 <div className="flex flex-col gap-2">
                   {data.teams.map(team => {
-                    const pct = (team.completedCount / maxCompleted) * 100;
+                    const pct = barPercent(team.completedCount, maxCompleted);
                     return (
                       <div className="flex items-center gap-2" key={team.teamId}>
-                        <span
+                        <TeamLabel
                           className="w-32 shrink-0 truncate text-xs text-muted-foreground"
-                          title={team.teamName}
-                        >
-                          {team.teamName}
-                        </span>
+                          href={teamHref(team.teamId)}
+                          name={team.teamName}
+                        />
                         <div className="h-5 flex-1 rounded bg-muted">
                           <div
                             className="h-5 rounded transition-all"
@@ -265,4 +304,6 @@ export default function WorkspaceAnalyticsPage() {
       </div>
     </div>
   );
-}
+});
+
+export default WorkspaceAnalyticsPage;

@@ -9,6 +9,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { installSessionCookies } from '@/lib/auth-session';
 import { gql } from '@/lib/graphql';
 import { ORGANIZATION_CREATE_MUTATION } from '@/lib/graphql-queries';
+import { finalizeUrlKey, isReservedUrlKey, sanitizeUrlKeyInput } from '@/lib/url-key';
 
 interface OrganizationCreateResult {
   accessToken: string;
@@ -16,18 +17,9 @@ interface OrganizationCreateResult {
   refreshToken: string;
 }
 
+/** Derive a key from a display name — fully trimmed, unlike a keystroke. */
 export function slugify(value: string): string {
-  return (
-    value
-      // Decompose accents first so "Ünïcode" becomes "unicode" rather than
-      // losing the letters the [^a-z0-9] pass would otherwise strip whole.
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 63)
-  );
+  return finalizeUrlKey(value);
 }
 
 export function OnboardingForm({ host }: { host: string }) {
@@ -52,14 +44,18 @@ export function OnboardingForm({ host }: { host: string }) {
   function handleUrlKeyChange(value: string) {
     setUrlKeyManuallyEdited(true);
     setTakenKey(null);
-    setUrlKey(slugify(value));
+    setUrlKey(sanitizeUrlKeyInput(value));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!name.trim() || urlKey.length < 3) {
+    const finalKey = finalizeUrlKey(urlKey);
+    if (!name.trim() || finalKey.length < 3 || isReservedUrlKey(finalKey)) {
       return;
+    }
+    if (finalKey !== urlKey) {
+      setUrlKey(finalKey);
     }
 
     setLoading(true);
@@ -67,7 +63,7 @@ export function OnboardingForm({ host }: { host: string }) {
 
     try {
       const data = await gql(ORGANIZATION_CREATE_MUTATION, {
-        input: { name: name.trim(), urlKey },
+        input: { name: name.trim(), urlKey: finalKey },
       });
 
       if (data.errors?.length) {
@@ -78,7 +74,7 @@ export function OnboardingForm({ host }: { host: string }) {
         // A taken key is a field problem, not a form-level failure: show it
         // under the URL input with a free alternative to click.
         if (first.extensions?.reason === 'URL_KEY_TAKEN') {
-          setTakenKey(urlKey);
+          setTakenKey(finalKey);
           return;
         }
         setError(first.message);
@@ -102,8 +98,10 @@ export function OnboardingForm({ host }: { host: string }) {
     }
   }
 
-  const urlTaken = takenKey !== null && takenKey === urlKey;
-  const suggestion = urlTaken ? `${urlKey}-2`.slice(0, 63) : null;
+  const finalKey = finalizeUrlKey(urlKey);
+  const urlTaken = takenKey !== null && takenKey === finalKey;
+  const urlReserved = isReservedUrlKey(finalKey);
+  const suggestion = urlTaken ? `${finalKey}-2`.slice(0, 63) : null;
 
   return (
     <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -125,9 +123,9 @@ export function OnboardingForm({ host }: { host: string }) {
           autoComplete="off"
           className="font-mono"
           error={
-            urlTaken
+            urlTaken || urlReserved
               ? t('auth.urlKeyTaken')
-              : urlKey.length > 0 && urlKey.length < 3
+              : finalKey.length > 0 && finalKey.length < 3
                 ? t('auth.urlKeyMinLength')
                 : null
           }
@@ -135,6 +133,7 @@ export function OnboardingForm({ host }: { host: string }) {
           label={t('auth.workspaceUrl')}
           leading={`${host}/`}
           name="urlKey"
+          onBlur={() => setUrlKey(finalizeUrlKey(urlKey))}
           onChange={e => handleUrlKeyChange(e.target.value)}
           placeholder="acme"
           required
@@ -165,7 +164,7 @@ export function OnboardingForm({ host }: { host: string }) {
 
       <Button
         className="w-full"
-        disabled={loading || !name.trim() || urlKey.length < 3}
+        disabled={loading || !name.trim() || finalKey.length < 3 || urlReserved}
         type="submit"
       >
         {loading ? t('auth.creatingWorkspace') : t('auth.createWorkspaceButton')}

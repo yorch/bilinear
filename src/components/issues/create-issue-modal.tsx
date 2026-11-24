@@ -77,6 +77,8 @@ export interface CreateIssueInput {
   dueDate?: string | null;
   estimate?: number;
   labelIds: string[];
+  /** Set when creating a sub-issue of an existing issue. */
+  parentId?: string;
   priority: number;
   projectId?: string;
   stateId?: string;

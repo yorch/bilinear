@@ -21,7 +21,12 @@ import { rememberPostAuthNext, safeRelativePath } from '@/lib/safe-path';
 // browser's native bubble.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function LoginForm() {
+export interface LoginProviders {
+  github: boolean;
+  google: boolean;
+}
+
+export function LoginForm({ providers }: { providers: LoginProviders }) {
   const router = useRouter();
   const t = useTranslations();
   // Where to land after signing in — set when the user arrived from a link
@@ -110,36 +115,42 @@ export function LoginForm() {
         {loading ? t('auth.sending') : t('auth.continueWithEmail')}
       </Button>
 
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-border" />
-        </div>
-        <div className="relative flex justify-center text-xs text-muted-foreground">
-          <span className="bg-background px-2">{t('common.or')}</span>
-        </div>
-      </div>
-
-      <Button
-        className="w-full"
-        disabled={busy}
-        onClick={() => startOAuth(GOOGLE_OAUTH)}
-        type="button"
-        variant="outline"
-      >
-        <GoogleIcon />
-        {t('auth.continueWithGoogle')}
-      </Button>
-
-      <Button
-        className="w-full"
-        disabled={busy}
-        onClick={() => startOAuth(GITHUB_OAUTH)}
-        type="button"
-        variant="outline"
-      >
-        <GitHubIcon />
-        {t('auth.continueWithGitHub')}
-      </Button>
+      {(providers.google || providers.github) && (
+        <>
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs text-muted-foreground">
+              <span className="bg-background px-2">{t('common.or')}</span>
+            </div>
+          </div>
+          {providers.google && (
+            <Button
+              className="w-full"
+              disabled={busy}
+              onClick={() => startOAuth(GOOGLE_OAUTH)}
+              type="button"
+              variant="outline"
+            >
+              <GoogleIcon />
+              {t('auth.continueWithGoogle')}
+            </Button>
+          )}
+          {providers.github && (
+            <Button
+              className="w-full"
+              disabled={busy}
+              onClick={() => startOAuth(GITHUB_OAUTH)}
+              type="button"
+              variant="outline"
+            >
+              <GitHubIcon />
+              {t('auth.continueWithGitHub')}
+            </Button>
+          )}
+        </>
+      )}
     </form>
   );
 

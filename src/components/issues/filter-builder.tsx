@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, ChevronDown, Plus, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
@@ -270,6 +270,35 @@ function AddFilterForm({
   const t = useTranslations();
   const filterFields = useFilterFields();
   const operators = useOperators();
+  const formRef = useRef<HTMLDivElement>(null);
+
+  // Dismiss on Escape or a press outside the form. A nested field / operator /
+  // value popover owns its own Escape, so while one is open the form leaves the
+  // key alone — one Escape closes exactly one surface.
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      if (formRef.current && !formRef.current.contains(e.target as Node)) {
+        onCancel();
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) {
+        return;
+      }
+      if (formRef.current?.querySelector('[aria-expanded="true"]')) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      onCancel();
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [onCancel]);
   const [fieldValue, setFieldValue] = useState<string>(
     initial
       ? initial.field === 'custom' && initial.customFieldId
@@ -373,7 +402,10 @@ function AddFilterForm({
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-e2">
+    <div
+      className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-e2"
+      ref={formRef}
+    >
       <SelectPopover
         triggerChildren={valueTrigger(fieldOptions.find(f => f.value === fieldValue)?.label ?? '')}
         triggerClassName="gap-1 border border-input px-2 py-1 text-xs"

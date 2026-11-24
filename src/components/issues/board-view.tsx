@@ -33,6 +33,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBWorkflowState } from '@/lib/db';
 import { getDueDateColor } from '@/lib/issue-utils';
 import { cn } from '@/lib/utils';
+import { useStore } from '@/providers/store-provider';
 import type { IssueLabel, IssueUser } from '@/types/issues';
 import type { IssueRowData } from './issue-row';
 
@@ -85,7 +86,9 @@ function BoardCardInner({
   const t = useTranslations();
   const { formatDueDate } = useFormatters();
   const pending = usePending(issue.id);
+  const { workflowStateStore } = useStore();
   const assignee = issue.assigneeId ? users.find(u => u.id === issue.assigneeId) : null;
+  const stateType = workflowStateStore.findById(issue.stateId)?.type;
 
   return (
     <button
@@ -150,7 +153,7 @@ function BoardCardInner({
 
       {/* Due date */}
       {issue.dueDate && (
-        <div className={cn('mt-1.5 text-xs', getDueDateColor(issue.dueDate))}>
+        <div className={cn('mt-1.5 text-xs', getDueDateColor(issue.dueDate, stateType))}>
           {formatDueDate(issue.dueDate)}
         </div>
       )}

@@ -2,13 +2,12 @@
 
 import { observer } from 'mobx-react-lite';
 import { useMemo, useRef, useState } from 'react';
+import type { CreateIssueInput } from '@/components/issues/create-issue-modal';
 import { PriorityIcon } from '@/components/properties/priority-icon';
 import { SectionAddButton, SectionHeader } from '@/components/shared/section-header';
 import { ProgressBar } from '@/components/ui/progress-bar';
+import { useIssueCreate } from '@/hooks/use-issue-create';
 import { useTranslations } from '@/hooks/use-translations';
-import { CREATE_SUB_ISSUE_MUTATION } from '@/lib/graphql-queries';
-import { toast } from '@/lib/toast';
-import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
@@ -44,7 +43,7 @@ interface SubIssueListProps {
 export const SubIssueList = observer(function SubIssueList({ parentIssueId }: SubIssueListProps) {
   const t = useTranslations();
   const STATE_CATEGORY_LABELS = useMemo(() => getStateCategoryLabels(t), [t]);
-  const { issueStore, workflowStateStore } = useStore();
+  const { issueStore, teamStore, workflowStateStore } = useStore();
 
   // Resolve the parent issue's teamId, projectId, and cycleId so sub-issue
   // creation inherits them. If the issue isn't in the store yet, render nothing
@@ -57,8 +56,12 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
   const [collapsed, setCollapsed] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
-  // TransactionQueue per mount
-  const tq = useMemo(() => new TransactionQueue(), []);
+  // Same optimistic path as every other issue creation: the row appears at once
+  // and the write queues, so adding a sub-issue works offline too.
+  const createIssue = useIssueCreate(
+    teamId ? teamStore.findById(teamId) : null,
+    teamId ? workflowStateStore.findByTeamId(teamId) : [],
+  );
 
   // pool.size is the MobX reactive dependency per repo convention.
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size values are the intentional reactive triggers
@@ -135,11 +138,10 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
       {showCreateForm && (
         <CreateSubIssueForm
           onClose={() => setShowCreateForm(false)}
+          onCreate={createIssue}
           parentCycleId={parentCycleId}
           parentIssueId={parentIssueId}
           parentProjectId={parentProjectId}
-          teamId={teamId}
-          tq={tq}
         />
       )}
 
@@ -215,57 +217,39 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
 
 interface CreateSubIssueFormProps {
   onClose: () => void;
+  onCreate: (input: CreateIssueInput) => Promise<void>;
   parentCycleId: string | null;
   parentIssueId: string;
   parentProjectId: string | null;
-  teamId: string;
-  tq: TransactionQueue;
 }
 
 function CreateSubIssueForm({
   parentIssueId,
-  teamId,
-  tq,
   onClose,
+  onCreate,
   parentProjectId,
   parentCycleId,
 }: CreateSubIssueFormProps) {
   const t = useTranslations();
   const [title, setTitle] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || submitting) {
+    if (!title.trim()) {
       return;
     }
-
-    setSubmitting(true);
-    try {
-      await new Promise<void>((resolve, reject) => {
-        tq.enqueue(
-          CREATE_SUB_ISSUE_MUTATION,
-          {
-            input: {
-              cycleId: parentCycleId ?? undefined,
-              parentId: parentIssueId,
-              projectId: parentProjectId ?? undefined,
-              teamId,
-              title: title.trim(),
-            },
-          },
-          {
-            onError: err => reject(err),
-            onSuccess: () => resolve(),
-          },
-        );
-      });
-      onClose();
-    } catch {
-      toast.error(t('issueDetail.subIssues.failedToCreate'));
-      setSubmitting(false);
-    }
+    // Optimistic: the row is in the store before this returns, and a failure
+    // is reported (and rolled back) by `useIssueCreate`.
+    void onCreate({
+      cycleId: parentCycleId ?? undefined,
+      labelIds: [],
+      parentId: parentIssueId,
+      priority: 0,
+      projectId: parentProjectId ?? undefined,
+      title: title.trim(),
+    });
+    onClose();
   };
 
   return (
@@ -299,10 +283,10 @@ function CreateSubIssueForm({
       </button>
       <button
         className="rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-        disabled={!title.trim() || submitting}
+        disabled={!title.trim()}
         type="submit"
       >
-        {submitting ? t('issueDetail.subIssues.adding') : t('issueDetail.subIssues.add')}
+        {t('issueDetail.subIssues.add')}
       </button>
     </form>
   );

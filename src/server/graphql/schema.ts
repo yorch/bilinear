@@ -1997,6 +1997,7 @@ export const typeDefs = `
     projectCreate(input: ProjectCreateInput!): ProjectPayload!
     projectUpdate(id: ID!, input: ProjectUpdateInput!): ProjectPayload!
     projectArchive(id: ID!): ProjectPayload!
+    projectUnarchive(id: ID!): ProjectPayload!
     projectDelete(id: ID!): DeletePayload!
 
     projectAddTeam(projectId: ID!, teamId: ID!): ProjectPayload!
@@ -2068,6 +2069,7 @@ export const typeDefs = `
     initiativeCreate(input: InitiativeCreateInput!): InitiativePayload!
     initiativeUpdate(id: ID!, input: InitiativeUpdateInput!): InitiativePayload!
     initiativeArchive(id: ID!): InitiativePayload!
+    initiativeUnarchive(id: ID!): InitiativePayload!
     initiativeDelete(id: ID!): DeletePayload!
     initiativeAddProject(initiativeId: ID!, projectId: ID!): InitiativePayload!
     initiativeRemoveProject(initiativeId: ID!, projectId: ID!): InitiativePayload!

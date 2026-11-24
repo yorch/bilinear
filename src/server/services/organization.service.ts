@@ -4,6 +4,7 @@ import type {
   OrganizationRole,
   PrismaClient,
 } from '../../generated/prisma';
+import { isReservedUrlKey } from '../../lib/url-key';
 import { assertMaxLength, MAX_LOGO_URL_LENGTH, MAX_ORGANIZATION_NAME_LENGTH } from '../lib/limits';
 
 const URL_KEY_RE = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
@@ -46,6 +47,20 @@ export class InvalidLogoUrlError extends Error {
  */
 function isUniqueViolation(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2002';
+}
+
+/**
+ * Shape check plus the reserved-route check. A reserved key is reported as
+ * taken (it is — by a route), so the client's existing "taken" handling and
+ * suggestion apply unchanged.
+ */
+function assertUsableUrlKey(urlKey: string): void {
+  if (!URL_KEY_RE.test(urlKey)) {
+    throw new InvalidUrlKeyError();
+  }
+  if (isReservedUrlKey(urlKey)) {
+    throw new UrlKeyTakenError();
+  }
 }
 
 export class UrlKeyTakenError extends Error {
@@ -109,8 +124,8 @@ export class OrganizationService {
     orgId: string,
     input: { logoUrl?: string | null; name?: string; urlKey?: string },
   ): Promise<Organization> {
-    if (input.urlKey !== undefined && !URL_KEY_RE.test(input.urlKey)) {
-      throw new InvalidUrlKeyError();
+    if (input.urlKey !== undefined) {
+      assertUsableUrlKey(input.urlKey);
     }
     if (input.name !== undefined) {
       if (input.name.trim().length === 0) {
@@ -155,9 +170,7 @@ export class OrganizationService {
    * have to know about Prisma errors.
    */
   async createWithOwner(userId: string, input: OrganizationCreateInput): Promise<Organization> {
-    if (!URL_KEY_RE.test(input.urlKey)) {
-      throw new InvalidUrlKeyError();
-    }
+    assertUsableUrlKey(input.urlKey);
 
     try {
       return await this.prisma.$transaction(async tx => {

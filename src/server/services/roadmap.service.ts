@@ -66,6 +66,17 @@ export async function verifyRoadmapPassword(stored: string, candidate: string): 
 
 /** Slugs are URL segments and part of the unlock cookie name, so keep them cookie-safe. */
 const ROADMAP_SLUG_PATTERN = /^[a-z0-9-]{1,63}$/;
+/**
+ * A public roadmap is only served while its workspace is live. A suspended or
+ * archived org is locked everywhere else, so leaving its roadmap public would
+ * keep publishing data the platform has taken the tenant offline for.
+ */
+export function isRoadmapOrgLive(
+  org: { archivedAt: Date | null; suspendedAt: Date | null } | null | undefined,
+): boolean {
+  return Boolean(org) && !org?.archivedAt && !org?.suspendedAt;
+}
+
 export const isValidRoadmapSlug = (slug: string) => ROADMAP_SLUG_PATTERN.test(slug);
 
 /** Longest password we will run through scrypt — a cap on per-request CPU. */

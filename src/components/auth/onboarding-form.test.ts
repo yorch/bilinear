@@ -15,3 +15,9 @@ describe('slugify', () => {
     expect(slugify('a'.repeat(100))).toHaveLength(63);
   });
 });
+
+describe('slugify keeps typing-safe behaviour out of the derive path', () => {
+  it('trims a trailing hyphen when deriving from a name', () => {
+    expect(slugify('Acme-')).toBe('acme');
+  });
+});

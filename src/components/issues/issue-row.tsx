@@ -348,6 +348,7 @@ export function IssueRow({
             forceOpen={openProperty === 'dueDate'}
             onChange={dueDate => onUpdate(issue.id, { dueDate })}
             onClose={onPropertyClosed}
+            stateType={states.find(st => st.id === issue.stateId)?.type}
             value={issue.dueDate}
           />
         </div>

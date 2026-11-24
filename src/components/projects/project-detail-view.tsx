@@ -42,6 +42,7 @@ const PROJECT_UPDATE_MUTATION = `mutation ($id: ID!, $input: ProjectUpdateInput!
   projectUpdate(id: $id, input: $input) { success }
 }`;
 
+const PROJECT_UNARCHIVE_MUTATION = `mutation ($id: ID!) { projectUnarchive(id: $id) { success } }`;
 const PROJECT_ARCHIVE_MUTATION = `mutation ($id: ID!) { projectArchive(id: $id) { success } }`;
 const PROJECT_DELETE_MUTATION = `mutation ($id: ID!) { projectDelete(id: $id) { success } }`;
 
@@ -156,7 +157,13 @@ export const ProjectDetailView = observer(function ProjectDetailView({
   const handleArchive = async () => {
     try {
       await gqlMutate(PROJECT_ARCHIVE_MUTATION, { id: project.id });
-      toast.success(t('projects.projectArchived'));
+      // The row is already gone from the pool once the sync action lands, so
+      // undo restores it server-side and the project reappears in the list.
+      toast.undo(t('projects.projectArchived'), t('common.undo'), () => {
+        gqlMutate(PROJECT_UNARCHIVE_MUTATION, { id: project.id }).catch(err =>
+          toast.error(getErrorMessage(err, t('projects.failedToUnarchive'))),
+        );
+      });
       router.push(projectsHref);
     } catch (err) {
       toast.error(getErrorMessage(err, t('projects.failedToArchive')));

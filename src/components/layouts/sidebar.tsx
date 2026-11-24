@@ -351,7 +351,7 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
   onNavigate?: () => void;
   pathname: string;
 }) {
-  const { customViewStore, documentStore, syncStore, teamStore, uiStore } = useStore();
+  const { customViewStore, documentStore, issueStore, syncStore, teamStore, uiStore } = useStore();
   const t = useTranslations();
   // Until the first bootstrap lands the team pool is empty for everyone, so
   // "New team" would tell a user who has teams that they have none.
@@ -381,7 +381,13 @@ const SidebarTeamsSection = observer(function SidebarTeamsSection({
    * teams, which buried the global nav above it. Only the team you are
    * actually in is expanded now; the rest collapse to a single row.
    */
-  const activeTeamKey = teams.find(team => isPathWithin(pathname, `${base}/team/${team.key}`))?.key;
+  // On an issue page (`/issue/[id]`) the route carries no team key, so the open
+  // team is the issue's own rather than the first in the list.
+  const issueRouteMatch = pathname.match(/\/issue\/([^/?#]+)/);
+  const issueTeamId = issueRouteMatch ? issueStore.findById(issueRouteMatch[1])?.teamId : undefined;
+  const activeTeamKey =
+    teams.find(team => isPathWithin(pathname, `${base}/team/${team.key}`))?.key ??
+    (issueTeamId ? teams.find(team => team.id === issueTeamId)?.key : undefined);
   const [manuallyToggled, setManuallyToggled] = useState<Record<string, boolean>>({});
 
   // Exactly one team is open by default: the one the route is in, or — on a
@@ -646,6 +652,9 @@ export const Sidebar = observer(function Sidebar({
   const t = useTranslations();
   const appName = useAppName();
   const modKey = useModKey();
+  const toggleLabel = t(collapsed ? 'nav.expandSidebar' : 'nav.collapseSidebar', {
+    shortcut: modKey === '⌘' ? '⌘B' : 'Ctrl+B',
+  });
   const base = workspaceKey ? `/${workspaceKey}` : '';
   // The mobile drawer always shows full content — the desktop collapse
   // preference (a persistent-rail concept) doesn't apply to a transient overlay.
@@ -724,13 +733,13 @@ export const Sidebar = observer(function Sidebar({
         )}
       >
         <button
-          aria-label={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
+          aria-label={toggleLabel}
           className={cn(
             'hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:flex',
             'pointer-coarse:h-11 pointer-coarse:w-11',
           )}
           onClick={onToggle}
-          title={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
+          title={toggleLabel}
           type="button"
         >
           <PanelLeft className="h-4 w-4" />

@@ -36,7 +36,8 @@ interface IssueContextMenuProps {
   onClose: () => void;
   /** Omit on surfaces that cannot delete — the item is hidden, never a no-op. */
   onDelete?: () => void;
-  onOpen: () => void;
+  /** Omit where the issue is already open (detail page / panel) — the item is hidden. */
+  onOpen?: () => void;
   onUpdate?: (patch: Record<string, unknown>) => void;
   states?: WorkflowState[];
   title: string;
@@ -144,13 +145,17 @@ export const IssueContextMenu = observer(function IssueContextMenu({
   const canQuickEdit = Boolean(onUpdate);
 
   const items: MenuEntry[] = [
-    {
-      label: t('issues.openIssue'),
-      onClick: () => {
-        onOpen();
-        onClose();
-      },
-    },
+    ...(onOpen
+      ? ([
+          {
+            label: t('issues.openIssue'),
+            onClick: () => {
+              onOpen();
+              onClose();
+            },
+          },
+        ] as MenuEntry[])
+      : []),
     {
       label: t('issues.openInNewTab'),
       onClick: () => {

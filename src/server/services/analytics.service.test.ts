@@ -245,6 +245,18 @@ describe('AnalyticsService', () => {
       });
     });
 
+    it('only counts issues added after the cycle started as scope creep', async () => {
+      const startsAt = new Date('2026-03-01T00:00:00Z');
+      prisma.cycle.findUnique.mockResolvedValue({ carryoverCount: 0, startsAt });
+      prisma.issue.count.mockResolvedValue(0);
+
+      await service.cycleScopeAndCarryover('c1');
+
+      expect(prisma.issue.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({ addedToCycleAt: { gt: startsAt }, cycleId: 'c1' }),
+      });
+    });
+
     it('clamps negative scope-creep to zero when carryover exceeds added issues', async () => {
       prisma.cycle.findUnique.mockResolvedValue({ carryoverCount: 5 });
       prisma.issue.count.mockResolvedValueOnce(8).mockResolvedValueOnce(2).mockResolvedValueOnce(4);

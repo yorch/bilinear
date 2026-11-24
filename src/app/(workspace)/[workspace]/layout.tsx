@@ -39,7 +39,10 @@ export default async function WorkspaceGuardLayout({
   const { workspace } = await params;
   const claim = await readSessionClaim();
   if (!claim) {
-    redirect('/login');
+    // Keep the workspace through sign-in. The full deep path is not available
+    // to a layout (and the app deliberately has no edge middleware to stash
+    // it), so the workspace root is the most precise target we can name.
+    redirect(`/login?next=${encodeURIComponent(`/${workspace}`)}`);
   }
 
   const urlOrg = await prisma.organization.findUnique({
