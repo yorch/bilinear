@@ -3,8 +3,8 @@ import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock'
 import {
   decodeCreatedAtCursor,
   encodeCreatedAtCursor,
-  InvalidCursorError,
   ImpersonationTargetError,
+  InvalidCursorError,
   InvalidTenantLimitsError,
   LastPlatformAdminError,
   PlatformAdminService,
@@ -375,11 +375,11 @@ describe('PlatformAdminService', () => {
       const ID = '00000000-0000-0000-0000-000000000001';
       for (const bad of [
         'garbage',
-        'not-a-date|' + ID,
+        `not-a-date|${ID}`,
         '2026-01-01T00:00:00Z|notauuid',
         '2026-01-01T00:00:00.000Z|',
-        '|' + ID,
-        '2026-13-45T00:00:00.000Z|' + ID,
+        `|${ID}`,
+        `2026-13-45T00:00:00.000Z|${ID}`,
       ]) {
         expect(() => decodeCreatedAtCursor(bad), bad).toThrow(InvalidCursorError);
       }

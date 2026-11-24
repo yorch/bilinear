@@ -2,7 +2,11 @@
 
 import { ChevronDown, Copy } from 'lucide-react';
 import { useState } from 'react';
-import { WebhookForm, type WebhookFormValues } from '@/components/settings/webhook-form';
+import {
+  changedWebhookFields,
+  WebhookForm,
+  type WebhookFormValues,
+} from '@/components/settings/webhook-form';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { LoadError } from '@/components/shared/load-error';
 import { Badge } from '@/components/ui/badge';
@@ -279,9 +283,8 @@ export default function WebhooksSettingsPage() {
     try {
       const res = await gql(WEBHOOK_CREATE_MUTATION, { input: values });
       if (res.errors?.length) {
-        toast.error(
-          (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.createError'),
-        );
+        // Localized fallback, never the server's raw text (see the frontend rules).
+        toast.error(t('settings.webhooks.createError'));
         return;
       }
       const created = (res.data as { webhookCreate?: { webhook?: Webhook } } | undefined)
@@ -301,13 +304,16 @@ export default function WebhooksSettingsPage() {
   };
 
   const handleEdit = async (hook: Webhook, values: WebhookFormValues) => {
+    const changed = changedWebhookFields(hook, values);
+    if (Object.keys(changed).length === 0) {
+      setEditing(null);
+      return;
+    }
     setCreatingBusy(true);
     try {
-      const res = await gql(WEBHOOK_UPDATE_MUTATION, { id: hook.id, input: values });
+      const res = await gql(WEBHOOK_UPDATE_MUTATION, { id: hook.id, input: changed });
       if (res.errors?.length) {
-        toast.error(
-          (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.updateError'),
-        );
+        toast.error(t('settings.webhooks.updateError'));
         return;
       }
       const updated = (res.data as { webhookUpdate?: { webhook?: Webhook | null } } | undefined)
@@ -329,8 +335,11 @@ export default function WebhooksSettingsPage() {
     try {
       const res = await gql(WEBHOOK_TEST_MUTATION, { id: hook.id });
       if (res.errors?.length) {
+        const code = (res.errors[0] as { extensions?: { code?: string } })?.extensions?.code;
         toast.error(
-          (res.errors[0] as { message?: string })?.message ?? t('settings.webhooks.testError'),
+          code === 'RATELIMITED'
+            ? t('settings.webhooks.testRateLimited')
+            : t('settings.webhooks.testError'),
         );
         return;
       }

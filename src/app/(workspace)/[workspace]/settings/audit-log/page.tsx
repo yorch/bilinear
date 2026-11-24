@@ -19,12 +19,13 @@ import { SimpleSelect } from '@/components/ui/select';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useLoadMore } from '@/hooks/use-load-more';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { downloadCsv } from '@/lib/csv-export';
 import { gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /**
@@ -104,8 +105,6 @@ const AuditLogPage = observer(function AuditLogPage() {
     });
   useDocumentTitle(t('settings.auditLog.title'));
   const { formatDateTime } = useFormatters();
-  const [loadingMore, setLoadingMore] = useState(false);
-
   // Filters
   const [actionFilter, setActionFilter] = useState('');
   const [userIdFilter, setUserIdFilter] = useState('');
@@ -167,30 +166,32 @@ const AuditLogPage = observer(function AuditLogPage() {
     { entries: [], hasMore: false, nextCursor: null },
   );
 
-  const { entries, hasMore, nextCursor } = page;
+  const { entries, hasMore } = page;
 
-  async function handleLoadMore() {
-    if (!nextCursor || loadingMore) {
-      return;
-    }
-    setLoadingMore(true);
-    const filter = { ...buildFilter(), cursor: nextCursor };
-    try {
-      const next = await gqlQuery<AuditLogPage | null>(AUDIT_LOGS_QUERY, { filter }, 'auditLogs');
-      if (next) {
-        setPage(prev => ({
-          entries: [...prev.entries, ...next.entries],
-          hasMore: next.hasMore,
-          nextCursor: next.nextCursor,
-        }));
-      }
-    } catch (err) {
-      // Previously swallowed: "Load more" simply did nothing on failure.
-      toast.error(getErrorMessage(err, t('common.somethingWentWrong')));
-    } finally {
-      setLoadingMore(false);
-    }
-  }
+  const { loadMore: handleLoadMore, loadingMore } = useLoadMore<AuditLogPage>({
+    fetchMore: async cursor => {
+      const next = await gqlQuery<AuditLogPage | null>(
+        AUDIT_LOGS_QUERY,
+        { filter: { ...buildFilter(), cursor } },
+        'auditLogs',
+      );
+      return {
+        entries: next?.entries ?? [],
+        hasMore: next?.hasMore ?? false,
+        nextCursor: next?.nextCursor ?? null,
+      };
+    },
+    merge: (prev, next) => ({
+      entries: [...prev.entries, ...next.entries],
+      hasMore: next.hasMore,
+      nextCursor: next.nextCursor,
+    }),
+    // Previously swallowed: "Load more" simply did nothing on failure.
+    onError: () => toast.error(t('common.somethingWentWrong')),
+    page,
+    resetKey: JSON.stringify([appliedAction, appliedUserId, appliedFrom, appliedTo]),
+    setPage,
+  });
 
   function handleApplyFilters() {
     setAppliedAction(actionFilter);
@@ -230,8 +231,8 @@ const AuditLogPage = observer(function AuditLogPage() {
       } else {
         toast.success(t('settings.auditLog.exported', { rows: out.rows }));
       }
-    } catch (err) {
-      toast.error(getErrorMessage(err, t('settings.auditLog.exportError')));
+    } catch {
+      toast.error(t('settings.auditLog.exportError'));
     } finally {
       setExporting(false);
     }
@@ -468,7 +469,7 @@ const AuditLogPage = observer(function AuditLogPage() {
           <div className="mt-4 flex justify-center">
             <Button
               disabled={loadingMore}
-              onClick={handleLoadMore}
+              onClick={() => void handleLoadMore()}
               size="sm"
               type="button"
               variant="outline"

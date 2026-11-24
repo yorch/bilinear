@@ -23,6 +23,7 @@ const RUN_MUTATION = `
   mutation GithubImportRun($input: GithubImportInput!) {
     githubImportRun(input: $input) {
       processed created existing commentsCreated labelsCreated errors nextPage tokenSource
+      closedAsOpen commentsTruncated limitReached
     }
   }
 `;
@@ -34,17 +35,22 @@ interface Preview {
 }
 
 interface Chunk {
+  closedAsOpen: number;
   commentsCreated: number;
+  commentsTruncated: number;
   created: number;
   errors: string[];
   existing: number;
   labelsCreated: number;
+  limitReached: boolean;
   nextPage: number | null;
   processed: number;
 }
 
 interface Totals {
+  closedAsOpen: number;
   comments: number;
+  commentsTruncated: number;
   created: number;
   errors: string[];
   existing: number;
@@ -53,7 +59,9 @@ interface Totals {
 }
 
 const EMPTY_TOTALS: Totals = {
+  closedAsOpen: 0,
   comments: 0,
+  commentsTruncated: 0,
   created: 0,
   errors: [],
   existing: 0,
@@ -85,6 +93,8 @@ export function GithubImportSection({ teams }: GithubImportSectionProps) {
   const [running, setRunning] = useState(false);
   const [totals, setTotals] = useState<Totals>(EMPTY_TOTALS);
   const [finished, setFinished] = useState(false);
+  // Set when a run stopped at the per-run row cap: the page a new run resumes at.
+  const [resumePage, setResumePage] = useState<number | null>(null);
   const cancelRef = useRef(false);
 
   const ready = Boolean(teamId && repo.trim());
@@ -116,9 +126,13 @@ export function GithubImportSection({ teams }: GithubImportSectionProps) {
     cancelRef.current = false;
     setRunning(true);
     setFinished(false);
-    let acc: Totals = { ...EMPTY_TOTALS };
+    // Continuing after the row cap keeps the running totals and starts a new
+    // run (its own cap window) at the page the last one stopped on.
+    const startPage = resumePage ?? 1;
+    let acc: Totals = resumePage ? { ...totals } : { ...EMPTY_TOTALS };
+    setResumePage(null);
     setTotals(acc);
-    let page: number | null = 1;
+    let page: number | null = startPage;
     try {
       while (page !== null && !cancelRef.current) {
         const res = (await gqlMutate(RUN_MUTATION, {
@@ -127,6 +141,7 @@ export function GithubImportSection({ teams }: GithubImportSectionProps) {
             includeComments,
             page,
             repo: repo.trim(),
+            startPage,
             teamId,
             token: token.trim() || null,
           },
@@ -136,7 +151,9 @@ export function GithubImportSection({ teams }: GithubImportSectionProps) {
           throw new Error(t('settings.import.importFailed'));
         }
         acc = {
+          closedAsOpen: acc.closedAsOpen + chunk.closedAsOpen,
           comments: acc.comments + chunk.commentsCreated,
+          commentsTruncated: acc.commentsTruncated + chunk.commentsTruncated,
           created: acc.created + chunk.created,
           errors: [...acc.errors, ...chunk.errors],
           existing: acc.existing + chunk.existing,
@@ -145,6 +162,11 @@ export function GithubImportSection({ teams }: GithubImportSectionProps) {
         };
         setTotals(acc);
         page = chunk.nextPage;
+        if (chunk.limitReached) {
+          setResumePage(chunk.nextPage);
+          toast.info(t('settings.import.github.limitReached'));
+          break;
+        }
       }
       setFinished(page === null);
       if (page === null) {
@@ -176,7 +198,10 @@ export function GithubImportSection({ teams }: GithubImportSectionProps) {
           </span>
           <SimpleSelect
             ariaLabel={t('settings.import.importIntoTeam')}
-            onChange={setTeamId}
+            onChange={value => {
+              setTeamId(value);
+              setResumePage(null);
+            }}
             options={teams.map(team => ({ label: team.name, value: team.id }))}
             placeholder={
               teams.length === 0 ? t('settings.import.noTeams') : t('settings.import.chooseTeam')
@@ -194,6 +219,7 @@ export function GithubImportSection({ teams }: GithubImportSectionProps) {
             id="gh-import-repo"
             onChange={e => {
               setRepo(e.target.value);
+              setResumePage(null);
               setPreview(null);
             }}
             placeholder="owner/name"
@@ -253,7 +279,11 @@ export function GithubImportSection({ teams }: GithubImportSectionProps) {
           {checking ? t('settings.import.github.checking') : t('settings.import.github.check')}
         </Button>
         <Button disabled={!ready || running} onClick={() => void run()} size="sm" type="button">
-          {running ? t('settings.import.importingEllipsis') : t('settings.import.github.start')}
+          {running
+            ? t('settings.import.importingEllipsis')
+            : resumePage
+              ? t('settings.import.github.continue', { page: resumePage })
+              : t('settings.import.github.start')}
         </Button>
         {running && (
           <Button
@@ -299,6 +329,21 @@ export function GithubImportSection({ teams }: GithubImportSectionProps) {
                 comments: totals.comments,
                 labels: totals.labels,
               })}
+            </p>
+          )}
+          {totals.closedAsOpen > 0 && (
+            <p className="text-xs text-warning-subtle-foreground">
+              {t('settings.import.github.closedAsOpen', { count: totals.closedAsOpen })}
+            </p>
+          )}
+          {totals.commentsTruncated > 0 && (
+            <p className="text-xs text-warning-subtle-foreground">
+              {t('settings.import.github.commentsTruncated', { count: totals.commentsTruncated })}
+            </p>
+          )}
+          {resumePage !== null && (
+            <p className="text-xs text-muted-foreground">
+              {t('settings.import.github.limitReachedHint', { page: resumePage })}
             </p>
           )}
           {finished && (

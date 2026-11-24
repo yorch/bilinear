@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useLoadMore } from '@/hooks/use-load-more';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import {
@@ -58,8 +59,6 @@ function TenantsInner() {
   const [confirmingDelete, setConfirmingDelete] = useState<PlatformTenant | null>(null);
   const [suspending, setSuspending] = useState<PlatformTenant | null>(null);
 
-  const [loadingMore, setLoadingMore] = useState(false);
-
   const {
     data: page,
     setData: setPage,
@@ -78,20 +77,14 @@ function TenantsInner() {
     setPage(prev => ({ ...prev, items: update(prev.items) }));
   }
 
-  async function handleLoadMore() {
-    if (!page.nextCursor) {
-      return;
-    }
-    setLoadingMore(true);
-    try {
-      const next = await fetchTenants(applied, includeArchived, page.nextCursor);
-      setPage(prev => ({ ...next, items: [...prev.items, ...next.items] }));
-    } catch (e) {
-      toast.error(getErrorMessage(e, t('common.somethingWentWrong')));
-    } finally {
-      setLoadingMore(false);
-    }
-  }
+  const { loadMore: handleLoadMore, loadingMore } = useLoadMore<AdminPage<PlatformTenant>>({
+    fetchMore: cursor => fetchTenants(applied, includeArchived, cursor),
+    merge: (prev, next) => ({ ...next, items: [...prev.items, ...next.items] }),
+    onError: e => toast.error(getErrorMessage(e, t('common.somethingWentWrong'))),
+    page,
+    resetKey: `${applied}\u0000${includeArchived}`,
+    setPage,
+  });
 
   function replaceRow(updated: PlatformTenant) {
     setTenants(prev => prev.map(t => (t.id === updated.id ? updated : t)));

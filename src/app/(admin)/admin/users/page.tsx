@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { ModalDialog } from '@/components/ui/modal-dialog';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useLoadMore } from '@/hooks/use-load-more';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import {
@@ -52,8 +53,6 @@ export default function AdminUsersPage() {
   } | null>(null);
   const [pickingOrgFor, setPickingOrgFor] = useState<PlatformUser | null>(null);
 
-  const [loadingMore, setLoadingMore] = useState(false);
-
   const {
     data: page,
     setData: setPage,
@@ -72,20 +71,14 @@ export default function AdminUsersPage() {
     setPage(prev => ({ ...prev, items: update(prev.items) }));
   }
 
-  async function handleLoadMore() {
-    if (!page.nextCursor) {
-      return;
-    }
-    setLoadingMore(true);
-    try {
-      const next = await fetchUsers(applied, page.nextCursor);
-      setPage(prev => ({ ...next, items: [...prev.items, ...next.items] }));
-    } catch (e) {
-      toast.error(getErrorMessage(e, t('common.somethingWentWrong')));
-    } finally {
-      setLoadingMore(false);
-    }
-  }
+  const { loadMore: handleLoadMore, loadingMore } = useLoadMore<AdminPage<PlatformUser>>({
+    fetchMore: cursor => fetchUsers(applied, cursor),
+    merge: (prev, next) => ({ ...next, items: [...prev.items, ...next.items] }),
+    onError: e => toast.error(getErrorMessage(e, t('common.somethingWentWrong'))),
+    page,
+    resetKey: applied,
+    setPage,
+  });
 
   const isSelf = (u: PlatformUser) => adminId !== null && u.id === adminId;
 

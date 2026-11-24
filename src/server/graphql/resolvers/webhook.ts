@@ -131,7 +131,11 @@ export const webhookResolvers = {
     webhookTest: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       const auth = await requireOrgAdmin(ctx);
       const [byHook, byUser] = await Promise.all([
-        checkFixedWindow(`rl:webhook-test:hook:${id}`, WEBHOOK_TEST_LIMIT_PER_HOOK, WEBHOOK_TEST_WINDOW_SECONDS),
+        checkFixedWindow(
+          `rl:webhook-test:hook:${id}`,
+          WEBHOOK_TEST_LIMIT_PER_HOOK,
+          WEBHOOK_TEST_WINDOW_SECONDS,
+        ),
         checkFixedWindow(
           `rl:webhook-test:user:${auth.userId}`,
           WEBHOOK_TEST_LIMIT_PER_USER,

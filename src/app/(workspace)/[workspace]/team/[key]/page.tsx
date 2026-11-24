@@ -29,8 +29,8 @@ import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
 import { useListDisplayPrefs } from '@/hooks/use-list-display-prefs';
 import { useRecentItems } from '@/hooks/use-recent-items';
-import { useTriageCount } from '@/hooks/use-triage-count';
 import { useTranslations } from '@/hooks/use-translations';
+import { useTriageCount } from '@/hooks/use-triage-count';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
 import {
   applyFilters,

@@ -4,8 +4,8 @@ import type { Issue } from '../../../generated/prisma';
 import { getIntegrationAvailability } from '../../lib/integration-availability';
 import { childLogger } from '../../lib/logger';
 import { requireAuth, requireOrgRole } from '../../middleware/auth';
-import { GitHubIntegrationNotFoundError } from '../../services/github.service';
 import type { AuditAction } from '../../services/audit-log.service';
+import { GitHubIntegrationNotFoundError } from '../../services/github.service';
 import type { GraphQLContext } from '../context';
 import { mapServiceError } from '../types/errors';
 

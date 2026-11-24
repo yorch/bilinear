@@ -1954,10 +1954,17 @@
           "created": "Clave de API creada",
           "revoked": "Clave de API revocada"
         },
+        "audit_log": {
+          "exported": "Registro de auditoría exportado"
+        },
         "auth": {
           "login": "Inicio de sesión",
           "login_failed": "Inicio de sesión fallido",
           "logout": "Cierre de sesión"
+        },
+        "github": {
+          "webhook_secret_revealed": "Secreto del webhook de GitHub mostrado",
+          "webhook_secret_rotated": "Secreto del webhook de GitHub rotado"
         },
         "issue": {
           "archived": "Incidencia archivada",
@@ -2102,12 +2109,17 @@
         "check": "Comprobar repositorio",
         "checkFailed": "No se pudo acceder al repositorio",
         "checking": "Comprobando…",
+        "closedAsOpen": "{count} cerradas en GitHub pero importadas como abiertas: este equipo no tiene un estado Hecho ni Cancelado.",
+        "commentsTruncated": "{count} incidencias tenían más comentarios que el límite de importación; el resto no se importó.",
+        "continue": "Continuar desde la página {page}",
         "done": "Terminado. Los responsables se asignan por el correo público del perfil de GitHub; el resto queda sin asignar.",
         "extras": "{labels} etiquetas y {comments} comentarios creados",
         "heading": "Importar incidencias desde GitHub",
         "hint": "Importa las incidencias de un repositorio (se omiten los pull requests). Repetirlo es seguro: las incidencias ya importadas se omiten, así que una importación interrumpida puede reanudarse.",
         "includeClosed": "Incluir incidencias cerradas",
         "includeComments": "Importar comentarios (más lento)",
+        "limitReached": "Se alcanzó el límite de importación de una ejecución. Continúa para importar el resto.",
+        "limitReachedHint": "Esta ejecución alcanzó el límite de importación del espacio de trabajo. Continúa para reanudar en la página {page} de GitHub; las incidencias ya importadas se omiten.",
         "previewCount_one": "{repo} tiene {count} incidencia.",
         "previewCount_other": "{repo} tiene {count} incidencias.",
         "previewUnknown": "{repo} es accesible (recuento no disponible).",
@@ -2167,6 +2179,7 @@
       "notConfigured": "No configurado en este servidor",
       "notConfiguredHint": "{provider} necesita {envVars} en el entorno del servidor. Pide a quien administra esta instalación que los defina; consulta .env.example.",
       "rotateWebhookSecret": "Generar nuevo secreto del webhook",
+      "rotateWebhookSecretConfirm": "¿Generar un nuevo secreto de webhook? El actual deja de funcionar de inmediato, así que actualiza el secreto en la configuración del webhook de GitHub o se rechazarán los eventos entrantes.",
       "showWebhookSecret": "Mostrar secreto del webhook",
       "slack": "Slack",
       "slackDescriptionPrefix": "Crea issues desde Slack con el comando",
@@ -2536,6 +2549,7 @@
       "testFailedDetail": "El evento de prueba falló: {detail}",
       "testing": "Enviando…",
       "testNeedsEnabled": "Activa el webhook para enviar un evento de prueba",
+      "testRateLimited": "Demasiados eventos de prueba. Espera un minuto e inténtalo de nuevo.",
       "testSucceeded": "Evento de prueba entregado (HTTP {status})",
       "title": "Webhooks",
       "updateError": "Error al actualizar el webhook",

@@ -1954,10 +1954,17 @@
           "created": "API key created",
           "revoked": "API key revoked"
         },
+        "audit_log": {
+          "exported": "Audit log exported"
+        },
         "auth": {
           "login": "Signed in",
           "login_failed": "Sign-in failed",
           "logout": "Signed out"
+        },
+        "github": {
+          "webhook_secret_revealed": "GitHub webhook secret revealed",
+          "webhook_secret_rotated": "GitHub webhook secret rotated"
         },
         "issue": {
           "archived": "Issue archived",
@@ -2102,12 +2109,17 @@
         "check": "Check repository",
         "checkFailed": "Could not reach the repository",
         "checking": "Checking…",
+        "closedAsOpen": "{count} closed on GitHub but imported as open: this team has no Done or Canceled status.",
+        "commentsTruncated": "{count} issues had more comments than the import limit; the rest were not imported.",
+        "continue": "Continue from page {page}",
         "done": "Finished. Assignees are matched by the public email on the GitHub profile; others are left unassigned.",
         "extras": "{labels} labels and {comments} comments created",
         "heading": "Import issues from GitHub",
         "hint": "Imports the issues of one repository (pull requests are skipped). Re-running is safe: issues already imported are skipped, so an interrupted import can simply be started again.",
         "includeClosed": "Include closed issues",
         "includeComments": "Import comments (slower)",
+        "limitReached": "Import limit for one run reached. Continue to import the rest.",
+        "limitReachedHint": "This run reached the workspace import limit. Continue to resume at GitHub page {page}; issues already imported are skipped.",
         "previewCount_one": "{repo} has {count} issue.",
         "previewCount_other": "{repo} has {count} issues.",
         "previewUnknown": "{repo} is reachable (issue count unavailable).",
@@ -2167,6 +2179,7 @@
       "notConfigured": "Not configured on this server",
       "notConfiguredHint": "{provider} sign-in needs {envVars} in the server environment. Ask whoever runs this deployment to set them; see .env.example.",
       "rotateWebhookSecret": "Generate new webhook secret",
+      "rotateWebhookSecretConfirm": "Generate a new webhook secret? The current one stops working immediately, so update the secret in GitHub's webhook settings or inbound events will be rejected.",
       "showWebhookSecret": "Show webhook secret",
       "slack": "Slack",
       "slackDescriptionPrefix": "Create issues from Slack with the",
@@ -2536,6 +2549,7 @@
       "testFailedDetail": "Test event failed: {detail}",
       "testing": "Sending…",
       "testNeedsEnabled": "Enable the webhook to send a test event",
+      "testRateLimited": "Too many test events. Wait a minute and try again.",
       "testSucceeded": "Test event delivered (HTTP {status})",
       "title": "Webhooks",
       "updateError": "Failed to update webhook",

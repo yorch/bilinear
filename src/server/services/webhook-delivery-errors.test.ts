@@ -40,7 +40,9 @@ const WEBHOOK = {
 
 describe('describeDeliveryError', () => {
   it('surfaces the SSRF block hidden in the cause of undici\'s "fetch failed"', () => {
-    const err = Object.assign(new TypeError('fetch failed'), { cause: new WebhookPrivateUrlError() });
+    const err = Object.assign(new TypeError('fetch failed'), {
+      cause: new WebhookPrivateUrlError(),
+    });
     expect(describeDeliveryError(err)).toBe(
       'fetch failed (Webhook URL cannot point to a private/internal address)',
     );
@@ -60,7 +62,9 @@ describe('describeDeliveryError', () => {
 
   it('strips URL credentials and bounds the length', () => {
     const err = Object.assign(new TypeError('fetch failed'), {
-      cause: new Error(`connect to https://user:hunter2@internal.test/x failed ${'x'.repeat(2000)}`),
+      cause: new Error(
+        `connect to https://user:hunter2@internal.test/x failed ${'x'.repeat(2000)}`,
+      ),
     });
     const out = describeDeliveryError(err);
     expect(out).not.toContain('hunter2');

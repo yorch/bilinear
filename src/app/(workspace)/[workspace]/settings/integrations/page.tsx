@@ -116,7 +116,9 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
   // Shown once on demand; never kept in the URL or persisted client-side.
   const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [pendingDisconnect, setPendingDisconnect] = useState<'github' | 'slack' | null>(null);
+  const [pendingDisconnect, setPendingDisconnect] = useState<
+    'github' | 'rotateSecret' | 'slack' | null
+  >(null);
 
   const { workspace: orgKey } = useParams<{ workspace: string }>();
   const appUrl = useOrigin();
@@ -320,7 +322,7 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
                 </Button>
                 <Button
                   disabled={saving}
-                  onClick={() => void handleRotateSecret()}
+                  onClick={() => setPendingDisconnect('rotateSecret')}
                   size="sm"
                   type="button"
                   variant="outline"
@@ -461,23 +463,35 @@ const IntegrationsSettingsPage = observer(function IntegrationsSettingsPage() {
         </section>
 
         <ConfirmDialog
-          confirmLabel={t('settings.integrations.disconnect')}
+          confirmLabel={
+            pendingDisconnect === 'rotateSecret'
+              ? t('settings.integrations.rotateWebhookSecret')
+              : t('settings.integrations.disconnect')
+          }
           message={
             pendingDisconnect === 'slack'
               ? t('settings.integrations.disconnectSlackConfirm')
-              : t('settings.integrations.disconnectGithubConfirm')
+              : pendingDisconnect === 'rotateSecret'
+                ? t('settings.integrations.rotateWebhookSecretConfirm')
+                : t('settings.integrations.disconnectGithubConfirm')
           }
           onCancel={() => setPendingDisconnect(null)}
           onConfirm={() => {
             if (pendingDisconnect === 'slack') {
               void handleSlackDisconnect();
+            } else if (pendingDisconnect === 'rotateSecret') {
+              void handleRotateSecret();
             } else if (pendingDisconnect === 'github') {
               void handleDisconnect();
             }
             setPendingDisconnect(null);
           }}
           open={pendingDisconnect !== null}
-          title={t('settings.integrations.disconnect')}
+          title={
+            pendingDisconnect === 'rotateSecret'
+              ? t('settings.integrations.rotateWebhookSecret')
+              : t('settings.integrations.disconnect')
+          }
         />
       </div>
     </div>

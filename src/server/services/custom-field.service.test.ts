@@ -165,39 +165,39 @@ describe('CustomFieldService', () => {
     });
 
     it.each([
-      ['a non-number field', { type: 'text' as const, numberFormat: { kind: 'percent' as const } }],
-      ['an unknown kind', { type: 'number' as const, numberFormat: { kind: 'bogus' as never } }],
+      ['a non-number field', { numberFormat: { kind: 'percent' as const }, type: 'text' as const }],
+      ['an unknown kind', { numberFormat: { kind: 'bogus' as never }, type: 'number' as const }],
       [
         'a currency kind without a code',
-        { type: 'number' as const, numberFormat: { kind: 'currency' as const } },
+        { numberFormat: { kind: 'currency' as const }, type: 'number' as const },
       ],
       [
         'a lower-case currency',
-        { type: 'number' as const, numberFormat: { currency: 'usd', kind: 'currency' as const } },
+        { numberFormat: { currency: 'usd', kind: 'currency' as const }, type: 'number' as const },
       ],
       [
         'a 2-letter currency',
-        { type: 'number' as const, numberFormat: { currency: 'US', kind: 'currency' as const } },
+        { numberFormat: { currency: 'US', kind: 'currency' as const }, type: 'number' as const },
       ],
       [
         'a 4-letter currency',
-        { type: 'number' as const, numberFormat: { currency: 'USDX', kind: 'currency' as const } },
+        { numberFormat: { currency: 'USDX', kind: 'currency' as const }, type: 'number' as const },
       ],
       [
         'a currency on a percent kind',
-        { type: 'number' as const, numberFormat: { currency: 'USD', kind: 'percent' as const } },
+        { numberFormat: { currency: 'USD', kind: 'percent' as const }, type: 'number' as const },
       ],
       [
         'decimals above 6',
-        { type: 'number' as const, numberFormat: { decimals: 7, kind: 'plain' as const } },
+        { numberFormat: { decimals: 7, kind: 'plain' as const }, type: 'number' as const },
       ],
       [
         'negative decimals',
-        { type: 'number' as const, numberFormat: { decimals: -1, kind: 'plain' as const } },
+        { numberFormat: { decimals: -1, kind: 'plain' as const }, type: 'number' as const },
       ],
       [
         'fractional decimals',
-        { type: 'number' as const, numberFormat: { decimals: 1.5, kind: 'plain' as const } },
+        { numberFormat: { decimals: 1.5, kind: 'plain' as const }, type: 'number' as const },
       ],
     ])('rejects %s on create', async (_label, extra) => {
       await expect(service.createDefinition({ ...base, ...extra })).rejects.toBeInstanceOf(

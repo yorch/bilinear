@@ -152,7 +152,9 @@ describe('AuditLogService', () => {
       const where = prisma.auditLogEntry.findMany.mock.calls[0][0].where;
       expect(where.createdAt).toEqual({ gte: new Date('2026-01-01T00:00:00Z') });
       const at = new Date('2026-02-15T00:00:00Z');
-      expect(where.AND).toEqual([{ OR: [{ createdAt: { lt: at } }, { createdAt: at, id: { lt: id } }] }]);
+      expect(where.AND).toEqual([
+        { OR: [{ createdAt: { lt: at } }, { createdAt: at, id: { lt: id } }] },
+      ]);
     });
 
     it('rejects malformed cursors instead of passing them to Postgres', async () => {
@@ -163,9 +165,10 @@ describe('AuditLogService', () => {
         'not-a-date|00000000-0000-0000-0000-000000000abc',
         '2026-02-15T00:00:00.000Z|',
       ]) {
-        await expect(service.findByOrg({ cursor, orgId: TEST_ORG.id }), cursor).rejects.toMatchObject(
-          { name: 'InvalidCursorError' },
-        );
+        await expect(
+          service.findByOrg({ cursor, orgId: TEST_ORG.id }),
+          cursor,
+        ).rejects.toMatchObject({ name: 'InvalidCursorError' });
       }
       expect(prisma.auditLogEntry.findMany).not.toHaveBeenCalled();
     });
@@ -209,7 +212,9 @@ describe('AuditLogService', () => {
 
       expect(result.entries).toEqual([first, second]);
       expect(result.hasMore).toBe(true);
-      expect(result.nextCursor).toBe('2026-03-02T00:00:00.000Z|00000000-0000-0000-0000-000000000702');
+      expect(result.nextCursor).toBe(
+        '2026-03-02T00:00:00.000Z|00000000-0000-0000-0000-000000000702',
+      );
     });
 
     it('returns hasMore false and a null cursor on the last page', async () => {
@@ -302,7 +307,9 @@ describe('AuditLogService', () => {
       function seed(count: number, perTimestamp: number) {
         return Array.from({ length: count }, (_, i) =>
           makeEntry({
-            createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, 0) - Math.floor(i / perTimestamp) * 1000),
+            createdAt: new Date(
+              Date.UTC(2026, 0, 1, 0, 0, 0) - Math.floor(i / perTimestamp) * 1000,
+            ),
             id: uuid(i + 1),
             resourceId: uuid(i + 1),
           }),
@@ -313,7 +320,8 @@ describe('AuditLogService', () => {
           async ({ take, where }: { take: number; where: { AND?: Array<{ OR: unknown[] }> } }) => {
             const sorted = [...table].sort(
               (a, b) =>
-                b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
+                b.createdAt.getTime() - a.createdAt.getTime() ||
+                (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
             );
             const or = where.AND?.[0]?.OR as
               | [{ createdAt: { lt: Date } }, { createdAt: Date; id: { lt: string } }]

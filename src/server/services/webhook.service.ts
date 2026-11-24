@@ -1,7 +1,12 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { Agent, type Dispatcher, fetch as undiciFetch, type RequestInit as UndiciRequestInit } from 'undici';
+import {
+  Agent,
+  type Dispatcher,
+  type RequestInit as UndiciRequestInit,
+  fetch as undiciFetch,
+} from 'undici';
 import type { PrismaClient, Webhook, WebhookDelivery } from '../../generated/prisma';
 import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { env } from '../lib/env';

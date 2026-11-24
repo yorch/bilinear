@@ -36,8 +36,8 @@ import {
   type FilterSet,
 } from '@/lib/filter-engine';
 import { gql } from '@/lib/graphql';
-import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildBacklogViewFilters } from '@/lib/issue-list-visibility';
+import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildIssueHref } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';

@@ -3,14 +3,14 @@
 import { useCallback, useRef, useState } from 'react';
 
 interface UseLoadMoreOptions<P extends { nextCursor: string | null }> {
+  /** Fetches the page after `cursor` with the filters of the render that built this call. */
+  fetchMore: (cursor: string) => Promise<P>;
   /** Appends the fetched page to the current one. */
   merge: (prev: P, next: P) => P;
   /** Called with a failed fetch for the CURRENT key only (stale failures are dropped). */
   onError: (err: unknown) => void;
   /** The page currently shown; its `nextCursor` is what "Load more" continues from. */
   page: P;
-  /** Fetches the page after `cursor` with the filters of the render that built this call. */
-  fetchMore: (cursor: string) => Promise<P>;
   /**
    * Identity of the filters/query the shown page belongs to. When it changes,
    * every in-flight "Load more" for the old value is discarded on arrival, so a
@@ -66,5 +66,5 @@ export function useLoadMore<P extends { nextCursor: string | null }>({
     }
   }, [fetchMore, merge, onError, page.nextCursor, resetKey, setPage]);
 
-  return { loadMore, loadingMore: loadingKey === resetKey };
+  return { loadingMore: loadingKey === resetKey, loadMore };
 }

@@ -63,11 +63,7 @@ describe('audit entries for secret-bearing and export operations', () => {
 
     log.mockClear();
     const supplied = 'x'.repeat(24);
-    await githubResolvers.Mutation.githubRotateWebhookSecret(
-      undefined,
-      { newSecret: supplied },
-      c,
-    );
+    await githubResolvers.Mutation.githubRotateWebhookSecret(undefined, { newSecret: supplied }, c);
     expect(JSON.stringify(log.mock.calls[0]?.[0])).not.toContain(supplied);
   });
 
@@ -89,7 +85,11 @@ describe('audit entries for secret-bearing and export operations', () => {
     );
     const entry = log.mock.calls[0]?.[0];
     expect(entry).toMatchObject({ action: 'audit_log.exported', orgId: 'org-1', userId: 'user-1' });
-    expect(entry.metadata).toMatchObject({ filterAction: 'issue.created', rows: 3, truncated: true });
+    expect(entry.metadata).toMatchObject({
+      filterAction: 'issue.created',
+      rows: 3,
+      truncated: true,
+    });
     expect(JSON.stringify(entry)).not.toContain('"csv"');
   });
 

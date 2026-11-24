@@ -13,6 +13,31 @@ export interface WebhookFormValues {
   url: string;
 }
 
+/**
+ * Only the fields the user actually changed. Sending all three every time makes
+ * the `webhook.updated` audit entry (whose `changed` list is the input's keys)
+ * claim the URL and events moved when only the name did, and re-validates a URL
+ * nobody touched. Events compare as a set: order is not a change.
+ */
+export function changedWebhookFields(
+  current: WebhookFormValues,
+  next: WebhookFormValues,
+): Partial<WebhookFormValues> {
+  const changed: Partial<WebhookFormValues> = {};
+  if (next.name !== current.name) {
+    changed.name = next.name;
+  }
+  if (next.url !== current.url) {
+    changed.url = next.url;
+  }
+  const a = [...new Set(current.events)].sort();
+  const b = [...new Set(next.events)].sort();
+  if (a.length !== b.length || a.some((e, i) => e !== b[i])) {
+    changed.events = next.events;
+  }
+  return changed;
+}
+
 interface WebhookFormProps {
   availableEvents: string[];
   busy: boolean;

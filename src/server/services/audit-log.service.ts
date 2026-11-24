@@ -1,10 +1,7 @@
 import type { AuditLogEntry, PrismaClient } from '../../generated/prisma';
 import { Prisma } from '../../generated/prisma';
 import { csvCell } from '../../lib/csv-export';
-import {
-  afterCreatedAtCursor,
-  encodeCreatedAtCursor,
-} from '../lib/created-at-cursor';
+import { afterCreatedAtCursor, encodeCreatedAtCursor } from '../lib/created-at-cursor';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 

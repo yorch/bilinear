@@ -100,8 +100,10 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   );
   const subscribedSet = useMemo(() => new Set(subscribedIds ?? []), [subscribedIds]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
-  const allMyIssues: IssueDetail[] = useMemo(() => {
+  // Two variants because the "Completed issues" preference only has a control
+  // in list mode: the board and timeline must show everything, or issues would
+  // vanish with no way to bring them back.
+  const buildMine = (completedMode: CompletedIssuesMode): IssueDetail[] => {
     if (!currentUser) {
       return [];
     }
@@ -113,12 +115,13 @@ const MyIssuesPage = observer(function MyIssuesPage() {
     };
     return filterCompletedIssues(
       Array.from(issueStore.pool.values()).filter(i => mine(i) && !i.trashed && !i.archivedAt),
-      completed,
+      completedMode,
       stateIdsOfType(workflowStateStore.all, ['completed', 'canceled']),
     )
       .map(i => toIssueDetail(i, labelStore))
       .sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [
+  };
+  const mineDeps = [
     issueStore.pool.size,
     userStore.pool.size,
     workflowStateStore.pool.size,
@@ -127,9 +130,12 @@ const MyIssuesPage = observer(function MyIssuesPage() {
     labelStore,
     scope,
     subscribedSet,
-    completed,
     workflowStateStore,
-  ]);
+  ];
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
+  const mineAll = useMemo(() => buildMine('all'), mineDeps);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
+  const mineListMode = useMemo(() => buildMine(completed), [...mineDeps, completed]);
 
   // Every active state across all teams — filter options and the timeline only.
   // Names shared by several teams get a team suffix so the filter doesn't offer
@@ -142,23 +148,20 @@ const MyIssuesPage = observer(function MyIssuesPage() {
   );
 
   const lookups = useFilterLookups();
-  const filteredIssues = applySorting(
-    applyFilters(allMyIssues, filterSet, undefined, buildFilterContext(workflowStateStore.all)),
-    orderByToSort(orderBy),
-  );
-  const teamGroups = groupIssuesByTeam(
-    filteredIssues,
-    teamStore.all.map(team => team.id),
-  );
-  const multiTeam = teamGroups.length > 1;
-  // Keyboard navigation (j/k) walks the order the sections are drawn in.
-  const issues = teamGroups.flatMap(group => group.issues);
-  // One section per team, each with only that team's workflow states. An empty
-  // list still gets one (stateless) section so the empty state renders.
-  const sections = (teamGroups.length > 0 ? teamGroups : [{ issues, teamId: '' }]).map(group => ({
-    ...group,
-    states: workflowStateStore.findByTeamId(group.teamId),
-  }));
+  // Filter, sort and group one of the two sources above.
+  const derive = (source: IssueDetail[]) => {
+    const filtered = applySorting(
+      applyFilters(source, filterSet, undefined, buildFilterContext(workflowStateStore.all)),
+      orderByToSort(orderBy),
+    );
+    const groups = groupIssuesByTeam(
+      filtered,
+      teamStore.all.map(team => team.id),
+    );
+    // Keyboard navigation (j/k) walks the order the sections are drawn in.
+    return { groups, issues: groups.flatMap(group => group.issues) };
+  };
+  const sourceFor = (mode: string) => (mode === 'list' ? mineListMode : mineAll);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
   const users: IssueUser[] = useMemo(() => toIssueUsers(userStore.all), [userStore.pool.size]);
@@ -185,6 +188,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
     handleArchiveMany,
     handleDeleteMany,
     handleOpen,
+    issues,
     openProperty,
     requestDelete,
     selectedId,
@@ -202,8 +206,17 @@ const MyIssuesPage = observer(function MyIssuesPage() {
     initialBoardGroupBy: displayPrefs.boardGroupBy,
     initialSwimlaneBy: displayPrefs.swimlaneBy,
     initialViewMode: displayPrefs.viewMode,
-    issues,
+    issues: mode => derive(sourceFor(mode)).issues,
   });
+
+  const { groups: teamGroups } = derive(sourceFor(viewMode));
+  const multiTeam = teamGroups.length > 1;
+  // One section per team, each with only that team's workflow states. An empty
+  // list still gets one (stateless) section so the empty state renders.
+  const sections = (teamGroups.length > 0 ? teamGroups : [{ issues, teamId: '' }]).map(group => ({
+    ...group,
+    states: workflowStateStore.findByTeamId(group.teamId),
+  }));
 
   useEffect(() => {
     saveDisplayPrefs({
@@ -293,6 +306,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
         />
         <FilterBuilder
           cycles={lookups.cycles}
+          estimateScaleMixed={lookups.estimateScaleMixed}
           filterSet={filterSet}
           labels={labels}
           onChange={setFilterSet}

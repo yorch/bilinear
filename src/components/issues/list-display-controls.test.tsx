@@ -38,6 +38,20 @@ describe('ListDisplayControls', () => {
     expect(onCompleted).toHaveBeenCalledWith('pastWeek');
   });
 
+  it('picks a completed-issues mode from the desktop select', () => {
+    const { onCompleted } = renderControls({ completed: 'all' });
+    // Desktop trigger is its own labelled control, separate from the mobile panel.
+    fireEvent.click(screen.getByLabelText('issues.completedIssuesLabel'));
+    fireEvent.click(screen.getByRole('option', { name: 'issues.completedNone' }));
+    expect(onCompleted).toHaveBeenCalledWith('none');
+  });
+
+  it('omits the desktop completed select when the page does not support it', () => {
+    renderControls({ completed: undefined, onCompleted: undefined });
+    expect(screen.queryByLabelText('issues.completedIssuesLabel')).toBeNull();
+    expect(screen.getByLabelText('issues.groupByLabel')).toBeTruthy();
+  });
+
   it('omits the completed control when the page does not support it', () => {
     renderControls({ completed: undefined, onCompleted: undefined });
     fireEvent.click(screen.getByTestId('display-menu').querySelector('button') as HTMLElement);

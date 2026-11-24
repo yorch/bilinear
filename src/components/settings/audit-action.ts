@@ -5,9 +5,12 @@
 export const AUDIT_ACTIONS = [
   'api_key.created',
   'api_key.revoked',
+  'audit_log.exported',
   'auth.login',
   'auth.login_failed',
   'auth.logout',
+  'github.webhook_secret_revealed',
+  'github.webhook_secret_rotated',
   'issue.archived',
   'issue.bulk_updated',
   'issue.created',

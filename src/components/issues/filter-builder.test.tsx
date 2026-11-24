@@ -80,3 +80,63 @@ describe('AddFilterForm due date', () => {
     expect(document.querySelector('input[type="date"]')).not.toBeNull();
   });
 });
+
+describe('AddFilterForm field changes', () => {
+  const openAddForm = (props: Record<string, unknown> = {}) => {
+    const onChange = vi.fn();
+    render(
+      <FilterBuilder
+        {...base}
+        filterSet={{ composition: 'and', conditions: [] }}
+        onChange={onChange}
+        {...props}
+      />,
+    );
+    fireEvent.click(screen.getByText('issues.filter'));
+    return onChange;
+  };
+  const pickField = (current: string, next: string) => {
+    fireEvent.click(screen.getByText(current));
+    // The open panel's option renders after the trigger carrying the same label.
+    fireEvent.click(screen.getAllByText(next).at(-1) as HTMLElement);
+  };
+
+  it('resets the operator to one valid for the new field', () => {
+    openAddForm();
+    expect(screen.getByText('issues.operatorIs')).toBeTruthy();
+
+    pickField('issues.status', 'issues.dueDate');
+    expect(screen.getByText('issues.operatorBefore')).toBeTruthy();
+    expect(screen.queryByText('issues.operatorIs')).toBeNull();
+
+    // Back to a non-date field: `before` is not valid there and must not linger.
+    pickField('issues.dueDate', 'issues.priority');
+    expect(screen.getByText('issues.operatorIs')).toBeTruthy();
+    expect(screen.queryByText('issues.operatorBefore')).toBeNull();
+  });
+
+  it('stores an estimate as a number, not the picker string', () => {
+    const onChange = openAddForm({ estimationType: 'fibonacci' });
+    pickField('issues.status', 'issues.estimate');
+    fireEvent.click(screen.getByText('issues.selectEllipsis'));
+    fireEvent.click(screen.getAllByText('3').at(-1) as HTMLElement);
+    fireEvent.click(screen.getByText('issues.add'));
+    expect(onChange).toHaveBeenCalledWith({
+      composition: 'and',
+      conditions: [{ field: 'estimate', operator: 'eq', value: 3 }],
+    });
+  });
+
+  it('does not offer Estimate when the issues in view mix estimation scales', () => {
+    openAddForm({ estimateScaleMixed: true });
+    fireEvent.click(screen.getByText('issues.status'));
+    expect(screen.getAllByText('issues.dueDate').length).toBeGreaterThan(0);
+    expect(screen.queryByText('issues.estimate')).toBeNull();
+  });
+
+  it('offers Estimate when the scale is shared', () => {
+    openAddForm({ estimationType: 'fibonacci' });
+    fireEvent.click(screen.getByText('issues.status'));
+    expect(screen.getByText('issues.estimate')).toBeTruthy();
+  });
+});

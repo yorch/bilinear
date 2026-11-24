@@ -25,8 +25,8 @@ const findByIdMock = vi.fn();
 const optimisticUpdateMock = vi.fn();
 const applySyncActionMock = vi.fn();
 const stateTypes: Record<string, string> = {
-  st_done: 'completed',
   st_cancel: 'canceled',
+  st_done: 'completed',
   st_todo: 'unstarted',
 };
 const stateFindByIdMock = vi.fn((id: string) =>

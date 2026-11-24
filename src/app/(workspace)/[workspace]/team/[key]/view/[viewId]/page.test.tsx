@@ -99,6 +99,8 @@ vi.mock('@/providers/store-provider', () => ({
     projectStore: { all: [{ id: 'p1', name: 'Apollo' }] },
     syncStore: { status: 'ready' },
     teamStore: {
+      all: [{ id: 't1', issueEstimationType: 'tShirt', key: 'ENG', name: 'Eng' }],
+      findById: () => ({ id: 't1', key: 'ENG' }),
       findByKey: () => ({ id: 't1', issueEstimationType: 'tShirt', key: 'ENG', name: 'Eng' }),
     },
     uiStore: { openCreateIssueModal: vi.fn() },

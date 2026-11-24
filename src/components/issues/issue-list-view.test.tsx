@@ -230,7 +230,8 @@ describe('IssueListView project / cycle / label grouping', () => {
     const text = document.body.textContent ?? '';
     expect(text.indexOf('Alpha')).toBeLessThan(text.indexOf('Beta'));
     expect(text.indexOf('Beta')).toBeLessThan(text.indexOf('issues.noProject'));
-    expect(headers().length).toBeGreaterThan(0);
+    // The project groups come first and "no project" last; each issue sits under its own.
+    expect(headers().filter(h => /^(Alpha|Beta|issues\.noProject)/.test(h))).toHaveLength(3);
   });
 
   it('keeps an issue whose project is not loaded under "no project" rather than dropping it', () => {

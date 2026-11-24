@@ -80,6 +80,12 @@ function isValueless(operator: FilterOperator): boolean {
 /** Picker data for the entity-backed fields; every prop is optional so existing callers keep working. */
 export interface FilterLookups {
   cycles?: { id: string; label: string; number?: number }[];
+  /**
+   * The issues in view span teams with different estimation scales (e.g. a
+   * T-shirt team and a points team), so one estimate value would mean different
+   * things — the Estimate field is not offered for new conditions.
+   */
+  estimateScaleMixed?: boolean;
   /** The team's estimation scale, so the estimate picker offers its points. */
   estimationType?: string;
   projects?: { id: string; name: string }[];
@@ -328,6 +334,7 @@ function AddFilterForm({
   labels,
   customFields,
   cycles,
+  estimateScaleMixed,
   estimationType,
   projects,
   initial,
@@ -385,7 +392,9 @@ function AddFilterForm({
   const field: FilterField = customFieldId ? 'custom' : (fieldValue as FilterField);
 
   const fieldOptions: FieldOption[] = [
-    ...filterFields.map(f => ({ label: f.label, value: f.value })),
+    ...filterFields
+      .filter(f => !(f.value === 'estimate' && estimateScaleMixed && initial?.field !== 'estimate'))
+      .map(f => ({ label: f.label, value: f.value })),
     ...(customFields ?? []).map(d => ({
       label: d.name,
       value: `custom:${d.id}`,
@@ -629,6 +638,7 @@ export function FilterBuilder({
   labels,
   customFields,
   cycles,
+  estimateScaleMixed,
   estimationType,
   projects,
 }: FilterBuilderProps) {
@@ -680,6 +690,7 @@ export function FilterBuilder({
     <AddFilterForm
       customFields={customFields}
       cycles={cycles}
+      estimateScaleMixed={estimateScaleMixed}
       estimationType={estimationType}
       initial={initial}
       key={editingIndex ?? 'new'}

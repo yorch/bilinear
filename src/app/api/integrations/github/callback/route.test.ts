@@ -47,7 +47,7 @@ describe('GET /api/integrations/github/callback', () => {
 
   it('generates a fresh high-entropy webhook secret at connect time, outside any URL', async () => {
     const a = await GET(await callbackReq());
-    const b = await GET(await callbackReq());
+    await GET(await callbackReq());
     const secrets = connect.mock.calls.map(c => (c[2] as { webhookSecret: string }).webhookSecret);
     expect(secrets).toHaveLength(2);
     for (const secret of secrets) {
