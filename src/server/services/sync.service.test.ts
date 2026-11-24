@@ -735,7 +735,7 @@ describe('SyncService — Notification rows are per-recipient', () => {
     prisma.$queryRaw.mockResolvedValue([
       notif(BigInt(1), 'user-1'),
       notif(BigInt(2), 'someone-else'),
-      makeRawRow(BigInt(3), '10'),
+      makeRawRow(BigInt(3), '10', { data: { teamId: 't-ok' } }),
     ]);
   });
 
@@ -767,7 +767,7 @@ describe('SyncService — per-user models (Favorite, IssueReminder) are per-reci
   const own = (modelName: string) => rowFor(BigInt(1), modelName, { id: 'a', userId: 'user-1' });
   const foreign = (modelName: string) =>
     rowFor(BigInt(2), modelName, { id: 'b', userId: 'someone-else' });
-  const plain = () => makeRawRow(BigInt(3), '10');
+  const plain = () => makeRawRow(BigInt(3), '10', { data: { teamId: 't-ok' } });
 
   beforeEach(() => {
     prisma = createMockPrisma();

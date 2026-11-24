@@ -1681,6 +1681,18 @@ describe('IssueService', () => {
         expect(prisma.customFieldValue.deleteMany).toHaveBeenCalled();
       });
 
+      it('always ships the surviving custom-field values on a move, even when none were dropped', async () => {
+        arrangeMove();
+        prisma.customFieldValue.deleteMany.mockResolvedValue({ count: 0 });
+        prisma.customFieldValue.findMany.mockResolvedValue([{ id: 'v1', issueId: A }]);
+        const hook = vi.fn();
+        await service.update(A, { teamId: TARGET }, hook);
+        // A viewer who gains visibility through the move has no values yet.
+        expect(hook.mock.calls[0][1].issue).toMatchObject({
+          customFieldValues: [{ id: 'v1', issueId: A }],
+        });
+      });
+
       it('tags the sync payload with the team the issue left', async () => {
         arrangeMove();
         const hook = vi.fn();

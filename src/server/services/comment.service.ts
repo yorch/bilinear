@@ -83,6 +83,7 @@ export function extractMentionedUserIds(bodyData: unknown): string[] {
  * because it doesn't know the caller userId.
  */
 export interface CommentAccessTarget {
+  issueId: string;
   teamId: string;
 }
 
@@ -119,14 +120,14 @@ export class CommentService {
    */
   async findAccessTarget(commentId: string, orgId: string): Promise<CommentAccessTarget | null> {
     const row = await this.prisma.comment.findUnique({
-      select: { issue: { select: { organizationId: true, teamId: true } } },
+      select: { issue: { select: { id: true, organizationId: true, teamId: true } } },
       where: { id: commentId },
     });
     const issue = row?.issue;
     if (!issue || issue.organizationId !== orgId || !issue.teamId) {
       return null;
     }
-    return { teamId: issue.teamId };
+    return { issueId: issue.id, teamId: issue.teamId };
   }
 
   async findById(

@@ -94,6 +94,26 @@ describe('ConnectionManager.broadcastActions', () => {
     expect(lockedMine.send).toHaveBeenCalledWith(JSON.stringify({ cmd: 'sync', sync: [issue] }));
   });
 
+  it("rewrites someone else's unshared view for an unrestricted socket instead of sending the shared frame", async () => {
+    const cm = new ConnectionManager();
+    const creator = fakeWs();
+    const other = fakeWs();
+    cm.add('org-1', 'creator', creator);
+    cm.add('org-1', 'other', other);
+    const view = {
+      action: 'U',
+      data: { creatorId: 'creator', id: 'v1', name: 'private', shared: false },
+      modelName: 'CustomView',
+    };
+
+    await cm.broadcastActions('org-1', [view], async (_v, batch) => batch);
+
+    expect(creator.send).toHaveBeenCalledWith(JSON.stringify({ cmd: 'sync', sync: [view] }));
+    const sent = JSON.parse(other.send.mock.calls[0][0]);
+    expect(sent.sync).toEqual([{ action: 'D', data: null, modelName: 'CustomView' }]);
+    expect(other.send.mock.calls[0][0]).not.toContain('private');
+  });
+
   it("sends nothing to a user when the batch is only another user's Notification", async () => {
     const cm = new ConnectionManager();
     const theirs = fakeWs();

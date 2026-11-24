@@ -147,23 +147,111 @@ export const PER_USER_MODELS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Drop per-user rows (`PER_USER_MODELS`) that belong to someone other than
- * `userId`. Applies to every caller, restricted or not, so it runs ahead of the
- * `isUnrestricted` fast path. The owner is read from `data.userId`, so the
- * emitters must put it in the payload — including on deletes where the owner
- * would otherwise be unknowable (`IssueReminder` deletes carry `{id, userId, …}`).
- * A delete with `data: null` carries only an id and passes through.
+ * Narrow a batch to the rows that are THIS user's to receive, for every caller
+ * (restricted or not, so it runs ahead of the `isUnrestricted` fast path):
+ *
+ * - `PER_USER_MODELS` rows that belong to someone else are dropped. The owner is
+ *   read from `data.userId`, so the emitters must put it in the payload —
+ *   including on deletes where the owner would otherwise be unknowable
+ *   (`IssueReminder` deletes carry `{id, userId, …}`). A delete with
+ *   `data: null` carries only an id and passes through.
+ * - A `CustomView` with `shared: false` belongs to its creator (`data.creatorId`).
+ *   For anyone else an insert is dropped, and any other action is rewritten to a
+ *   delete: the view may have been shared a moment ago (true -> false), in which
+ *   case this viewer holds a cached copy that must go. The reverse transition
+ *   (false -> true) is emitted as an insert by the resolver, so the viewers who
+ *   never had the view receive it then.
+ *
+ * Returns the SAME row objects for rows that pass untouched, so callers can use
+ * identity to tell whether anything was narrowed.
  */
-export function dropForeignUserRows<T extends { data: unknown; modelName: string }>(
-  rows: T[],
-  userId: string,
-): T[] {
-  return rows.filter(row => {
-    if (!PER_USER_MODELS.has(row.modelName) || !row.data || typeof row.data !== 'object') {
-      return true;
+export function dropForeignUserRows<
+  T extends { action?: string; data: unknown; modelName: string },
+>(rows: T[], userId: string): T[] {
+  const out: T[] = [];
+  for (const row of rows) {
+    const data =
+      row.data && typeof row.data === 'object' ? (row.data as Record<string, unknown>) : null;
+    if (PER_USER_MODELS.has(row.modelName)) {
+      if (!data || data.userId === userId) {
+        out.push(row);
+      }
+      continue;
     }
-    return (row.data as { userId?: unknown }).userId === userId;
-  });
+    if (
+      row.modelName === 'CustomView' &&
+      data &&
+      data.shared === false &&
+      data.creatorId !== userId
+    ) {
+      if (row.action !== 'I') {
+        out.push({ ...row, action: 'D', data: null });
+      }
+      continue;
+    }
+    out.push(row);
+  }
+  return out;
+}
+
+/**
+ * Models whose rows are derived from an issue and must say which one
+ * (`issueId`). A row of one of these that does not is dropped for a restricted
+ * viewer rather than waved through — see `filterVisibleActions`.
+ */
+export const ISSUE_BOUND_MODELS: ReadonlySet<string> = new Set([
+  'Comment',
+  'CommentReaction',
+  'CustomFieldValue',
+  'IssueActivity',
+  'IssueReaction',
+  'IssueRelation',
+]);
+
+/** Models that always belong to exactly one team and must carry its `teamId`. */
+export const TEAM_BOUND_MODELS: ReadonlySet<string> = new Set([
+  'Cycle',
+  'IssueTemplate',
+  'TeamMembership',
+  'WorkflowState',
+]);
+
+/** The key of an issue identifier (`SEC-12` -> `SEC`). */
+function identifierKey(identifier: string): string {
+  const i = identifier.lastIndexOf('-');
+  return i > 0 ? identifier.slice(0, i) : identifier;
+}
+
+/**
+ * An Issue row that this viewer may see, with what it reveals about the team it
+ * LEFT removed when they cannot see that team: `movedFromTeamId` (the id) and
+ * the `previousIdentifiers` that start with its key. Without this a private ->
+ * public move published the private team's id and key to every member.
+ */
+function redactOriginTeam(
+  row: SyncActionRow,
+  data: Record<string, unknown>,
+  hiddenTeamSet: ReadonlySet<string>,
+  hiddenKeys: ReadonlySet<string>,
+): SyncActionRow {
+  const hideOrigin =
+    typeof data.movedFromTeamId === 'string' && hiddenTeamSet.has(data.movedFromTeamId);
+  const prev = Array.isArray(data.previousIdentifiers)
+    ? (data.previousIdentifiers as unknown[])
+    : null;
+  const keptPrev = prev?.filter(id => typeof id !== 'string' || !hiddenKeys.has(identifierKey(id)));
+  const prevChanged = prev !== null && keptPrev !== undefined && keptPrev.length !== prev.length;
+  if (!hideOrigin && !prevChanged) {
+    return row;
+  }
+  const next: Record<string, unknown> = { ...data };
+  if (hideOrigin) {
+    delete next.movedFromTeamId;
+  }
+  if (prevChanged) {
+    next.previousIdentifiers = keptPrev;
+  }
+  return { ...row, data: next as Prisma.JsonValue };
 }
 
 /** The JSON payload of a row as a record, or null for delete rows / non-objects. */
@@ -523,7 +611,14 @@ export class SyncService {
         where: { archivedAt: null, organizationId: orgId, trashed: false },
       }),
       this.prisma.customView.findMany({
-        where: { archivedAt: null, organizationId: orgId, ...teamVisibleOrWorkspace },
+        // An unshared view is its creator's alone. `AND`, not a top-level `OR`:
+        // `teamVisibleOrWorkspace` may already carry one.
+        where: {
+          AND: [{ OR: [{ shared: true }, { creatorId: userId }] }],
+          archivedAt: null,
+          organizationId: orgId,
+          ...teamVisibleOrWorkspace,
+        },
       }),
       this.prisma.issueRelation.findMany({
         where: {
@@ -600,6 +695,14 @@ export class SyncService {
       })
       .slice(0, BOOTSTRAP_PROJECT_UPDATES_TOTAL);
 
+    // A private -> public move leaves the old key (`SEC-12`) in
+    // `previousIdentifiers`; a viewer locked out of that team must not learn it.
+    // Identifier redirects still work for everyone else, and server-side.
+    let hiddenKeys: Set<string> = new Set();
+    if (hiddenTeamIds.length > 0 && issues.some(i => i.previousIdentifiers.length > 0)) {
+      hiddenKeys = await this.hiddenTeamKeys(hiddenTeamIds);
+    }
+
     const cursor = bootstrapCursor;
 
     return {
@@ -616,6 +719,13 @@ export class SyncService {
       issues: issues.map(i => ({
         ...i,
         labelIds: labelIdsByIssue.get(i.id) ?? [],
+        ...(hiddenKeys.size > 0
+          ? {
+              previousIdentifiers: i.previousIdentifiers.filter(
+                id => !hiddenKeys.has(identifierKey(id)),
+              ),
+            }
+          : {}),
       })),
       issueTemplates,
       lastSyncId: cursor,
@@ -856,6 +966,11 @@ export class SyncService {
       if (!data || typeof data.teamId === 'string') {
         continue;
       }
+      // An Issue row whose payload does not say which team it belongs to (a
+      // partial `{ customFieldValues }` update) is resolved from the live row.
+      if (row.modelName === 'Issue' && row.action !== 'D') {
+        relatedIssueIds.add(row.modelId);
+      }
       if (typeof data.issueId === 'string') {
         relatedIssueIds.add(data.issueId);
       }
@@ -903,6 +1018,19 @@ export class SyncService {
       return !info || canSeeIssue(info.teamId, info.creatorId, info.assigneeId);
     };
 
+    // Keys of the private teams this viewer cannot see, needed only when an
+    // Issue row carries `previousIdentifiers` (a key like `SEC` is the team's).
+    let hiddenKeys: Set<string> = new Set();
+    if (
+      hiddenTeamSet.size > 0 &&
+      rows.some(r => {
+        const prev = payloadOf(r)?.previousIdentifiers;
+        return r.modelName === 'Issue' && Array.isArray(prev) && prev.length > 0;
+      })
+    ) {
+      hiddenKeys = await this.hiddenTeamKeys(visibility.hiddenTeamIds);
+    }
+
     const out: SyncActionRow[] = [];
     for (const row of rows) {
       const data = payloadOf(row);
@@ -918,6 +1046,29 @@ export class SyncService {
         }
         continue;
       }
+      // Fail CLOSED for rows that must be scoped but say nothing about where they
+      // live. Falling through to "no teamId, no issueId -> visible" is how a
+      // private issue's custom-field values and a reaction on its comment once
+      // reached every member. A delete (`D`) carries no secrets and passes.
+      if (row.action !== 'D') {
+        if (row.modelName === 'Issue' && typeof data.teamId !== 'string') {
+          const info = issueLookup.get(row.modelId);
+          if (info && canSeeIssue(info.teamId, info.creatorId, info.assigneeId)) {
+            out.push(row);
+          }
+          continue;
+        }
+        if (
+          ISSUE_BOUND_MODELS.has(row.modelName) &&
+          typeof data.issueId !== 'string' &&
+          typeof data.teamId !== 'string'
+        ) {
+          continue;
+        }
+        if (TEAM_BOUND_MODELS.has(row.modelName) && typeof data.teamId !== 'string') {
+          continue;
+        }
+      }
       if (typeof data.teamId === 'string') {
         const visible =
           row.modelName === 'Issue'
@@ -928,7 +1079,11 @@ export class SyncService {
               )
             : !hiddenTeamSet.has(data.teamId);
         if (visible) {
-          out.push(row);
+          out.push(
+            row.modelName === 'Issue'
+              ? redactOriginTeam(row, data, hiddenTeamSet, hiddenKeys)
+              : row,
+          );
         } else if (
           row.modelName === 'Issue' &&
           row.action !== 'D' &&
@@ -951,6 +1106,15 @@ export class SyncService {
       out.push(row);
     }
     return out;
+  }
+
+  /** Keys of the given teams (id -> `team.key`), for redacting identifiers. */
+  private async hiddenTeamKeys(teamIds: string[]): Promise<Set<string>> {
+    const teams = await this.prisma.team.findMany({
+      select: { key: true },
+      where: { id: { in: teamIds } },
+    });
+    return new Set(teams.map(t => t.key));
   }
 
   /**

@@ -16,7 +16,7 @@ import type { GraphQLContext } from '../context';
 async function requireCommentAccess(
   ctx: GraphQLContext & { userId: string; orgId: string },
   commentId: string,
-): Promise<void> {
+): Promise<{ issueId: string }> {
   const target = await ctx.services.comment.findAccessTarget(commentId, ctx.orgId);
   if (!target) {
     throw new GraphQLError('Comment not found', {
@@ -24,6 +24,7 @@ async function requireCommentAccess(
     });
   }
   await requireTeamMember(ctx.prisma, target.teamId, ctx.userId, ctx.orgId);
+  return { issueId: target.issueId };
 }
 
 function handleCommentError(err: unknown): never {
@@ -155,15 +156,18 @@ export const commentResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireCommentAccess(ctx, commentId);
+      const { issueId } = await requireCommentAccess(ctx, commentId);
       try {
         const reaction = await ctx.services.comment.addReaction(commentId, ctx.userId, emoji);
+        // A reaction row only names its comment; `issueId` is what lets the sync
+        // filter tie it to the issue's visibility (it would otherwise reach every
+        // member, whatever team the comment is in).
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'I',
           'CommentReaction',
           reaction.id,
-          reaction,
+          { ...reaction, issueId },
         );
         return { lastSyncId: sync.id.toString(), reaction, success: true };
       } catch (err) {

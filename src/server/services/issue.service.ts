@@ -778,15 +778,20 @@ export class IssueService {
           });
           droppedLabelNames.push(...staleLabels.map(a => a.label.name));
         }
-        const removed = await tx.customFieldValue.deleteMany({
+        await tx.customFieldValue.deleteMany({
           where: {
             definition: { AND: [{ teamId: { not: null } }, { teamId: { not: effectiveTeamId } }] },
             issueId: id,
           },
         });
-        if (removed?.count > 0) {
-          customFieldValues = await tx.customFieldValue.findMany({ where: { issueId: id } });
-        }
+        // Always ship the surviving set, not only when something was dropped. A
+        // viewer who GAINS visibility through this move receives the issue row
+        // for the first time and has no values for it; the row's value set
+        // replaces whatever they hold, so existing viewers are unaffected.
+        // (Comments, reactions and attachments are not in the offline cache —
+        // the client fetches them over GraphQL when the issue is opened, under
+        // the same visibility rules, so they need no backfill.)
+        customFieldValues = await tx.customFieldValue.findMany({ where: { issueId: id } });
       }
 
       const cascaded: Issue[] = [];

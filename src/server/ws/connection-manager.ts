@@ -123,11 +123,13 @@ export class ConnectionManager {
       // other socket, restricted or not — so the shared frame is only safe
       // when this user's own view of the batch is identical to the whole batch.
       const own = dropForeignUserRows(
-        actions as unknown as Array<{ data: unknown; modelName: string }>,
+        actions as unknown as Array<{ action?: string; data: unknown; modelName: string }>,
         info.userId,
       ) as unknown as T[];
       if (!info.visibility) {
-        if (own.length === actions.length) {
+        // Identity, not length: a row rewritten for this user (an unshared view
+        // turned into a delete) keeps the count but must not get the shared frame.
+        if (own.length === actions.length && own.every((row, i) => row === actions[i])) {
           this.sendTo(info, full);
         } else if (own.length > 0) {
           this.sendTo(info, JSON.stringify({ cmd: 'sync', sync: own }));

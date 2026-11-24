@@ -281,7 +281,7 @@ export const server = new Server<HookContext>({
   // ─── Auth ─────────────────────────────────────────────────────────────────
   // Called before any document operations. Token is the ws_ticket sent by
   // HocuspocusProvider on the client side. Throwing rejects the connection.
-  async onAuthenticate({ token, documentName, context }) {
+  async onAuthenticate({ token, documentName, context, connectionConfig }) {
     if (!token) {
       log.warn({ documentName }, 'YJS connection rejected: no token');
       throw new Error('Missing authentication token');
@@ -363,6 +363,15 @@ export const server = new Server<HookContext>({
             "YJS connection rejected: not a member of this document's team",
           );
           throw new Error('Not a member of this team');
+        }
+        // A guest may read a team document but not edit it: GraphQL's
+        // document write gate (requireTeamMemberNotGuest) refuses them, and
+        // the collaborative channel must not be a way around it. Hocuspocus
+        // drops every update from a readOnly connection, so nothing from this
+        // peer is applied or persisted. (Issue descriptions keep the
+        // own-issue rule above: a guest may edit issues they created or hold.)
+        if (role === 'guest') {
+          connectionConfig.readOnly = true;
         }
       }
     }

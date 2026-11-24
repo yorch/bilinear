@@ -131,9 +131,14 @@ export const customViewResolvers = {
       }
 
       const customView = await ctx.services.customView.update(id, input).catch(badInput);
+      // Sharing an unshared view is an INSERT for everyone else: the sync filter
+      // never sent them the private copy, so they have nothing to update. The
+      // opposite transition stays a `U` — the filter turns it into a delete for
+      // everyone but the creator, which evicts the copy they held while shared.
+      const becameShared = !existing.shared && customView.shared;
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
-        'U',
+        becameShared ? 'I' : 'U',
         'CustomView',
         id,
         customView,
