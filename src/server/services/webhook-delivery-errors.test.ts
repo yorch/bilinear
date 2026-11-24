@@ -60,6 +60,23 @@ describe('describeDeliveryError', () => {
     expect(describeDeliveryError(dns)).not.toBe(describeDeliveryError(tls));
   });
 
+  it('maps known network codes to plain language', () => {
+    const dns = Object.assign(new TypeError('fetch failed'), {
+      cause: Object.assign(new Error('getaddrinfo ENOTFOUND hooks.example.com'), {
+        code: 'ENOTFOUND',
+      }),
+    });
+    const refused = Object.assign(new TypeError('fetch failed'), {
+      cause: Object.assign(new Error('connect ECONNREFUSED 10.0.0.1:443'), {
+        code: 'ECONNREFUSED',
+      }),
+    });
+    expect(describeDeliveryError(dns)).toBe("Couldn't resolve host hooks.example.com (ENOTFOUND)");
+    expect(describeDeliveryError(refused)).toBe(
+      'Connection refused by 10.0.0.1:443 (ECONNREFUSED)',
+    );
+  });
+
   it('strips URL credentials and bounds the length', () => {
     const err = Object.assign(new TypeError('fetch failed'), {
       cause: new Error(

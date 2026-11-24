@@ -1062,6 +1062,47 @@ export async function readBodyCapped(res: {
 }
 
 /**
+ * Plain-language text for the network failures people actually hit, so the UI
+ * does not show undici's `fetch failed (ENOTFOUND: getaddrinfo ENOTFOUND host)`.
+ * The error code stays in parentheses for anyone debugging. Unknown codes
+ * return null and fall back to the raw description.
+ */
+function friendlyNetworkError(cause: unknown): string | null {
+  if (!cause || typeof cause !== 'object') {
+    return null;
+  }
+  const { code, message } = cause as { code?: unknown; message?: unknown };
+  if (typeof code !== 'string') {
+    return null;
+  }
+  const text = typeof message === 'string' ? message : '';
+  // `getaddrinfo ENOTFOUND host` / `connect ECONNREFUSED 1.2.3.4:443`: the
+  // target is whatever follows the code.
+  const target = text.split(code)[1]?.trim().split(/\s+/)[0] ?? '';
+  switch (code) {
+    case 'ENOTFOUND':
+    case 'EAI_AGAIN':
+      return `Couldn't resolve host${target ? ` ${target}` : ''} (${code})`;
+    case 'ECONNREFUSED':
+      return `Connection refused${target ? ` by ${target}` : ''} (${code})`;
+    case 'ECONNRESET':
+      return `Connection was reset by the server (${code})`;
+    case 'ETIMEDOUT':
+    case 'UND_ERR_CONNECT_TIMEOUT':
+    case 'UND_ERR_HEADERS_TIMEOUT':
+      return `Timed out connecting to the server (${code})`;
+    case 'CERT_HAS_EXPIRED':
+    case 'DEPTH_ZERO_SELF_SIGNED_CERT':
+    case 'SELF_SIGNED_CERT_IN_CHAIN':
+    case 'UNABLE_TO_VERIFY_LEAF_SIGNATURE':
+    case 'ERR_TLS_CERT_ALTNAME_INVALID':
+      return `TLS certificate problem (${code})`;
+    default:
+      return null;
+  }
+}
+
+/**
  * Human-readable reason for a failed attempt. undici reports nearly every
  * network failure as `TypeError: fetch failed` with the real reason in
  * `cause`, so the bare message hides whether the SSRF guard refused the
@@ -1083,7 +1124,8 @@ export function describeDeliveryError(err: unknown, timeoutMs?: number): string 
       .filter(Boolean)
       .join(': ');
   }
-  const full = detail && !base.includes(detail) ? `${base} (${detail})` : base;
+  const friendly = friendlyNetworkError(cause);
+  const full = friendly ?? (detail && !base.includes(detail) ? `${base} (${detail})` : base);
   return full
     .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, '$1***@')
     .replace(/\s+/g, ' ')
