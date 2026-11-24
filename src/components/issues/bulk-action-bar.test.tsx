@@ -123,11 +123,12 @@ describe('BulkActionBar', () => {
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
 
-  it('is a full-width single-row scroller on phones', () => {
+  it('is a full-width wrapping bar on phones so Delete is never scrolled out of sight', () => {
     render(<BulkActionBar {...base} />);
     const bar = screen.getByTestId('bulk-action-bar');
     expect(bar.className).toContain('inset-x-0');
-    expect(bar.className).toContain('flex-nowrap');
-    expect(bar.className).toContain('overflow-x-auto');
+    expect(bar.className).toContain('flex-wrap');
+    expect(bar.className).not.toContain('flex-nowrap');
+    expect(bar.className).not.toContain('overflow-x-auto');
   });
 });
