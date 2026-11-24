@@ -85,10 +85,10 @@ function PanelSection({
   value: string;
 }) {
   return (
-    <div role="group" aria-label={title}>
-      <p className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <fieldset className="m-0 min-w-0 border-0 p-0">
+      <legend className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         {title}
-      </p>
+      </legend>
       {options.map(o => (
         <button
           aria-pressed={o.value === value}
@@ -107,7 +107,7 @@ function PanelSection({
           {o.label}
         </button>
       ))}
-    </div>
+    </fieldset>
   );
 }
 

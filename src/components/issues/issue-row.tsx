@@ -51,13 +51,13 @@ interface IssueRowProps {
   allLabels: IssueLabel[];
   /** Whether this row is checked in bulk-selection mode. */
   checked?: boolean;
+  customFields?: DBCustomFieldDefinition[];
   /** Active custom-field definitions; only those whose column is visible render. */
   /**
    * The issue's cycle, when the list knows it. Lets the narrow cycle column
    * show a short "C2" with the full name as its tooltip.
    */
   cycle?: { label: string; number?: number };
-  customFields?: DBCustomFieldDefinition[];
   estimationType?: string;
   /** Look up a custom-field value for this issue. */
   getCustomFieldValue?: (definitionId: string) => unknown;
@@ -219,6 +219,10 @@ export function IssueRow({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: presentational row container; interactive children (checkbox, button, selects) provide all a11y. onContextMenu is the only handler.
     <div
+      // The j/k cursor row: `aria-current` is the valid way to mark "the current
+      // item in a set" on a plain element (`aria-selected` needs a row/option
+      // role, which this container of interactive cells cannot take).
+      aria-current={selected ? 'true' : undefined}
       className={cn(
         'group grid h-9 select-none items-center gap-2 border-b border-border px-4 py-0 transition-colors hover:bg-accent max-lg:gap-1 max-lg:px-3',
         'max-lg:[grid-template-columns:var(--row-cols-mobile)]!',
@@ -237,10 +241,6 @@ export function IssueRow({
         'max-md:[&_[data-prop-empty]]:opacity-100',
         selected && 'bg-brand-subtle',
       )}
-      // The j/k cursor row: `aria-current` is the valid way to mark "the current
-      // item in a set" on a plain element (`aria-selected` needs a row/option
-      // role, which this container of interactive cells cannot take).
-      aria-current={selected ? 'true' : undefined}
       data-issue-id={issue.id}
       data-selected={selected ? 'true' : undefined}
       data-testid="issue-row"
@@ -254,6 +254,7 @@ export function IssueRow({
       {/* Checkbox */}
       {/* A 44px hit area below `md` around the 14px box; the wrapper takes the
           click so a tap that misses the box still toggles. */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: presentational hit-area wrapper; the checkbox inside is the real control and keyboard target */}
       <span
         className={cn('flex items-center justify-center', TOUCH_TARGET_SQUARE)}
         data-testid="issue-row-check-area"

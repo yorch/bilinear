@@ -30,11 +30,11 @@ export type ListGroupBy =
 
 interface IssueListViewProps {
   customFields?: DBCustomFieldDefinition[];
+  /** Cycle names for `groupBy='cycle'`. */
+  cycles?: { id: string; label: string; number?: number }[];
   /** The team's estimation scale; supplying it adds an Estimate action to the bulk bar. */
   estimationType?: string;
   getCustomFieldValue?: (issueId: string, definitionId: string) => unknown;
-  /** Cycle names for `groupBy='cycle'`. */
-  cycles?: { id: string; label: string; number?: number }[];
   /** Section the list by this property (default: status). */
   groupBy?: ListGroupBy;
   /** True when a filter is narrowing the list: an empty result is then "no match", not "no issues". */

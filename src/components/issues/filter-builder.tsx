@@ -499,7 +499,10 @@ function AddFilterForm({
                   // Keep the operator valid for the new field (a date field has
                   // before/after, not any-of).
                   const nextField = f.value.startsWith('custom:') ? 'custom' : f.value;
-                  if (!operatorsFor(nextField as FilterField).includes(operator)) {
+                  if (
+                    !operatorsFor(nextField as FilterField).includes(operator) ||
+                    (nextField === 'dueDate' && operator === 'eq')
+                  ) {
                     setOperator(nextField === 'dueDate' ? 'before' : 'eq');
                   }
                   close();
