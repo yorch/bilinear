@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { markdownToHtml, markdownToHtmlWithin, safeHref } from './markdown-to-html';
+import {
+  MAX_MARKDOWN_SOURCE_LENGTH,
+  markdownToHtml,
+  markdownToHtmlWithin,
+  safeHref,
+} from './markdown-to-html';
 
 describe('markdownToHtml', () => {
   it('keeps headings, paragraphs, line breaks, lists and code blocks', () => {
@@ -81,5 +86,37 @@ describe('markdownToHtml', () => {
     const html = markdownToHtmlWithin('**bold** word\n\n'.repeat(5000), 2000);
     expect(html.length).toBeLessThanOrEqual(2000);
     expect(html.endsWith('</p>')).toBe(true);
+  });
+});
+
+describe('markdownToHtml on pathological input', () => {
+  // Unclosed `__` / `~~` openers used to rescan to end of input each (quadratic):
+  // 64 KB took ~270 ms and 256 KB ~4.9 s on the request thread.
+  const cases: Array<[string, string]> = [
+    ['unclosed __', ' __a'],
+    ['unclosed ~~', ' ~~a'],
+    ['unclosed ** ', '**a '],
+    ['unclosed __ per line', '__a\n'],
+  ];
+  for (const [name, unit] of cases) {
+    for (const bytes of [64 * 1024, 256 * 1024]) {
+      it(`${name} at ${bytes / 1024} KB converts in under 50 ms`, () => {
+        const src = unit.repeat(Math.ceil(bytes / unit.length));
+        const started = performance.now();
+        markdownToHtml(src);
+        expect(performance.now() - started).toBeLessThan(50);
+      });
+    }
+  }
+
+  it('ignores source beyond the conversion ceiling', () => {
+    const html = markdownToHtml(`${'a'.repeat(MAX_MARKDOWN_SOURCE_LENGTH)}TAILMARKER`);
+    expect(html).not.toContain('TAILMARKER');
+  });
+
+  it('still renders ordinary emphasis', () => {
+    expect(markdownToHtml('__bb__ ~~ss~~ **cc** *ii*')).toBe(
+      '<p><strong>bb</strong> <s>ss</s> <strong>cc</strong> <em>ii</em></p>',
+    );
   });
 });

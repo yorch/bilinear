@@ -89,9 +89,9 @@ describe('GithubImportService', () => {
       },
     };
     prisma.gitHubIntegration.findUnique.mockResolvedValue(null);
-    // The per-team advisory lock; a plain no-op here, emulated as a real mutex
-    // in the concurrency suite below.
-    (prisma as unknown as { $executeRaw: unknown }).$executeRaw = vi.fn();
+    // pg_try_advisory_xact_lock (lock acquired) and the per-issue heartbeat; the
+    // concurrency suite below emulates the lock as a real non-blocking mutex.
+    (prisma as unknown as { $queryRaw: unknown }).$queryRaw = vi.fn(async () => [{ locked: true }]);
     prisma.organizationMember.findUnique.mockResolvedValue({ role: 'admin' });
     prisma.customFieldDefinition.findFirst.mockResolvedValue(FIELD);
     prisma.customFieldValue.findMany.mockResolvedValue([]);
@@ -453,32 +453,43 @@ describe('GithubImportService', () => {
   });
 
   describe('concurrent runs', () => {
-    it('serialise on the team lock: one set of issues and one field definition', async () => {
-      // Stateful fakes + a real mutex behind the advisory-lock statement.
-      const lockQueues = new Map<string, Promise<void>>();
-      const releases: Array<() => void> = [];
+    /** Wire $transaction/$queryRaw so pg_try_advisory_xact_lock is a real non-blocking mutex. */
+    function wireTryLock() {
+      const held = new Set<string>();
+      let openTx = 0;
+      const state = { maxOpenTx: 0 };
       prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-        let release: () => void = () => undefined;
+        const mine: string[] = [];
+        openTx++;
+        state.maxOpenTx = Math.max(state.maxOpenTx, openTx);
         const tx = {
           ...prisma,
-          $executeRaw: async (_s: TemplateStringsArray, key: string) => {
-            const prev = lockQueues.get(key) ?? Promise.resolve();
-            lockQueues.set(
-              key,
-              new Promise<void>(r => {
-                release = r;
-              }),
-            );
-            await prev;
+          $queryRaw: async (_s: TemplateStringsArray, key?: string) => {
+            if (key === undefined) {
+              return [{ '?column?': 1 }]; // heartbeat
+            }
+            if (held.has(key)) {
+              return [{ locked: false }];
+            }
+            held.add(key);
+            mine.push(key);
+            return [{ locked: true }];
           },
         };
         try {
           return await fn(tx);
         } finally {
-          release();
-          releases.push(release);
+          openTx--;
+          for (const k of mine) {
+            held.delete(k);
+          }
         }
       });
+      return state;
+    }
+
+    it('lets one run through and fails the rest fast, never queueing', async () => {
+      wireTryLock();
       let definition: typeof FIELD | null = null;
       const recorded = new Set<string>();
       const tick = () => new Promise(r => setTimeout(r, 5));
@@ -517,12 +528,90 @@ describe('GithubImportService', () => {
         items: [gh({ number: 1 }), gh({ number: 2 })],
       });
 
-      const [a, b] = await Promise.all([run(), run()]);
+      const results = await Promise.allSettled([run(), run(), run()]);
+      const ok = results.filter(r => r.status === 'fulfilled');
+      const busy = results.filter(
+        r => r.status === 'rejected' && (r.reason as Error).name === 'GithubImportBusyError',
+      );
 
+      expect(ok).toHaveLength(1);
+      expect(busy).toHaveLength(2);
       expect(deps.customField.createDefinition).toHaveBeenCalledTimes(1);
       expect(deps.issue.create).toHaveBeenCalledTimes(2);
-      expect(a.createdIssues.length + b.createdIssues.length).toBe(2);
-      expect(a.existing + b.existing).toBe(2);
+    });
+
+    it('does GitHub fetches and markdown conversion before opening the lock transaction', async () => {
+      let txOpen = false;
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+        txOpen = true;
+        try {
+          return await fn(prisma);
+        } finally {
+          txOpen = false;
+        }
+      });
+      const seenOpen: boolean[] = [];
+      client.listIssues.mockImplementation(async () => {
+        seenOpen.push(txOpen);
+        return { hasNext: false, items: [gh({ assignee: { login: 'octo' }, comments: 1 })] };
+      });
+      client.getUserEmail.mockImplementation(async () => {
+        seenOpen.push(txOpen);
+        return null;
+      });
+      client.listComments.mockImplementation(async () => {
+        seenOpen.push(txOpen);
+        return { items: [], truncated: false };
+      });
+      await run({ includeComments: true });
+      expect(seenOpen).toHaveLength(3);
+      expect(seenOpen.every(open => open === false)).toBe(true);
+    });
+
+    it('stops writing when the lock transaction has expired mid-run', async () => {
+      let heartbeats = 0;
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          ...prisma,
+          $queryRaw: async (_s: TemplateStringsArray, key?: string) => {
+            if (key !== undefined) {
+              return [{ locked: true }];
+            }
+            if (++heartbeats > 1) {
+              throw new Error('Transaction already closed: expired');
+            }
+            return [];
+          },
+        }),
+      );
+      client.listIssues.mockResolvedValue({
+        hasNext: false,
+        items: [gh({ number: 1 }), gh({ number: 2 }), gh({ number: 3 })],
+      });
+      await expect(run()).rejects.toThrow('expired');
+      expect(deps.issue.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects over the process-wide ceiling instead of taking another connection', async () => {
+      client.listIssues.mockResolvedValue({ hasNext: false, items: [gh()] });
+      const gates: Array<() => void> = [];
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+        await new Promise<void>(r => gates.push(r));
+        return fn(prisma);
+      });
+      const inFlight = [run(), run(), run()];
+      await vi.waitFor(() => expect(gates).toHaveLength(3));
+      await expect(run()).rejects.toMatchObject({ name: 'GithubImportBusyError' });
+      for (const g of gates) {
+        g();
+      }
+      await Promise.all(inFlight);
+    });
+
+    it('maps a pool wait timeout (P2028) to busy', async () => {
+      client.listIssues.mockResolvedValue({ hasNext: false, items: [gh()] });
+      prisma.$transaction.mockRejectedValue(Object.assign(new Error('timeout'), { code: 'P2028' }));
+      await expect(run()).rejects.toMatchObject({ name: 'GithubImportBusyError' });
     });
   });
 

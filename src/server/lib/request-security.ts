@@ -1,6 +1,9 @@
 import type { NextRequest, NextResponse } from 'next/server';
 import { env } from './env';
 import { REFRESH_TOKEN_DAYS } from './jwt';
+import { childLogger } from './logger';
+
+const log = childLogger({ module: 'request-security' });
 
 /**
  * Shared request-security helpers used by the GraphQL route and the
@@ -39,11 +42,17 @@ export function setSessionCookie(
   });
 }
 
+let warnedProxyTrustUnset = false;
+
 /**
- * Best-effort client IP. Only trusts `X-Forwarded-For` / `X-Real-IP` when
- * `TRUST_PROXY_HEADERS=1` (deploy only behind a proxy that strips
- * client-supplied forwarding headers); otherwise falls back to the socket
- * peer. Never trust the raw header by default — it is attacker-controlled.
+ * Client IP, or null when it cannot be established safely.
+ *
+ * Next 16 removed `NextRequest.ip`, and a route handler has no access to the
+ * socket. Next itself fills `x-forwarded-for` from the socket peer only when
+ * the header is absent, so a client-sent value is indistinguishable from the
+ * real one. The header is therefore trusted only with `TRUST_PROXY_HEADERS=1`
+ * (deploy behind a proxy that overwrites it); otherwise the answer is null and
+ * callers MUST still rate limit (use `rateLimitKeyIp`) rather than skip.
  */
 export function getClientIp(req: NextRequest): string | null {
   if (env.TRUST_PROXY_HEADERS) {
@@ -57,8 +66,31 @@ export function getClientIp(req: NextRequest): string | null {
       return realIp;
     }
   }
-  const nextIp = (req as unknown as { ip?: string | null }).ip;
-  return nextIp ?? null;
+  // Set by a few hosting adapters (framework-provided, not a header); Next 16's
+  // own NextRequest has no `ip`, so on a plain deploy this is undefined.
+  const platformIp = (req as unknown as { ip?: string | null }).ip;
+  if (platformIp) {
+    return platformIp;
+  }
+  if (!warnedProxyTrustUnset && process.env.NODE_ENV === 'production') {
+    warnedProxyTrustUnset = true;
+    log.warn(
+      'TRUST_PROXY_HEADERS is not set: client IPs are unavailable, so per-IP rate limits fall back to shared buckets and audit/impersonation records carry no IP. Set TRUST_PROXY_HEADERS=1 behind a proxy that overwrites X-Forwarded-For.',
+    );
+  }
+  return null;
+}
+
+/** Bucket name used in place of an IP that cannot be established. */
+export const UNKNOWN_IP_BUCKET = 'unknown-ip';
+
+/**
+ * Key component for per-IP rate limits. An unknown IP shares one bucket (with a
+ * caller-chosen larger limit) so the limiter still bites instead of being skipped.
+ */
+export function rateLimitKeyIp(req: NextRequest): { ip: string; known: boolean } {
+  const ip = getClientIp(req);
+  return ip ? { ip, known: true } : { ip: UNKNOWN_IP_BUCKET, known: false };
 }
 
 /**
@@ -106,4 +138,36 @@ export function isOriginStringAllowed(origin: string | null): boolean {
  */
 export function isOriginAllowed(req: NextRequest): boolean {
   return isOriginStringAllowed(req.headers.get('origin'));
+}
+
+/**
+ * Read a request body with a hard size cap, without trusting Content-Length.
+ * Returns null as soon as the cap is exceeded (the rest of the upload is
+ * cancelled, not buffered). A declared Content-Length over the cap is refused
+ * before reading anything.
+ */
+export async function readBodyCapped(req: Request, maxBytes: number): Promise<Buffer | null> {
+  const declared = Number(req.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    return null;
+  }
+  if (!req.body) {
+    return Buffer.alloc(0);
+  }
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
 }

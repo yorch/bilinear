@@ -43,8 +43,13 @@ function anchor(href: string, innerHtml: string): string {
 // One alternation, earliest match wins. Groups:
 // 1/2 code span, 3 image bang, 4 link text, 5 link url, 6 bare url,
 // 7 bold(**), 8 bold(__), 9 strike, 10 italic(*), 11 italic(_)
+//
+// Emphasis bodies are capped at EMPHASIS_MAX characters: an unclosed opener
+// otherwise rescans to the end of the input, which is quadratic over many
+// openers (' __a' x 16384 took ~270 ms, 256 KB took ~4.9 s on the request
+// thread). With the cap every opener costs O(1), so the whole pass is linear.
 const INLINE_RE =
-  /(`+)([\s\S]*?[^`])\1(?!`)|(!?)\[([^\]\n]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"\n]*")?\s*\)|(https?:\/\/[^\s<>]*[^\s<>.,;:!?)'"\]])|\*\*(?=\S)([\s\S]+?\S)\*\*|__(?=\S)([\s\S]+?\S)__|~~(?=\S)([\s\S]+?\S)~~|\*(?=[^\s*])([^*\n]+?)\*|\b_(?=[^\s_])([^_\n]+?)_\b/g;
+  /(`+)([\s\S]*?[^`])\1(?!`)|(!?)\[([^\]\n]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"\n]*")?\s*\)|(https?:\/\/[^\s<>]*[^\s<>.,;:!?)'"\]])|\*\*(?=\S)([\s\S]{1,200}?\S)\*\*|__(?=\S)([\s\S]{1,200}?\S)__|~~(?=\S)([\s\S]{1,200}?\S)~~|\*(?=[^\s*])([^*\n]{1,200}?)\*|\b_(?=[^\s_])([^_\n]{1,200}?)_\b/g;
 
 function escapeText(text: string): string {
   return escapeHtml(text).replace(/\n/g, '<br>');
@@ -190,8 +195,20 @@ function renderBlocks(src: string, depth: number): string {
   return out.join('');
 }
 
+/**
+ * Hard ceiling on markdown source characters converted in one call. The stored
+ * HTML is capped far below this anyway (`MAX_RICH_TEXT_LENGTH`), so a larger
+ * source only buys the attacker CPU time on the request thread.
+ */
+export const MAX_MARKDOWN_SOURCE_LENGTH = 150_000;
+
 export function markdownToHtml(markdown: string): string {
-  return renderBlocks(markdown, 0);
+  return renderBlocks(
+    markdown.length > MAX_MARKDOWN_SOURCE_LENGTH
+      ? markdown.slice(0, MAX_MARKDOWN_SOURCE_LENGTH)
+      : markdown,
+    0,
+  );
 }
 
 /**

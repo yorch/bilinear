@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
 import {
   Agent,
   type Dispatcher,
@@ -465,6 +465,24 @@ export class WebhookService {
       return;
     }
 
+    // Rows created before a range was blocked (or before the check existed) are
+    // never grandfathered: every delivery re-runs the create-time URL screen, so
+    // a stale IP-literal row cannot reach a now-forbidden address. (Hostnames
+    // are additionally pinned at connect time.)
+    try {
+      this.validateUrl(delivery.webhook.url);
+    } catch {
+      await this.prisma.webhookDelivery.update({
+        data: {
+          errorMessage: 'Webhook URL is no longer allowed',
+          nextAttemptAt: null,
+          status: 'failed',
+        },
+        where: { id: deliveryId },
+      });
+      return;
+    }
+
     const rawBody = JSON.stringify(delivery.payload);
     const signature = signPayload(rawBody, delivery.webhook.signingSecret);
 
@@ -874,60 +892,65 @@ function parseIpLiteral(s: string): string | null {
   return null;
 }
 
-/** Whether a normalized IP literal points to a private/loopback range. */
+/**
+ * IANA special-purpose / non-global ranges a webhook must never reach. Built on
+ * `node:net` BlockList (CIDR-aware, handles IPv4-mapped IPv6 natively) rather
+ * than hand-rolled prefix tests, which previously missed CGNAT (100.64/10 —
+ * 100.100.100.200 is a cloud metadata address), benchmarking (198.18/15),
+ * fe80::/10 beyond the literal `fe80:` prefix, site-local fec0::/10, the
+ * IPv4-compatible/translated forms (::7f00:1, ::ffff:0:7f00:1), NAT64 and 6to4.
+ */
+const PRIVATE_V4_CIDRS: Array<[string, number]> = [
+  ['0.0.0.0', 8], // "this network"
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10], // CGNAT / shared address space
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16], // link-local + cloud metadata
+  ['172.16.0.0', 12],
+  ['192.0.0.0', 24], // IETF protocol assignments
+  ['192.0.2.0', 24], // TEST-NET-1
+  ['192.88.99.0', 24], // 6to4 relay anycast
+  ['192.168.0.0', 16],
+  ['198.18.0.0', 15], // benchmarking
+  ['198.51.100.0', 24], // TEST-NET-2
+  ['203.0.113.0', 24], // TEST-NET-3
+  ['224.0.0.0', 3], // multicast + reserved + broadcast (224/4 and 240/4)
+];
+const PRIVATE_V6_CIDRS: Array<[string, number]> = [
+  ['::', 96], // unspecified, loopback, IPv4-compatible (::7f00:1)
+  ['::ffff:0:0:0', 96], // IPv4-translated (::ffff:0:7f00:1)
+  ['64:ff9b::', 96], // NAT64
+  ['64:ff9b:1::', 48], // local-use NAT64
+  ['100::', 64], // discard-only
+  ['2001::', 23], // IETF protocol assignments (Teredo etc.)
+  ['2001:db8::', 32], // documentation
+  ['2002::', 16], // 6to4
+  ['fc00::', 7], // unique-local
+  ['fe80::', 10], // link-local
+  ['fec0::', 10], // site-local (deprecated)
+  ['ff00::', 8], // multicast
+];
+const privateRanges = new BlockList();
+for (const [net, prefix] of PRIVATE_V4_CIDRS) {
+  privateRanges.addSubnet(net, prefix, 'ipv4');
+}
+for (const [net, prefix] of PRIVATE_V6_CIDRS) {
+  privateRanges.addSubnet(net, prefix, 'ipv6');
+}
+
+/** Whether a normalized IP literal points to a private/loopback/special-purpose range. */
 function isPrivateIp(ip: string): boolean {
-  // IPv6 forms — strip zone id and zero-pad shorthand for matching.
-  // Node's URL parser keeps brackets in `hostname`, but isPrivateIp is
-  // also called recursively on already-stripped values, so accept both.
-  let v6 = ip.split('%')[0];
-  if (v6.startsWith('[') && v6.endsWith(']')) {
-    v6 = v6.slice(1, -1);
+  // Node's URL parser keeps brackets in `hostname`, but this is also called on
+  // already-stripped values, so accept both; drop any IPv6 zone id.
+  let addr = ip.split('%')[0] ?? '';
+  if (addr.startsWith('[') && addr.endsWith(']')) {
+    addr = addr.slice(1, -1);
   }
-  if (v6.includes(':')) {
-    if (
-      v6 === '::1' ||
-      v6 === '::' ||
-      v6.startsWith('fe80:') ||
-      // unique-local fc00::/7
-      /^fc[0-9a-f]{2}:/i.test(v6) ||
-      /^fd[0-9a-f]{2}:/i.test(v6)
-    ) {
-      return true;
-    }
-    // IPv4-mapped IPv6 — dotted form (::ffff:127.0.0.1).
-    const mappedDotted = v6.match(/^::ffff:(?:0:)?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
-    if (mappedDotted) {
-      return isPrivateIp(mappedDotted[1]);
-    }
-    // IPv4-mapped IPv6 — compressed numeric form (::ffff:7f00:1). Node's
-    // URL parser canonicalizes `[::ffff:127.0.0.1]` to this shape, so the
-    // SSRF guard MUST handle it or the loopback bypass slips through.
-    const mappedHex = v6.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
-    if (mappedHex) {
-      const hi = Number.parseInt(mappedHex[1], 16);
-      const lo = Number.parseInt(mappedHex[2], 16);
-      if (Number.isFinite(hi) && Number.isFinite(lo)) {
-        const dotted = [(hi >>> 8) & 0xff, hi & 0xff, (lo >>> 8) & 0xff, lo & 0xff].join('.');
-        return isPrivateIp(dotted);
-      }
-    }
+  const family = isIP(addr);
+  if (family === 0) {
     return false;
   }
-  // IPv4
-  const m = ip.split('.').map(Number);
-  if (m.length !== 4 || m.some(n => !Number.isFinite(n) || n < 0 || n > 255)) {
-    return false;
-  }
-  const [a, b] = m;
-  return (
-    a === 0 || // 0.0.0.0/8
-    a === 10 || // private
-    a === 127 || // loopback
-    (a === 169 && b === 254) || // link-local + cloud metadata
-    (a === 172 && b >= 16 && b <= 31) || // private
-    (a === 192 && b === 168) || // private
-    a >= 224 // multicast / reserved
-  );
+  return privateRanges.check(addr, family === 4 ? 'ipv4' : 'ipv6');
 }
 
 type LookupCallback = (

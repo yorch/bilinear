@@ -13,9 +13,22 @@ export const REQUEST_PATH_HEADER = 'x-bilinear-path';
  * the header is client-forgeable until the proxy overwrites it, so it goes
  * through `safeRelativePath` like any other `next` value.
  */
-export function loginRedirectPath(requestPath: string | null | undefined, fallback: string) {
-  const next = safeRelativePath(requestPath) ?? fallback;
+export function loginRedirectPath(
+  requestPath: string | null | undefined,
+  fallback: string,
+  scope?: string,
+) {
+  const safe = safeRelativePath(requestPath);
+  // Defence in depth: the path must live under the tree being rendered, so a
+  // forged header cannot point the post-login redirect at another tree.
+  const next = safe && (!scope || isUnder(safe, scope)) ? safe : fallback;
   return `/login?next=${encodeURIComponent(next)}`;
+}
+
+/** True when `path` is `scope` itself or below it (segment-wise, query ignored). */
+function isUnder(path: string, scope: string): boolean {
+  const pathname = path.split(/[?#]/, 1)[0] ?? '';
+  return pathname === scope || pathname.startsWith(`${scope}/`);
 }
 
 /**

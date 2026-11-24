@@ -4,7 +4,7 @@ import { env } from '@/server/lib/env';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
-import { getClientIp } from '@/server/lib/request-security';
+import { rateLimitKeyIp } from '@/server/lib/request-security';
 import { checkFixedWindow } from '@/server/middleware/rate-limit';
 import { SamlService } from '@/server/services/saml.service';
 
@@ -33,7 +33,8 @@ const RELAY_STATE_MAX_AGE = 5 * 60;
  * IdP redirect; a plain navigation lands back on /login with the message.
  */
 const MIN_RESPONSE_MS = 300;
-const INITIATE_PER_MINUTE = 20;
+export const INITIATE_PER_MINUTE = 20;
+export const INITIATE_PER_MINUTE_UNKNOWN_IP = 120;
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
@@ -51,15 +52,19 @@ async function handleGet(req: NextRequest) {
   const probe = searchParams.get('probe') === '1';
   const startedAt = Date.now();
 
-  const ip = getClientIp(req);
-  if (ip) {
-    const { exceeded } = await checkFixedWindow(`rl:saml-initiate:${ip}`, INITIATE_PER_MINUTE, 60);
-    if (exceeded) {
-      return NextResponse.json(
-        { error: 'Too many attempts — try again in a minute' },
-        { headers: { 'Retry-After': '60' }, status: 429 },
-      );
-    }
+  // With no trusted client IP (TRUST_PROXY_HEADERS unset) everyone shares one
+  // bucket with a larger limit: still finite, so the limiter never switches off.
+  const { ip, known } = rateLimitKeyIp(req);
+  const { exceeded } = await checkFixedWindow(
+    `rl:saml-initiate:${ip}`,
+    known ? INITIATE_PER_MINUTE : INITIATE_PER_MINUTE_UNKNOWN_IP,
+    60,
+  );
+  if (exceeded) {
+    return NextResponse.json(
+      { error: 'Too many attempts — try again in a minute' },
+      { headers: { 'Retry-After': '60' }, status: 429 },
+    );
   }
 
   const org = orgKey ? await prisma.organization.findUnique({ where: { urlKey: orgKey } }) : null;

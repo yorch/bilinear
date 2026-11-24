@@ -20,6 +20,19 @@ describe('loginRedirectPath', () => {
   );
 });
 
+describe('loginRedirectPath scope', () => {
+  it('ignores a path outside the tree being rendered', () => {
+    expect(loginRedirectPath('/other/settings', '/acme', '/acme')).toBe('/login?next=%2Facme');
+    expect(loginRedirectPath('/acmeX/y', '/acme', '/acme')).toBe('/login?next=%2Facme');
+  });
+  it('keeps a path inside it', () => {
+    expect(loginRedirectPath('/acme/team/ENG?x=1', '/acme', '/acme')).toBe(
+      `/login?next=${encodeURIComponent('/acme/team/ENG?x=1')}`,
+    );
+    expect(loginRedirectPath('/acme', '/acme', '/acme')).toBe('/login?next=%2Facme');
+  });
+});
+
 describe('withWorkspaceKey', () => {
   it('swaps the first segment and keeps the rest, search included', () => {
     expect(withWorkspaceKey('/old/team/ENG/issue/ENG-1?tab=a', 'new')).toBe(

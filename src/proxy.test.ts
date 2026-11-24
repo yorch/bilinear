@@ -38,25 +38,21 @@ describe('proxy', () => {
     expect(re.test(path)).toBe(true);
   });
 
+  // A page whose path merely ends in a static-looking extension is still a
+  // document request; skipping it let a forged x-bilinear-path reach the layout.
   it.each([
-    '/api',
-    '/api/',
-    '/api/graphql',
-    '/_next/static/x.js',
-    '/_next/image',
-    '/sw.js',
-    '/offline.html',
-    '/manifest.webmanifest',
-    '/favicon.ico',
-    '/icons/icon-192.png',
-    '/icons/logo.svg',
-    '/fonts/a.woff2',
-    '/fonts/a.ttf',
-    '/chunks/app.js.map',
-    '/styles/app.css',
-    '/robots.txt',
-    '/sitemap.xml',
-  ])('matcher skips %s', path => {
-    expect(re.test(path)).toBe(false);
+    '/demo/issue/ABC-1.png',
+    '/demo/settings/x.json',
+    '/demo/project/report.pdf',
+    '/demo/team/ENG/view.css',
+  ])('matcher covers extension-suffixed page %s', path => {
+    expect(re.test(path)).toBe(true);
   });
+
+  it.each(['/api', '/api/', '/api/graphql', '/_next/static/x.js', '/_next/image'])(
+    'matcher skips %s',
+    path => {
+      expect(re.test(path)).toBe(false);
+    },
+  );
 });

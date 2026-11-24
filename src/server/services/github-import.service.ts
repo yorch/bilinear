@@ -128,7 +128,10 @@ function isoDay(ts: string): string {
  * converted (and sanitised) server-side; nothing from GitHub is stored as raw
  * HTML. A footer keeps provenance without a schema change.
  */
-export function buildDescription(issue: GithubIssue): string {
+export function buildDescription(
+  issue: GithubIssue,
+  convert: (markdown: string, maxLength: number) => string = markdownToHtmlWithin,
+): string {
   const href = safeHref(issue.html_url);
   const link = href
     ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer nofollow">${escapeHtml(issue.html_url)}</a>`
@@ -136,19 +139,22 @@ export function buildDescription(issue: GithubIssue): string {
   const author = issue.user?.login ? ` by @${escapeHtml(issue.user.login)}` : '';
   const footer = `<hr><p>Imported from GitHub: ${link}<br>Opened${author} on ${escapeHtml(isoDay(issue.created_at))}.</p>`;
   const body = (issue.body ?? '').trim()
-    ? markdownToHtmlWithin(issue.body ?? '', MAX_RICH_TEXT_LENGTH - footer.length - 1)
+    ? convert(issue.body ?? '', MAX_RICH_TEXT_LENGTH - footer.length - 1)
     : '';
   return `${body}${footer}`;
 }
 
-export function buildCommentBody(c: {
-  body: string;
-  created_at: string;
-  user: { login: string } | null;
-}): string {
+export function buildCommentBody(
+  c: {
+    body: string;
+    created_at: string;
+    user: { login: string } | null;
+  },
+  convert: (markdown: string, maxLength: number) => string = markdownToHtmlWithin,
+): string {
   const who = c.user?.login ? `@${escapeHtml(c.user.login)}` : 'Someone';
   const head = `<p><strong>${who}</strong> commented on ${escapeHtml(isoDay(c.created_at))}:</p>`;
-  return `${head}${markdownToHtmlWithin(c.body, MAX_RICH_TEXT_LENGTH - head.length - 1)}`;
+  return `${head}${convert(c.body, MAX_RICH_TEXT_LENGTH - head.length - 1)}`;
 }
 
 function validDate(ts: string | null | undefined): Date | undefined {
@@ -159,8 +165,41 @@ function validDate(ts: string | null | undefined): Date | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
-/** Interactive-transaction bounds for the per-team import lock (a chunk can take a while). */
-const LOCK_TX_OPTIONS = { maxWait: 60_000, timeout: 5 * 60_000 } as const;
+/**
+ * The per-team lock is held only for the DB phase of one page (no network I/O
+ * inside it), so a short transaction bound is enough. `maxWait` is how long we
+ * wait for a pooled connection before reporting "busy" instead of queueing.
+ */
+const LOCK_TX_OPTIONS = { maxWait: 3_000, timeout: 60_000 } as const;
+
+/**
+ * Process-wide ceiling on import DB phases running at once. Each one holds a
+ * pooled connection for the lock transaction while the services it calls take
+ * a second one; without a ceiling many teams importing together could occupy
+ * the whole pool with half-finished pairs. Over the ceiling we fail fast.
+ */
+const MAX_CONCURRENT_IMPORT_PHASES = 3;
+let activeImportPhases = 0;
+
+/** Total markdown characters converted per importPage call (all bodies together). */
+const MARKDOWN_BUDGET_PER_CALL = 1_000_000;
+
+const yieldToEventLoop = () => new Promise<void>(resolve => setImmediate(resolve));
+
+export class GithubImportBusyError extends Error {
+  constructor() {
+    super('An import is already running for this team. Wait for it to finish and try again.');
+    this.name = 'GithubImportBusyError';
+  }
+}
+
+interface PreparedIssue {
+  assigneeId?: string;
+  commentBodies: string[];
+  commentError?: string;
+  commentsTruncated: boolean;
+  description: string;
+}
 
 export class GithubImportService {
   constructor(
@@ -219,11 +258,14 @@ export class GithubImportService {
    * interrupted import is resumed by simply starting again.
    *
    * Runs for one (org, team) are serialised with a transaction-scoped Postgres
-   * advisory lock held for the whole chunk: without it two concurrent runs read
-   * the same "already imported" set and both insert, and both create the
-   * "GitHub issue" field definition (neither table can carry a unique key for
-   * this). The lock is per team rather than per repo because the definition is
-   * team-wide, so it also makes the definition get-or-create atomic.
+   * advisory lock taken with the NON-blocking `pg_try_advisory_xact_lock`: a
+   * second run fails fast with GithubImportBusyError instead of queueing (a
+   * queued waiter holds a pooled connection, so ~10 of them starved the whole
+   * app). Without the lock two runs read the same "already imported" set and
+   * both insert, and both create the "GitHub issue" field definition (neither
+   * table can carry a unique key for this). The lock is per team rather than
+   * per repo because the definition is team-wide. It is held only for the DB
+   * phase: GitHub fetches and markdown conversion happen before it is taken.
    */
   async importPage(
     orgId: string,
@@ -259,36 +301,163 @@ export class GithubImportService {
       return { ...empty, limitReached: true, nextPage: page };
     }
 
-    return this.prisma.$transaction(async tx => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`github-import:${orgId}:${teamId}`}, 0))`;
-      return this.importLocked(orgId, userId, teamId, input, repo, page, token, empty);
-    }, LOCK_TX_OPTIONS);
-  }
-
-  private async importLocked(
-    orgId: string,
-    userId: string,
-    teamId: string,
-    input: GithubImportInput,
-    repo: string,
-    page: number,
-    token: string | undefined,
-    chunk: GithubImportChunk,
-  ): Promise<GithubImportChunk> {
+    // All network I/O and markdown conversion happens here, before any
+    // connection is held, so a slow GitHub never pins a pooled connection.
     const fetched = await this.client.listIssues(repo, token, {
       includeClosed: input.includeClosed ?? true,
       page,
       perPage: GITHUB_IMPORT_PAGE_SIZE,
     });
-
-    chunk.nextPage = fetched.hasNext ? page + 1 : null;
-    chunk.processed = fetched.items.length;
+    empty.nextPage = fetched.hasNext ? page + 1 : null;
+    empty.processed = fetched.items.length;
     if (fetched.items.length === 0) {
-      return chunk;
+      return empty;
     }
+    const prepared = await this.prepare(orgId, teamId, input, repo, token, fetched.items);
 
+    if (activeImportPhases >= MAX_CONCURRENT_IMPORT_PHASES) {
+      throw new GithubImportBusyError();
+    }
+    activeImportPhases++;
+    try {
+      return await this.prisma.$transaction(async tx => {
+        // Non-blocking: a second run for the same team fails fast instead of
+        // parking in the lock queue holding a connection.
+        const rows = await tx.$queryRaw<
+          Array<{ locked: boolean }>
+        >`SELECT pg_try_advisory_xact_lock(hashtextextended(${`github-import:${orgId}:${teamId}`}, 0)) AS locked`;
+        if (!rows[0]?.locked) {
+          throw new GithubImportBusyError();
+        }
+        return this.importLocked(
+          tx as unknown as PrismaClient,
+          orgId,
+          userId,
+          teamId,
+          fetched.items,
+          prepared,
+          empty,
+        );
+      }, LOCK_TX_OPTIONS);
+    } catch (err) {
+      // Prisma's "could not start the transaction in time": the pool is busy.
+      if ((err as { code?: string }).code === 'P2028' && !(err instanceof GithubImportBusyError)) {
+        throw new GithubImportBusyError();
+      }
+      throw err;
+    } finally {
+      activeImportPhases--;
+    }
+  }
+
+  /**
+   * Network + CPU work for one page, done without a DB transaction: which
+   * issues are new (a plain read), assignee lookup, comments, and the markdown
+   * conversion (yielding to the event loop between bodies, under a per-call
+   * budget). The lock phase re-checks "already imported" itself, so a stale
+   * answer here only costs wasted work, never a duplicate.
+   */
+  private async prepare(
+    orgId: string,
+    teamId: string,
+    input: GithubImportInput,
+    repo: string,
+    token: string | undefined,
+    items: GithubIssue[],
+  ): Promise<Map<number, PreparedIssue>> {
+    const field = await this.prisma.customFieldDefinition.findFirst({
+      where: {
+        archivedAt: null,
+        name: GITHUB_SOURCE_FIELD_NAME,
+        OR: [{ teamId }, { teamId: null }],
+        organizationId: orgId,
+        type: 'url',
+      },
+    });
+    const already = new Set<string>();
+    if (field) {
+      const rows = await this.prisma.customFieldValue.findMany({
+        select: { value: true },
+        where: {
+          definitionId: field.id,
+          OR: items.map(i => ({ value: { equals: i.html_url } })),
+        },
+      });
+      for (const r of rows) {
+        already.add(String(r.value));
+      }
+    }
+    const fresh = items.filter(i => !already.has(i.html_url));
+
+    const emailToUserId = new Map<string, string>();
+    if (fresh.some(i => i.assignee?.login || i.assignees?.[0]?.login)) {
+      const members = await this.prisma.organizationMember.findMany({
+        select: { user: { select: { email: true, id: true } } },
+        where: { organizationId: orgId },
+      });
+      for (const m of members) {
+        emailToUserId.set(m.user.email.toLowerCase(), m.user.id);
+      }
+    }
+    const loginToUserId = new Map<string, string | null>();
+    let budget = MARKDOWN_BUDGET_PER_CALL;
+    const within = (src: string, cap: number): string => {
+      const cut = src.slice(0, Math.max(0, budget));
+      budget -= cut.length;
+      return markdownToHtmlWithin(cut, cap);
+    };
+
+    const out = new Map<number, PreparedIssue>();
+    for (const gh of fresh) {
+      const prep: PreparedIssue = { commentBodies: [], commentsTruncated: false, description: '' };
+      const login = gh.assignee?.login ?? gh.assignees?.[0]?.login;
+      if (login) {
+        if (!loginToUserId.has(login)) {
+          const email = await this.client.getUserEmail(login, token);
+          loginToUserId.set(login, email ? (emailToUserId.get(email.toLowerCase()) ?? null) : null);
+        }
+        prep.assigneeId = loginToUserId.get(login) ?? undefined;
+      }
+      prep.description = buildDescription(gh, within);
+      await yieldToEventLoop();
+      if ((input.includeComments ?? false) && gh.comments > 0) {
+        try {
+          const comments = await this.client.listComments(repo, gh.number, token);
+          prep.commentsTruncated = comments.truncated;
+          for (const c of comments.items) {
+            if (!c.body?.trim()) {
+              continue;
+            }
+            prep.commentBodies.push(buildCommentBody(c, within));
+            await yieldToEventLoop();
+          }
+        } catch (err) {
+          prep.commentError = (err as Error).message;
+        }
+      }
+      out.set(gh.number, prep);
+    }
+    return out;
+  }
+
+  /**
+   * The DB phase, run while holding the team's advisory lock on `tx`. Reads go
+   * through `tx`; writes go through the services (own short transactions). Each
+   * issue starts with a heartbeat on `tx`: if the lock transaction has expired
+   * the heartbeat throws and the loop stops, so a run can never keep writing
+   * after its lock is gone.
+   */
+  private async importLocked(
+    tx: PrismaClient,
+    orgId: string,
+    userId: string,
+    teamId: string,
+    items: GithubIssue[],
+    prepared: Map<number, PreparedIssue>,
+    chunk: GithubImportChunk,
+  ): Promise<GithubImportChunk> {
     // ── source field (idempotency key) ──
-    let field = await this.prisma.customFieldDefinition.findFirst({
+    let field = await tx.customFieldDefinition.findFirst({
       where: {
         archivedAt: null,
         name: GITHUB_SOURCE_FIELD_NAME,
@@ -315,8 +484,8 @@ export class GithubImportService {
     }
     const definitionId = field.id;
 
-    const urls = fetched.items.map(i => i.html_url);
-    const already = await this.prisma.customFieldValue.findMany({
+    const urls = items.map(i => i.html_url);
+    const already = await tx.customFieldValue.findMany({
       select: { value: true },
       where: { definitionId, OR: urls.map(u => ({ value: { equals: u } })) },
     });
@@ -328,7 +497,7 @@ export class GithubImportService {
       labelsByName.set(l.name.trim().toLowerCase(), l);
     }
 
-    const states = await this.prisma.workflowState.findMany({
+    const states = await tx.workflowState.findMany({
       orderBy: { position: 'asc' },
       select: { id: true, type: true },
       where: { archivedAt: null, teamId },
@@ -340,30 +509,17 @@ export class GithubImportService {
     const canceledState = firstOfType('canceled') ?? completedState;
     const doneState = completedState ?? canceledState;
 
-    const needsAssignee = fetched.items.some(
-      i => i.assignee?.login && !alreadyUrls.has(i.html_url),
-    );
-    const emailToUserId = new Map<string, string>();
-    if (needsAssignee) {
-      const members = await this.prisma.organizationMember.findMany({
-        select: { user: { select: { email: true, id: true } } },
-        where: { organizationId: orgId },
-      });
-      for (const m of members) {
-        emailToUserId.set(m.user.email.toLowerCase(), m.user.id);
-      }
-    }
-    const loginToUserId = new Map<string, string | null>();
-    const resolveAssignee = async (login: string): Promise<string | undefined> => {
-      if (!loginToUserId.has(login)) {
-        const email = await this.client.getUserEmail(login, token);
-        loginToUserId.set(login, email ? (emailToUserId.get(email.toLowerCase()) ?? null) : null);
-      }
-      return loginToUserId.get(login) ?? undefined;
-    };
-
-    for (const gh of fetched.items) {
+    for (const gh of items) {
       if (alreadyUrls.has(gh.html_url)) {
+        chunk.existing++;
+        continue;
+      }
+      // Throws if the lock transaction has expired (deliberately outside the
+      // per-issue try: that is a stop, not an issue failure).
+      await tx.$queryRaw`SELECT 1`;
+      const prep = prepared.get(gh.number);
+      if (!prep) {
+        // Imported by a run that finished between prepare() and the lock.
         chunk.existing++;
         continue;
       }
@@ -388,8 +544,7 @@ export class GithubImportService {
           labelIds.push(label.id);
         }
 
-        const assigneeLogin = gh.assignee?.login ?? gh.assignees?.[0]?.login;
-        const assigneeId = assigneeLogin ? await resolveAssignee(assigneeLogin) : undefined;
+        const assigneeId = prep.assigneeId;
 
         const closedState =
           gh.state === 'closed'
@@ -416,14 +571,14 @@ export class GithubImportService {
           userId,
           {
             assigneeId,
-            description: buildDescription(gh),
+            description: prep.description,
             labelIds,
             stateId,
             teamId,
             title: gh.title.trim().slice(0, MAX_TITLE) || `GitHub issue #${gh.number}`,
           },
-          async (tx, created) => {
-            const client = tx as unknown as PrismaClient;
+          async (itx, created) => {
+            const client = itx as unknown as PrismaClient;
             value = await client.customFieldValue.create({
               data: { definitionId, issueId: created.id, value: gh.html_url },
             });
@@ -446,36 +601,30 @@ export class GithubImportService {
         }
 
         const labelAssignments = labelIds.length
-          ? await this.prisma.issueLabelAssignment.findMany({
+          ? await tx.issueLabelAssignment.findMany({
               select: { labelId: true },
               where: { issueId: issue.id },
             })
           : [];
         chunk.createdIssues.push({ ...issue, ...(stamped ?? {}), labelAssignments });
 
-        if ((input.includeComments ?? false) && gh.comments > 0) {
-          try {
-            const comments = await this.client.listComments(repo, gh.number, token);
-            if (comments.truncated) {
-              chunk.commentsTruncated++;
-              chunk.errors.push(
-                `#${gh.number}: only the first ${GITHUB_MAX_COMMENTS_PER_ISSUE} of ${gh.comments} comments were imported`,
-              );
-            }
-            for (const c of comments.items) {
-              if (!c.body?.trim()) {
-                continue;
-              }
-              const created = await this.deps.comment.create(userId, {
-                body: buildCommentBody(c),
-                issueId: issue.id,
-              });
-              chunk.createdComments.push(created as unknown as Comment);
-            }
-          } catch (err) {
-            // The issue itself is in; a comment failure is reported, not fatal.
-            chunk.errors.push(`#${gh.number}: comments not imported (${(err as Error).message})`);
+        if (prep.commentsTruncated) {
+          chunk.commentsTruncated++;
+          chunk.errors.push(
+            `#${gh.number}: only the first ${GITHUB_MAX_COMMENTS_PER_ISSUE} of ${gh.comments} comments were imported`,
+          );
+        }
+        if (prep.commentError) {
+          // The issue itself is in; a comment failure is reported, not fatal.
+          chunk.errors.push(`#${gh.number}: comments not imported (${prep.commentError})`);
+        }
+        try {
+          for (const body of prep.commentBodies) {
+            const created = await this.deps.comment.create(userId, { body, issueId: issue.id });
+            chunk.createdComments.push(created as unknown as Comment);
           }
+        } catch (err) {
+          chunk.errors.push(`#${gh.number}: comments not imported (${(err as Error).message})`);
         }
       } catch (err) {
         log.warn({ err, number: gh.number }, 'github import: issue failed');

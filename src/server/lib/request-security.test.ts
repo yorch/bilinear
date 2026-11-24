@@ -1,6 +1,13 @@
 import type { NextRequest } from 'next/server';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getClientIp, isOriginAllowed, isOriginStringAllowed } from './request-security';
+import {
+  getClientIp,
+  isOriginAllowed,
+  isOriginStringAllowed,
+  rateLimitKeyIp,
+  readBodyCapped,
+  UNKNOWN_IP_BUCKET,
+} from './request-security';
 
 function fakeRequest(headers: Record<string, string>, ip?: string): NextRequest {
   const map = new Map(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
@@ -75,5 +82,34 @@ describe('getClientIp', () => {
     expect(getClientIp(fakeRequest({ 'X-Real-IP': '203.0.113.10' }))).toBe('203.0.113.10');
     expect(getClientIp(fakeRequest({}, '198.51.100.7'))).toBe('198.51.100.7');
     expect(getClientIp(fakeRequest({}))).toBeNull();
+  });
+});
+
+describe('rateLimitKeyIp', () => {
+  it('uses a shared bucket instead of nothing when the IP is unknown', () => {
+    delete process.env.TRUST_PROXY_HEADERS;
+    // A client-supplied XFF must not pick the bucket either.
+    expect(rateLimitKeyIp(fakeRequest({ 'X-Forwarded-For': '203.0.113.9' }))).toEqual({
+      ip: UNKNOWN_IP_BUCKET,
+      known: false,
+    });
+    process.env.TRUST_PROXY_HEADERS = '1';
+    expect(rateLimitKeyIp(fakeRequest({ 'X-Forwarded-For': '203.0.113.9' }))).toEqual({
+      ip: '203.0.113.9',
+      known: true,
+    });
+  });
+});
+
+describe('readBodyCapped', () => {
+  const post = (body: BodyInit, headers: Record<string, string> = {}) =>
+    new Request('http://x.test', { body, headers, method: 'POST' });
+
+  it('returns the body when within the cap', async () => {
+    expect((await readBodyCapped(post('hello'), 10))?.toString()).toBe('hello');
+  });
+  it('returns null over the cap, with or without a Content-Length', async () => {
+    expect(await readBodyCapped(post('hello world'), 5)).toBeNull();
+    expect(await readBodyCapped(post('x', { 'content-length': '999' }), 5)).toBeNull();
   });
 });

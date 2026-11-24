@@ -44,7 +44,13 @@ export default async function WorkspaceGuardLayout({
   if (!claim) {
     // Keep the full deep path through sign-in. `src/proxy.ts` forwards it as a
     // header; the workspace root is the fallback if it is missing or unsafe.
-    redirect(loginRedirectPath((await headers()).get(REQUEST_PATH_HEADER), `/${workspace}`));
+    redirect(
+      loginRedirectPath(
+        (await headers()).get(REQUEST_PATH_HEADER),
+        `/${workspace}`,
+        `/${workspace}`,
+      ),
+    );
   }
 
   const urlOrg = await prisma.organization.findUnique({

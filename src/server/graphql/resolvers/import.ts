@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import { requireAuth, requireOrgRole, requireTeamMemberNotGuest } from '../../middleware/auth';
+import { checkFixedWindow } from '../../middleware/rate-limit';
 import { GithubImportService } from '../../services/github-import.service';
 import type { ImportMapping } from '../../services/import.service';
 import type { GraphQLContext } from '../context';
@@ -12,8 +13,12 @@ const GITHUB_IMPORT_ERRORS = {
     'GithubTokenInvalidError',
   ],
   NOT_FOUND: ['GithubRepoNotFoundError'],
-  RATELIMITED: ['GithubRateLimitedError'],
+  RATELIMITED: ['GithubRateLimitedError', 'GithubImportBusyError'],
 } as const;
+
+export const GITHUB_IMPORT_LIMIT_PER_TEAM = 60;
+export const GITHUB_IMPORT_LIMIT_PER_USER = 60;
+export const GITHUB_IMPORT_WINDOW_SECONDS = 60;
 
 function githubImporter(ctx: GraphQLContext): GithubImportService {
   return new GithubImportService(
@@ -95,6 +100,26 @@ export const importResolvers = {
     ) => {
       requireAuth(ctx);
       await requireTeamMemberNotGuest(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
+
+      // One call is one GitHub page; a legitimate client walks pages
+      // sequentially, so these are generous but finite.
+      const [byTeam, byUser] = await Promise.all([
+        checkFixedWindow(
+          `rl:github-import:team:${input.teamId}`,
+          GITHUB_IMPORT_LIMIT_PER_TEAM,
+          GITHUB_IMPORT_WINDOW_SECONDS,
+        ),
+        checkFixedWindow(
+          `rl:github-import:user:${ctx.userId}`,
+          GITHUB_IMPORT_LIMIT_PER_USER,
+          GITHUB_IMPORT_WINDOW_SECONDS,
+        ),
+      ]);
+      if (byTeam.exceeded || byUser.exceeded) {
+        throw new GraphQLError('Too many import requests. Wait a minute and try again.', {
+          extensions: { code: 'RATELIMITED' },
+        });
+      }
 
       let chunk: Awaited<ReturnType<GithubImportService['importPage']>>;
       try {

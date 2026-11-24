@@ -18,14 +18,14 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Only the two guarded trees' document requests matter. Exclude API routes
+  // The proxy must run for EVERY page request, including ones whose path ends
+  // in a static-looking extension (`/demo/issue/ABC-1.png` is still a document
+  // request the workspace layout renders). Skipping those let a client-sent
+  // `x-bilinear-path` reach the layout un-overwritten (and the header is not
+  // in Vary, so a cache could keep the poisoned redirect). Only API routes
   // (`api/` or exactly `api` — NOT a prefix match, or a workspace called
-  // "apiary" loses its deep link), Next internals and static assets (sw.js,
-  // offline.html, manifest, icons, fonts, source maps).
-  // The extension list is an allow-list, not "anything with a dot": a dotted
-  // segment is legitimate in a deep link (`/demo/project/v1.2`). It must stay a
-  // plain string literal — Next reads `config` statically.
-  matcher: [
-    '/((?!api/|api$|_next/|[^?]*\\.(?:avif|css|eot|gif|html|ico|jpe?g|js|json|map|mjs|mp4|otf|pdf|png|svg|ttf|txt|wasm|webm|webmanifest|webp|woff2?|xml)$).*)',
-  ],
+  // "apiary" loses its deep link) and Next internals are excluded; real static
+  // files pass through harmlessly (the proxy just sets a request header). It
+  // must stay a plain string literal — Next reads `config` statically.
+  matcher: ['/((?!api/|api$|_next/).*)'],
 };

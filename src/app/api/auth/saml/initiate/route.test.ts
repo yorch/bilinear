@@ -13,7 +13,11 @@ vi.mock('@/server/lib/request-context', () => ({
   bindRequestContext: vi.fn(),
   withRequestContext: (_name: string, fn: unknown) => fn,
 }));
-vi.mock('@/server/lib/request-security', () => ({ getClientIp: () => '203.0.113.9' }));
+let trustedIp: string | null = '203.0.113.9';
+vi.mock('@/server/lib/request-security', () => ({
+  rateLimitKeyIp: () =>
+    trustedIp ? { ip: trustedIp, known: true } : { ip: 'unknown-ip', known: false },
+}));
 vi.mock('@/server/middleware/rate-limit', () => ({
   checkFixedWindow: (...a: unknown[]) => checkFixedWindow(...a),
 }));
@@ -36,6 +40,7 @@ const req = (qs: string) =>
 describe('GET /api/auth/saml/initiate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    trustedIp = '203.0.113.9';
     checkFixedWindow.mockResolvedValue({ count: 1, exceeded: false });
   });
 
@@ -99,5 +104,31 @@ describe('GET /api/auth/saml/initiate', () => {
     expect(res.status).toBe(429);
     expect(checkFixedWindow).toHaveBeenCalledWith('rl:saml-initiate:203.0.113.9', 20, 60);
     expect(findOrg).not.toHaveBeenCalled();
+  });
+
+  it('still rate-limits when the client IP is unknown (no TRUST_PROXY_HEADERS)', async () => {
+    trustedIp = null;
+    // Real fixed-window semantics over an in-memory counter.
+    let count = 0;
+    checkFixedWindow.mockImplementation(async (_k: string, limit: number) => ({
+      count: ++count,
+      exceeded: count > limit,
+    }));
+    findOrg.mockResolvedValue({ id: 'o1' });
+    getConfig.mockResolvedValue({
+      emailAttribute: 'email',
+      enabled: true,
+      idpCert: 'c',
+      idpEntityId: 'i',
+      idpSsoUrl: 'https://idp.test/sso',
+      nameAttribute: 'name',
+    });
+    const statuses: number[] = [];
+    for (let i = 0; i < 125; i++) {
+      statuses.push((await GET(req('org=acme&probe=1'))).status);
+    }
+    expect(checkFixedWindow).toHaveBeenCalledWith('rl:saml-initiate:unknown-ip', 120, 60);
+    expect(statuses.filter(s => s === 429)).toHaveLength(5);
+    expect(statuses.slice(0, 120).every(s => s === 302)).toBe(true);
   });
 });

@@ -1,12 +1,16 @@
+import { createHmac } from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { config } from '@/server/config';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
+import { readBodyCapped } from '@/server/lib/request-security';
 import { GitHubService } from '@/server/services/github.service';
 
 const log = childLogger({ module: 'github-webhook' });
+
+const DECOY_SECRET = 'github-webhook-decoy-secret';
 
 /**
  * POST /api/integrations/github/webhook
@@ -20,31 +24,41 @@ const log = childLogger({ module: 'github-webhook' });
  *
  * Signature validated with HMAC-SHA256 against the stored webhook_secret.
  */
-async function handlePost(req: NextRequest) {
-  // Identify the org via query param (?org=<urlKey>)
-  const orgKey = req.nextUrl.searchParams.get('org');
-  if (!orgKey) {
-    return NextResponse.json({ error: 'Missing org parameter' }, { status: 400 });
-  }
+/** GitHub's documented maximum webhook payload. */
+export const GITHUB_WEBHOOK_MAX_BYTES = 25 * 1024 * 1024;
 
-  const org = await prisma.organization.findUnique({
-    select: { id: true },
-    where: { urlKey: orgKey },
-  });
+/** One response for every authentication failure, so the route is not an oracle. */
+function unauthorized() {
+  return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+}
+
+async function handlePost(req: NextRequest) {
+  // Bounded read first: nothing is trusted or looked up until the body is
+  // known to be within GitHub's maximum, and a larger upload is cut off.
+  const rawBody = await readBodyCapped(req, GITHUB_WEBHOOK_MAX_BYTES);
+  if (!rawBody) {
+    return NextResponse.json({ error: 'Payload too large' }, { status: 413 });
+  }
+  const signatureHeader = req.headers.get('x-hub-signature-256');
+
+  // Missing ?org=, unknown org, no integration and a bad signature are all the
+  // same 401 and do the same HMAC work, so response status/body/timing do not
+  // reveal which workspaces exist.
+  const orgKey = req.nextUrl.searchParams.get('org');
+  const org = orgKey
+    ? await prisma.organization.findUnique({ select: { id: true }, where: { urlKey: orgKey } })
+    : null;
   if (!org) {
-    return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+    createHmac('sha256', DECOY_SECRET).update(rawBody).digest();
+    return unauthorized();
   }
   bindRequestContext({ orgId: org.id });
-
-  // Read raw body for signature validation
-  const rawBody = Buffer.from(await req.arrayBuffer());
-  const signatureHeader = req.headers.get('x-hub-signature-256');
 
   const service = new GitHubService(prisma, config);
   const valid = await service.validateWebhookSignature(org.id, rawBody, signatureHeader);
   if (!valid) {
     log.warn({ orgKey }, 'GitHub webhook signature validation failed');
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    return unauthorized();
   }
 
   const event = req.headers.get('x-github-event');
