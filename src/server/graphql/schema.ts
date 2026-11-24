@@ -1552,6 +1552,8 @@ export const typeDefs = `
     score: Float!
     "Title terms shared with the triage issue — the reason shown to the user."
     matchedTerms: [String!]!
+    "The suggested issue is itself still in triage, so the pair can be resolved against each other."
+    inTriage: Boolean!
   }
 
   input IssueTriageAcceptInput {
@@ -1975,7 +1977,7 @@ export const typeDefs = `
 
     triageQueue(teamId: ID!): [Issue!]!
     triageQueueCount(teamId: ID!): Int!
-    "Up to 5 similar non-triage issues the caller can see (ranked, best first)."
+    "Up to 5 similar issues the caller can see (ranked, best first); duplicates resolve to their canonical issue, declined issues are never offered."
     triageDuplicateSuggestions(issueId: ID!, first: Int): [TriageDuplicateSuggestion!]!
 
     initiative(id: ID!): Initiative!
@@ -2255,6 +2257,8 @@ export const typeDefs = `
     issueTriageDecline(issueId: ID!): IssuePayload!
     issueTriageMarkDuplicate(issueId: ID!, canonicalIssueId: ID!): IssuePayload!
     issueTriageSnooze(issueId: ID!, until: DateTime!): IssuePayload!
+    "Undo an accept / decline / mark-duplicate: returns the issue to the triage queue. Only valid for a few minutes after the decision."
+    issueTriageRevert(issueId: ID!): IssuePayload!
 
     initiativeCreate(input: InitiativeCreateInput!): InitiativePayload!
     initiativeUpdate(id: ID!, input: InitiativeUpdateInput!): InitiativePayload!

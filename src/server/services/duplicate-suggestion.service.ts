@@ -42,29 +42,57 @@ export interface DuplicateScoreRequest {
  * Pluggable similarity strategy. The FTS scorer below is the default; an
  * embedding/AI scorer can replace it by implementing this one method. A scorer
  * is responsible for honouring `scope` (visibility) and for excluding the
- * source issue, archived/trashed issues and issues still in triage — the
- * service re-verifies visibility on hydration but does not re-rank.
+ * source issue and archived/trashed issues. Canceled issues may only be returned
+ * when they carry a `duplicate` relation (the service follows it to the live
+ * canonical issue). Triage peers are valid candidates. The service re-verifies
+ * visibility on hydration but does not re-rank.
  */
 export interface DuplicateScorer {
   score(request: DuplicateScoreRequest): Promise<ScoredCandidate[]>;
 }
 
 export interface DuplicateSuggestionResult {
+  /** The suggested issue is itself still awaiting triage (resolve the pair against each other). */
+  inTriage: boolean;
   issue: Issue;
   matchedTerms: string[];
   score: number;
 }
 
+/** Pairs of an issue's terms are index-gated, so this only bounds the ranking pass. */
+const CANDIDATE_CAP = 300;
+/** `duplicate-of` chains followed to reach a live canonical issue. */
+const MAX_CANONICAL_HOPS = 3;
+
+/** True for a 2-character token that is a plausible acronym ("CI", "UI", "Q4") or CJK word. */
+function isShortToken(raw: string): boolean {
+  return [...raw].length === 2 && raw === raw.toUpperCase() && /\p{L}/u.test(raw);
+}
+
 /**
- * Reduce free text to safe tsquery lexemes. Only `[a-z0-9]` runs survive, so
- * no tsquery operator (`& | ! <-> ( ) : * '`) can ever reach `to_tsquery` — the
- * query is built by this function, never by the caller's text.
+ * Reduce free text to candidate search terms. Splitting is Unicode-aware
+ * (`\p{L}\p{N}\p{M}`), so "sesión", "Größe" and "导出" survive intact instead of
+ * being cut at the first non-ASCII letter. Terms are only ever passed to
+ * Postgres as a bound `text[]` and re-parsed by `plainto_tsquery`, so no
+ * tsquery operator in the user's text can reach the query.
+ *
+ * Words shorter than three characters are dropped, except two-character
+ * all-caps tokens ("CI", "UI", "QA") which are routinely the whole point of a
+ * title. Stop words ("for", "you") survive here and are dropped in SQL, where
+ * the FTS configuration decides what a stop word is.
+ *
+ * Limitation: languages written without spaces (Chinese, Japanese) produce one
+ * long token per clause, so they only match an identical run of characters.
  */
 export function extractQueryTerms(text: string): string[] {
   const seen = new Set<string>();
-  for (const raw of text.toLowerCase().split(/[^a-z0-9]+/)) {
-    if (raw.length >= MIN_TERM_LENGTH && !seen.has(raw)) {
-      seen.add(raw);
+  for (const raw of text.normalize('NFC').split(/[^\p{L}\p{N}\p{M}]+/u)) {
+    if (!raw) {
+      continue;
+    }
+    const term = raw.toLowerCase();
+    if (([...term].length >= MIN_TERM_LENGTH || isShortToken(raw)) && !seen.has(term)) {
+      seen.add(term);
       if (seen.size >= MAX_TERMS) {
         break;
       }
@@ -73,6 +101,24 @@ export function extractQueryTerms(text: string): string[] {
   return [...seen];
 }
 
+/**
+ * Full-text scorer over the same `to_tsvector('english', title || ' ' || …)`
+ * expression `idx_issues_fts` is built on, so the GIN index serves the lookup.
+ *
+ * Shape of the query (all in one round trip):
+ *  1. `live` — each term through `plainto_tsquery`; terms that reduce to
+ *     nothing (stop words) are dropped BEFORE the match threshold is set, so
+ *     "Broken for you" is a one-term search, not a three-term search that can
+ *     never reach two matches.
+ *  2. `gate` — the index condition. With 3+ live terms it is the OR of every
+ *     pair ("shares at least two terms"), so the GIN index already enforces the
+ *     threshold; otherwise a plain OR.
+ *  3. `hits` → `recent` — gated rows, newest first, capped at CANDIDATE_CAP.
+ *     The tsvector is NOT in the select list, so Postgres never recomputes it
+ *     for rows the index already accepted (the old LATERAL form re-ran
+ *     to_tsvector per row per term: 10 s at 20k issues, ~80 ms now).
+ *  4. `top` ranks only the capped set; `matched` is computed for the final few.
+ */
 export class FtsDuplicateScorer implements DuplicateScorer {
   constructor(private prisma: PrismaClient) {}
 
@@ -81,9 +127,6 @@ export class FtsDuplicateScorer implements DuplicateScorer {
     if (terms.length === 0 || scope.memberTeamIds.length === 0) {
       return [];
     }
-    // OR semantics: a duplicate rarely shares every word of the title, which is
-    // what `plainto_tsquery` (AND) would demand.
-    const tsQuery = terms.join(' | ');
     const guestFilter =
       scope.guestTeamIds.length > 0
         ? Prisma.sql`AND (
@@ -93,42 +136,58 @@ export class FtsDuplicateScorer implements DuplicateScorer {
           )`
         : Prisma.sql``;
 
-    // One shared match among generic words ("page", "customer") is noise, so a
-    // title with 3+ usable terms must share at least two of them. Matching is
-    // per-term through `plainto_tsquery`, so it is stem-aware ("statuses" ~
-    // "status") and the same array doubles as the "why" shown to the user.
-    const minMatches = terms.length >= 3 ? 2 : 1;
     const rows = await this.prisma.$queryRaw<
       Array<{ id: string; matched: string[]; score: number }>
     >(
       Prisma.sql`
-        SELECT c.id, c.score, c.matched
-        FROM (
-          SELECT i.id,
-                 i.created_at,
-                 ts_rank(v.tsv, to_tsquery('english', ${tsQuery}))
-                   * (CASE WHEN i.team_id = ${source.teamId}::uuid THEN 1.0 ELSE 0.8 END) AS score,
-                 ARRAY(
-                   SELECT t FROM unnest(${terms}::text[]) AS t
-                   WHERE v.tsv @@ plainto_tsquery('english', t)
-                 ) AS matched
-          FROM issues i
+        WITH q AS (
+          SELECT t.term, plainto_tsquery('english', t.term) AS tq
+          FROM unnest(${terms}::text[]) AS t(term)
+        ), live AS MATERIALIZED (
+          SELECT term, tq FROM q WHERE numnode(tq) > 0
+        ), gate AS MATERIALIZED (
+          SELECT
+            string_agg('(' || tq::text || ')', ' | ')::tsquery AS any_q,
+            CASE WHEN count(*) >= 3 THEN
+              (SELECT string_agg('(' || a.tq::text || ' & ' || b.tq::text || ')', ' | ')::tsquery
+                 FROM live a JOIN live b ON a.term < b.term)
+            ELSE string_agg('(' || tq::text || ')', ' | ')::tsquery END AS gate_q
+          FROM live
+        ), hits AS MATERIALIZED (
+          SELECT i.id, i.created_at, i.team_id
+          FROM gate g, issues i
           JOIN workflow_states ws ON ws.id = i.state_id
-          CROSS JOIN LATERAL (
-            SELECT to_tsvector('english', i.title || ' ' || COALESCE(i.description, '')) AS tsv
-          ) v
           WHERE i.organization_id = ${orgId}::uuid
             AND i.id != ${source.id}::uuid
             AND i.archived_at IS NULL
             AND i.trashed = false
-            AND ws.type::text != 'triage'
+            AND (
+              ws.type::text != 'canceled'
+              OR EXISTS (
+                SELECT 1 FROM issue_relations r
+                WHERE r.issue_id = i.id AND r.type = 'duplicate'
+              )
+            )
             AND i.team_id = ANY(${scope.memberTeamIds}::uuid[])
             ${guestFilter}
-            AND v.tsv @@ to_tsquery('english', ${tsQuery})
-        ) c
-        WHERE cardinality(c.matched) >= ${minMatches}
-        ORDER BY c.score DESC, c.created_at DESC
-        LIMIT ${limit}
+            AND to_tsvector('english', i.title || ' ' || COALESCE(i.description, '')) @@ g.gate_q
+        ), recent AS MATERIALIZED (
+          SELECT id, created_at, team_id FROM hits ORDER BY created_at DESC LIMIT ${CANDIDATE_CAP}
+        ), top AS MATERIALIZED (
+          SELECT i.id, i.created_at,
+                 ts_rank(to_tsvector('english', i.title || ' ' || COALESCE(i.description, '')), g.any_q)
+                   * (CASE WHEN i.team_id = ${source.teamId}::uuid THEN 1.0 ELSE 0.8 END) AS score
+          FROM gate g, recent r JOIN issues i ON i.id = r.id
+          ORDER BY score DESC, i.created_at DESC
+          LIMIT ${limit}
+        )
+        SELECT top.id, top.score,
+               ARRAY(
+                 SELECT l.term FROM live l
+                 WHERE to_tsvector('english', i.title || ' ' || COALESCE(i.description, '')) @@ l.tq
+               ) AS matched
+        FROM top JOIN issues i ON i.id = top.id
+        ORDER BY top.score DESC, top.created_at DESC
       `,
     );
     return rows.map(r => ({ issueId: r.id, matchedTerms: r.matched, score: Number(r.score) }));
@@ -165,22 +224,40 @@ export class DuplicateSuggestionService {
     const capped = scored.slice(0, limit);
     // Re-assert the invariants on hydration so a faulty (or future AI) scorer
     // cannot leak a hidden/archived row into the response.
+    const visible = {
+      archivedAt: null,
+      organizationId: orgId,
+      teamId: { in: scope.memberTeamIds },
+      trashed: false,
+    } as const;
     const rows = await this.prisma.issue.findMany({
-      where: {
-        archivedAt: null,
-        id: { in: capped.map(c => c.issueId), not: source.id },
-        organizationId: orgId,
-        state: { type: { not: 'triage' } },
-        teamId: { in: scope.memberTeamIds },
-        trashed: false,
-      },
+      include: { state: { select: { type: true } } },
+      where: { ...visible, id: { in: capped.map(c => c.issueId), not: source.id } },
     });
     const byId = new Map(rows.map(r => [r.id, r]));
     const sourceTerms = extractQueryTerms(source.title);
     const results: DuplicateSuggestionResult[] = [];
+    const taken = new Set<string>();
     for (const c of capped) {
-      const issue = byId.get(c.issueId);
-      if (!issue) {
+      let issue = byId.get(c.issueId);
+      // A canceled candidate is only useful as a pointer to what it duplicates:
+      // suggesting it would build duplicate-of-duplicate chains. Follow the
+      // `duplicate` relation to the live canonical issue; a declined issue (no
+      // relation) or a chain that dead-ends is dropped.
+      for (let hop = 0; issue && issue.state.type === 'canceled' && hop < MAX_CANONICAL_HOPS; hop++) {
+        const link = await this.prisma.issueRelation.findFirst({
+          orderBy: { createdAt: 'desc' },
+          select: { relatedIssueId: true },
+          where: { issueId: issue.id, type: 'duplicate' },
+        });
+        issue = link
+          ? ((await this.prisma.issue.findFirst({
+              include: { state: { select: { type: true } } },
+              where: { ...visible, id: link.relatedIssueId },
+            })) ?? undefined)
+          : undefined;
+      }
+      if (!issue || issue.state.type === 'canceled' || issue.id === source.id || taken.has(issue.id)) {
         continue;
       }
       if (scope.guestTeamIds.includes(issue.teamId)) {
@@ -188,9 +265,12 @@ export class DuplicateSuggestionService {
           continue;
         }
       }
+      taken.add(issue.id);
+      const { state, ...plain } = issue;
       const haystack = new Set(extractQueryTerms(`${issue.title} ${issue.description ?? ''}`));
       results.push({
-        issue,
+        inTriage: state.type === 'triage',
+        issue: plain as Issue,
         matchedTerms: c.matchedTerms ?? sourceTerms.filter(term => haystack.has(term)),
         score: c.score,
       });

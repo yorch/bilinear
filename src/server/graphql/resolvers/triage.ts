@@ -1,6 +1,7 @@
 import { GraphQLError } from 'graphql';
 import { logger } from '../../lib/logger';
 import { getGuestTeamIds, requireAuth, requireTeamMember } from '../../middleware/auth';
+import { checkFixedWindow } from '../../middleware/rate-limit';
 import {
   DuplicateSourceNotFoundError,
   DuplicateSuggestionService,
@@ -8,6 +9,9 @@ import {
 import type { IssueActivityCreateInput } from '../../services/issue-activity.service';
 import type { GraphQLContext } from '../context';
 import { mapServiceError } from '../types/errors';
+
+/** Duplicate-suggestion lookups allowed per user per minute (a held J/K ≈ 30/s is capped client-side). */
+export const DUPLICATE_SUGGESTION_RATE_LIMIT = 90;
 
 const TRIAGE_ERROR_MAP = {
   BAD_USER_INPUT: [
@@ -20,6 +24,7 @@ const TRIAGE_ERROR_MAP = {
     'TriageInvalidTargetStateError',
     'TriageInvalidAssigneeError',
     'TriageInvalidCycleError',
+    'TriageNotRevertableError',
   ],
   NOT_FOUND: ['TriageIssueNotFoundError'],
 } as const;
@@ -224,6 +229,46 @@ export const triageResolvers = {
       }
     },
 
+    issueTriageRevert: async (
+      _parent: unknown,
+      { issueId }: { issueId: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+
+      const issue = await ctx.services.issue.findById(issueId);
+      if (!issue || issue.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Issue not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+
+      try {
+        const { issue: updated, removedRelationIds } = await ctx.services.triage.revert(issueId);
+        await recordTriageSideEffects(ctx, issue, updated);
+        for (const relationId of removedRelationIds) {
+          await ctx.services.sync.createSyncAction(
+            ctx.orgId,
+            'D',
+            'IssueRelation',
+            relationId,
+            null,
+          );
+        }
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'U',
+          'Issue',
+          issueId,
+          updated,
+        );
+        return { issue: updated, lastSyncId: sync.id.toString(), success: true };
+      } catch (err) {
+        mapServiceError(err, TRIAGE_ERROR_MAP);
+      }
+    },
+
     issueTriageSnooze: async (
       _parent: unknown,
       { issueId, until }: { issueId: string; until: string },
@@ -273,6 +318,19 @@ export const triageResolvers = {
         throw new GraphQLError('Issue not found', { extensions: { code: 'NOT_FOUND' } });
       }
       await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+
+      // The query runs on every focus change in the triage queue, so it carries
+      // its own per-user budget on top of the global hourly limit.
+      const limited = await checkFixedWindow(
+        `rl:dup-suggest:${ctx.userId}`,
+        DUPLICATE_SUGGESTION_RATE_LIMIT,
+        60,
+      );
+      if (limited.exceeded) {
+        throw new GraphQLError('Too many duplicate-suggestion requests. Try again shortly.', {
+          extensions: { code: 'RATELIMITED' },
+        });
+      }
 
       // Same visibility scope as `searchIssues`: member teams only, guests
       // restricted to issues they created or are assigned to.

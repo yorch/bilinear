@@ -16,6 +16,9 @@ import type { Issue, IssueRelation, PrismaClient } from '../../generated/prisma'
  * Snoozing reuses the existing `snoozedUntilAt` field — the queue filter
  * hides snoozed issues until that timestamp has passed.
  */
+/** How long after a decision it can still be undone with `revert`. */
+export const TRIAGE_REVERT_WINDOW_MS = 5 * 60 * 1000;
+
 export class TriageService {
   constructor(private prisma: PrismaClient) {}
 
@@ -301,6 +304,58 @@ export class TriageService {
   }
 
   /**
+   * Undo an accept / decline / mark-duplicate: put the issue back in the
+   * triage state and clear `triagedAt` / `canceledAt`. Only valid for
+   * TRIAGE_REVERT_WINDOW_MS after the decision, so it cannot be used to
+   * rewrite old history. A `duplicate` relation created by the same decision
+   * is removed (ids returned so the resolver can emit `D` SyncActions).
+   * The CAS on `triagedAt` means a second decision made in between wins.
+   */
+  async revert(issueId: string): Promise<{ issue: Issue; removedRelationIds: string[] }> {
+    const issue = await this.prisma.issue.findUnique({ where: { id: issueId } });
+    if (!issue) {
+      throw new TriageIssueNotFoundError();
+    }
+    const triageState = await this.findTriageState(issue.teamId);
+    if (!triageState) {
+      throw new TriageNotEnabledError();
+    }
+    const decidedAt = issue.triagedAt;
+    if (
+      issue.stateId === triageState.id ||
+      !decidedAt ||
+      Date.now() - decidedAt.getTime() > TRIAGE_REVERT_WINDOW_MS
+    ) {
+      throw new TriageNotRevertableError();
+    }
+    return this.prisma.$transaction(async tx => {
+      const result = await tx.issue.updateMany({
+        data: { canceledAt: null, stateId: triageState.id, triagedAt: null },
+        where: { id: issueId, stateId: issue.stateId, triagedAt: decidedAt },
+      });
+      if (result.count === 0) {
+        throw new TriageNotRevertableError();
+      }
+      const relations = await tx.issueRelation.findMany({
+        select: { id: true },
+        where: {
+          createdAt: { gte: new Date(decidedAt.getTime() - 60_000) },
+          issueId,
+          type: 'duplicate',
+        },
+      });
+      if (relations.length > 0) {
+        await tx.issueRelation.deleteMany({ where: { id: { in: relations.map(r => r.id) } } });
+      }
+      const updated = await tx.issue.findUnique({ where: { id: issueId } });
+      if (!updated) {
+        throw new TriageIssueNotFoundError();
+      }
+      return { issue: updated, removedRelationIds: relations.map(r => r.id) };
+    });
+  }
+
+  /**
    * Snooze an issue, hiding it from the triage queue until `until`. The issue
    * stays in the triage state — `triagedAt` is NOT set, since it hasn't been
    * resolved. `until` must be in the future.
@@ -405,5 +460,12 @@ export class TriageInvalidCycleError extends Error {
   constructor() {
     super('Cycle must belong to the same team as the issue');
     this.name = 'TriageInvalidCycleError';
+  }
+}
+
+export class TriageNotRevertableError extends Error {
+  constructor() {
+    super('This triage decision can no longer be undone');
+    this.name = 'TriageNotRevertableError';
   }
 }
