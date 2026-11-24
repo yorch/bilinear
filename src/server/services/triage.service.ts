@@ -343,7 +343,11 @@ export class TriageService {
     if (
       issue.stateId === triageState.id ||
       !decidedAt ||
-      Date.now() - decidedAt.getTime() > TRIAGE_REVERT_WINDOW_MS
+      Date.now() - decidedAt.getTime() > TRIAGE_REVERT_WINDOW_MS ||
+      // Every decision pins updatedAt === triagedAt; anything else means the
+      // issue was edited (or moved on) after the decision, and undoing it
+      // would clobber that later work.
+      issue.updatedAt.getTime() !== decidedAt.getTime()
     ) {
       throw new TriageNotRevertableError();
     }

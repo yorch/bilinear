@@ -90,6 +90,55 @@ describe('triageResolvers', () => {
     });
   });
 
+  describe('guests are not triagers', () => {
+    // The caller is a guest of the issue's team and neither created nor owns it.
+    beforeEach(() => {
+      ctx.prisma.issue.findUnique.mockResolvedValue({
+        ...ISSUE,
+        assigneeId: null,
+        creatorId: 'someone-else',
+      });
+      ctx.prisma.teamMemberRole.findUnique.mockResolvedValue({ role: 'guest' });
+    });
+
+    it.each([
+      ['issueTriageAccept', { input: { stateId: 's' }, issueId: ISSUE.id }],
+      ['issueTriageDecline', { issueId: ISSUE.id }],
+      ['issueTriageMarkDuplicate', { canonicalIssueId: 'c', issueId: ISSUE.id }],
+      ['issueTriageRevert', { issueId: ISSUE.id }],
+      ['issueTriageSnooze', { issueId: ISSUE.id, until: '2999-01-01T00:00:00Z' }],
+    ] as const)('%s is FORBIDDEN for a guest and touches nothing', async (name, args) => {
+      const spies = ['accept', 'decline', 'markDuplicate', 'revert', 'snooze'].map(m =>
+        vi.spyOn(ctx.services.triage, m as 'accept'),
+      );
+      await expect(
+        (triageResolvers.Mutation[name] as (...a: unknown[]) => Promise<unknown>)(
+          {},
+          args,
+          ctx as never,
+        ),
+      ).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
+      for (const spy of spies) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    });
+
+    it('triageQueue and triageQueueCount are FORBIDDEN for a guest', async () => {
+      await expect(
+        triageResolvers.Query.triageQueue({}, { teamId: TEST_TEAM.id }, ctx as never),
+      ).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
+      await expect(
+        triageResolvers.Query.triageQueueCount({}, { teamId: TEST_TEAM.id }, ctx as never),
+      ).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
+    });
+
+    it("triageDuplicateSuggestions is FORBIDDEN for a guest on someone else's issue", async () => {
+      await expect(
+        triageResolvers.Query.triageDuplicateSuggestions({}, { issueId: ISSUE.id }, ctx as never),
+      ).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
+    });
+  });
+
   describe('triageDuplicateSuggestions', () => {
     it('is rate limited per user, before any search work happens', async () => {
       vi.mocked(checkFixedWindow).mockResolvedValueOnce({ count: 999, exceeded: true });

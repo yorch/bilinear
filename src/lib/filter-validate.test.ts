@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_FILTER_CONDITIONS, MAX_FILTER_VALUES, validateFilterSet } from './filter-validate';
+import {
+  MAX_FILTER_CONDITIONS,
+  MAX_FILTER_VALUES,
+  sanitizeStoredFilterSet,
+  validateFilterSet,
+} from './filter-validate';
 
 describe('validateFilterSet', () => {
   it.each([null, undefined, {}, { conditions: [] }])('treats %j as the empty filter', v => {
@@ -53,5 +58,39 @@ describe('validateFilterSet', () => {
     });
     expect(validateFilterSet(many(MAX_FILTER_VALUES)).ok).toBe(true);
     expect(validateFilterSet(many(MAX_FILTER_VALUES + 1)).ok).toBe(false);
+  });
+});
+
+describe('unknown top-level keys and stored-view sanitising', () => {
+  it('rejects a filter set carrying a foreign top-level key', () => {
+    const r = validateFilterSet({ s2: 'x' });
+    expect(r.ok).toBe(false);
+    expect(validateFilterSet({ conditions: [], extra: 1 }).ok).toBe(false);
+  });
+
+  it('still accepts the empty column default and a well-formed set', () => {
+    expect(validateFilterSet({}).ok).toBe(true);
+    expect(
+      validateFilterSet({ composition: 'or', conditions: [{ field: 'priority', operator: 'eq' }] })
+        .ok,
+    ).toBe(true);
+  });
+
+  it('sanitizeStoredFilterSet keeps sound conditions, drops and counts the rest', () => {
+    const r = sanitizeStoredFilterSet({
+      conditions: [
+        { field: 'priority', operator: 'eq', value: 1 },
+        null,
+        { field: 'nope', operator: 'eq' },
+      ],
+      s2: 'x',
+    });
+    expect(r.dropped).toBe(2);
+    expect(r.set?.conditions).toEqual([{ field: 'priority', operator: 'eq', value: 1 }]);
+  });
+
+  it('sanitizeStoredFilterSet refuses (null set) a stored value that is not an object', () => {
+    expect(sanitizeStoredFilterSet('garbage').set).toBeNull();
+    expect(sanitizeStoredFilterSet({}).dropped).toBe(0);
   });
 });

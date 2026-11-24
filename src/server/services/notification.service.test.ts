@@ -272,6 +272,7 @@ describe('NotificationService', () => {
       expect(result).toBe(3);
       expect(prisma.notification.count).toHaveBeenCalledWith({
         where: {
+          AND: [{}],
           OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: expect.any(Date) } }],
           organizationId: TEST_ORG.id,
           read: false,
@@ -563,6 +564,112 @@ describe('NotificationService', () => {
     it('skips a user already notified as the reply target', async () => {
       await service.notifyMentions({ ...params, skipUserIds: [MENTIONED] });
       expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('recipients who lost access (issue moved into a private team / guest demotion)', () => {
+    const PRIVATE_TEAM = 'team-private';
+    const movedIssue = { ...VISIBLE_ISSUE, teamId: PRIVATE_TEAM };
+
+    /** The recipients are NOT members of PRIVATE_TEAM. */
+    function hidePrivate() {
+      prisma.issue.findUnique.mockResolvedValue(movedIssue);
+      prisma.team.findMany.mockResolvedValue([
+        { id: PRIVATE_TEAM, memberships: [], organizationId: TEST_ORG.id },
+      ]);
+    }
+
+    it('createForStatusChange sends nothing to a subscriber who cannot see the issue', async () => {
+      hidePrivate();
+      prisma.notificationSubscription.findMany.mockResolvedValue([{ userId: TEST_USER.id }]);
+
+      const result = await service.createForStatusChange(
+        TEST_ORG.id,
+        TEST_ISSUE.id,
+        TEST_USER_2.id,
+        'old',
+        'new',
+      );
+
+      expect(result).toEqual({ count: 0 });
+      expect(prisma.notification.createMany).not.toHaveBeenCalled();
+    });
+
+    it('createForStatusChange still notifies a subscriber who can see the issue', async () => {
+      prisma.notificationSubscription.findMany.mockResolvedValue([{ userId: TEST_USER.id }]);
+      prisma.notification.createMany.mockResolvedValue({ count: 1 });
+
+      await service.createForStatusChange(TEST_ORG.id, TEST_ISSUE.id, TEST_USER_2.id, 'a', 'b');
+
+      expect(prisma.notification.createMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('notifyCommentSubscribers filters recipients (and so the emails) by visibility', async () => {
+      hidePrivate();
+      prisma.notificationSubscription.findMany.mockResolvedValue([{ userId: TEST_USER.id }]);
+      prisma.comment.findUnique.mockResolvedValue(null);
+
+      const result = await service.notifyCommentSubscribers(
+        TEST_ORG.id,
+        TEST_ISSUE.id,
+        TEST_USER_2.id,
+        'comment-1',
+        'secret excerpt',
+      );
+
+      expect(result.count).toBe(0);
+      expect(prisma.notification.createMany).not.toHaveBeenCalled();
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+    });
+
+    it('createForIssueAssignment and createForMention skip a user who cannot see the issue', async () => {
+      hidePrivate();
+      expect(
+        await service.createForIssueAssignment(
+          TEST_ORG.id,
+          TEST_ISSUE.id,
+          TEST_USER.id,
+          TEST_USER_2.id,
+        ),
+      ).toBeNull();
+      expect(
+        await service.createForMention(
+          TEST_ORG.id,
+          TEST_ISSUE.id,
+          TEST_USER.id,
+          TEST_USER_2.id,
+          'x',
+        ),
+      ).toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('a guest on the team only receives notifications for issues they created or are assigned', async () => {
+      prisma.teamMemberRole.findMany.mockResolvedValue([
+        { team: { organizationId: TEST_ORG.id }, teamId: movedIssue.teamId, userId: TEST_USER.id },
+      ]);
+      prisma.issue.findUnique.mockResolvedValue(movedIssue);
+      expect(
+        await service.filterVisibleRecipients(TEST_ORG.id, TEST_ISSUE.id, [TEST_USER.id]),
+      ).toEqual([]);
+      prisma.issue.findUnique.mockResolvedValue({ ...movedIssue, assigneeId: TEST_USER.id });
+      expect(
+        await service.filterVisibleRecipients(TEST_ORG.id, TEST_ISSUE.id, [TEST_USER.id]),
+      ).toEqual([TEST_USER.id]);
+    });
+
+    it('the inbox list excludes rows pointing at issues the viewer cannot see', async () => {
+      prisma.team.findMany.mockResolvedValue([
+        { id: PRIVATE_TEAM, memberships: [], organizationId: TEST_ORG.id },
+      ]);
+      prisma.notification.findMany.mockResolvedValue([]);
+
+      await service.findByUserId(TEST_USER.id, TEST_ORG.id);
+
+      const where = prisma.notification.findMany.mock.calls[0][0].where;
+      expect(JSON.stringify(where.AND)).toContain(
+        JSON.stringify({ teamId: { notIn: [PRIVATE_TEAM] } }),
+      );
     });
   });
 });

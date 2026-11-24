@@ -273,7 +273,7 @@ describe('FavoriteService', () => {
       expect(prisma.favorite.create).not.toHaveBeenCalled();
     });
 
-    it('allows a shared view, and the caller\'s own unshared view', async () => {
+    it("allows a shared view, and the caller's own unshared view", async () => {
       prisma.customView.findUnique.mockResolvedValue({ organizationId: TEST_ORG.id });
       prisma.favorite.findFirst.mockResolvedValue(null);
       prisma.favorite.create.mockResolvedValue(TEST_FAVORITE);

@@ -166,6 +166,22 @@ describe('TriageService', () => {
       });
     });
 
+    it('stamps updatedAt equal to triagedAt so revert can detect later edits', async () => {
+      prisma.issue.findUnique
+        .mockResolvedValueOnce(TRIAGE_ISSUE)
+        .mockResolvedValueOnce({ ...TRIAGE_ISSUE, stateId: CANCELED_STATE.id });
+      prisma.workflowState.findFirst
+        .mockResolvedValueOnce({ id: TRIAGE_STATE.id })
+        .mockResolvedValueOnce({ id: CANCELED_STATE.id });
+      prisma.issue.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.decline(TRIAGE_ISSUE.id);
+
+      const data = prisma.issue.updateMany.mock.calls[0][0].data;
+      expect(data.updatedAt).toBeInstanceOf(Date);
+      expect(data.updatedAt).toBe(data.triagedAt);
+    });
+
     it('throws TriageNotInQueueError when issue raced out of triage', async () => {
       prisma.issue.findUnique.mockResolvedValue(TRIAGE_ISSUE);
       prisma.workflowState.findFirst
@@ -244,7 +260,12 @@ describe('TriageService', () => {
 
   describe('revert', () => {
     const decidedAt = new Date(Date.now() - 60_000);
-    const accepted = { ...TEST_ISSUE, stateId: 'backlog-state', triagedAt: decidedAt };
+    const accepted = {
+      ...TEST_ISSUE,
+      stateId: 'backlog-state',
+      triagedAt: decidedAt,
+      updatedAt: decidedAt,
+    };
 
     function arm(issue: unknown, count = 1) {
       prisma.issue.findUnique.mockResolvedValueOnce(issue).mockResolvedValue({
@@ -263,12 +284,29 @@ describe('TriageService', () => {
       expect(prisma.issue.updateMany).toHaveBeenCalledWith({
         data: { canceledAt: null, stateId: TRIAGE_STATE.id, triagedAt: null },
         // CAS on the decision being undone: a later decision must win.
-        where: { id: TEST_ISSUE.id, stateId: 'backlog-state', triagedAt: decidedAt },
+        where: {
+          id: TEST_ISSUE.id,
+          stateId: 'backlog-state',
+          triagedAt: decidedAt,
+          updatedAt: decidedAt,
+        },
+      });
+      // Only relations stamped with the decision's own timestamp are removed.
+      expect(prisma.issueRelation.findMany).toHaveBeenCalledWith({
+        select: { id: true },
+        where: { createdAt: decidedAt, issueId: TEST_ISSUE.id, type: 'duplicate' },
       });
       expect(prisma.issueRelation.deleteMany).toHaveBeenCalledWith({
         where: { id: { in: ['rel-1'] } },
       });
       expect(out.removedRelationIds).toEqual(['rel-1']);
+    });
+
+    it('refuses to undo a decision that was edited afterwards (updatedAt moved past triagedAt)', async () => {
+      arm({ ...accepted, updatedAt: new Date(decidedAt.getTime() + 5_000) });
+      await expect(service.revert(TEST_ISSUE.id)).rejects.toBeInstanceOf(TriageNotRevertableError);
+      expect(prisma.issue.updateMany).not.toHaveBeenCalled();
+      expect(prisma.issueRelation.deleteMany).not.toHaveBeenCalled();
     });
 
     it('refuses an issue that is still in the queue', async () => {

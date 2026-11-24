@@ -758,11 +758,13 @@ describe('CycleService', () => {
 
     it('starts after the latest cycle even when it is archived (so restore cannot be blocked)', async () => {
       prisma.team.findUnique.mockResolvedValue(CYCLES_TEAM);
-      prisma.cycle.findFirst.mockResolvedValue({
-        ...TEST_CYCLE,
-        archivedAt: new Date(),
-        endsAt: new Date('2031-01-15T00:00:00Z'),
-      });
+      prisma.cycle.findFirst
+        .mockResolvedValueOnce({
+          ...TEST_CYCLE,
+          archivedAt: new Date(),
+          endsAt: new Date('2031-01-15T00:00:00Z'),
+        })
+        .mockResolvedValue(null); // no concurrent overlap under the lock
       prisma.cycle.findMany.mockResolvedValue([]);
       prisma.cycle.create.mockImplementation(({ data }) =>
         Promise.resolve({ ...TEST_CYCLE, ...data }),
@@ -777,12 +779,66 @@ describe('CycleService', () => {
       });
     });
 
+    it('yields (creates nothing) when a concurrent writer filled the span before the lock was won', async () => {
+      prisma.team.findUnique.mockResolvedValue(CYCLES_TEAM);
+      prisma.cycle.findFirst
+        .mockResolvedValueOnce(null) // latest cycle
+        .mockResolvedValueOnce({ id: 'someone-elses' }); // overlap found under the lock
+      prisma.cycle.findMany.mockResolvedValue([]);
+
+      const result = await service.autoCreateUpcomingCycles(TEST_ORG.id, TEST_TEAM.id, 2);
+
+      expect(result).toEqual([]);
+      expect(prisma.cycle.create).not.toHaveBeenCalled();
+    });
+
     it('returns no cycles when the team does not have cycles enabled', async () => {
       prisma.team.findUnique.mockResolvedValue({ ...CYCLES_TEAM, cyclesEnabled: false });
 
       const result = await service.autoCreateUpcomingCycles(TEST_ORG.id, TEST_TEAM.id);
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('per-team advisory lock (overlap check-then-write must be serialised)', () => {
+    const lockCalls = () =>
+      prisma.$queryRaw.mock.calls.map(c => String((c[0] as string[]).join('?')));
+
+    it('create takes the team lock before its overlap read', async () => {
+      prisma.cycle.findFirst.mockResolvedValue(null);
+      prisma.cycle.create.mockResolvedValue(TEST_CYCLE);
+      await service.create(TEST_ORG.id, {
+        endsAt: '2031-01-15T00:00:00Z',
+        startsAt: '2031-01-01T00:00:00Z',
+        teamId: TEST_TEAM.id,
+      });
+      expect(lockCalls()[0]).toContain('pg_advisory_xact_lock');
+      expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+        prisma.cycle.findFirst.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('unarchive takes the team lock before its overlap read', async () => {
+      prisma.cycle.findUnique.mockResolvedValue({ ...TEST_CYCLE, archivedAt: new Date() });
+      prisma.cycle.findFirst.mockResolvedValue(null);
+      prisma.cycle.update.mockResolvedValue(TEST_CYCLE);
+      await service.unarchive(TEST_CYCLE.id);
+      expect(lockCalls()[0]).toContain('pg_advisory_xact_lock');
+      expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+        prisma.cycle.findFirst.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('a date-changing update takes the team lock before its overlap read', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(TEST_CYCLE);
+      prisma.cycle.findFirst.mockResolvedValue(null);
+      prisma.cycle.update.mockResolvedValue(TEST_CYCLE);
+      await service.update(TEST_CYCLE.id, { endsAt: '2031-06-01T00:00:00Z' });
+      expect(lockCalls()[0]).toContain('pg_advisory_xact_lock');
+      expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+        prisma.cycle.findFirst.mock.invocationCallOrder[0],
+      );
     });
   });
 });

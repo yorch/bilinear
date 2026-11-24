@@ -75,6 +75,60 @@ describe('documentResolvers', () => {
     });
   });
 
+  describe('team-document write gate (guests read-only, non-members out)', () => {
+    const TEAM = '00000000-0000-0000-0000-0000000000e1';
+    const TEAM_DOC = { ...DOC, teamId: TEAM };
+    const WRITES = [
+      ['documentCreate', { input: { teamId: TEAM, title: 'x' } }],
+      ['documentUpdate', { id: DOC.id, input: { title: 'x' } }],
+      ['documentArchive', { id: DOC.id }],
+      ['documentUnarchive', { id: DOC.id }],
+      ['documentDelete', { id: DOC.id }],
+    ] as const;
+
+    function asRole(role: 'guest' | 'member' | null) {
+      ctx.prisma.document.findUnique.mockResolvedValue(TEAM_DOC);
+      ctx.prisma.team.findFirst.mockResolvedValue({ id: TEAM, organizationId: TEST_ORG.id });
+      ctx.prisma.team.findUnique.mockResolvedValue({ id: TEAM, organizationId: TEST_ORG.id });
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue(
+        role === null ? null : { team: { organizationId: TEST_ORG.id } },
+      );
+      ctx.prisma.teamMemberRole.findUnique.mockResolvedValue(role ? { role } : null);
+    }
+
+    it.each(WRITES)(
+      '%s is FORBIDDEN for a guest of the team and writes nothing',
+      async (name, args) => {
+        asRole('guest');
+        await expect(call(name, args)).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
+        expect(ctx.prisma.document.create).not.toHaveBeenCalled();
+        expect(ctx.prisma.document.update).not.toHaveBeenCalled();
+        expect(ctx.prisma.document.delete).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(WRITES)('%s is FORBIDDEN for an org member outside the team', async (name, args) => {
+      asRole(null);
+      await expect(call(name, args)).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
+    });
+
+    it('a team member can still archive a team document', async () => {
+      asRole('member');
+      ctx.prisma.document.update.mockResolvedValue({ ...TEAM_DOC, archivedAt: new Date() });
+      await expect(call('documentArchive', { id: DOC.id })).resolves.toMatchObject({
+        success: true,
+      });
+    });
+
+    it('a workspace-level document stays writable by any org member', async () => {
+      ctx.prisma.document.findUnique.mockResolvedValue({ ...DOC, teamId: null });
+      ctx.prisma.document.update.mockResolvedValue({ ...DOC, teamId: null });
+      await expect(call('documentArchive', { id: DOC.id })).resolves.toMatchObject({
+        success: true,
+      });
+    });
+  });
+
   describe('Query.documents archive flag', () => {
     it('hides archived documents unless includeArchived is asked for', async () => {
       ctx.prisma.document.findMany.mockResolvedValue([]);

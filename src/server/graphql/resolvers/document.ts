@@ -90,7 +90,11 @@ export const documentResolvers = {
       requireAuth(ctx);
 
       const { hiddenTeamIds } = await documentScope(ctx);
-      await requireDocumentWriteAccess(ctx, input.teamId);
+      // A hidden team falls through to the service's NOT_FOUND so the gate
+      // never confirms that a private team exists.
+      if (!input.teamId || !hiddenTeamIds.includes(input.teamId)) {
+        await requireDocumentWriteAccess(ctx, input.teamId);
+      }
       let document: Awaited<ReturnType<typeof ctx.services.document.create>>;
       try {
         document = await ctx.services.document.create(ctx.orgId, ctx.userId, input, hiddenTeamIds);

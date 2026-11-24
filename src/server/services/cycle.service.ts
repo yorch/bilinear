@@ -69,6 +69,18 @@ export class CycleService {
     private readonly deps: CycleServiceDeps = {},
   ) {}
 
+  /**
+   * Serialise every cycle write on one team. Overlap is a check-then-write that
+   * READ COMMITTED does not protect: `Promise.all([unarchive A, unarchive B,
+   * create C])` over the same dates let each transaction pass its overlap query
+   * before any committed, leaving two active, overlapping cycles. A
+   * transaction-scoped advisory lock keyed on the team closes that window
+   * without a schema change; it is released at commit/rollback.
+   */
+  private async lockTeamCycles(tx: Pick<PrismaClient, '$queryRaw'>, teamId: string) {
+    await tx.$queryRaw`SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${`cycle-team:${teamId}`}, 0))) AS l`;
+  }
+
   async create(orgId: string, input: CycleCreateInput): Promise<Cycle> {
     const startsAt = new Date(input.startsAt);
     const endsAt = new Date(input.endsAt);
@@ -87,6 +99,7 @@ export class CycleService {
     for (let attempt = 0; attempt < MAX_NUMBER_RETRIES; attempt++) {
       try {
         return await this.prisma.$transaction(async tx => {
+          await this.lockTeamCycles(tx, input.teamId);
           const overlap = await tx.cycle.findFirst({
             where: {
               archivedAt: null,
@@ -148,31 +161,42 @@ export class CycleService {
     }
 
     if (data.startsAt || data.endsAt) {
-      const existing = await this.prisma.cycle.findUnique({ where: { id } });
-      if (!existing) {
-        throw new CycleNotFoundError();
-      }
+      return this.prisma.$transaction(async tx => {
+        // `teamId` never changes, so read it once to know which lock to take,
+        // then re-read the dates UNDER the lock — a concurrent update of this
+        // cycle must not be validated against its pre-image.
+        const team = await tx.cycle.findUnique({ select: { teamId: true }, where: { id } });
+        if (!team) {
+          throw new CycleNotFoundError();
+        }
+        await this.lockTeamCycles(tx, team.teamId);
+        const existing = await tx.cycle.findUnique({ where: { id } });
+        if (!existing) {
+          throw new CycleNotFoundError();
+        }
 
-      const newStart = (data.startsAt as Date) ?? existing.startsAt;
-      const newEnd = (data.endsAt as Date) ?? existing.endsAt;
+        const newStart = (data.startsAt as Date) ?? existing.startsAt;
+        const newEnd = (data.endsAt as Date) ?? existing.endsAt;
 
-      if (newEnd <= newStart) {
-        throw new CycleInvalidDatesError();
-      }
+        if (newEnd <= newStart) {
+          throw new CycleInvalidDatesError();
+        }
 
-      // Check for overlapping cycles (excluding self)
-      const overlap = await this.prisma.cycle.findFirst({
-        where: {
-          archivedAt: null,
-          endsAt: { gt: newStart },
-          id: { not: id },
-          startsAt: { lt: newEnd },
-          teamId: existing.teamId,
-        },
+        // Check for overlapping cycles (excluding self)
+        const overlap = await tx.cycle.findFirst({
+          where: {
+            archivedAt: null,
+            endsAt: { gt: newStart },
+            id: { not: id },
+            startsAt: { lt: newEnd },
+            teamId: existing.teamId,
+          },
+        });
+        if (overlap) {
+          throw new CycleOverlapError();
+        }
+        return tx.cycle.update({ data, where: { id } });
       });
-      if (overlap) {
-        throw new CycleOverlapError();
-      }
     }
 
     return this.prisma.cycle.update({
@@ -197,6 +221,11 @@ export class CycleService {
    */
   async unarchive(id: string): Promise<Cycle> {
     return this.prisma.$transaction(async tx => {
+      const team = await tx.cycle.findUnique({ select: { teamId: true }, where: { id } });
+      if (!team) {
+        throw new CycleNotFoundError();
+      }
+      await this.lockTeamCycles(tx, team.teamId);
       const existing = await tx.cycle.findUnique({ where: { id } });
       if (!existing) {
         throw new CycleNotFoundError();
@@ -763,6 +792,26 @@ export class CycleService {
     }
 
     return this.prisma.$transaction(async tx => {
+      await this.lockTeamCycles(tx, teamId);
+      // The ranges above were computed before the lock: if a concurrent
+      // generator (or a manual create) filled this span meanwhile, creating
+      // again would stack overlapping cycles — yield to it.
+      const first = ranges[0];
+      const last = ranges[ranges.length - 1];
+      if (first && last) {
+        const taken = await tx.cycle.findFirst({
+          select: { id: true },
+          where: {
+            archivedAt: null,
+            endsAt: { gt: first.startsAt },
+            startsAt: { lt: last.endsAt },
+            teamId,
+          },
+        });
+        if (taken) {
+          return [];
+        }
+      }
       const created: Cycle[] = [];
 
       // Get the current max cycle number inside the transaction

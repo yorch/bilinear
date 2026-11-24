@@ -1495,6 +1495,24 @@ describe('IssueService', () => {
       expect(prisma.issue.update).not.toHaveBeenCalled();
     });
 
+    it('update refuses (rather than silently admits) a parent chain deeper than the walk bound', async () => {
+      // 203-deep chain: node i's parent is node i+1; A sits on top. Making A a
+      // child of the bottom node closes a loop the bounded walk can never reach.
+      const chain = Array.from({ length: 203 }, (_, i) => `n${i}`);
+      const parents: Record<string, string | null> = { [A]: null };
+      chain.forEach((id, i) => {
+        parents[id] = i + 1 < chain.length ? (chain[i + 1] as string) : A;
+      });
+      prisma.issue.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => ({
+        organizationId: TEST_ORG.id,
+        parentId: parents[where.id] ?? null,
+        projectId: null,
+        teamId: TEST_TEAM.id,
+      }));
+      await expect(service.update(A, { parentId: 'n0' })).rejects.toThrow('deeper than');
+      expect(prisma.issue.update).not.toHaveBeenCalled();
+    });
+
     it('update allows a valid parent', async () => {
       prisma.issue.findUnique.mockResolvedValue({
         organizationId: TEST_ORG.id,
@@ -1681,8 +1699,12 @@ describe('IssueService', () => {
         });
         prisma.issue.update.mockResolvedValue({ ...TEST_ISSUE, parentId: B });
         await service.update(A, { parentId: B });
-        expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
-        expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+        // advisory lock first, then the issue row lock, then the write.
+        const sql = prisma.$queryRaw.mock.calls.map(c => String(c[0].join('?')));
+        expect(sql).toHaveLength(2);
+        expect(sql[0]).toContain('pg_advisory_xact_lock');
+        expect(sql[1]).toContain('FOR UPDATE');
+        expect(prisma.$queryRaw.mock.invocationCallOrder[1]).toBeLessThan(
           prisma.issue.update.mock.invocationCallOrder[0],
         );
       });
@@ -1695,7 +1717,7 @@ describe('IssueService', () => {
         expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
       });
 
-      it('does not lock when no parent is being set', async () => {
+      it('takes only the issue row lock (no org advisory lock) when no parent is being set', async () => {
         prisma.issue.findUnique.mockResolvedValue({
           organizationId: TEST_ORG.id,
           projectId: null,
@@ -1703,7 +1725,29 @@ describe('IssueService', () => {
         });
         prisma.issue.update.mockResolvedValue(TEST_ISSUE);
         await service.update(A, { title: 'x' });
-        expect(prisma.$queryRaw).not.toHaveBeenCalled();
+        const sql = prisma.$queryRaw.mock.calls.map(c => String(c[0].join('?')));
+        expect(sql).toHaveLength(1);
+        expect(sql[0]).toContain('FOR UPDATE');
+        expect(sql[0]).not.toContain('advisory');
+      });
+
+      it('runs the caller authorize hook against the locked row, inside the write transaction', async () => {
+        prisma.issue.findUnique.mockResolvedValue({
+          assigneeId: null,
+          creatorId: 'c',
+          organizationId: TEST_ORG.id,
+          projectId: null,
+          teamId: 'team-moved-meanwhile',
+        });
+        prisma.issue.update.mockResolvedValue(TEST_ISSUE);
+        const authorize = vi.fn().mockRejectedValue(new Error('forbidden'));
+        await expect(service.update(A, { title: 'x' }, undefined, { authorize })).rejects.toThrow(
+          'forbidden',
+        );
+        expect(authorize).toHaveBeenCalledWith(
+          expect.objectContaining({ teamId: 'team-moved-meanwhile' }),
+        );
+        expect(prisma.issue.update).not.toHaveBeenCalled();
       });
     });
 

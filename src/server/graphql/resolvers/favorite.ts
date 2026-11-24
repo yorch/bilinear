@@ -155,8 +155,16 @@ export const favoriteResolvers = {
     favoriteDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       try {
-        await ctx.services.favorite.delete(ctx.orgId, ctx.userId, id);
-        const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Favorite', id, null);
+        const removed = await ctx.services.favorite.delete(ctx.orgId, ctx.userId, id);
+        // The deleted row (not null) so the payload carries `userId` and the
+        // per-user filter keeps this delete away from every other member.
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'D',
+          'Favorite',
+          id,
+          removed,
+        );
         return { lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
         mapServiceError(err, FAVORITE_ERRORS);

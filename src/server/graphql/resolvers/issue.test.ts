@@ -16,6 +16,10 @@ describe('issueResolvers', () => {
 
   beforeEach(() => {
     ctx = createMockContext();
+    // Notification fan-out filters recipients by visibility: no private teams,
+    // no guest roles.
+    ctx.prisma.team.findMany.mockResolvedValue([]);
+    ctx.prisma.teamMemberRole.findMany.mockResolvedValue([]);
   });
 
   // ── Mutation.issueCreate ──────────────────────────────────────────────────
@@ -124,6 +128,7 @@ describe('issueResolvers', () => {
     });
 
     it('notifies and subscribes the assignee when different from creator', async () => {
+      ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
       ctx.prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
       ctx.prisma.issue.create.mockResolvedValue({
         ...TEST_ISSUE,
@@ -346,6 +351,26 @@ describe('issueResolvers', () => {
         expect(calls.some(c => c[3] === TEST_TEAM.id && c[4]?.teamScopedOnly === true)).toBe(true);
       });
 
+      it('sends the team the issue LEFT only a redacted "moved out" event, never the post-move row', async () => {
+        const { webhook } = await move();
+        await vi.waitFor(() => expect(webhook).toHaveBeenCalledTimes(2));
+        const oldTeamCall = webhook.mock.calls.find(c => c[4]?.teamScopedOnly === true);
+        const payload = oldTeamCall?.[2] as Record<string, unknown>;
+        expect(payload).toEqual({
+          id: TEST_ISSUE.id,
+          identifier: TEST_ISSUE.identifier,
+          movedOut: true,
+          organizationId: TEST_ORG.id,
+          teamId: TEST_TEAM.id,
+        });
+        // Nothing of the destination may leak to the old team's subscriber.
+        expect(JSON.stringify(payload)).not.toContain('OPS-7');
+        expect(payload).not.toHaveProperty('stateId');
+        // The destination (and org-wide) hook still gets the full row.
+        const newTeamCall = webhook.mock.calls.find(c => c[3] === OPS && !c[4]);
+        expect(newTeamCall?.[2]).toMatchObject({ identifier: 'OPS-7', teamId: OPS });
+      });
+
       it('reports the labels dropped by the move', async () => {
         ctx.prisma.issueLabelAssignment.findMany.mockResolvedValue([
           { label: { name: 'eng-only', teamId: TEST_TEAM.id }, labelId: 'l1' },
@@ -353,6 +378,29 @@ describe('issueResolvers', () => {
         const { result } = await move();
         expect(result.droppedLabelNames).toEqual(['eng-only']);
       });
+    });
+
+    it('re-checks access inside the write transaction against the locked row', async () => {
+      // Pre-read says the issue is in TEST_TEAM (caller is a member); by the
+      // time the row lock is granted a concurrent move put it in another team
+      // the caller is NOT a member of. The authorize hook must see that and abort.
+      ctx.prisma.issue.findUnique
+        .mockResolvedValueOnce(TEST_ISSUE) // resolver pre-read
+        .mockResolvedValue({ ...TEST_ISSUE, teamId: 'moved-away-team' }); // under the lock
+      ctx.prisma.teamMembership.findUnique.mockImplementation(
+        async ({ where }: { where: { teamId_userId: { teamId: string } } }) =>
+          where.teamId_userId.teamId === TEST_ISSUE.teamId
+            ? { team: { organizationId: TEST_ORG.id } }
+            : null,
+      );
+      await expect(
+        issueResolvers.Mutation.issueUpdate(
+          null,
+          { id: TEST_ISSUE.id, input: { title: 'x' } },
+          ctx as never,
+        ),
+      ).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
+      expect(ctx.prisma.issue.update).not.toHaveBeenCalled();
     });
 
     it('auto-subscribes the actor on any update', async () => {
