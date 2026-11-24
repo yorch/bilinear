@@ -100,8 +100,9 @@ function NotConfiguredRow({ envVars, provider }: { envVars: string; provider: st
   return (
     <div className="rounded-md bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
       <p className="font-medium">{t('settings.integrations.notConfigured')}</p>
-      <p className="mt-1 text-xs">
-        {t('settings.integrations.notConfiguredHint', { envVars, provider })}
+      {/* The variable names are operator detail: kept off the card, on hover. */}
+      <p className="mt-1 text-xs" title={envVars}>
+        {t('settings.integrations.notConfiguredHint', { provider })}
       </p>
     </div>
   );
