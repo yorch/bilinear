@@ -153,12 +153,15 @@
   "analytics": {
     "explorer": {
       "allIssues": "All issues",
+      "cycleTimeNote": "Averages cover issues that were started and completed. An issue moved straight to Done has no start time and is left out; n is how many issues each average is based on.",
       "days": "{count}d",
       "description": "Pick a measure and a slice. Only issues you can see are counted.",
       "empty": "No issues match this selection.",
       "exportCsv": "Export CSV",
       "failedToLoad": "Failed to load insights",
       "filter": "Filter",
+      "groupCount_one": "{count} group",
+      "groupCount_other": "{count} groups",
       "issues": "Issues",
       "labelNote": "An issue with several labels is counted under each.",
       "measure": "Measure",
@@ -182,7 +185,9 @@
         "3": "Medium",
         "4": "Low"
       },
-      "scanCapped": "Too many issues matched; figures cover the newest ones only. Narrow it with a saved view.",
+      "sampleHeader": "Sample (n)",
+      "sampleShort": "n={count}",
+      "scanCapped": "More than {count} issues matched, so the figures cover only the newest {count}. Narrow the selection with a saved view.",
       "slice": "Slice",
       "slices": {
         "assignee": "Assignee",
@@ -192,7 +197,8 @@
         "status": "Status",
         "team": "Team"
       },
-      "summary": "{issues} issues in {groups} groups.",
+      "summary_one": "{issues} issue in {groups}.",
+      "summary_other": "{issues} issues in {groups}.",
       "tableCaption": "{measure} by {slice}",
       "title": "Insights",
       "truncated": "Showing the top {count} groups only.",
@@ -216,7 +222,7 @@
       "noStateTransitionData": "No state-transition data yet",
       "rangeAll": "All",
       "rangeDays": "{count}d",
-      "title": "Insights"
+      "title": "Cycle and lead time"
     },
     "team": {
       "allTime": "all time",
@@ -269,6 +275,7 @@
     },
     "workspace": {
       "activeTeams": "Active teams",
+      "adminOnly": "The workspace overview is available to workspace admins. Insights below still covers the issues you can see.",
       "avgCycle": "Avg cycle",
       "completed": "Completed",
       "completedCol": "Completed",
@@ -977,6 +984,7 @@
       "updateFailed": "Couldn't save the change"
     },
     "health": {
+      "aProject": "a project",
       "derived": "Derived: {health}",
       "derivedHint": "Derived from project health and forecasts; it does not replace a posted update.",
       "label": {
@@ -990,9 +998,9 @@
         "initiativeTargetSlip": "projects are projected to finish after the initiative target date",
         "noActiveProjects": "no active projects",
         "noSignals": "no project health, target dates or forecasts yet",
-        "projectManualHealth": "a project was posted as at risk or off track",
-        "projectOverdue": "a project is past its target date and unfinished",
-        "projectProjectedLate": "a project is projected to finish after its target date"
+        "projectManualHealth": "{project} was posted as at risk or off track",
+        "projectOverdue": "{project} is past its target date and unfinished",
+        "projectProjectedLate": "{project} is projected to finish after its target date"
       },
       "title": "Health"
     },
@@ -1670,11 +1678,13 @@
       "ariaLabel": "Project burn-up: scope and completed issues over time with a projected finish",
       "complete": "All issues complete",
       "completed": "Completed",
+      "dateHeader": "Date",
       "description": "Scope and completed issues per day, with a forecast from recent pace.",
       "empty": "No issues in this project yet.",
       "failedToLoad": "Failed to load the burn-up chart",
       "forecast": "Forecast",
       "hover": "{date}: scope {scope}, completed {completed}",
+      "keyboardHint": "Use the left and right arrow keys to read each day; Home and End jump to the first and last day.",
       "noTarget": "No target date set",
       "notEnoughData": "Not enough data to forecast",
       "pastTarget_one": "{count} day past target ({date})",
@@ -1688,6 +1698,8 @@
       },
       "scope": "Scope",
       "target": "Target date",
+      "targetAfter": "Target {date} (beyond the chart)",
+      "targetBefore": "Target {date} (before the chart starts)",
       "title": "Burn-up",
       "velocity": "Pace: {count} issues/week over the last {days} days"
     },

@@ -1,11 +1,20 @@
 import { GraphQLError } from 'graphql';
 import type { CustomView } from '../../../generated/prisma';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
-import type {
-  CustomViewCreateInput,
-  CustomViewUpdateInput,
+import {
+  type CustomViewCreateInput,
+  CustomViewInputError,
+  type CustomViewUpdateInput,
 } from '../../services/custom-view.service';
 import type { GraphQLContext } from '../context';
+
+/** A rejected `filters` payload is the caller's input error, not a 500. */
+function badInput(err: unknown): never {
+  if (err instanceof CustomViewInputError) {
+    throw new GraphQLError(err.message, { extensions: { code: 'BAD_USER_INPUT' } });
+  }
+  throw err;
+}
 
 export const customViewResolvers = {
   CustomView: {
@@ -65,7 +74,9 @@ export const customViewResolvers = {
         await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
       }
 
-      const customView = await ctx.services.customView.create(ctx.orgId, ctx.userId, input);
+      const customView = await ctx.services.customView
+        .create(ctx.orgId, ctx.userId, input)
+        .catch(badInput);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'I',
@@ -117,7 +128,7 @@ export const customViewResolvers = {
         });
       }
 
-      const customView = await ctx.services.customView.update(id, input);
+      const customView = await ctx.services.customView.update(id, input).catch(badInput);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'U',

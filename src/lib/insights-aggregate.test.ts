@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregateInsights, csvSafeText, type InsightIssue, NONE_KEY } from './insights-aggregate';
+import { aggregateInsights, type InsightIssue, NONE_KEY } from './insights-aggregate';
 
 const team = { id: 't1', name: 'Eng' };
 const mk = (over: Partial<InsightIssue> = {}): InsightIssue => ({
@@ -77,11 +77,36 @@ describe('aggregateInsights', () => {
   });
 });
 
-describe('csvSafeText', () => {
-  it.each(['=SUM(A1)', '+1', '-1', '@x'])('prefixes %s', v => {
-    expect(csvSafeText(v)).toBe(`'${v}`);
+describe('aggregateInsights edge cases', () => {
+  it('is not truncated when the group count equals the cap exactly', () => {
+    const issues = Array.from({ length: 3 }, (_, i) =>
+      mk({ team: { id: `t${i}`, name: `Team ${i}` } }),
+    );
+    const r = aggregateInsights(issues, 'count', 'team', 3);
+    expect(r).toMatchObject({ totalGroups: 3, truncated: false });
+    expect(r.rows).toHaveLength(3);
   });
-  it('leaves ordinary text alone', () => {
-    expect(csvSafeText('Bug fixes - Q3')).toBe('Bug fixes - Q3');
+
+  it('clamps a negative cycle time (completed before started) to zero', () => {
+    const r = aggregateInsights(
+      [
+        mk({ completedAt: at('2026-06-01'), startedAt: at('2026-06-03') }), // -2 days -> 0
+        mk({ completedAt: at('2026-06-04'), startedAt: at('2026-06-01') }), // 3 days
+      ],
+      'cycleTime',
+      'team',
+    );
+    expect(r.rows[0]).toMatchObject({ sampleSize: 2, value: 1.5 });
+  });
+
+  it('rounds the average cycle time to one decimal place', () => {
+    const r = aggregateInsights(
+      [1, 2, 2].map(days =>
+        mk({ completedAt: at(`2026-06-0${1 + days}`), startedAt: at('2026-06-01') }),
+      ),
+      'cycleTime',
+      'team',
+    );
+    expect(r.rows[0].value).toBe(1.7); // 5/3 = 1.666...
   });
 });

@@ -1,10 +1,6 @@
 import { GraphQLError } from 'graphql';
-import {
-  getGuestTeamIds,
-  requireAuth,
-  requireOrgRole,
-  requireTeamMember,
-} from '../../middleware/auth';
+import { getSyncVisibility } from '../../lib/sync-visibility';
+import { requireAuth, requireOrgRole, requireTeamMember } from '../../middleware/auth';
 import {
   type AnalyticsRange,
   InsightsInputError,
@@ -40,18 +36,19 @@ async function buildFilter(
   };
 }
 
-/** The viewer's issue scope: member teams, guest restriction on guest teams. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A malformed id is the caller's mistake (400), not a database error (500). */
+function requireUuid(value: string, what: string): void {
+  if (!UUID_RE.test(value)) {
+    throw new GraphQLError(`Invalid ${what}`, { extensions: { code: 'BAD_USER_INPUT' } });
+  }
+}
+
+/** The viewer's issue scope — the same one bootstrap/delta use. */
 async function visibilityScope(ctx: GraphQLContext): Promise<IssueVisibilityScope> {
   requireAuth(ctx);
-  const memberships = await ctx.prisma.teamMembership.findMany({
-    select: { teamId: true },
-    where: { team: { organizationId: ctx.orgId }, userId: ctx.userId },
-  });
-  return {
-    guestTeamIds: await getGuestTeamIds(ctx.prisma, ctx.userId, ctx.orgId),
-    memberTeamIds: memberships.map(m => m.teamId),
-    userId: ctx.userId,
-  };
+  return getSyncVisibility(ctx.prisma, ctx.userId, ctx.orgId);
 }
 
 export const analyticsResolvers = {
@@ -125,6 +122,9 @@ export const analyticsResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      if (args.viewId) {
+        requireUuid(args.viewId, 'viewId');
+      }
       try {
         return await ctx.services.analytics.insights(
           ctx.orgId,
@@ -148,6 +148,7 @@ export const analyticsResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      requireUuid(projectId, 'projectId');
       const result = await ctx.services.analytics.projectBurnup(
         ctx.orgId,
         projectId,

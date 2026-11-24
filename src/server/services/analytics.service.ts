@@ -1,10 +1,11 @@
 import { Prisma, type PrismaClient } from '../../generated/prisma';
-import { applyFilters, coerceFilterSet } from '../../lib/filter-engine';
+import { validateFilterSet } from '../../lib/filter-validate';
 import { type DerivedHealthResult, deriveInitiativeHealth } from '../../lib/initiative-health';
 import {
   aggregateInsights,
   INSIGHT_MEASURES,
   INSIGHT_SLICES,
+  INSIGHTS_SCAN_LIMIT,
   type InsightIssue,
   type InsightMeasure,
   type InsightResult,
@@ -18,28 +19,32 @@ import {
   utcDay,
 } from '../../lib/project-burnup';
 import { toDateOnly } from '../lib/date-only';
+import { filterSetToWhere, UnsupportedFilterError } from '../lib/insights-filters';
 import { buildGuestVisibilityWhere } from '../lib/issue-visibility';
 
 /**
- * Which issues the caller may count: only teams they belong to, and on guest
- * teams only issues they created or are assigned to. Same rule as
- * `searchIssues`. Every project/insights number is computed over this scope, so
- * a private team's issues never leak into a count.
+ * Which issues the caller may count: exactly what bootstrap/delta ship them
+ * (`getSyncVisibility`). Only PRIVATE teams the caller is not in are hidden —
+ * a public team's issues are visible to every org member whether or not they
+ * joined it — and on guest teams only issues they created or are assigned to.
  */
 export interface IssueVisibilityScope {
   guestTeamIds: string[];
-  memberTeamIds: string[];
+  hiddenTeamIds: string[];
   userId: string;
 }
 
 export function issueVisibilityWhere(scope: IssueVisibilityScope): Prisma.IssueWhereInput {
-  const ands: Prisma.IssueWhereInput[] = [{ teamId: { in: scope.memberTeamIds } }];
+  const ands: Prisma.IssueWhereInput[] = [];
+  if (scope.hiddenTeamIds.length > 0) {
+    ands.push({ teamId: { notIn: scope.hiddenTeamIds } });
+  }
   if (scope.guestTeamIds.length > 0) {
     ands.push(
       buildGuestVisibilityWhere({ guestTeamIds: scope.guestTeamIds, userId: scope.userId }),
     );
   }
-  return { AND: ands };
+  return ands.length === 0 ? {} : { AND: ands };
 }
 
 export interface ProjectBurnupResult {
@@ -62,8 +67,10 @@ export class InsightsInputError extends Error {
   }
 }
 
-/** Upper bound on issues scanned per insights call. */
-export const INSIGHTS_SCAN_LIMIT = 20_000;
+export { INSIGHTS_SCAN_LIMIT };
+/** How long an identical Insights call is served from memory. */
+export const INSIGHTS_CACHE_TTL_MS = 10_000;
+const INSIGHTS_CACHE_MAX = 200;
 
 /**
  * Cross-team workflow analytics. All queries are org-scoped and optionally
@@ -597,7 +604,7 @@ export class AnalyticsService {
   ): Promise<Map<string, ProjectBurnupResult>> {
     const out = new Map<string, ProjectBurnupResult>();
     const issues =
-      scope.memberTeamIds.length === 0 || projects.length === 0
+      projects.length === 0
         ? []
         : await this.prisma.issue.findMany({
             select: {
@@ -736,8 +743,12 @@ export class AnalyticsService {
 
   /**
    * Insights v0: Measure x Slice over the caller's visible issues, optionally
-   * narrowed by a saved view the caller can see. Capped at INSIGHTS_SCAN_LIMIT
-   * issues (`scanCapped`) and MAX_INSIGHT_GROUPS groups.
+   * narrowed by a saved view the caller can see. The view's filters are pushed
+   * into the database `where`, so the INSIGHTS_SCAN_LIMIT cap applies to the
+   * MATCHING rows, never to the unfiltered newest ones. Only the scalar
+   * columns the measure needs are read; names are resolved for the slice's own
+   * entities afterwards. Identical calls within INSIGHTS_CACHE_TTL_MS share one
+   * scan (and a call already in flight is joined, not repeated).
    */
   async insights(
     orgId: string,
@@ -753,8 +764,60 @@ export class AnalyticsService {
     if (!(INSIGHT_SLICES as readonly string[]).includes(slice)) {
       throw new InsightsInputError(`Unknown slice: ${slice}`);
     }
+    const key = [
+      orgId,
+      userId,
+      measure,
+      slice,
+      viewId ?? '',
+      [...scope.hiddenTeamIds].sort().join(','),
+      [...scope.guestTeamIds].sort().join(','),
+    ].join('|');
+    const now = Date.now();
+    const hit = this.insightsCache.get(key);
+    if (hit && hit.expires > now) {
+      return hit.value;
+    }
+    const value = this.computeInsights(
+      orgId,
+      userId,
+      measure as InsightMeasure,
+      slice as InsightSlice,
+      scope,
+      viewId,
+    );
+    this.insightsCache.set(key, { expires: now + INSIGHTS_CACHE_TTL_MS, value });
+    // A failed scan must not be cached; success entries are bounded.
+    value.catch(() => {
+      if (this.insightsCache.get(key)?.value === value) {
+        this.insightsCache.delete(key);
+      }
+    });
+    if (this.insightsCache.size > INSIGHTS_CACHE_MAX) {
+      for (const [k, v] of this.insightsCache) {
+        if (v.expires <= now || this.insightsCache.size > INSIGHTS_CACHE_MAX) {
+          this.insightsCache.delete(k);
+        }
+      }
+    }
+    return value;
+  }
+
+  private readonly insightsCache = new Map<
+    string,
+    { expires: number; value: Promise<InsightResult & { scanCapped: boolean }> }
+  >();
+
+  private async computeInsights(
+    orgId: string,
+    userId: string,
+    measure: InsightMeasure,
+    slice: InsightSlice,
+    scope: IssueVisibilityScope,
+    viewId: string | null | undefined,
+  ): Promise<InsightResult & { scanCapped: boolean }> {
     let viewTeamId: string | null = null;
-    let filters = coerceFilterSet(null);
+    let viewWhere: Prisma.IssueWhereInput | null = null;
     if (viewId) {
       const view = await this.prisma.customView.findFirst({
         select: { filters: true, teamId: true },
@@ -769,72 +832,144 @@ export class AnalyticsService {
         throw new InsightsInputError('View not found');
       }
       viewTeamId = view.teamId;
-      filters = coerceFilterSet(view.filters);
+      const checked = validateFilterSet(view.filters);
+      if (!checked.ok) {
+        throw new InsightsInputError(`This view's filters are invalid: ${checked.error}`);
+      }
+      try {
+        viewWhere = filterSetToWhere(checked.set);
+      } catch (err) {
+        if (err instanceof UnsupportedFilterError) {
+          throw new InsightsInputError(err.message);
+        }
+        throw err;
+      }
     }
-    const empty = (): InsightResult & { scanCapped: boolean } => ({
-      ...aggregateInsights([], measure as InsightMeasure, slice as InsightSlice),
-      scanCapped: false,
-    });
-    if (scope.memberTeamIds.length === 0) {
-      return empty();
-    }
+
     const rows = await this.prisma.issue.findMany({
       orderBy: { createdAt: 'desc' },
       select: {
-        assignee: { select: { id: true, name: true } },
         assigneeId: true,
         completedAt: true,
-        createdAt: true,
-        creatorId: true,
-        cycleId: true,
-        dueDate: true,
         estimate: true,
-        id: true,
-        labelAssignments: { select: { label: { select: { id: true, name: true } } } },
         priority: true,
-        project: { select: { id: true, name: true } },
         projectId: true,
-        sortOrder: true,
         startedAt: true,
-        state: { select: { name: true } },
         stateId: true,
-        team: { select: { id: true, name: true } },
-        updatedAt: true,
+        teamId: true,
+        ...(slice === 'label' ? { labelAssignments: { select: { labelId: true } } } : {}),
       },
       take: INSIGHTS_SCAN_LIMIT + 1,
       where: {
-        ...issueVisibilityWhere(scope),
-        archivedAt: null,
-        organizationId: orgId,
-        trashed: false,
-        ...(viewTeamId ? { teamId: viewTeamId } : {}),
+        AND: [
+          issueVisibilityWhere(scope),
+          ...(viewWhere ? [viewWhere] : []),
+          {
+            archivedAt: null,
+            organizationId: orgId,
+            trashed: false,
+            ...(viewTeamId ? { teamId: viewTeamId } : {}),
+          },
+        ],
       },
     });
     const scanCapped = rows.length > INSIGHTS_SCAN_LIMIT;
     const scanned = scanCapped ? rows.slice(0, INSIGHTS_SCAN_LIMIT) : rows;
-    const filterable = scanned.map(r => ({
-      ...r,
-      assigneeId: r.assigneeId,
-      createdAt: r.createdAt.toISOString(),
-      dueDate: r.dueDate ? toDateOnly(r.dueDate) : null,
-      labelIds: r.labelAssignments.map(l => l.label.id),
-      updatedAt: r.updatedAt.toISOString(),
-    }));
-    const kept = applyFilters(filterable, filters);
-    const issues: InsightIssue[] = kept.map(r => ({
-      assignee: r.assignee ? { id: r.assignee.id, name: r.assignee.name } : null,
+
+    const names = await this.insightNames(scanned, slice);
+    const issues: InsightIssue[] = scanned.map(r => ({
+      assignee: r.assigneeId
+        ? { id: r.assigneeId, name: names.users.get(r.assigneeId) ?? r.assigneeId }
+        : null,
       completedAt: r.completedAt,
       estimate: r.estimate,
-      labels: r.labelAssignments.map(l => l.label),
+      labels: ((r as { labelAssignments?: Array<{ labelId: string }> }).labelAssignments ?? []).map(
+        l => ({ id: l.labelId, name: names.labels.get(l.labelId) ?? l.labelId }),
+      ),
       priority: r.priority,
-      project: r.project,
+      project: r.projectId
+        ? { id: r.projectId, name: names.projects.get(r.projectId) ?? r.projectId }
+        : null,
       startedAt: r.startedAt,
-      state: r.state,
-      team: r.team,
+      state: { name: names.states.get(r.stateId) ?? '' },
+      team: { id: r.teamId, name: names.teams.get(r.teamId) ?? r.teamId },
     }));
-    return {
-      ...aggregateInsights(issues, measure as InsightMeasure, slice as InsightSlice),
-      scanCapped,
+    return { ...aggregateInsights(issues, measure, slice), scanCapped };
+  }
+
+  /** Display names for only the entities `slice` groups by. */
+  private async insightNames(
+    rows: Array<{
+      assigneeId: string | null;
+      projectId: string | null;
+      stateId: string;
+      teamId: string;
+      labelAssignments?: Array<{ labelId: string }>;
+    }>,
+    slice: InsightSlice,
+  ) {
+    const out = {
+      labels: new Map<string, string>(),
+      projects: new Map<string, string>(),
+      states: new Map<string, string>(),
+      teams: new Map<string, string>(),
+      users: new Map<string, string>(),
     };
+    const ids = (pick: (r: (typeof rows)[number]) => string | null | undefined): string[] => [
+      ...new Set(rows.map(pick).filter((v): v is string => !!v)),
+    ];
+    const fill = async (
+      map: Map<string, string>,
+      wanted: string[],
+      fetch: (ids: string[]) => Promise<Array<{ id: string; name: string }>>,
+    ) => {
+      if (wanted.length === 0) {
+        return;
+      }
+      for (const e of await fetch(wanted)) {
+        map.set(e.id, e.name);
+      }
+    };
+    const select = { id: true, name: true } as const;
+    switch (slice) {
+      case 'status':
+        await fill(
+          out.states,
+          ids(r => r.stateId),
+          idIn => this.prisma.workflowState.findMany({ select, where: { id: { in: idIn } } }),
+        );
+        break;
+      case 'assignee':
+        await fill(
+          out.users,
+          ids(r => r.assigneeId),
+          idIn => this.prisma.user.findMany({ select, where: { id: { in: idIn } } }),
+        );
+        break;
+      case 'label':
+        await fill(
+          out.labels,
+          [...new Set(rows.flatMap(r => r.labelAssignments?.map(l => l.labelId) ?? []))],
+          idIn => this.prisma.issueLabel.findMany({ select, where: { id: { in: idIn } } }),
+        );
+        break;
+      case 'project':
+        await fill(
+          out.projects,
+          ids(r => r.projectId),
+          idIn => this.prisma.project.findMany({ select, where: { id: { in: idIn } } }),
+        );
+        break;
+      case 'team':
+        await fill(
+          out.teams,
+          ids(r => r.teamId),
+          idIn => this.prisma.team.findMany({ select, where: { id: { in: idIn } } }),
+        );
+        break;
+      default:
+        break;
+    }
+    return out;
   }
 }

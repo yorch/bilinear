@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { buildAxis, placeOnAxis } from '@/components/analytics/burnup-axis';
 import {
   CHART_HEIGHT,
   makeScales,
@@ -53,35 +54,46 @@ const QUERY = `
   }
 `;
 
-/** Axis never grows past this many days, whatever a forecast or target says. */
-const MAX_AXIS_POINTS = 800;
-const DAY_MS = 86_400_000;
+type MarkerKind = 'circle' | 'diamond' | 'square' | 'triangle';
 
-function addDays(day: string, n: number): string {
-  return new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
-}
-
-/** Series days, then every day up to the later of the projected finish and the target. */
-export function buildAxis(data: ProjectBurnupData): string[] {
-  const axis = data.points.map(p => p.date);
-  const last = axis[axis.length - 1];
-  if (!last) {
-    return axis;
+/** A 8px mark with a 2px card-coloured ring so it stays legible over a line. */
+function Marker({
+  hollow,
+  kind,
+  stroke,
+  x,
+  y,
+}: {
+  hollow?: boolean;
+  kind: MarkerKind;
+  stroke: string;
+  x: number;
+  y: number;
+}) {
+  const common = {
+    fill: hollow ? 'var(--card)' : stroke,
+    stroke: hollow ? stroke : 'var(--card)',
+    strokeWidth: 2,
+  };
+  switch (kind) {
+    case 'circle':
+      return <circle cx={x} cy={y} r={4} {...common} />;
+    case 'square':
+      return <rect height={8} width={8} x={x - 4} y={y - 4} {...common} />;
+    case 'diamond':
+      return (
+        <rect
+          height={8}
+          transform={`rotate(45 ${x} ${y})`}
+          width={8}
+          x={x - 4}
+          y={y - 4}
+          {...common}
+        />
+      );
+    case 'triangle':
+      return <path d={`M ${x} ${y + 5} L ${x - 5} ${y - 4} L ${x + 5} ${y - 4} Z`} {...common} />;
   }
-  const ends = [data.forecast.projectedFinish, data.targetDate].filter(
-    (d): d is string => !!d && d > last,
-  );
-  const end = ends.sort().at(-1);
-  if (!end) {
-    return axis;
-  }
-  const span = Math.round(
-    (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${last}T00:00:00Z`)) / DAY_MS,
-  );
-  for (let i = 1; i <= span && axis.length < MAX_AXIS_POINTS; i++) {
-    axis.push(addDays(last, i));
-  }
-  return axis;
 }
 
 function BurnupChart({ data }: { data: ProjectBurnupData }) {
@@ -96,13 +108,14 @@ function BurnupChart({ data }: { data: ProjectBurnupData }) {
   const maxY = Math.max(1, ...pts.map(p => p.scope));
   const { xScale, yScale, yTicks } = makeScales(n, maxY, width);
   const fmt = (d: string) => formatDate(d, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const fmtYear = (d: string) =>
+    formatDate(d, { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' });
 
   const scopePath = toPath(pts.map((p, i) => ({ x: xScale(i), y: yScale(p.scope) })));
   const donePath = toPath(pts.map((p, i) => ({ x: xScale(i), y: yScale(p.completed) })));
   const lastIdx = pts.length - 1;
-  const finishIdx = data.forecast.projectedFinish
-    ? axis.indexOf(data.forecast.projectedFinish)
-    : -1;
+  const finish = placeOnAxis(data.forecast.projectedFinish, axis);
+  const finishIdx = finish && !finish.clipped ? finish.index : -1;
   const forecastPath =
     data.forecast.status === 'projected' && finishIdx > lastIdx
       ? toPath([
@@ -110,7 +123,18 @@ function BurnupChart({ data }: { data: ProjectBurnupData }) {
           { x: xScale(finishIdx), y: yScale(pts[lastIdx].scope) },
         ])
       : null;
-  const targetIdx = data.targetDate ? axis.indexOf(data.targetDate) : -1;
+  // A target outside the axis is pinned to the nearest edge and says so,
+  // rather than silently vanishing.
+  const target = placeOnAxis(data.targetDate, axis);
+  const targetLabel =
+    data.targetDate && target?.clipped
+      ? t(
+          target.clipped === 'before'
+            ? 'projects.burnup.targetBefore'
+            : 'projects.burnup.targetAfter',
+          { date: fmtYear(data.targetDate) },
+        )
+      : null;
   const xLabels = xAxisLabels(
     axis.map(date => ({ date })),
     fmt,
@@ -130,94 +154,214 @@ function BurnupChart({ data }: { data: ProjectBurnupData }) {
     setHover(best);
   };
 
+  // Keyboard scrubbing: arrows step a day, Home/End jump to the ends, Escape
+  // clears. The readout below is a polite live region, so a screen reader
+  // hears each day as the cursor moves.
+  const onKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const cur = hover ?? lastIdx;
+    let next: number | null = null;
+    if (e.key === 'ArrowLeft') {
+      next = Math.max(0, cur - 1);
+    } else if (e.key === 'ArrowRight') {
+      next = Math.min(lastIdx, cur + 1);
+    } else if (e.key === 'Home') {
+      next = 0;
+    } else if (e.key === 'End') {
+      next = lastIdx;
+    } else if (e.key === 'Escape') {
+      setHover(null);
+      return;
+    }
+    if (next !== null) {
+      e.preventDefault();
+      setHover(next);
+    }
+  };
+
+  // Every series is distinguishable without colour: scope = solid + circle,
+  // completed = solid + square, forecast = dashed + hollow diamond,
+  // target = dotted + triangle.
   const legend = [
-    { dash: undefined, label: t('projects.burnup.scope'), stroke: 'var(--chart-primary)' },
-    { dash: undefined, label: t('projects.burnup.completed'), stroke: 'var(--chart-actual)' },
+    {
+      dash: undefined,
+      label: t('projects.burnup.scope'),
+      marker: 'circle',
+      stroke: 'var(--chart-primary)',
+    },
+    {
+      dash: undefined,
+      label: t('projects.burnup.completed'),
+      marker: 'square',
+      stroke: 'var(--chart-actual)',
+    },
     ...(forecastPath
-      ? [{ dash: '5 4', label: t('projects.burnup.forecast'), stroke: 'var(--chart-actual)' }]
+      ? [
+          {
+            dash: '5 4',
+            label: t('projects.burnup.forecast'),
+            marker: 'diamond',
+            stroke: 'var(--chart-actual)',
+          },
+        ]
       : []),
-    ...(targetIdx >= 0
-      ? [{ dash: '2 3', label: t('projects.burnup.target'), stroke: 'var(--chart-warning)' }]
+    ...(target
+      ? [
+          {
+            dash: '2 3',
+            label: t('projects.burnup.target'),
+            marker: 'triangle',
+            stroke: 'var(--chart-warning)',
+          },
+        ]
       : []),
   ];
+  const lastPt = pts[lastIdx];
+  const dotIdx = hover !== null && hover < pts.length ? hover : lastIdx;
 
   return (
     <div className="w-full" ref={ref}>
-      <svg
+      <div
+        aria-describedby="burnup-kbd-hint"
         aria-label={t('projects.burnup.ariaLabel')}
-        height={CHART_HEIGHT}
-        onPointerLeave={() => setHover(null)}
-        onPointerMove={onMove}
-        role="img"
-        viewBox={`0 0 ${width} ${CHART_HEIGHT}`}
-        width={width}
+        aria-roledescription="chart"
+        aria-valuemax={lastIdx}
+        aria-valuemin={0}
+        aria-valuenow={dotIdx}
+        aria-valuetext={t('projects.burnup.hover', {
+          completed: pts[dotIdx].completed,
+          date: fmt(pts[dotIdx].date),
+          scope: pts[dotIdx].scope,
+        })}
+        className="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        onBlur={() => setHover(null)}
+        onFocus={() => setHover(h => h ?? lastIdx)}
+        onKeyDown={onKey}
+        role="slider"
+        tabIndex={0}
       >
-        {yTicks.map(v => (
-          <g key={v}>
-            <line
-              stroke="currentColor"
-              strokeOpacity={0.08}
-              x1={PADDING_LEFT}
-              x2={width - PADDING_RIGHT}
-              y1={yScale(v)}
-              y2={yScale(v)}
-            />
+        <svg
+          aria-hidden="true"
+          height={CHART_HEIGHT}
+          onPointerLeave={() => setHover(null)}
+          onPointerMove={onMove}
+          viewBox={`0 0 ${width} ${CHART_HEIGHT}`}
+          width={width}
+        >
+          {yTicks.map(v => (
+            <g key={v}>
+              <line
+                stroke="currentColor"
+                strokeOpacity={0.08}
+                x1={PADDING_LEFT}
+                x2={width - PADDING_RIGHT}
+                y1={yScale(v)}
+                y2={yScale(v)}
+              />
+              <text
+                className="fill-muted-foreground"
+                fontSize={11}
+                textAnchor="end"
+                x={PADDING_LEFT - 4}
+                y={yScale(v) + 4}
+              >
+                {v}
+              </text>
+            </g>
+          ))}
+          {xLabels.map(({ i, label }) => (
             <text
               className="fill-muted-foreground"
               fontSize={11}
-              textAnchor="end"
-              x={PADDING_LEFT - 4}
-              y={yScale(v) + 4}
+              key={i}
+              textAnchor="middle"
+              x={xScale(i)}
+              y={CHART_HEIGHT - PADDING_BOTTOM + 14}
             >
-              {v}
+              {label}
             </text>
-          </g>
-        ))}
-        {xLabels.map(({ i, label }) => (
-          <text
-            className="fill-muted-foreground"
-            fontSize={11}
-            key={i}
-            textAnchor="middle"
-            x={xScale(i)}
-            y={CHART_HEIGHT - PADDING_BOTTOM + 14}
-          >
-            {label}
-          </text>
-        ))}
-        {targetIdx >= 0 && (
-          <line
-            stroke="var(--chart-warning)"
-            strokeDasharray="2 3"
-            strokeWidth={2}
-            x1={xScale(targetIdx)}
-            x2={xScale(targetIdx)}
-            y1={yScale(maxY)}
-            y2={yScale(0)}
+          ))}
+          {target && (
+            <>
+              <line
+                stroke="var(--chart-warning)"
+                strokeDasharray="2 3"
+                strokeWidth={2}
+                x1={xScale(target.index)}
+                x2={xScale(target.index)}
+                y1={yScale(maxY)}
+                y2={yScale(0)}
+              />
+              <Marker
+                kind="triangle"
+                stroke="var(--chart-warning)"
+                x={xScale(target.index)}
+                y={yScale(maxY)}
+              />
+              {targetLabel && (
+                <text
+                  className="fill-muted-foreground"
+                  fontSize={11}
+                  textAnchor={target.clipped === 'before' ? 'start' : 'end'}
+                  x={xScale(target.index) + (target.clipped === 'before' ? 8 : -8)}
+                  y={yScale(maxY) + 12}
+                >
+                  {`${target.clipped === 'before' ? '\u2190' : '\u2192'} ${targetLabel}`}
+                </text>
+              )}
+            </>
+          )}
+          <path d={scopePath} fill="none" stroke="var(--chart-primary)" strokeWidth={2} />
+          <path d={donePath} fill="none" stroke="var(--chart-actual)" strokeWidth={2} />
+          {forecastPath && (
+            <>
+              <path
+                d={forecastPath}
+                fill="none"
+                stroke="var(--chart-actual)"
+                strokeDasharray="5 4"
+                strokeWidth={2}
+              />
+              <Marker
+                hollow
+                kind="diamond"
+                stroke="var(--chart-actual)"
+                x={xScale(finishIdx)}
+                y={yScale(lastPt.scope)}
+              />
+            </>
+          )}
+          {hover !== null && hovered && (
+            <line
+              stroke="var(--chart-grid)"
+              x1={xScale(hover)}
+              x2={xScale(hover)}
+              y1={yScale(maxY)}
+              y2={yScale(0)}
+            />
+          )}
+          {/* Always-visible point markers: a one-day series has no line to see. */}
+          <Marker
+            kind="circle"
+            stroke="var(--chart-primary)"
+            x={xScale(dotIdx)}
+            y={yScale(pts[dotIdx].scope)}
           />
-        )}
-        <path d={scopePath} fill="none" stroke="var(--chart-primary)" strokeWidth={2} />
-        <path d={donePath} fill="none" stroke="var(--chart-actual)" strokeWidth={2} />
-        {forecastPath && (
-          <path
-            d={forecastPath}
-            fill="none"
+          <Marker
+            kind="square"
             stroke="var(--chart-actual)"
-            strokeDasharray="5 4"
-            strokeWidth={2}
+            x={xScale(dotIdx)}
+            y={yScale(pts[dotIdx].completed)}
           />
-        )}
-        {hover !== null && hovered && (
-          <line
-            stroke="var(--chart-grid)"
-            x1={xScale(hover)}
-            x2={xScale(hover)}
-            y1={yScale(maxY)}
-            y2={yScale(0)}
-          />
-        )}
-      </svg>
-      <p aria-live="off" className="mt-1 h-4 px-1 text-xs tabular-nums text-muted-foreground">
+        </svg>
+      </div>
+      <p className="sr-only" id="burnup-kbd-hint">
+        {t('projects.burnup.keyboardHint')}
+      </p>
+      <p
+        aria-live="polite"
+        className="mt-1 h-4 px-1 text-xs tabular-nums text-muted-foreground"
+        role="status"
+      >
         {hovered
           ? t('projects.burnup.hover', {
               completed: hovered.completed,
@@ -229,15 +373,22 @@ function BurnupChart({ data }: { data: ProjectBurnupData }) {
       <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 px-1 text-xs text-muted-foreground">
         {legend.map(item => (
           <li className="flex items-center gap-1.5" key={item.label}>
-            <svg aria-hidden="true" height="8" width="18">
+            <svg aria-hidden="true" height="12" width="22">
               <line
                 stroke={item.stroke}
                 strokeDasharray={item.dash}
                 strokeWidth={2}
                 x1="0"
-                x2="18"
-                y1="4"
-                y2="4"
+                x2="22"
+                y1="6"
+                y2="6"
+              />
+              <Marker
+                hollow={item.marker === 'diamond'}
+                kind={item.marker as MarkerKind}
+                stroke={item.stroke}
+                x={11}
+                y={6}
               />
             </svg>
             {item.label}
@@ -246,12 +397,19 @@ function BurnupChart({ data }: { data: ProjectBurnupData }) {
       </ul>
       <table className="sr-only">
         <caption>{t('projects.burnup.ariaLabel')}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{t('projects.burnup.dateHeader')}</th>
+            <th scope="col">{t('projects.burnup.scope')}</th>
+            <th scope="col">{t('projects.burnup.completed')}</th>
+          </tr>
+        </thead>
         <tbody>
           {pts.map(p => (
             <tr key={p.date}>
               <th scope="row">{fmt(p.date)}</th>
-              <td>{`${t('projects.burnup.scope')} ${p.scope}`}</td>
-              <td>{`${t('projects.burnup.completed')} ${p.completed}`}</td>
+              <td>{p.scope}</td>
+              <td>{p.completed}</td>
             </tr>
           ))}
         </tbody>

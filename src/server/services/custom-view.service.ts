@@ -1,4 +1,20 @@
 import type { CustomView, PrismaClient } from '../../generated/prisma';
+import { validateFilterSet } from '../../lib/filter-validate';
+
+export class CustomViewInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CustomViewInputError';
+  }
+}
+
+/** `filters` is bare JSON read by every viewer of a shared view — reject junk on write. */
+function assertValidFilters(filters: unknown): void {
+  const checked = validateFilterSet(filters);
+  if (!checked.ok) {
+    throw new CustomViewInputError(`Invalid view filters: ${checked.error}`);
+  }
+}
 
 export interface CustomViewCreateInput {
   color?: string;
@@ -36,6 +52,7 @@ export class CustomViewService {
     creatorId: string,
     input: CustomViewCreateInput,
   ): Promise<CustomView> {
+    assertValidFilters(input.filters);
     return this.prisma.customView.create({
       data: {
         color: input.color,
@@ -88,6 +105,7 @@ export class CustomViewService {
       data.color = input.color;
     }
     if (input.filters !== undefined) {
+      assertValidFilters(input.filters);
       data.filters = input.filters;
     }
     if (input.sort !== undefined) {

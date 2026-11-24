@@ -153,12 +153,15 @@
   "analytics": {
     "explorer": {
       "allIssues": "Todas las incidencias",
+      "cycleTimeNote": "Las medias cubren las incidencias iniciadas y completadas. Una incidencia movida directamente a Hecho no tiene hora de inicio y queda fuera; n es el número de incidencias en que se basa cada media.",
       "days": "{count} d",
       "description": "Elige una medida y una segmentación. Solo se cuentan las incidencias que puedes ver.",
       "empty": "Ninguna incidencia coincide con esta selección.",
       "exportCsv": "Exportar CSV",
       "failedToLoad": "No se pudieron cargar los datos",
       "filter": "Filtro",
+      "groupCount_one": "{count} grupo",
+      "groupCount_other": "{count} grupos",
       "issues": "Incidencias",
       "labelNote": "Una incidencia con varias etiquetas se cuenta en cada una.",
       "measure": "Medida",
@@ -182,7 +185,9 @@
         "3": "Media",
         "4": "Baja"
       },
-      "scanCapped": "Coinciden demasiadas incidencias; las cifras cubren solo las más recientes. Acota con una vista guardada.",
+      "sampleHeader": "Muestra (n)",
+      "sampleShort": "n={count}",
+      "scanCapped": "Coinciden más de {count} incidencias, así que las cifras cubren solo las {count} más recientes. Acota la selección con una vista guardada.",
       "slice": "Segmentar por",
       "slices": {
         "assignee": "Responsable",
@@ -192,7 +197,8 @@
         "status": "Estado",
         "team": "Equipo"
       },
-      "summary": "{issues} incidencias en {groups} grupos.",
+      "summary_one": "{issues} incidencia en {groups}.",
+      "summary_other": "{issues} incidencias en {groups}.",
       "tableCaption": "{measure} por {slice}",
       "title": "Análisis",
       "truncated": "Se muestran solo los {count} grupos principales.",
@@ -216,7 +222,7 @@
       "noStateTransitionData": "Aún no hay datos de transición de estado",
       "rangeAll": "Todo",
       "rangeDays": "{count} d",
-      "title": "Insights"
+      "title": "Tiempos de ciclo y de entrega"
     },
     "team": {
       "allTime": "todo el tiempo",
@@ -269,6 +275,7 @@
     },
     "workspace": {
       "activeTeams": "Equipos activos",
+      "adminOnly": "El resumen del workspace solo está disponible para administradores. Análisis, más abajo, sigue cubriendo las incidencias que puedes ver.",
       "avgCycle": "Ciclo prom.",
       "completed": "Completados",
       "completedCol": "Completados",
@@ -977,6 +984,7 @@
       "updateFailed": "No se pudo guardar el cambio"
     },
     "health": {
+      "aProject": "un proyecto",
       "derived": "Derivada: {health}",
       "derivedHint": "Derivada de la salud y las previsiones de los proyectos; no sustituye a una actualización publicada.",
       "label": {
@@ -990,9 +998,9 @@
         "initiativeTargetSlip": "se prevé que los proyectos terminen después de la fecha objetivo de la iniciativa",
         "noActiveProjects": "sin proyectos activos",
         "noSignals": "aún sin salud, fechas objetivo ni previsiones de proyectos",
-        "projectManualHealth": "un proyecto se publicó como en riesgo o fuera de plazo",
-        "projectOverdue": "un proyecto superó su fecha objetivo sin terminar",
-        "projectProjectedLate": "se prevé que un proyecto termine después de su fecha objetivo"
+        "projectManualHealth": "{project} se publicó como en riesgo o fuera de plazo",
+        "projectOverdue": "{project} superó su fecha objetivo sin terminar",
+        "projectProjectedLate": "se prevé que {project} termine después de su fecha objetivo"
       },
       "title": "Salud"
     },
@@ -1670,11 +1678,13 @@
       "ariaLabel": "Burn-up del proyecto: alcance e incidencias completadas a lo largo del tiempo con fecha de fin proyectada",
       "complete": "Todas las incidencias completadas",
       "completed": "Completadas",
+      "dateHeader": "Fecha",
       "description": "Alcance e incidencias completadas por día, con una previsión basada en el ritmo reciente.",
       "empty": "Aún no hay incidencias en este proyecto.",
       "failedToLoad": "No se pudo cargar el gráfico de burn-up",
       "forecast": "Previsión",
       "hover": "{date}: alcance {scope}, completadas {completed}",
+      "keyboardHint": "Usa las flechas izquierda y derecha para leer cada día; Inicio y Fin saltan al primer y último día.",
       "noTarget": "Sin fecha objetivo",
       "notEnoughData": "Datos insuficientes para prever",
       "pastTarget_one": "{count} día después del objetivo ({date})",
@@ -1688,6 +1698,8 @@
       },
       "scope": "Alcance",
       "target": "Fecha objetivo",
+      "targetAfter": "Objetivo {date} (más allá del gráfico)",
+      "targetBefore": "Objetivo {date} (antes del inicio del gráfico)",
       "title": "Burn-up",
       "velocity": "Ritmo: {count} incidencias/semana en los últimos {days} días"
     },

@@ -1,6 +1,7 @@
 import type { AuditLogEntry, PrismaClient } from '../../generated/prisma';
 import { Prisma } from '../../generated/prisma';
 import { csvCell } from '../../lib/csv-export';
+import { csvSafeText } from '../../lib/csv-safe';
 import { afterCreatedAtCursor, encodeCreatedAtCursor } from '../lib/created-at-cursor';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../lib/limits';
 import { childLogger } from '../lib/logger';
@@ -77,7 +78,7 @@ const EXPORT_BATCH = 200;
  */
 function safeCsvCell(value: unknown): string {
   const text = value === null || value === undefined ? '' : String(value);
-  return csvCell(/^[=+\-@\t\r]/.test(text) ? `'${text}` : text);
+  return csvCell(csvSafeText(text));
 }
 
 export interface AuditLogExport {

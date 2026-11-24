@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { InsightsExplorer } from '@/components/analytics/insights-explorer';
 import { StatCard } from '@/components/analytics/stat-card';
 import { barPercent, maxCompletedCount } from '@/components/analytics/velocity-utils';
-import { InlineRetry } from '@/components/shared/inline-retry';
+import { LoadError } from '@/components/shared/load-error';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
@@ -115,7 +115,7 @@ const WorkspaceAnalyticsPage = observer(function WorkspaceAnalyticsPage() {
   // gqlQuery throws on a GraphQL-level error, which is what makes the
   // InlineRetry branch below reachable — the previous hand-rolled effect
   // rendered a failed load as a dead-end message with no way to try again.
-  const { data, loading, error, refetch } = useRetryableFetch<WorkspaceOverview | null>(
+  const { cause, data, loading, error, refetch } = useRetryableFetch<WorkspaceOverview | null>(
     () => gqlQuery<WorkspaceOverview>(WORKSPACE_OVERVIEW_QUERY, {}, 'analyticsWorkspaceOverview'),
     [],
     null,
@@ -153,7 +153,15 @@ const WorkspaceAnalyticsPage = observer(function WorkspaceAnalyticsPage() {
         )}
 
         {error && (
-          <InlineRetry message={t('analytics.workspace.failedToLoad')} onRetry={() => refetch()} />
+          // The overview is admin-only. A member's refusal is an answer, not a
+          // failure — say so instead of offering a Retry that can never work.
+          // Insights below stays usable: it counts only what the viewer can see.
+          <LoadError
+            cause={cause}
+            fallback={t('analytics.workspace.failedToLoad')}
+            forbiddenMessage={t('analytics.workspace.adminOnly')}
+            onRetry={() => refetch()}
+          />
         )}
 
         {data && (

@@ -16,6 +16,8 @@ export const INSIGHT_SLICES = [
 export type InsightMeasure = (typeof INSIGHT_MEASURES)[number];
 export type InsightSlice = (typeof INSIGHT_SLICES)[number];
 
+/** Upper bound on issues scanned per Insights call (the UI quotes it). */
+export const INSIGHTS_SCAN_LIMIT = 20_000;
 /** Hard cap on groups returned; the rest are reported via `truncated`. */
 export const MAX_INSIGHT_GROUPS = 50;
 /** Key of the "no assignee / no label / no project" group. */
@@ -140,13 +142,4 @@ export function aggregateInsights(
     totalGroups,
     truncated: totalGroups > cap,
   };
-}
-
-/**
- * Neutralise spreadsheet formula injection for exported text cells: label and
- * project names are user-controlled, and a cell starting with = + - @ would
- * run as a formula when the CSV is opened. Numbers must not go through this.
- */
-export function csvSafeText(v: string): string {
-  return /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
 }

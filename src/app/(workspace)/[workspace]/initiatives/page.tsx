@@ -271,10 +271,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
             ) : null}
           </span>
           {/* No status badge: the group header above the row already says it. */}
-          <InitiativeHealthBadge
-            className="hidden shrink-0 sm:inline-flex"
-            initiativeId={initiative.id}
-          />
+          <InitiativeHealthBadge className="shrink-0" compact initiativeId={initiative.id} />
           <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
             {t('initiatives.row.projectCount', { count: projectIds.length })}
           </span>

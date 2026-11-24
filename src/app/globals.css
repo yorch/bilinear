@@ -332,8 +332,10 @@
   --destructive: oklch(0.545 0.223 27.325);
   --destructive-foreground: oklch(0.985 0 0);
   --chart-grid: oklch(0.708 0.012 286);
-  --chart-actual: oklch(0.733 0.184 142);
-  --chart-warning: oklch(0.795 0.184 86.047);
+  /* Chart strokes are non-text marks: WCAG 1.4.11 wants 3:1 on the card, which
+     the old light values (2.2:1 / 1.9:1) missed. Asserted in contrast.test.ts. */
+  --chart-actual: oklch(0.6 0.17 145);
+  --chart-warning: oklch(0.64 0.15 70);
   --chart-ideal: var(--brand);
   --chart-primary: var(--brand);
   --chart-muted: oklch(0.708 0.012 var(--accent-h));

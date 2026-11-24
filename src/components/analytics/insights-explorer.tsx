@@ -12,11 +12,12 @@ import { LoadingRegion, Skeleton } from '@/components/ui/skeleton';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { downloadCsv, rowsToCsv } from '@/lib/csv-export';
+import { csvSafeText } from '@/lib/csv-safe';
 import { gqlQuery } from '@/lib/graphql';
 import {
-  csvSafeText,
   INSIGHT_MEASURES,
   INSIGHT_SLICES,
+  INSIGHTS_SCAN_LIMIT,
   type InsightMeasure,
   type InsightSlice,
   NONE_KEY,
@@ -95,6 +96,11 @@ export function InsightsExplorer() {
       ? t('analytics.explorer.days', { count: v })
       : String(Math.round(v * 10) / 10);
   const max = useMemo(() => Math.max(1, ...(data?.rows ?? []).map(r => r.value)), [data]);
+  const capNote = (
+    <p className="mt-2 text-xs text-warning-subtle-foreground" role="note">
+      {t('analytics.explorer.scanCapped', { count: INSIGHTS_SCAN_LIMIT.toLocaleString() })}
+    </p>
+  );
   const valueHeader = t(`analytics.explorer.valueHeader.${measure}`);
 
   const exportCsv = () => {
@@ -102,8 +108,18 @@ export function InsightsExplorer() {
       return;
     }
     const csv = rowsToCsv(
-      [t(`analytics.explorer.slices.${slice}`), valueHeader, t('analytics.explorer.issues')],
-      data.rows.map(r => [csvSafeText(groupLabel(r)), r.value, r.issueCount]),
+      [
+        t(`analytics.explorer.slices.${slice}`),
+        valueHeader,
+        ...(measure === 'cycleTime' ? [t('analytics.explorer.sampleHeader')] : []),
+        t('analytics.explorer.issues'),
+      ],
+      data.rows.map(r => [
+        csvSafeText(groupLabel(r)),
+        r.value,
+        ...(measure === 'cycleTime' ? [r.sampleSize] : []),
+        r.issueCount,
+      ]),
     );
     downloadCsv(`insights-${measure}-by-${slice}`, csv);
   };
@@ -163,7 +179,10 @@ export function InsightsExplorer() {
           <InlineRetry message={t('analytics.explorer.failedToLoad')} onRetry={() => refetch()} />
         )}
         {data && !loading && data.rows.length === 0 && (
-          <EmptyState size="compact" title={t('analytics.explorer.empty')} />
+          <>
+            <EmptyState size="compact" title={t('analytics.explorer.empty')} />
+            {data.scanCapped && capNote}
+          </>
         )}
         {data && !loading && data.rows.length > 0 && (
           <>
@@ -188,6 +207,11 @@ export function InsightsExplorer() {
                   <span className="w-14 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
                     {fmtValue(r.value)}
                   </span>
+                  {measure === 'cycleTime' && (
+                    <span className="w-12 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+                      {t('analytics.explorer.sampleShort', { count: r.sampleSize })}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -195,7 +219,8 @@ export function InsightsExplorer() {
             <div className="mt-4 flex items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">
                 {t('analytics.explorer.summary', {
-                  groups: data.totalGroups,
+                  count: data.issueCount,
+                  groups: t('analytics.explorer.groupCount', { count: data.totalGroups }),
                   issues: data.issueCount,
                 })}
                 {slice === 'label' && ` ${t('analytics.explorer.labelNote')}`}
@@ -210,9 +235,10 @@ export function InsightsExplorer() {
                 {t('analytics.explorer.truncated', { count: data.rows.length })}
               </p>
             )}
-            {data.scanCapped && (
-              <p className="mt-1 text-xs text-warning-subtle-foreground" role="note">
-                {t('analytics.explorer.scanCapped')}
+            {data.scanCapped && capNote}
+            {measure === 'cycleTime' && (
+              <p className="mt-1 text-xs text-muted-foreground" role="note">
+                {t('analytics.explorer.cycleTimeNote')}
               </p>
             )}
 
@@ -232,6 +258,11 @@ export function InsightsExplorer() {
                     <th className="py-2 px-2 text-right font-medium" scope="col">
                       {valueHeader}
                     </th>
+                    {measure === 'cycleTime' && (
+                      <th className="py-2 px-2 text-right font-medium" scope="col">
+                        {t('analytics.explorer.sampleHeader')}
+                      </th>
+                    )}
                     <th className="py-2 pl-2 text-right font-medium" scope="col">
                       {t('analytics.explorer.issues')}
                     </th>
@@ -249,6 +280,11 @@ export function InsightsExplorer() {
                       <td className="py-2 px-2 text-right font-mono tabular-nums text-foreground">
                         {fmtValue(r.value)}
                       </td>
+                      {measure === 'cycleTime' && (
+                        <td className="py-2 px-2 text-right font-mono tabular-nums text-muted-foreground">
+                          {r.sampleSize}
+                        </td>
+                      )}
                       <td className="py-2 pl-2 text-right font-mono tabular-nums text-muted-foreground">
                         {r.issueCount}
                       </td>
