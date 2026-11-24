@@ -223,18 +223,18 @@ export async function verifyOAuthState(state: string, provider: LoginOAuthProvid
 export interface GithubOAuthStatePayload {
   orgId: string;
   userId: string;
-  webhookSecret: string;
 }
 
 /**
  * Sign the GitHub OAuth "state" param. Unlike the Google flow (where the
  * authenticated client re-supplies its own identity on callback), GitHub
  * redirects straight back to our server-side callback, so the state must
- * carry the initiating org/user and the webhook secret. Signing it with
- * `JWT_SECRET` makes it unforgeable — an attacker can no longer craft a
- * callback that binds an attacker-controlled `webhookSecret` (or a foreign
- * `orgId`) to a victim org. The 10-minute expiry bounds replay and the
- * narrow `type`/`provider` claims prevent substitution for another token.
+ * carry the initiating org/user. It is signed, NOT encrypted, and travels
+ * through github.com, our callback URL, browser history and access logs — so
+ * it must never carry a secret (the webhook secret is generated in the callback
+ * instead). Signing with `JWT_SECRET` makes it unforgeable; the 10-minute
+ * expiry bounds replay and the narrow `type`/`provider` claims prevent
+ * substitution for another token.
  */
 export async function signGithubOAuthState(payload: GithubOAuthStatePayload): Promise<string> {
   return signOAuthStateJWT({ ...payload, provider: 'github' });
@@ -245,7 +245,6 @@ export async function verifyGithubOAuthState(state: string): Promise<GithubOAuth
   return {
     orgId: payload.orgId as string,
     userId: payload.userId as string,
-    webhookSecret: payload.webhookSecret as string,
   };
 }
 

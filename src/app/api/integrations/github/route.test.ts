@@ -1,14 +1,10 @@
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const signState = vi.fn(async (_payload: unknown) => 'signed-state');
 const requireAuthContext = vi.fn();
 const findMember = vi.fn();
 
 vi.mock('@/server/lib/env', () => ({ env: { APP_URL: 'https://app.test' } }));
-vi.mock('@/server/lib/jwt', () => ({
-  signGithubOAuthState: (payload: unknown) => signState(payload),
-}));
 vi.mock('@/server/lib/prisma', () => ({
   prisma: { organizationMember: { findUnique: (...a: unknown[]) => findMember(...a) } },
 }));
@@ -16,6 +12,7 @@ vi.mock('@/server/middleware/auth', () => ({
   requireAuthContext: (...a: unknown[]) => requireAuthContext(...a),
 }));
 
+import { verifyGithubOAuthState } from '@/server/lib/jwt';
 import { GET } from './route';
 
 function req(query = '') {
@@ -42,31 +39,26 @@ describe('GET /api/integrations/github', () => {
     expect(res.status).toBe(403);
   });
 
-  it('generates a strong webhook secret server-side and carries it only in the signed state', async () => {
-    const res = await GET(req());
+  // Real signState/verifyState and real crypto: the state is HS256-signed but
+  // NOT encrypted, so anything put in it is readable by whoever sees the URL.
+  it('puts no secret in the OAuth state or in any URL it redirects to', async () => {
+    const res = await GET(req('?webhookSecret=attacker-chosen-secret-123'));
     expect(res.status).toBe(307);
-    expect(signState).toHaveBeenCalledTimes(1);
-    const payload = signState.mock.calls[0]?.[0] as { webhookSecret: string };
-    expect(payload.webhookSecret).toMatch(/^[0-9a-f]{64}$/);
     const location = res.headers.get('location') ?? '';
-    expect(location).toContain('state=signed-state');
-    expect(location).not.toContain(payload.webhookSecret);
-  });
+    const state = new URL(location).searchParams.get('state') ?? '';
 
-  it('ignores a webhookSecret supplied in the query string', async () => {
-    await GET(req('?webhookSecret=attacker-chosen-secret-123'));
-    const payload = signState.mock.calls[0]?.[0] as { webhookSecret: string };
-    expect(payload.webhookSecret).not.toBe('attacker-chosen-secret-123');
-    expect(payload.webhookSecret).toHaveLength(64);
-  });
-
-  it('mints a different secret on every initiation', async () => {
-    await GET(req());
-    await GET(req());
-    const secrets = signState.mock.calls.map(
-      c => (c[0] as { webhookSecret: string }).webhookSecret,
+    // Decode the JWT payload exactly as anyone holding the URL could.
+    const claims = JSON.parse(Buffer.from(state.split('.')[1] ?? '', 'base64url').toString());
+    expect(Object.keys(claims).sort()).toEqual(
+      ['exp', 'iat', 'orgId', 'provider', 'type', 'userId'].sort(),
     );
-    expect(secrets).toHaveLength(2);
-    expect(new Set(secrets).size).toBe(2);
+    expect(JSON.stringify(claims)).not.toMatch(/[0-9a-f]{32,}/);
+    expect(location).not.toContain('attacker-chosen');
+    expect(location).not.toContain('webhookSecret');
+    // The verifier still accepts it and yields only identity.
+    await expect(verifyGithubOAuthState(state)).resolves.toEqual({
+      orgId: 'org-1',
+      userId: 'user-1',
+    });
   });
 });

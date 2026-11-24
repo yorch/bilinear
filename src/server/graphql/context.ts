@@ -23,6 +23,7 @@ import { ImportService } from '../services/import.service';
 import { InitiativeService } from '../services/initiative.service';
 import { IssueService } from '../services/issue.service';
 import { IssueActivityService } from '../services/issue-activity.service';
+import { IssueReminderService } from '../services/issue-reminder.service';
 import { IssueRelationService } from '../services/issue-relation.service';
 import { IssueTemplateService } from '../services/issue-template.service';
 import { LabelService } from '../services/label.service';
@@ -74,6 +75,7 @@ export interface GraphQLContext extends AuthContext {
     initiative: InitiativeService;
     issue: IssueService;
     issueActivity: IssueActivityService;
+    issueReminder: IssueReminderService;
     issueRelation: IssueRelationService;
     issueTemplate: IssueTemplateService;
     label: LabelService;
@@ -120,6 +122,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
   const customFieldService = new CustomFieldService(prisma, config);
   const customViewService = new CustomViewService(prisma);
   const issueActivityService = new IssueActivityService(prisma);
+  const issueReminderService = new IssueReminderService(prisma);
   const notificationService = new NotificationService(prisma);
   const organizationService = new OrganizationService(prisma);
   const organizationInviteService = new OrganizationInviteService(prisma, config);
@@ -176,6 +179,7 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       initiative: initiativeService,
       issue: issueService,
       issueActivity: issueActivityService,
+      issueReminder: issueReminderService,
       issueRelation: issueRelationService,
       issueTemplate: issueTemplateService,
       label: labelService,

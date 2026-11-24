@@ -1,6 +1,10 @@
 import { GraphQLError } from 'graphql';
 import { logger } from '../../lib/logger';
-import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import { getGuestTeamIds, requireAuth, requireTeamMember } from '../../middleware/auth';
+import {
+  DuplicateSourceNotFoundError,
+  DuplicateSuggestionService,
+} from '../../services/duplicate-suggestion.service';
 import type { IssueActivityCreateInput } from '../../services/issue-activity.service';
 import type { GraphQLContext } from '../context';
 import { mapServiceError } from '../types/errors';
@@ -280,6 +284,44 @@ export const triageResolvers = {
       requireAuth(ctx);
       await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
       return ctx.services.triage.getQueueCount(teamId);
+    },
+
+    triageDuplicateSuggestions: async (
+      _parent: unknown,
+      { first, issueId }: { first?: number | null; issueId: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      const issue = await ctx.services.issue.findById(issueId);
+      if (!issue || issue.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Issue not found', { extensions: { code: 'NOT_FOUND' } });
+      }
+      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+
+      // Same visibility scope as `searchIssues`: member teams only, guests
+      // restricted to issues they created or are assigned to.
+      const memberships = await ctx.prisma.teamMembership.findMany({
+        select: { team: { select: { organizationId: true } }, teamId: true },
+        where: { team: { organizationId: ctx.orgId }, userId: ctx.userId },
+      });
+      const memberTeamIds = memberships
+        .filter(m => m.team.organizationId === ctx.orgId)
+        .map(m => m.teamId);
+      const guestTeamIds = await getGuestTeamIds(ctx.prisma, ctx.userId, ctx.orgId);
+
+      try {
+        return await new DuplicateSuggestionService(ctx.prisma).suggest(
+          ctx.orgId,
+          issueId,
+          { guestTeamIds, memberTeamIds, userId: ctx.userId },
+          first ?? undefined,
+        );
+      } catch (err) {
+        if (err instanceof DuplicateSourceNotFoundError) {
+          throw new GraphQLError('Issue not found', { extensions: { code: 'NOT_FOUND' } });
+        }
+        throw err;
+      }
     },
   },
 };

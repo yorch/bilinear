@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { config } from '@/server/config';
@@ -31,13 +32,11 @@ async function handleGet(req: NextRequest) {
 
   let orgId: string;
   let userId: string;
-  let webhookSecret: string;
 
   try {
     const decoded = await verifyGithubOAuthState(stateParam);
     orgId = decoded.orgId;
     userId = decoded.userId;
-    webhookSecret = decoded.webhookSecret;
   } catch {
     return NextResponse.redirect(`${fallbackUrl}?error=invalid_state`);
   }
@@ -80,6 +79,9 @@ async function handleGet(req: NextRequest) {
 
   try {
     const service = new GitHubService(prisma, config);
+    // Generated here, never carried through the OAuth state or any URL: the
+    // admin reads it back through the authenticated `githubRevealWebhookSecret`.
+    const webhookSecret = crypto.randomBytes(32).toString('hex');
     await service.connect(orgId, userId, { code, webhookSecret });
     log.info({ orgId }, 'GitHub integration connected');
   } catch (err) {

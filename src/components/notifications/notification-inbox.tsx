@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  AlarmClock,
   Bell,
   BellOff,
   Check,
@@ -14,11 +15,19 @@ import {
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   NOTIFICATION_MARK_UNREAD_MUTATION,
   NOTIFICATION_UNSNOOZE_MUTATION,
 } from '@/components/notifications/notification-queries';
+import {
+  type InboxLane,
+  nextLane,
+  partitionByLane,
+  readStoredLane,
+  reminderTime,
+  writeStoredLane,
+} from '@/components/notifications/notification-priority';
 import { resolveNotificationTarget } from '@/components/notifications/notification-target';
 import {
   fetchNotifications,
@@ -102,6 +111,8 @@ function getNotificationIcon(type: string) {
       return <MessageSquare className="h-3.5 w-3.5" />;
     case 'ISSUE_STATUS_CHANGED':
       return <RefreshCw className="h-3.5 w-3.5" />;
+    case 'REMINDER':
+      return <AlarmClock className="h-3.5 w-3.5" />;
     default:
       return <Bell className="h-3.5 w-3.5" />;
   }
@@ -117,6 +128,8 @@ function getNotificationLabelKey(type: string): string {
       return 'notifications.labels.issueCommented';
     case 'ISSUE_STATUS_CHANGED':
       return 'notifications.labels.issueStatusChanged';
+    case 'REMINDER':
+      return 'notifications.labels.reminder';
     default:
       return 'notifications.labels.default';
   }
@@ -162,12 +175,22 @@ const NotificationItem = observer(function NotificationItem({
   const isSnoozingThis = snoozingId === id;
   const actor = actorId ? userStore.findById(actorId) : null;
   const snoozed = isSnoozed(notification);
-  const target = resolveNotificationTarget(notification, workspace, {
-    document: docId => documentStore.findById(docId),
-    initiative: initId => initiativeStore.findById(initId),
-    issue: issueId => issueStore.findById(issueId),
-    project: projectId => projectStore.findById(projectId),
-  });
+  const isReminder = type === 'REMINDER';
+  const remindAt = isReminder ? reminderTime(notification) : null;
+  const dataIssueId = (notification.data as { issueId?: unknown } | null)?.issueId;
+  const target = resolveNotificationTarget(
+    {
+      data: notification.data,
+      issueId: notification.issueId ?? (typeof dataIssueId === 'string' ? dataIssueId : null),
+    },
+    workspace,
+    {
+      document: docId => documentStore.findById(docId),
+      initiative: initId => initiativeStore.findById(initId),
+      issue: issueId => issueStore.findById(issueId),
+      project: projectId => projectStore.findById(projectId),
+    },
+  );
 
   return (
     <div
@@ -195,7 +218,7 @@ const NotificationItem = observer(function NotificationItem({
 
       <div className="min-w-0 flex-1">
         <p className="text-xs text-muted-foreground">
-          {actor
+          {actor && !isReminder
             ? t('notifications.actorDidThing', {
                 action: t(getNotificationLabelKey(type)).toLowerCase(),
                 name: actor.displayName,
@@ -223,9 +246,18 @@ const NotificationItem = observer(function NotificationItem({
             <span
               className={cn('truncate', read ? 'text-foreground-secondary' : 'text-foreground')}
             >
-              {target.title || t('notifications.openLink')}
+              {isReminder
+                ? t('notifications.reminderTitle', { title: target.title })
+                : target.title || t('notifications.openLink')}
             </span>
           </Link>
+        ) : null}
+        {remindAt ? (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {t('notifications.remindedFor', {
+              when: formatDateTime(remindAt, { dateStyle: 'medium', timeStyle: 'short' }),
+            })}
+          </p>
         ) : null}
         {snoozed ? (
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -333,6 +365,32 @@ export const NotificationInbox = observer(function NotificationInbox() {
   const { workspace } = useParams<{ workspace: string }>();
 
   const [tab, setTab] = useState<InboxTab>('all');
+  // Priority vs Other. Starts on Priority (SSR-safe) and adopts the last-used
+  // lane once mounted, so the hydration markup never depends on storage.
+  const [lane, setLaneState] = useState<InboxLane>('priority');
+  const laneRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const stored = readStoredLane();
+    if (stored) {
+      setLaneState(stored);
+    }
+  }, []);
+  const setLane = (next: InboxLane) => {
+    setLaneState(next);
+    writeStoredLane(next);
+  };
+  const handleLaneKeyDown = (e: React.KeyboardEvent) => {
+    const next = nextLane(lane, e.key);
+    if (!next) {
+      return;
+    }
+    e.preventDefault();
+    setLane(next);
+    // Keep focus on the control after the selected segment changes.
+    requestAnimationFrame(() =>
+      laneRef.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus(),
+    );
+  };
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [snoozingId, setSnoozingId] = useState<string | null>(null);
@@ -478,14 +536,25 @@ export const NotificationInbox = observer(function NotificationInbox() {
     }
   };
 
-  const active = notifications.filter(n => !isSnoozed(n));
+  const viewerId = store.userStore.currentUserId;
+  const priorityLookups = {
+    issueAssigneeId: (issueId: string) => store.issueStore.findById(issueId)?.assigneeId ?? null,
+  };
+  const laneOf = (rows: DBNotification[]) => partitionByLane(rows, viewerId, priorityLookups);
+  const allActive = notifications.filter(n => !isSnoozed(n));
+  const activeByLane = laneOf(allActive);
+  const laneUnread = {
+    other: activeByLane.other.filter(n => !n.read).length,
+    priority: activeByLane.priority.filter(n => !n.read).length,
+  };
+  const active = activeByLane[lane];
   const unread = active.filter(n => !n.read);
   const read = active.filter(n => n.read);
   // The badge is the server's own total (kept exact by `unreadCount`), not the
   // size of the fetched page — which read "7 unread" against 29 in the database.
   const unreadLabel = notificationStore.unreadCount;
   const hasUnread = unreadLabel > 0;
-  const snoozedRows = notificationStore.snoozed;
+  const snoozedRows = laneOf(notificationStore.snoozed)[lane];
   const visible = tab === 'unread' ? unread : tab === 'snoozed' ? snoozedRows : active;
 
   return (
@@ -516,6 +585,42 @@ export const NotificationInbox = observer(function NotificationInbox() {
       />
 
       <Toolbar>
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: arrow keys on the focused segment move between lanes */}
+        <div
+          aria-label={t('notifications.lanes.label')}
+          onKeyDown={handleLaneKeyDown}
+          ref={laneRef}
+          role="group"
+        >
+          <SegmentedControl
+            onChange={setLane}
+            options={[
+              {
+                label: (
+                  <>
+                    {t('notifications.lanes.priority')}
+                    <span className="font-mono tabular-nums" data-testid="lane-count-priority">
+                      {laneUnread.priority}
+                    </span>
+                  </>
+                ),
+                value: 'priority',
+              },
+              {
+                label: (
+                  <>
+                    {t('notifications.lanes.other')}
+                    <span className="font-mono tabular-nums" data-testid="lane-count-other">
+                      {laneUnread.other}
+                    </span>
+                  </>
+                ),
+                value: 'other',
+              },
+            ]}
+            value={lane}
+          />
+        </div>
         <SegmentedControl
           onChange={setTab}
           options={[
@@ -552,7 +657,9 @@ export const NotificationInbox = observer(function NotificationInbox() {
                 ? t('notifications.emptyState.snoozedDetail')
                 : tab === 'unread'
                   ? t('notifications.emptyState.unreadDetail')
-                  : t('notifications.emptyState.detail')
+                  : lane === 'priority'
+                    ? t('notifications.emptyState.priorityDetail')
+                    : t('notifications.emptyState.otherDetail')
             }
             icon={<Bell className="h-5 w-5" />}
             testId="empty-state"
@@ -561,7 +668,9 @@ export const NotificationInbox = observer(function NotificationInbox() {
                 ? t('notifications.emptyState.snoozedTitle')
                 : tab === 'unread'
                   ? t('notifications.emptyState.unreadTitle')
-                  : t('notifications.emptyState.title')
+                  : lane === 'priority'
+                    ? t('notifications.emptyState.priorityTitle')
+                    : t('notifications.emptyState.otherTitle')
             }
           />
         )}
@@ -588,7 +697,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
               onSnooze={handleSnooze}
               onUnsnooze={handleUnsnooze}
               snoozingId={snoozingId}
-              title={t('notifications.unreadCount', { count: unreadLabel })}
+              title={t('notifications.unreadCount', { count: laneUnread[lane] })}
               workspace={workspace}
             />
           ) : (
@@ -602,7 +711,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
                   onSnooze={handleSnooze}
                   onUnsnooze={handleUnsnooze}
                   snoozingId={snoozingId}
-                  title={t('notifications.unreadCount', { count: unreadLabel })}
+                  title={t('notifications.unreadCount', { count: laneUnread[lane] })}
                   workspace={workspace}
                 />
               )}

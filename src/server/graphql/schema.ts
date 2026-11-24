@@ -1129,6 +1129,7 @@ export const typeDefs = `
     ISSUE_STATUS_CHANGED
     ISSUE_MENTIONED
     ISSUE_COMMENTED
+    REMINDER
   }
 
   type CustomFieldDefinition {
@@ -1519,6 +1520,13 @@ export const typeDefs = `
     userId: ID
   }
 
+  type TriageDuplicateSuggestion {
+    issue: Issue!
+    score: Float!
+    "Title terms shared with the triage issue — the reason shown to the user."
+    matchedTerms: [String!]!
+  }
+
   input IssueTriageAcceptInput {
     stateId: ID!
     assigneeId: ID
@@ -1867,6 +1875,8 @@ export const typeDefs = `
 
     triageQueue(teamId: ID!): [Issue!]!
     triageQueueCount(teamId: ID!): Int!
+    "Up to 5 similar non-triage issues the caller can see (ranked, best first)."
+    triageDuplicateSuggestions(issueId: ID!, first: Int): [TriageDuplicateSuggestion!]!
 
     initiative(id: ID!): Initiative!
     initiatives(includeArchived: Boolean): [Initiative!]!
@@ -1899,6 +1909,8 @@ export const typeDefs = `
 
     # Favorites — sidebar pinning, per user
     favorites: [Favorite!]!
+    # Issue reminders — the viewer's own pending reminders
+    myIssueReminders: [IssueReminder!]!
 
     # GitHub Integration
     githubIntegration: GitHubIntegration
@@ -2169,6 +2181,10 @@ export const typeDefs = `
     favoriteDelete(id: ID!): DeletePayload!
     favoriteReorder(entries: [FavoriteReorderEntryInput!]!): FavoriteListPayload!
 
+    # Issue reminders (private to the caller; not replicated through sync)
+    issueReminderSet(issueId: ID!, remindAt: DateTime!): IssueReminderPayload!
+    issueReminderClear(issueId: ID!): IssueReminderClearPayload!
+
     # GitHub Integration
     githubDisconnect: BasicPayload!
     """Omit newSecret to have the server generate one (returned once in the payload)."""
@@ -2288,6 +2304,32 @@ export const typeDefs = `
     name: String
     "http(s) URL of an uploaded avatar; null clears it."
     avatarUrl: String
+  }
+
+  # ---------------------------------------------------------------------------
+  # Issue reminders
+  # ---------------------------------------------------------------------------
+
+  """
+  A private "remind me about this issue" reminder. Only ever returned to its
+  owner. When it fires the sweep emits a REMINDER notification and the row
+  stops appearing in myIssueReminders.
+  """
+  type IssueReminder {
+    id: ID!
+    issueId: ID!
+    remindAt: DateTime!
+    createdAt: DateTime!
+    issue: Issue
+  }
+
+  type IssueReminderPayload {
+    success: Boolean!
+    reminder: IssueReminder
+  }
+
+  type IssueReminderClearPayload {
+    success: Boolean!
   }
 
   # ---------------------------------------------------------------------------

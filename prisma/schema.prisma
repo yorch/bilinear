@@ -68,6 +68,7 @@ model Organization {
   githubPullRequests     GitHubPullRequest[]
   slackIntegration       SlackIntegration?
   favorites              Favorite[]
+  issueReminders         IssueReminder[]
   customFieldDefinitions CustomFieldDefinition[]
   automationRules        AutomationRule[]
   auditLogEntries        AuditLogEntry[]
@@ -161,6 +162,7 @@ model User {
   githubIntegrations        GitHubIntegration[]        @relation("GitHubIntegrationCreator")
   createdAutomationRules    AutomationRule[]           @relation("AutomationRuleCreator")
   favorites                 Favorite[]
+  issueReminders            IssueReminder[]
   auditLogEntries           AuditLogEntry[]            @relation("AuditLogUser")
   createdSamlConfigurations SamlConfiguration[]        @relation("SamlConfigCreator")
   createdScimTokens         ScimToken[]                @relation("ScimTokenCreator")
@@ -529,6 +531,7 @@ model Issue {
   activities        IssueActivity[]
   cycle             Cycle?                     @relation(fields: [cycleId], references: [id], onDelete: SetNull)
   notifications     Notification[]
+  reminders         IssueReminder[]
   project           Project?                   @relation(fields: [projectId], references: [id], onDelete: SetNull)
   projectMilestone  ProjectMilestone?          @relation(fields: [projectMilestoneId], references: [id], onDelete: SetNull)
   subscriptions     NotificationSubscription[]
@@ -1006,6 +1009,7 @@ enum NotificationType {
   ISSUE_STATUS_CHANGED
   ISSUE_MENTIONED
   ISSUE_COMMENTED
+  REMINDER
 
   @@map("notification_type")
 }
@@ -1428,6 +1432,38 @@ model Favorite {
   @@index([userId])
   @@index([organizationId])
   @@map("favorites")
+}
+
+// ---------------------------------------------------------------------------
+// Issue reminders ("remind me about this issue at <time>")
+// ---------------------------------------------------------------------------
+
+/// A private, per-user reminder on one issue. One row per (issue, user): setting
+/// a reminder again moves it (and re-arms it by clearing `firedAt`). The
+/// background sweep claims due rows with an atomic
+/// `UPDATE ... WHERE fired_at IS NULL RETURNING`, so concurrent workers fire a
+/// reminder at most once. Not replicated to clients (see the service doc): the
+/// row is private to its owner and SyncActions broadcast org-wide.
+model IssueReminder {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  issueId        String    @map("issue_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  remindAt       DateTime  @map("remind_at") @db.Timestamptz
+  firedAt        DateTime? @map("fired_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  issue        Issue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, userId], map: "issue_reminders_issue_user_uniq")
+  // The sweep scans "unfired and due"; the viewer's own list filters by user.
+  @@index([remindAt, firedAt])
+  @@index([userId, firedAt])
+  @@index([organizationId])
+  @@map("issue_reminders")
 }
 
 // ---------------------------------------------------------------------------
