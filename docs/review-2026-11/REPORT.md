@@ -1,71 +1,49 @@
-# Platform review — 2026-11-24
+# Platform review — 2026-11-24 (final)
 
-Four reviewers (two Opus, one Sonnet for research, one Haiku for screenshots) plus two Sonnet
-engineers. Detail lives in:
+Two rounds: the first review (PR #166) fixed 22 findings; this round closed the rest of
+`FINDINGS-issues.md` / `FINDINGS-platform.md`, the half-finished work, and the P1/P2 backlog. Each
+stream was written by a Sonnet engineer and attacked by an adversarial Opus reviewer, followed by two
+cross-cutting sweeps (security; sync/authz), an integration gate, and a visual-QA pass over a
+production build.
 
-- [`FINDINGS-issues.md`](FINDINGS-issues.md) — 26 findings on the core issue experience
-- [`FINDINGS-platform.md`](FINDINGS-platform.md) — 26 findings on everything else
-- [`RESEARCH.md`](RESEARCH.md) — competitor research, top-8 feature shortlist, UX checklist
+- [`FINDINGS-issues.md`](FINDINGS-issues.md), [`FINDINGS-platform.md`](FINDINGS-platform.md), [`RESEARCH.md`](RESEARCH.md) — original findings and research
+- [`DEFECTS-verified.md`](DEFECTS-verified.md) — defects found by the visual-QA reviewer on the final build (all in-scope items fixed)
+- [`screenshots/final/`](screenshots/final/) — 156 production-build captures (52 screens × desktop light/dark + mobile light); [`INDEX.md`](screenshots/final/INDEX.md) lists route, console errors and mobile overflow per capture (0 console errors, no mobile horizontal overflow)
+- `screenshots/before|after|features/` — round-one evidence
+- The full rationale, traps and known limits are in the top entry of [`docs/CHANGELOG.md`](../CHANGELOG.md)
 
-## What shipped (22 findings fixed or partly fixed)
+## What shipped this round
 
-Gate on the final tree: `yarn lint`, `yarn lint:tokens`, `yarn typecheck` pass; `yarn test`
-2426/2426. Not run: `yarn build`, e2e (Node 22 locally vs the 24 pin).
+Features/UX: project/cycle/estimate filter pickers and date operators; shortcuts on the issue page;
+set-parent on existing issues; bulk cycle/project/due date/move/delete; triage single-key actions with
+duplicate suggestions (FTS); inbox Priority/Other lanes with snooze/unread; synced issue reminders;
+profile editing; SSO entry point; Slack/GitHub "not configured" states; admin pagination; archived
+views with unarchive; initiative detail editing; burn-up chart; insights explorer; custom fields;
+GitHub issue import; deep-link `?next=` via a minimal `src/proxy.ts`.
 
-| Finding | Change | Evidence |
-|---|---|---|
-| ISS-01 | Closed issues no longer show overdue-red due dates | unit test |
-| ISS-02 (half) | Cycle scope creep counts only issues added after the cycle starts. **Not fixed:** flat "Ideal" burndown line (chart `initialScope`) | unit test |
-| ISS-04 | Board/list, group, order, swimlane persist per team | [board-persist](screenshots/features/board-persist.png) |
-| ISS-06 | ⋯ actions menu on the issue page and panel (Archive/Delete reachable without right-click) | [menu](screenshots/features/issue-actions-menu.png) |
-| ISS-08 | Sub-issue creation is optimistic (works offline) | unit test |
-| ISS-11/12 | Filter form closes on Escape/outside click; dropdowns stop wrapping and show a checkmark | unit/type tests only, **no screenshot** |
-| ISS-15/16/17/24 | Duplicate cycle name removed; sidebar expands the issue's team; stable team order; `Ctrl+B` vs `⌘B` tooltip | [issue-detail](screenshots/features/issue-detail.png) |
-| PLT-01 | Workspace URL accepts hyphens | [onboarding-hyphen](screenshots/features/onboarding-hyphen.png) |
-| PLT-02 | Reserved route keys (`admin`, `login`…) rejected | [onboarding-reserved](screenshots/features/onboarding-reserved.png) |
-| PLT-04 | Login hides OAuth buttons that are not configured | before/after below |
-| PLT-07/12/21/23/24/26 | Landing picks an accessible team; suspended workspaces' public roadmap 404s; localised invite role; magic link submits once; signed-in `/login` redirects | unit tests |
-| PLT-18/19 | Analytics empty-state guard + team links; members no longer see admin-only settings sections | [analytics](screenshots/features/analytics.png), [settings-member](screenshots/features/settings-member.png) |
-| PLT-09/10 (partly) | Initiative status is optimistic with rollback; rename; project/initiative unarchive with undo toast | `initiatives.png` was **not** re-checked after the change |
-| PLT-03 (partly) | Signed-out redirect now carries `?next=` for the workspace/admin root. Full deep path needs a proxy (the app deliberately has none) | Playwright |
+Hardening: per-user sync filtering and fail-closed visibility on every sync path; advisory-lock
+protected parent/cycle writes; SSRF, SAML, avatar, markdown-sanitiser, CSV-injection and webhook
+body-cap fixes; guests read-only in collaborative editing.
 
-Every new test was confirmed to fail with its fix reverted, except one `onboarding-form.test.ts`
-addition that was not revert-checked.
+Visual-QA fixes (this pass): inbox emptied by a full bootstrap, favourite star wrong for existing
+favourites, duplicate Insights column, mobile bulk bar/triage/admin tables/cycle header, Set-parent
+popover clipping, burn-up edge labels, avg-cycle formatting, shortcut-modal focus ring, status-dot
+contrast, webhook error copy, audit-log resource labels.
 
-## Before → after
+## Verification
 
-Login, signed out — Google/GitHub buttons that only produced an untranslated server error are gone
-when the providers are not configured:
+`yarn lint`, `yarn lint:tokens`, `yarn typecheck`, `yarn build` pass; `yarn test` 3489 passed
+(19 DB-gated skipped; those pass locally with their env vars). Playwright chromium: 136 passed,
+3 skipped, 0 failed (before the final visual-QA fixes). Run on Node 22 locally; CI pins Node 24.
 
-| Before | After |
-|---|---|
-| ![before](screenshots/before/login-desktop-light.png) | ![after](screenshots/after/login-desktop-light.png) |
+## Known limits
 
-Full sets: [`screenshots/before/`](screenshots/before/) and [`screenshots/after/`](screenshots/after/)
-(desktop light, desktop dark, mobile 390px for ~26 routes each, same names in both folders).
-Because most of the fixes are behavioural (menus, persistence, validation), their evidence is the
-`screenshots/features/` set rather than a page-level diff.
-
-## Caveats — read before trusting the screenshots
-
-- **Some captures show loading skeletons.** The dev server compiles routes on demand and a fixed
-  4s wait was not always enough (e.g. `before/settings-mobile-light.png`). Treat those as
-  unreliable for visual comparison.
-- **"Before" desktop shots for issue/team pages were taken before the first engineer's edits**; the
-  settings/login/design baselines were re-shot later against unchanged code.
-- **The platform reviewer could not sign in**, so its signed-in findings come from code reading,
-  not the browser. Layout at 390px/1280px for those screens is covered only by the crawl.
-- Turbopack panicked twice in the dev server; shots were taken in webpack mode.
-- The board-toggle capture (`team-eng-board`) failed: the crawler's selector did not match.
-
-## Not done — recommended next (from the findings)
-
-Highest remaining value: ISS-03 (project/cycle/estimate filter pickers), ISS-05 (shortcuts on the
-issue page), ISS-07 (set parent on an existing issue), ISS-09 (bulk cycle/project/due date),
-PLT-06 (profile editing), PLT-11 (Slack/GitHub "not configured" state), PLT-13 (admin list
-pagination), PLT-05 (SSO entry point). Feature ideas worth building first, per `RESEARCH.md`:
-single-key triage actions, inbox Priority/Other tabs with snooze/unread, duplicate suggestions in
-triage.
-
-`AGENTS.md` shows as modified locally; the Next dev server regenerates it on start and it is
-deliberately not part of this change.
+- Duplicate suggestions match poorly for languages without spaces.
+- Inbox lane counts show "N+" beyond the page size.
+- DB-gated tests skip in CI unless their env vars are set.
+- Audit-log names resolve only for teams (others show a short id); webhook error text is English only.
+- Bulk bar has no list bottom padding while selecting; native date inputs are unthemed.
+- Not browser-verified after the last fix round (unit/typecheck/build only).
+- Cycle 2 burndown oddity in the screenshots is a seed artifact (all issues created today).
+- Audit `ipAddress` is null unless `TRUST_PROXY_HEADERS` is set.
+- Several WIP checkpoint commits carry a mistyped session trailer; squash-merge recommended.
