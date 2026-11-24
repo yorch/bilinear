@@ -99,8 +99,14 @@ describe('markdownToHtml on pathological input', () => {
     ['unclosed __ per line', '__a\n'],
   ];
   for (const [name, unit] of cases) {
-    for (const bytes of [64 * 1024, 256 * 1024]) {
-      it(`${name} at ${bytes / 1024} KB converts in under 50 ms`, () => {
+    // Budgets sit well above linear cost on a loaded shared runner (CI measured
+    // 66 ms at 256 KB against the old 50 ms) yet far below the quadratic
+    // regression: ~270 ms at 64 KB and ~4.9 s at 256 KB.
+    for (const [bytes, budgetMs] of [
+      [64 * 1024, 120],
+      [256 * 1024, 400],
+    ] as const) {
+      it(`${name} at ${bytes / 1024} KB converts in under ${budgetMs} ms`, () => {
         const src = unit.repeat(Math.ceil(bytes / unit.length));
         // Best of three: a loaded CI box can stall one run, but the quadratic
         // regression is 5-100x over budget on every run.
@@ -110,7 +116,7 @@ describe('markdownToHtml on pathological input', () => {
           markdownToHtml(src);
           best = Math.min(best, performance.now() - started);
         }
-        expect(best).toBeLessThan(50);
+        expect(best).toBeLessThan(budgetMs);
       });
     }
   }
