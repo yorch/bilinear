@@ -171,6 +171,7 @@ const CustomViewPage = observer(function CustomViewPage() {
     detailIssue,
     handleArchive,
     handleArchiveMany,
+    handleDeleteMany,
     handleOpen,
     openProperty,
     requestDelete,
@@ -422,6 +423,7 @@ const CustomViewPage = observer(function CustomViewPage() {
             labels={labels}
             onArchive={handleArchive}
             onArchiveMany={handleArchiveMany}
+            onDeleteMany={handleDeleteMany}
             onBulkUpdate={handleBulkUpdate}
             onClearFilters={() => setFilterSet(createEmptyFilterSet())}
             onDelete={requestDelete}

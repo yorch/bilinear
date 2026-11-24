@@ -27,6 +27,33 @@ describe('NotificationService', () => {
     service = new NotificationService(prisma as never);
   });
 
+  describe('listSubscribedIssueIds', () => {
+    it('returns only active, live, same-org subscriptions for the user, newest first', async () => {
+      prisma.notificationSubscription.findMany.mockResolvedValue([
+        { issueId: 'issue-b' },
+        { issueId: 'issue-a' },
+      ]);
+
+      const ids = await service.listSubscribedIssueIds(TEST_USER.id, TEST_ORG.id);
+
+      expect(ids).toEqual(['issue-b', 'issue-a']);
+      expect(prisma.notificationSubscription.findMany).toHaveBeenCalledWith({
+        orderBy: { updatedAt: 'desc' },
+        select: { issueId: true },
+        where: {
+          active: true,
+          issue: { archivedAt: null, organizationId: TEST_ORG.id, trashed: false },
+          userId: TEST_USER.id,
+        },
+      });
+    });
+
+    it('returns an empty list when the user subscribes to nothing', async () => {
+      prisma.notificationSubscription.findMany.mockResolvedValue([]);
+      expect(await service.listSubscribedIssueIds(TEST_USER.id, TEST_ORG.id)).toEqual([]);
+    });
+  });
+
   describe('create', () => {
     it('creates notification with correct data', async () => {
       prisma.notification.create.mockResolvedValue(TEST_NOTIFICATION);

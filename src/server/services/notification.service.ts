@@ -310,6 +310,26 @@ export class NotificationService {
     return subscription?.active === true;
   }
 
+  /**
+   * Ids of the live issues the user is actively subscribed to in this org,
+   * most recently subscribed first. Subscriptions are user-local (they never
+   * produce a SyncAction), so the My Issues "Subscribed" tab asks for this set
+   * and resolves the rows from its local issue pool. Archived and trashed
+   * issues are left out, matching every other list.
+   */
+  async listSubscribedIssueIds(userId: string, orgId: string): Promise<string[]> {
+    const subscriptions = await this.prisma.notificationSubscription.findMany({
+      orderBy: { updatedAt: 'desc' },
+      select: { issueId: true },
+      where: {
+        active: true,
+        issue: { archivedAt: null, organizationId: orgId, trashed: false },
+        userId,
+      },
+    });
+    return subscriptions.map(s => s.issueId);
+  }
+
   async getSubscribers(issueId: string): Promise<string[]> {
     const subscriptions = await this.prisma.notificationSubscription.findMany({
       select: { userId: true },

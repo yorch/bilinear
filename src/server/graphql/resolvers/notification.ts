@@ -209,6 +209,11 @@ export const notificationResolvers = {
       return ctx.services.notification.isSubscribed(ctx.userId, issueId);
     },
 
+    notificationSubscribedIssueIds: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      return ctx.services.notification.listSubscribedIssueIds(ctx.userId, ctx.orgId);
+    },
+
     notifications: async (
       _parent: unknown,
       { limit, before, snoozed }: { limit?: number; before?: string; snoozed?: boolean },

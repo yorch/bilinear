@@ -583,6 +583,54 @@ describe('CycleService', () => {
     });
   });
 
+  describe('getBurndown scope creep', () => {
+    const start = new Date('2026-03-01T00:00:00Z');
+    const cycle = { ...TEST_CYCLE, endsAt: new Date('2026-03-04T00:00:00Z'), startsAt: start };
+
+    it('counts a planning-time addedToCycleAt stamp as day-one scope, not an addition', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(cycle);
+      prisma.issue.findMany.mockResolvedValue([
+        // Assigned while the cycle was still upcoming (before startsAt).
+        { addedToCycleAt: new Date('2026-02-25T10:00:00Z'), completedAt: null, id: 'i1' },
+        { addedToCycleAt: new Date('2026-02-26T10:00:00Z'), completedAt: null, id: 'i2' },
+        { addedToCycleAt: null, completedAt: null, id: 'i3' },
+      ]);
+
+      const result = await service.getBurndown(TEST_CYCLE.id);
+
+      expect(result.map(p => p.scope)).toEqual([3, 3, 3, 3]);
+      expect(result[0].remaining).toBe(3);
+    });
+
+    it('steps scope up only on the day a mid-cycle addition arrived', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(cycle);
+      prisma.issue.findMany.mockResolvedValue([
+        { addedToCycleAt: new Date('2026-02-25T10:00:00Z'), completedAt: null, id: 'i1' },
+        { addedToCycleAt: new Date('2026-03-02T09:00:00Z'), completedAt: null, id: 'i2' },
+      ]);
+
+      const result = await service.getBurndown(TEST_CYCLE.id);
+
+      expect(result.map(p => [p.date, p.scope])).toEqual([
+        ['2026-03-01', 1],
+        ['2026-03-02', 2],
+        ['2026-03-03', 2],
+        ['2026-03-04', 2],
+      ]);
+    });
+
+    it('treats a stamp exactly at startsAt as planned (creep is strictly after)', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(cycle);
+      prisma.issue.findMany.mockResolvedValue([
+        { addedToCycleAt: new Date(start), completedAt: null, id: 'i1' },
+      ]);
+
+      const result = await service.getBurndown(TEST_CYCLE.id);
+
+      expect(result[0].scope).toBe(1);
+    });
+  });
+
   describe('autoCreateUpcomingCycles', () => {
     // `upcomingCycleCount` is no longer a Team column — it is the
     // `cycles.upcomingCount` registry knob, resolved at team scope.

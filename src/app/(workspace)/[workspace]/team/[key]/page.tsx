@@ -216,6 +216,7 @@ const TeamIssues = observer(function TeamIssues() {
     detailIssue,
     handleArchive,
     handleArchiveMany,
+    handleDeleteMany,
     handleOpen,
     openProperty,
     requestDelete,
@@ -440,6 +441,7 @@ const TeamIssues = observer(function TeamIssues() {
             labels={labels}
             onArchive={handleArchive}
             onArchiveMany={handleArchiveMany}
+            onDeleteMany={handleDeleteMany}
             onBulkUpdate={handleBulkUpdate}
             onClearFilters={() => setFilterSet(createEmptyFilterSet())}
             onDelete={requestDelete}

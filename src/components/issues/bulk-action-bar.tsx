@@ -48,6 +48,12 @@ interface BulkActionBarProps {
    */
   estimationType?: string;
   labels: IssueLabel[];
+  /**
+   * The checked issues span several teams, so no single cycle list applies.
+   * The Cycle action then renders disabled, with a tooltip saying why, rather
+   * than silently vanishing.
+   */
+  mixedTeams?: boolean;
   /** Archive every checked issue. Omitted where the page cannot archive. */
   onArchive?: () => void;
   onClear: () => void;
@@ -94,6 +100,7 @@ export const BulkActionBar = observer(function BulkActionBar({
   states,
   users,
   labels,
+  mixedTeams,
   onArchive,
   onDelete,
   onUpdate,
@@ -265,7 +272,19 @@ export const BulkActionBar = observer(function BulkActionBar({
         </BulkPopover>
       )}
 
-      {cycles.length > 0 && (
+      {mixedTeams && (
+        <button
+          aria-disabled="true"
+          className={cn(ACTION_BUTTON, 'cursor-not-allowed opacity-50 hover:bg-transparent')}
+          disabled
+          title={t('issues.bulkCycleNeedsSameTeam')}
+          type="button"
+        >
+          {t('issues.cycle')}
+        </button>
+      )}
+
+      {!mixedTeams && cycles.length > 0 && (
         <BulkPopover label={t('issues.cycle')}>
           {close => (
             <>

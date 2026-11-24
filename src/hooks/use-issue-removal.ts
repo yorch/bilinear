@@ -9,7 +9,7 @@ import { TransactionQueue } from '@/lib/transaction-queue';
 import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
-const ISSUE_DELETE_MUTATION = `
+export const ISSUE_DELETE_MUTATION = `
   mutation IssueDelete($id: ID!) {
     issueDelete(id: $id) {
       success

@@ -6,7 +6,7 @@ import type { OpenProperty } from '@/components/issues/issue-row';
 import type { ViewMode } from '@/components/issues/view-toggle';
 import { stepVisualOrder } from '@/components/issues/visual-order';
 import { useHotkeys } from '@/hooks/use-hotkeys';
-import { useIssueRemoval } from '@/hooks/use-issue-removal';
+import { ISSUE_DELETE_MUTATION, useIssueRemoval } from '@/hooks/use-issue-removal';
 import { useTranslations } from '@/hooks/use-translations';
 import { ISSUE_ARCHIVE_MUTATION } from '@/lib/graphql-queries';
 import { toIssueDetail } from '@/lib/issue-mappers';
@@ -15,6 +15,7 @@ import { TransactionQueue } from '@/lib/transaction-queue';
 import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail } from '@/types/issues';
+import { runInAction } from 'mobx';
 
 interface UseIssueListPageOptions {
   /** Route to replace on Escape / detail-panel close (no query params). */
@@ -167,6 +168,40 @@ export function useIssueListPage({
     [issueStore, txQueue, t, handleUnarchive],
   );
 
+  /**
+   * Delete several issues after the bulk bar's own confirmation. Optimistic:
+   * rows leave the pool at once and come back (with one error toast) if the
+   * server refuses that issue. One summary toast, not one per row.
+   */
+  const handleDeleteMany = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) {
+        return;
+      }
+      for (const id of ids) {
+        const snapshot = issueStore.findById(id);
+        runInAction(() => {
+          issueStore.pool.delete(id);
+        });
+        txQueue.enqueue(
+          ISSUE_DELETE_MUTATION,
+          { id },
+          {
+            onError: err => {
+              toast.error(getErrorMessage(err, t('issues.deleteFailed')));
+              if (snapshot) {
+                issueStore.applySyncAction('I', id, snapshot);
+              }
+            },
+          },
+        );
+        handleDeleted(id);
+      }
+      toast.success(t('issues.deletedManyToast', { count: ids.length }));
+    },
+    [issueStore, txQueue, t, handleDeleted],
+  );
+
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
 
   // J / K — navigate list
@@ -294,6 +329,7 @@ export function useIssueListPage({
     detailIssueId,
     handleArchive,
     handleArchiveMany,
+    handleDeleteMany,
     handleOpen,
     hasSelection,
     openProperty,

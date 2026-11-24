@@ -457,7 +457,13 @@ export class CycleService {
       .sort((a, b) => a.getTime() - b.getTime());
 
     // Scope tracking: issues with no addedToCycleAt were in scope from cycle
-    // start; issues with a timestamp entered scope on that day.
+    // start; issues with a timestamp entered scope on that day. A planning-time
+    // stamp (at or before `startsAt`) falls inside the first day bucket, so it
+    // lands in the day-one scope exactly as analytics' "planned" does
+    // (`cycleScopeAndCarryover` counts creep only when addedToCycleAt > startsAt);
+    // the series therefore agrees with `plannedScope` in chart-geometry, which
+    // reads day one's scope as the plan. Only a stamp after the first day
+    // steps `scope` up.
     const baseScope = issues.filter(i => i.addedToCycleAt == null).length;
     const scopeAdditions = issues
       .filter(i => i.addedToCycleAt != null)

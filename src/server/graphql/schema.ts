@@ -1844,6 +1844,12 @@ export const typeDefs = `
     notifications(limit: Int, before: DateTime, snoozed: Boolean): [Notification!]!
     notificationUnreadCount: Int!
     notificationIsSubscribed(issueId: ID!): Boolean!
+    """
+    Ids of the live issues the caller is subscribed to, newest subscription
+    first. Subscriptions are user-local and never synced, so the My Issues
+    Subscribed tab reads this set and renders the rows from its local pool.
+    """
+    notificationSubscribedIssueIds: [ID!]!
     issueActivities(issueId: ID!, limit: Int): [IssueActivity!]!
     issueRelations(issueId: ID!): [IssueRelation!]!
     issueTemplates(teamId: ID!, includeArchived: Boolean): [IssueTemplate!]!

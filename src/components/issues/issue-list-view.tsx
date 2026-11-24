@@ -10,6 +10,7 @@ import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
+import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { BulkActionBar } from './bulk-action-bar';
 import { GroupSection } from './group-section';
@@ -48,6 +49,8 @@ interface IssueListViewProps {
   onBulkUpdate?: (ids: string[], patch: Record<string, unknown>) => void;
   onClearFilters?: () => void;
   onDelete?: (id: string) => void;
+  /** Bulk delete for the checked set (the bar confirms first). Without it the bar offers no Delete. */
+  onDeleteMany?: (ids: string[]) => void;
   onOpen: (id: string) => void;
   onPropertyClosed?: () => void;
   onSelect: (id: string) => void;
@@ -97,6 +100,7 @@ export function IssueListView({
   onArchive,
   onArchiveMany,
   onDelete,
+  onDeleteMany,
   onBulkUpdate,
   openProperty,
   onPropertyClosed,
@@ -116,6 +120,21 @@ export function IssueListView({
     setCheckedIds(new Set());
     lastCheckedIdRef.current = null;
   }, [issueIds]);
+
+  // The Cycle action needs one team's cycle list. A page scoped to a team
+  // supplies it; a multi-team page (My Issues) only qualifies while every
+  // checked issue shares a team.
+  const checkedTeamIds = new Set<string | undefined>();
+  if (!teamId) {
+    for (const issue of issues) {
+      if (checkedIds.has(issue.id)) {
+        checkedTeamIds.add(issue.teamId);
+      }
+    }
+  }
+  const sharedTeamId =
+    teamId ?? (checkedTeamIds.size === 1 ? [...checkedTeamIds][0] : undefined);
+  const mixedTeams = !teamId && checkedTeamIds.size > 1;
 
   const selectAll = () => setCheckedIds(new Set(issues.map(i => i.id)));
 
@@ -289,7 +308,12 @@ export function IssueListView({
   }
 
   return (
-    <div className="flex flex-col" data-testid="issue-list-view">
+    // `pb-24` while rows are checked: the fixed bulk bar would otherwise cover
+    // the last rows with nothing to scroll them clear of it (ISS-10).
+    <div
+      className={cn('flex flex-col', checkedIds.size > 0 && 'pb-24')}
+      data-testid="issue-list-view"
+    >
       {groups.map(({ color, key, leading, name, issues: groupIssues }) => (
         <GroupSection
           collapsed={collapsedGroups.has(key)}
@@ -390,6 +414,7 @@ export function IssueListView({
           count={checkedIds.size}
           estimationType={estimationType}
           labels={labels}
+          mixedTeams={mixedTeams}
           onArchive={
             onArchiveMany || onArchive
               ? () => {
@@ -406,12 +431,21 @@ export function IssueListView({
               : undefined
           }
           onClear={() => setCheckedIds(new Set())}
+          onDelete={
+            onDeleteMany
+              ? () => {
+                  onDeleteMany([...checkedIds]);
+                  setCheckedIds(new Set());
+                }
+              : undefined
+          }
           onSelectAll={selectAll}
           onUpdate={patch => {
             onBulkUpdate([...checkedIds], patch);
             setCheckedIds(new Set());
           }}
           states={states}
+          teamId={sharedTeamId}
           totalCount={issues.length}
           users={users}
         />

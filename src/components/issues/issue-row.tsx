@@ -32,6 +32,8 @@ export interface IssueRowData {
   projectId?: string | null;
   snoozedUntilAt?: string | null;
   stateId: string;
+  /** Owning team; lets a multi-team list tell whether a selection shares one. */
+  teamId?: string;
   title: string;
 }
 

@@ -154,6 +154,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
     detailIssue,
     handleArchive,
     handleArchiveMany,
+    handleDeleteMany,
     handleOpen,
     openProperty,
     requestDelete,
@@ -310,6 +311,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
                   labels={labels}
                   onArchive={handleArchive}
                   onArchiveMany={handleArchiveMany}
+                  onDeleteMany={handleDeleteMany}
                   onBulkUpdate={handleBulkUpdate}
                   onDelete={requestDelete}
                   onOpen={handleOpen}

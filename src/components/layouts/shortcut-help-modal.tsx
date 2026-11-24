@@ -36,6 +36,9 @@ const SECTIONS: ShortcutSection[] = [
     shortcuts: [
       { descriptionKey: 'layout.shortcutHelp.goToMyIssues', keys: ['G', 'I'] },
       { descriptionKey: 'layout.shortcutHelp.goToInbox', keys: ['G', 'N'] },
+      { descriptionKey: 'layout.shortcutHelp.goToTeamIssues', keys: ['G', 'T'] },
+      { descriptionKey: 'layout.shortcutHelp.goToTeamBacklog', keys: ['G', 'B'] },
+      { descriptionKey: 'layout.shortcutHelp.goToTeamCycles', keys: ['G', 'C'] },
     ],
     titleKey: 'layout.shortcutHelp.sections.navigation',
   },
@@ -43,6 +46,7 @@ const SECTIONS: ShortcutSection[] = [
     shortcuts: [
       { descriptionKey: 'layout.shortcutHelp.moveDown', keys: ['J'] },
       { descriptionKey: 'layout.shortcutHelp.moveUp', keys: ['K'] },
+      { descriptionKey: 'layout.shortcutHelp.toggleSelectIssue', keys: ['X'] },
       { descriptionKey: 'layout.shortcutHelp.openIssue', keys: ['Enter'] },
       { descriptionKey: 'layout.shortcutHelp.closeDeselect', keys: ['Esc'] },
     ],
@@ -58,6 +62,9 @@ const SECTIONS: ShortcutSection[] = [
       { descriptionKey: 'layout.shortcutHelp.setEstimate', keys: ['Shift', 'E'] },
       { descriptionKey: 'layout.shortcutHelp.setProject', keys: ['Shift', 'P'] },
       { descriptionKey: 'layout.shortcutHelp.setCycle', keys: ['Q'] },
+      { descriptionKey: 'layout.shortcutHelp.assignToMe', keys: ['I'] },
+      { descriptionKey: 'layout.shortcutHelp.copyIssueId', keys: [MOD, '.'] },
+      { descriptionKey: 'layout.shortcutHelp.toggleSubscription', keys: ['Shift', 'S'] },
       { descriptionKey: 'layout.shortcutHelp.archiveIssue', keys: ['⌫'] },
     ],
     titleKey: 'layout.shortcutHelp.sections.issueActions',

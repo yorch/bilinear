@@ -166,6 +166,7 @@ const BacklogPage = observer(function BacklogPage() {
     detailIssue,
     handleArchive,
     handleArchiveMany,
+    handleDeleteMany,
     handleOpen,
     openProperty,
     requestDelete,
@@ -344,6 +345,7 @@ const BacklogPage = observer(function BacklogPage() {
             labels={labels}
             onArchive={handleArchive}
             onArchiveMany={handleArchiveMany}
+            onDeleteMany={handleDeleteMany}
             onBulkUpdate={handleBulkUpdate}
             onClearFilters={() => setFilterSet(createEmptyFilterSet())}
             onDelete={requestDelete}
