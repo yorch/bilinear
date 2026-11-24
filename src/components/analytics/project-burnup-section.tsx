@@ -11,6 +11,7 @@ import {
   toPath,
   xAxisLabels,
   xAxisStep,
+  xLabelAnchor,
 } from '@/components/cycles/chart-geometry';
 import { useChartWidth } from '@/components/cycles/use-chart-width';
 import { InlineRetry } from '@/components/shared/inline-retry';
@@ -273,7 +274,7 @@ function BurnupChart({ data }: { data: ProjectBurnupData }) {
               className="fill-muted-foreground"
               fontSize={11}
               key={i}
-              textAnchor="middle"
+              textAnchor={xLabelAnchor(i, axis.length)}
               x={xScale(i)}
               y={CHART_HEIGHT - PADDING_BOTTOM + 14}
             >

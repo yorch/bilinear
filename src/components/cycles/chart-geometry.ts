@@ -72,6 +72,13 @@ export function xAxisStep(pointCount: number, width: number = CHART_WIDTH): numb
   return Math.max(1, Math.ceil(pointCount / slots));
 }
 
+/** Text anchor for the x label at point `i` of `count`: the last one is end-anchored. */
+export function xLabelAnchor(i: number, count: number): 'end' | 'middle' {
+  // The last tick sits PADDING_RIGHT (12px) from the edge, so a centred label
+  // would hang half its width outside the SVG and be clipped.
+  return count > 1 && i === count - 1 ? 'end' : 'middle';
+}
+
 /**
  * Every `step`-th date plus the last. A stepped label that sits fewer than
  * `step` points from the last one is dropped, because the two would overprint

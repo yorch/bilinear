@@ -15,6 +15,7 @@ import {
   toPath,
   xAxisLabels,
   xAxisStep,
+  xLabelAnchor,
 } from './chart-geometry';
 
 /**
@@ -151,5 +152,13 @@ describe('burndown ideal line', () => {
     // No end date, or an end before the data: nothing to add.
     expect(extendAxis([{ date: '2026-11-24' }], null)).toHaveLength(1);
     expect(extendAxis([{ date: '2026-11-24' }], '2026-11-20T00:00:00Z')).toHaveLength(1);
+  });
+});
+
+describe('xLabelAnchor', () => {
+  it('end-anchors only the last label so it is not clipped at the right edge', () => {
+    expect(xLabelAnchor(9, 10)).toBe('end');
+    expect(xLabelAnchor(3, 10)).toBe('middle');
+    expect(xLabelAnchor(0, 1)).toBe('middle');
   });
 });
