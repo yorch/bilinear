@@ -132,8 +132,7 @@ export function IssueListView({
       }
     }
   }
-  const sharedTeamId =
-    teamId ?? (checkedTeamIds.size === 1 ? [...checkedTeamIds][0] : undefined);
+  const sharedTeamId = teamId ?? (checkedTeamIds.size === 1 ? [...checkedTeamIds][0] : undefined);
   const mixedTeams = !teamId && checkedTeamIds.size > 1;
 
   const selectAll = () => setCheckedIds(new Set(issues.map(i => i.id)));
@@ -269,6 +268,9 @@ export function IssueListView({
     return () => setVisualOrder(null);
   }, [drawnKey]);
 
+  const cursorIssue = selectedId ? issues.find(i => i.id === selectedId) : undefined;
+  const cursorPosition = selectedId ? drawnIds.indexOf(selectedId) + 1 : 0;
+
   if (issues.length === 0) {
     if (hasActiveFilters) {
       return (
@@ -314,6 +316,18 @@ export function IssueListView({
       className={cn('flex flex-col', checkedIds.size > 0 && 'pb-24')}
       data-testid="issue-list-view"
     >
+      {/* j/k moves a visual cursor only; announce it, or a screen-reader user
+          hears nothing when the highlighted row changes. */}
+      <span aria-atomic="true" aria-live="polite" className="sr-only" role="status">
+        {cursorIssue
+          ? t('issues.cursorAnnouncement', {
+              identifier: cursorIssue.identifier,
+              position: cursorPosition,
+              title: cursorIssue.title,
+              total: drawnIds.length,
+            })
+          : ''}
+      </span>
       {groups.map(({ color, key, leading, name, issues: groupIssues }) => (
         <GroupSection
           collapsed={collapsedGroups.has(key)}

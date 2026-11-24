@@ -1,10 +1,14 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { IssueListView } from './issue-list-view';
 import type { IssueRowData } from './issue-row';
 
 vi.mock('@/hooks/use-translations', () => ({
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string, params?: Record<string, unknown>) =>
+    params ? `${key}:${JSON.stringify(params)}` : key,
+}));
+const { barProps } = vi.hoisted(() => ({
+  barProps: { current: {} as Record<string, unknown> },
 }));
 vi.mock('./issue-row', () => ({
   IssueRow: ({
@@ -35,7 +39,12 @@ vi.mock('./issue-row', () => ({
   ),
 }));
 vi.mock('./issue-context-menu', () => ({ IssueContextMenu: () => null }));
-vi.mock('./bulk-action-bar', () => ({ BulkActionBar: () => <div data-testid="bulk" /> }));
+vi.mock('./bulk-action-bar', () => ({
+  BulkActionBar: (props: Record<string, unknown>) => {
+    barProps.current = props;
+    return <div data-testid="bulk" />;
+  },
+}));
 vi.mock('@/components/properties/status-select', () => ({ StatusDot: () => <i /> }));
 vi.mock('@/components/properties/priority-icon', () => ({
   PriorityIcon: () => <i />,
@@ -108,6 +117,58 @@ describe('IssueListView', () => {
     expect(rowB()?.dataset.checked).toBe('true');
     fireEvent.keyDown(window, { key: 'x' });
     expect(rowB()?.dataset.checked).toBe('false');
+  });
+
+  it('wires Delete into the bulk bar only when the page can bulk-delete, and clears after', () => {
+    const onDeleteMany = vi.fn();
+    const { unmount } = renderList({ onDeleteMany });
+    fireEvent.keyDown(window, { key: 'x' });
+    act(() => (barProps.current.onDelete as () => void)());
+    expect(onDeleteMany).toHaveBeenCalledWith(['B']);
+    expect(screen.queryByTestId('bulk')).toBeNull();
+    unmount();
+
+    renderList();
+    fireEvent.keyDown(window, { key: 'x' });
+    expect(barProps.current.onDelete).toBeUndefined();
+  });
+
+  it('hands the bar the page team, and on a multi-team page only a shared team', () => {
+    const { unmount } = renderList({ teamId: 'T1' });
+    fireEvent.keyDown(window, { key: 'x' });
+    expect(barProps.current.teamId).toBe('T1');
+    expect(barProps.current.mixedTeams).toBe(false);
+    unmount();
+
+    const issues = [
+      issue('A', { teamId: 'T1' }),
+      issue('B', { teamId: 'T1' }),
+      issue('C', { teamId: 'T2' }),
+    ];
+    const view = renderList({ issues });
+    fireEvent.keyDown(window, { key: 'x' }); // B only
+    expect(barProps.current.teamId).toBe('T1');
+    expect(barProps.current.mixedTeams).toBe(false);
+    fireEvent.click(screen.getByLabelText('check-C'));
+    expect(barProps.current.teamId).toBeUndefined();
+    expect(barProps.current.mixedTeams).toBe(true);
+    view.unmount();
+  });
+
+  it('pads the list while a selection exists so the fixed bar cannot cover the last rows', () => {
+    renderList();
+    expect(screen.getByTestId('issue-list-view').className).not.toContain('pb-24');
+    fireEvent.keyDown(window, { key: 'x' });
+    expect(screen.getByTestId('issue-list-view').className).toContain('pb-24');
+  });
+
+  it('announces the cursor row politely, with its place in the drawn order', () => {
+    renderList({ groupBy: 'none' });
+    const live = screen.getByRole('status');
+    expect(live.getAttribute('aria-live')).toBe('polite');
+    expect(live.textContent).toBe(
+      'issues.cursorAnnouncement:{"identifier":"B","position":2,"title":"B","total":3}',
+    );
   });
 
   it('Escape clears the checked set and claims the event', () => {

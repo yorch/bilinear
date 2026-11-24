@@ -98,6 +98,22 @@ describe('BulkActionBar', () => {
     expect(onUpdate).toHaveBeenLastCalledWith({ teamId: 't-ops' });
   });
 
+  it('on a multi-team selection shows Cycle disabled with an explanation instead of a team-less list', () => {
+    const { cycleStore } = storeHolder.current;
+    runInAction(() => {
+      cycleStore.applySyncAction('I', 'c1', { id: 'c1', number: 1, teamId: 't-eng' } as DBCycle);
+    });
+    const { rerender } = render(<BulkActionBar {...base} mixedTeams />);
+    const cycle = screen.getByRole('button', { name: 'issues.cycle' }) as HTMLButtonElement;
+    expect(cycle.disabled).toBe(true);
+    expect(cycle.title).toBe('issues.bulkCycleNeedsSameTeam');
+
+    rerender(<BulkActionBar {...base} mixedTeams={false} teamId="t-eng" />);
+    expect(
+      (screen.getByRole('button', { name: 'issues.cycle' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
   it('asks for confirmation before deleting', () => {
     const onDelete = vi.fn();
     render(<BulkActionBar {...base} onDelete={onDelete} />);

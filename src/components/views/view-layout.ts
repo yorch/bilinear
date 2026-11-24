@@ -15,7 +15,12 @@ export function coerceBoardGroupBy(groupBy: string | null | undefined): BoardGro
 
 /** A saved view's stored `groupBy` narrowed to the list groupings. */
 export function coerceListGroupBy(groupBy: string | null | undefined): ListGroupBy {
-  return groupBy === 'assignee' || groupBy === 'priority' || groupBy === 'none'
+  return groupBy === 'assignee' ||
+    groupBy === 'priority' ||
+    groupBy === 'project' ||
+    groupBy === 'cycle' ||
+    groupBy === 'label' ||
+    groupBy === 'none'
     ? groupBy
     : 'status';
 }

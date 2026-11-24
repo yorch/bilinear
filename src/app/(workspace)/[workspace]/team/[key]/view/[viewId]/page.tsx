@@ -9,7 +9,7 @@ import { BoardView } from '@/components/issues/board-view';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView, type ListGroupBy } from '@/components/issues/issue-list-view';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
-import { ListDisplayControls } from '@/components/issues/list-display-controls';
+import { ALL_GROUP_OPTIONS, ListDisplayControls } from '@/components/issues/list-display-controls';
 import { ViewToggle } from '@/components/issues/view-toggle';
 import { FavoriteToggle } from '@/components/layouts/favorite-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
@@ -28,6 +28,7 @@ import {
   sortToOrderBy,
 } from '@/components/views/view-layout';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { buildFilterContext, useFilterLookups } from '@/hooks/use-filter-lookups';
 import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
@@ -114,6 +115,7 @@ const CustomViewPage = observer(function CustomViewPage() {
   useDocumentTitle(view?.name);
 
   const states = teamId ? workflowStateStore.findByTeamId(teamId) : [];
+  const lookups = useFilterLookups(teamId);
   const customFieldDefs = teamId ? customFieldStore.findDefinitionsByTeamId(teamId) : [];
 
   // The stored filters seed an editable filter bar; "Update filters" writes
@@ -152,6 +154,7 @@ const CustomViewPage = observer(function CustomViewPage() {
           filterSet,
           (issueId, definitionId) =>
             customFieldStore.findValue(issueId, definitionId)?.value ?? null,
+          buildFilterContext(states),
         ),
         orderOverride === null ? storedSort : orderByToSort(orderOverride),
         new Map(states.map(s => [s.id, s.position])),
@@ -326,6 +329,7 @@ const CustomViewPage = observer(function CustomViewPage() {
             {viewMode === 'list' && (
               <ListDisplayControls
                 groupBy={listGroupBy}
+                groupOptions={ALL_GROUP_OPTIONS}
                 onGroupBy={setListGroupBy}
                 onOrderBy={setOrderOverride}
                 orderBy={orderBy}
@@ -389,9 +393,12 @@ const CustomViewPage = observer(function CustomViewPage() {
       <Toolbar className="justify-between">
         <FilterBuilder
           customFields={customFieldDefs}
+          cycles={lookups.cycles}
+          estimationType={team.issueEstimationType}
           filterSet={filterSet}
           labels={labels}
           onChange={setFilterSet}
+          projects={lookups.projects}
           states={states}
           users={users}
         />
@@ -413,6 +420,7 @@ const CustomViewPage = observer(function CustomViewPage() {
         {viewMode === 'list' ? (
           <IssueListView
             customFields={customFieldDefs}
+            cycles={lookups.cycles}
             estimationType={team.issueEstimationType}
             getCustomFieldValue={(issueId, definitionId) =>
               customFieldStore.findValue(issueId, definitionId)?.value ?? null
@@ -423,15 +431,16 @@ const CustomViewPage = observer(function CustomViewPage() {
             labels={labels}
             onArchive={handleArchive}
             onArchiveMany={handleArchiveMany}
-            onDeleteMany={handleDeleteMany}
             onBulkUpdate={handleBulkUpdate}
             onClearFilters={() => setFilterSet(createEmptyFilterSet())}
             onDelete={requestDelete}
+            onDeleteMany={handleDeleteMany}
             onOpen={handleOpen}
             onPropertyClosed={() => setOpenProperty(null)}
             onSelect={setSelectedId}
             onUpdate={handleUpdate}
             openProperty={openProperty}
+            projects={lookups.projects}
             selectedId={selectedId}
             states={states}
             teamId={teamId ?? undefined}

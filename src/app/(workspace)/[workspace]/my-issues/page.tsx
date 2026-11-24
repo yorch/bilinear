@@ -13,6 +13,7 @@ import { ALL_GROUP_OPTIONS, ListDisplayControls } from '@/components/issues/list
 import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { InlineRetry } from '@/components/shared/inline-retry';
 import { SectionHeader } from '@/components/shared/section-header';
 import { SyncErrorState } from '@/components/shared/sync-error-state';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,7 @@ import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
 import { useListDisplayPrefs } from '@/hooks/use-list-display-prefs';
+import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import {
   applyFilters,
@@ -33,6 +35,7 @@ import {
   createEmptyFilterSet,
   type FilterSet,
 } from '@/lib/filter-engine';
+import { gqlQuery } from '@/lib/graphql';
 import {
   type CompletedIssuesMode,
   filterCompletedIssues,
@@ -45,7 +48,13 @@ import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
 /** Which relationship to the viewer the list is answering for. */
-type MyIssuesScope = 'assigned' | 'created';
+type MyIssuesScope = 'assigned' | 'created' | 'subscribed';
+
+const SUBSCRIBED_IDS_QUERY = `
+  query NotificationSubscribedIssueIds {
+    notificationSubscribedIssueIds
+  }
+`;
 
 // ---------------------------------------------------------------------------
 // Page component
@@ -71,18 +80,37 @@ const MyIssuesPage = observer(function MyIssuesPage() {
 
   const currentUser = userStore.currentUser;
 
-  // "My issues" is two different questions — what am I on the hook for, and
-  // what did I file — and the page only ever answered the first. Both are
-  // derivable from the local pool, so both are tabs. Linear also offers
-  // Subscribed; that needs a per-issue server round trip, and a tab that
-  // silently shows the wrong set is worse than one that isn't there.
+  // "My issues" is three different questions — what am I on the hook for, what
+  // did I file, and what am I following. The first two are derivable from the
+  // local pool. Subscriptions are user-local and never synced, so the third asks
+  // the server for the id set (re-fetched each time the tab is opened, so a
+  // subscribe made elsewhere shows up) and resolves the rows from the pool.
+  const {
+    data: subscribedIds,
+    error: subscribedError,
+    loading: subscribedLoading,
+    refetch: refetchSubscribed,
+  } = useRetryableFetch<string[] | null>(
+    async () =>
+      scope === 'subscribed'
+        ? await gqlQuery<string[]>(SUBSCRIBED_IDS_QUERY, {}, 'notificationSubscribedIssueIds')
+        : null,
+    [scope],
+    null,
+  );
+  const subscribedSet = useMemo(() => new Set(subscribedIds ?? []), [subscribedIds]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the MobX reactive trigger
   const allMyIssues: IssueDetail[] = useMemo(() => {
     if (!currentUser) {
       return [];
     }
-    const mine = (i: { assigneeId?: string | null; creatorId?: string | null }) =>
-      scope === 'created' ? i.creatorId === currentUser.id : i.assigneeId === currentUser.id;
+    const mine = (i: { assigneeId?: string | null; creatorId?: string | null; id: string }) => {
+      if (scope === 'subscribed') {
+        return subscribedSet.has(i.id);
+      }
+      return scope === 'created' ? i.creatorId === currentUser.id : i.assigneeId === currentUser.id;
+    };
     return filterCompletedIssues(
       Array.from(issueStore.pool.values()).filter(i => mine(i) && !i.trashed && !i.archivedAt),
       completed,
@@ -98,6 +126,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
     issueStore,
     labelStore,
     scope,
+    subscribedSet,
     completed,
     workflowStateStore,
   ]);
@@ -258,6 +287,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
           options={[
             { label: t('issues.scope.assigned'), value: 'assigned' },
             { label: t('issues.scope.created'), value: 'created' },
+            { label: t('issues.scope.subscribed'), value: 'subscribed' },
           ]}
           value={scope}
         />
@@ -274,7 +304,16 @@ const MyIssuesPage = observer(function MyIssuesPage() {
 
       {/* Issue list / board / timeline */}
       <div className="flex-1 overflow-y-auto">
-        {viewMode === 'timeline' ? (
+        {scope === 'subscribed' && subscribedError ? (
+          // A failed lookup must not read as "you follow nothing".
+          <InlineRetry
+            className="px-4"
+            message={t('issues.subscribedLoadFailed')}
+            onRetry={() => refetchSubscribed()}
+          />
+        ) : scope === 'subscribed' && subscribedLoading ? (
+          <IssueListSkeleton />
+        ) : viewMode === 'timeline' ? (
           <GanttView
             emptyMessage={t('issues.ganttEmptyMessage')}
             items={issues
@@ -311,9 +350,9 @@ const MyIssuesPage = observer(function MyIssuesPage() {
                   labels={labels}
                   onArchive={handleArchive}
                   onArchiveMany={handleArchiveMany}
-                  onDeleteMany={handleDeleteMany}
                   onBulkUpdate={handleBulkUpdate}
                   onDelete={requestDelete}
+                  onDeleteMany={handleDeleteMany}
                   onOpen={handleOpen}
                   onPropertyClosed={() => setOpenProperty(null)}
                   onSelect={setSelectedId}
@@ -322,6 +361,7 @@ const MyIssuesPage = observer(function MyIssuesPage() {
                   projects={lookups.projects}
                   selectedId={selectedId}
                   states={section.states}
+                  teamId={section.teamId}
                   users={users}
                 />
               ) : (

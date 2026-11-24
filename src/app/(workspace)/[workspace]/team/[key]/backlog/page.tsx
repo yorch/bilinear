@@ -11,11 +11,7 @@ import { CsvExportButton } from '@/components/issues/csv-export-button';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView, type ListGroupBy } from '@/components/issues/issue-list-view';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
-import {
-  ALL_GROUP_OPTIONS,
-  DEFAULT_GROUP_OPTIONS,
-  ListDisplayControls,
-} from '@/components/issues/list-display-controls';
+import { ALL_GROUP_OPTIONS, ListDisplayControls } from '@/components/issues/list-display-controls';
 import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -345,10 +341,10 @@ const BacklogPage = observer(function BacklogPage() {
             labels={labels}
             onArchive={handleArchive}
             onArchiveMany={handleArchiveMany}
-            onDeleteMany={handleDeleteMany}
             onBulkUpdate={handleBulkUpdate}
             onClearFilters={() => setFilterSet(createEmptyFilterSet())}
             onDelete={requestDelete}
+            onDeleteMany={handleDeleteMany}
             onOpen={handleOpen}
             onPropertyClosed={() => setOpenProperty(null)}
             onSelect={setSelectedId}
@@ -417,11 +413,7 @@ const BacklogPage = observer(function BacklogPage() {
           ],
         }}
         initialGroupBy={
-          viewMode === 'board'
-            ? boardGroupBy
-            : viewMode === 'list' && DEFAULT_GROUP_OPTIONS.includes(listGroupBy)
-              ? listGroupBy
-              : undefined
+          viewMode === 'board' ? boardGroupBy : viewMode === 'list' ? listGroupBy : undefined
         }
         initialLayout={viewMode}
         initialSort={orderByToSort(orderBy)}

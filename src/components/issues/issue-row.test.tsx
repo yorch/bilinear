@@ -90,6 +90,15 @@ describe('IssueRow bulk-selection modifier', () => {
    * `as MouseEvent` cast is what stopped the type-checker from saying so. The
    * modifier now comes from the pointer/key event that precedes activation.
    */
+  it('is a labelled group naming its issue, with aria-current on the cursor row only', () => {
+    const { row } = renderRow({ selected: true });
+    expect(row.getAttribute('role')).toBe('group');
+    expect(row.getAttribute('aria-label')).toBe(`${issue.identifier} ${issue.title}`);
+    expect(row.getAttribute('aria-current')).toBe('true');
+    const { row: other } = renderRow({ selected: false });
+    expect(other.hasAttribute('aria-current')).toBe(false);
+  });
+
   it('reports Shift held during a pointer interaction', () => {
     const onCheck = vi.fn();
     const { row } = renderRow({ checked: false, onCheck });

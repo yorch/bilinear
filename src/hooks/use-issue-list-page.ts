@@ -1,5 +1,6 @@
 'use client';
 
+import { runInAction } from 'mobx';
 import { useCallback, useMemo, useState } from 'react';
 import type { BoardGroupBy, BoardSwimlaneBy } from '@/components/issues/board-view';
 import type { OpenProperty } from '@/components/issues/issue-row';
@@ -15,7 +16,6 @@ import { TransactionQueue } from '@/lib/transaction-queue';
 import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail } from '@/types/issues';
-import { runInAction } from 'mobx';
 
 interface UseIssueListPageOptions {
   /** Route to replace on Escape / detail-panel close (no query params). */

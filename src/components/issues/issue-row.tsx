@@ -219,12 +219,15 @@ export function IssueRow({
     .join(' ');
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: presentational row container; interactive children (checkbox, button, selects) provide all a11y. onContextMenu is the only handler.
+    // biome-ignore lint/a11y/useSemanticElements: a CSS-grid row of controls cannot be a <fieldset>; `group` + label is the equivalent.
     <div
       // The j/k cursor row: `aria-current` is the valid way to mark "the current
       // item in a set" on a plain element (`aria-selected` needs a row/option
       // role, which this container of interactive cells cannot take).
       aria-current={selected ? 'true' : undefined}
+      // Names the cluster of controls so a screen reader announces which issue
+      // it has entered, instead of a bare run of unlabelled buttons.
+      aria-label={`${issue.identifier} ${issue.title}`}
       className={cn(
         'group grid h-9 select-none items-center gap-2 border-b border-border px-4 py-0 transition-colors hover:bg-accent max-lg:gap-1 max-lg:px-3',
         'max-lg:[grid-template-columns:var(--row-cols-mobile)]!',
@@ -247,6 +250,7 @@ export function IssueRow({
       data-selected={selected ? 'true' : undefined}
       data-testid="issue-row"
       onContextMenu={onContextMenu}
+      role="group"
       style={{
         gridTemplateColumns: desktopColumns,
         ['--row-cols-mobile' as string]: mobileColumns,
