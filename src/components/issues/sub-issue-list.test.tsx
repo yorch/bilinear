@@ -8,6 +8,8 @@ vi.mock('@/hooks/use-translations', () => ({
 
 vi.mock('@/lib/transaction-queue', () => ({ TransactionQueue: class {} }));
 
+vi.mock('@/hooks/use-issue-create', () => ({ useIssueCreate: () => async () => undefined }));
+
 const baseIssue = {
   createdAt: '',
   labelIds: [],
@@ -60,7 +62,12 @@ vi.mock('@/providers/store-provider', () => ({
       findById: (id: string) => issues.find(i => i.id === id) ?? null,
       pool: new Map(issues.map(i => [i.id, i])),
     },
-    workflowStateStore: { findById: (id: string) => states[id], pool: new Map() },
+    teamStore: { findById: () => null },
+    workflowStateStore: {
+      findById: (id: string) => states[id],
+      findByTeamId: () => [],
+      pool: new Map(),
+    },
   }),
 }));
 

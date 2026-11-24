@@ -19,7 +19,6 @@ import { Badge } from '@/components/ui/badge';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { getCycleDisplayName } from '@/lib/cycle-utils';
 import { getBranchName } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
@@ -74,7 +73,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
 }: IssueDetailContentProps) {
   const t = useTranslations();
   const { formatDate } = useFormatters();
-  const { userStore, teamStore, issueStore, cycleStore } = useStore();
+  const { userStore, teamStore, issueStore } = useStore();
   const currentUserId = userStore.currentUser?.id;
   const currentUserName = userStore.currentUser?.displayName ?? t('issueDetail.defaultUserName');
   const mentionUsers = useMemo(() => users.map(u => ({ id: u.id, label: u.displayName })), [users]);
@@ -141,7 +140,6 @@ export const IssueDetailContent = observer(function IssueDetailContent({
   }, [issue.id, issue.title, issue.description]);
 
   const assignee = users.find(u => u.id === issue.assigneeId);
-  const currentCycle = issue.cycleId ? cycleStore.findById(issue.cycleId) : null;
   const isPage = layout === 'page';
   // `IssueDetail` is the narrow list-row shape; the fields only the detail view
   // shows (milestone, branch) come straight off the store row.
@@ -302,11 +300,6 @@ export const IssueDetailContent = observer(function IssueDetailContent({
           teamId={issue.teamId}
           value={issue.cycleId ?? null}
         />
-        {currentCycle && (
-          <span className="truncate text-xs text-muted-foreground">
-            {getCycleDisplayName(currentCycle)}
-          </span>
-        )}
       </div>
 
       <span className="text-muted-foreground">{t('issueDetail.properties.startDate')}</span>
@@ -320,6 +313,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
       <div className="flex min-w-0 items-center gap-1.5">
         <DueDatePicker
           onChange={dueDate => handleUpdate(issue.id, { dueDate })}
+          stateType={states.find(st => st.id === issue.stateId)?.type}
           value={issue.dueDate}
         />
       </div>

@@ -15,7 +15,11 @@ export class TeamStore {
   }
 
   get all(): DBTeam[] {
-    return Array.from(this.pool.values()).filter(t => !t.archivedAt);
+    // Pool insertion order follows whichever bootstrap / delta landed first, so
+    // sort explicitly: the sidebar's team order must not shuffle between loads.
+    return Array.from(this.pool.values())
+      .filter(t => !t.archivedAt)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   }
 
   findById(id: string): DBTeam | null {

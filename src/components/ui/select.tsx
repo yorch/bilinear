@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { usePopoverPanel } from '@/hooks/use-popover-panel';
@@ -96,7 +96,7 @@ export function SimpleSelect({
       {open && (
         <div
           className={cn(
-            'absolute left-0 z-50 min-w-full rounded-md border border-border bg-popover py-1 shadow-e2',
+            'absolute left-0 z-50 w-max min-w-full rounded-md border border-border bg-popover py-1 shadow-e2',
             placement === 'bottom' ? 'top-full mt-1' : 'bottom-full mb-1',
           )}
         >
@@ -112,7 +112,7 @@ export function SimpleSelect({
               <button
                 aria-selected={opt.value === value}
                 className={cn(
-                  'flex w-full items-center px-3 py-1.5 text-sm text-foreground hover:bg-accent',
+                  'flex w-full items-center justify-between gap-3 whitespace-nowrap px-3 py-1.5 text-left text-sm text-foreground hover:bg-accent',
                   opt.value === value && 'font-medium',
                 )}
                 key={opt.value}
@@ -123,7 +123,10 @@ export function SimpleSelect({
                 role="option"
                 type="button"
               >
-                {opt.label}
+                <span>{opt.label}</span>
+                {opt.value === value && (
+                  <Check aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                )}
               </button>
             ))}
           </div>

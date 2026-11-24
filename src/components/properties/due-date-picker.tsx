@@ -16,6 +16,8 @@ interface DueDatePickerProps {
   label?: string;
   onChange: (date: string | null) => void;
   onClose?: () => void;
+  /** Workflow state type of the owning issue; done/canceled work is never shown as overdue. */
+  stateType?: string | null;
   /**
    * `neutral` for dates that aren't deadlines (a project's start date): a past
    * start is not overdue, and red must keep meaning failure.
@@ -38,11 +40,13 @@ export function DueDatePicker({
   forceOpen,
   label,
   onClose,
+  stateType,
   tone = 'urgency',
 }: DueDatePickerProps) {
   const t = useTranslations();
   const { formatDueDate } = useFormatters();
-  const colorClass = tone === 'neutral' ? 'text-foreground-secondary' : getDueDateColor(value);
+  const colorClass =
+    tone === 'neutral' ? 'text-foreground-secondary' : getDueDateColor(value, stateType);
 
   return (
     <SelectPopover

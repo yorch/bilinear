@@ -93,6 +93,16 @@ describe('getDueDateColor', () => {
   it('returns neutral when due more than three days out', () => {
     expect(getDueDateColor('2026-06-25T12:00:00')).toBe('text-muted-foreground');
   });
+
+  it('stays muted for completed and canceled issues even when past due', () => {
+    expect(getDueDateColor('2026-06-10T12:00:00', 'completed')).toBe('text-muted-foreground');
+    expect(getDueDateColor('2026-06-10T12:00:00', 'canceled')).toBe('text-muted-foreground');
+    expect(getDueDateColor('2026-06-15T12:00:00', 'completed')).toBe('text-muted-foreground');
+  });
+
+  it('still flags overdue for open state types', () => {
+    expect(getDueDateColor('2026-06-10T12:00:00', 'started')).toBe('text-danger-subtle-foreground');
+  });
 });
 
 describe('formatDueDate', () => {

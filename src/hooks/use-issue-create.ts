@@ -55,7 +55,7 @@ export function useIssueCreate(
         labelIds: input.labelIds,
         number: 0,
         organizationId: team.organizationId,
-        parentId: null,
+        parentId: input.parentId ?? null,
         priority: input.priority,
         prioritySortOrder: 0,
         projectId: input.projectId ?? null,

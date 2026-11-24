@@ -38,9 +38,15 @@ export function getPriorityConfig(priority: number) {
   return PRIORITY_CONFIG[priority as Priority] ?? PRIORITY_CONFIG[0];
 }
 
-/** Returns a CSS color class for the due date indicator. */
-export function getDueDateColor(dueDate: string | null | undefined): string {
-  if (!dueDate) {
+/**
+ * Returns a CSS color class for the due date indicator. A finished issue
+ * (`completed` / `canceled` state type) is never overdue, so it stays muted.
+ */
+export function getDueDateColor(
+  dueDate: string | null | undefined,
+  stateType?: string | null,
+): string {
+  if (!dueDate || stateType === 'completed' || stateType === 'canceled') {
     return 'text-muted-foreground';
   }
 

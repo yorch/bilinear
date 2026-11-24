@@ -14,6 +14,7 @@ import {
 import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
 import type { IssueDetail, IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
+import { IssueActionsMenu } from './issue-actions-menu';
 import { IssueDetailContent } from './issue-detail-content';
 
 interface IssueDetailPanelProps {
@@ -195,6 +196,14 @@ export const IssueDetailPanel = observer(function IssueDetailPanel({
           </div>
           <div className="flex items-center gap-1">
             <SubscribeButton onToggle={toggle} subscribed={subscribed} />
+            <IssueActionsMenu
+              issue={issue}
+              labels={labels}
+              onRemoved={onClose}
+              onUpdate={onUpdate}
+              states={states}
+              users={users}
+            />
             <button
               aria-label={t('common.close')}
               className={cn('rounded p-1 text-muted-foreground hover:bg-accent', TOUCH_TARGET)}

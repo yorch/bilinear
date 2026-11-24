@@ -5,6 +5,7 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useState } from 'react';
+import { IssueActionsMenu } from '@/components/issues/issue-actions-menu';
 import { IssueDetailContent } from '@/components/issues/issue-detail-content';
 import { SubscribeButton, useIssueSubscription } from '@/components/issues/issue-detail-panel';
 import { WorkspaceNotFound } from '@/components/layouts/workspace-not-found';
@@ -226,7 +227,17 @@ const IssueDetailPage = observer(function IssueDetailPage() {
             {issue.identifier}
           </span>
         </div>
-        <SubscribeButton onToggle={toggleSubscription} subscribed={subscribed} />
+        <div className="flex items-center gap-1">
+          <SubscribeButton onToggle={toggleSubscription} subscribed={subscribed} />
+          <IssueActionsMenu
+            issue={issue}
+            labels={labels}
+            onRemoved={handleClose}
+            onUpdate={handleUpdate}
+            states={states}
+            users={users}
+          />
+        </div>
       </header>
       <div className="min-w-0 flex-1 overflow-y-auto">
         <IssueDetailContent

@@ -4,7 +4,7 @@ import { Bookmark, Plus, Settings } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BoardControls } from '@/components/issues/board-controls';
 import { BoardView } from '@/components/issues/board-view';
 import { ColumnPicker } from '@/components/issues/column-picker';
@@ -26,6 +26,7 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
+import { useListDisplayPrefs } from '@/hooks/use-list-display-prefs';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import { useTranslations } from '@/hooks/use-translations';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
@@ -62,7 +63,7 @@ const CUSTOM_VIEW_CREATE_MUTATION = `
 // Page component (observer so it re-renders on MobX store changes)
 // ---------------------------------------------------------------------------
 
-const TeamIssuesPage = observer(function TeamIssuesPage() {
+const TeamIssues = observer(function TeamIssues() {
   const { workspace, key: teamKey } = useParams<{
     workspace: string;
     key: string;
@@ -84,8 +85,9 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   // UI state (local to this page)
   const [saveViewOpen, setSaveViewOpen] = useState(false);
   const router = useRouter();
-  const [listGroupBy, setListGroupBy] = useState<ListGroupBy>('status');
-  const [orderBy, setOrderBy] = useState<ListOrderBy>('manual');
+  const { initial: displayPrefs, save: saveDisplayPrefs } = useListDisplayPrefs(teamKey);
+  const [listGroupBy, setListGroupBy] = useState<ListGroupBy>(displayPrefs.listGroupBy);
+  const [orderBy, setOrderBy] = useState<ListOrderBy>(displayPrefs.orderBy);
   // Filters. Kept per team in sessionStorage so a reload or a trip into an
   // issue and back doesn't silently drop them (storage can be unavailable, so
   // every access is guarded and the page works without it).
@@ -200,6 +202,9 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
         label: team?.name ?? teamKey,
         path: `/${workspace}/team/${teamKey}`,
       }),
+    initialBoardGroupBy: displayPrefs.boardGroupBy,
+    initialSwimlaneBy: displayPrefs.swimlaneBy,
+    initialViewMode: displayPrefs.viewMode,
     issues,
     onOpen: id => {
       const issue = issueStore.findById(id);
@@ -214,6 +219,10 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
       }
     },
   });
+
+  useEffect(() => {
+    saveDisplayPrefs({ boardGroupBy, listGroupBy, orderBy, swimlaneBy, viewMode });
+  }, [boardGroupBy, listGroupBy, orderBy, saveDisplayPrefs, swimlaneBy, viewMode]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
@@ -465,4 +474,9 @@ const TeamIssuesPage = observer(function TeamIssuesPage() {
   );
 });
 
-export default TeamIssuesPage;
+// Keyed on the team so display prefs (read once per mount) follow a team switch
+// instead of carrying team A's layout into team B.
+export default function TeamIssuesPage() {
+  const { key } = useParams<{ key: string }>();
+  return <TeamIssues key={key} />;
+}

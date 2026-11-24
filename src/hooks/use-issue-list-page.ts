@@ -1,29 +1,20 @@
 'use client';
 
-import { runInAction } from 'mobx';
 import { useCallback, useMemo, useState } from 'react';
 import type { BoardGroupBy, BoardSwimlaneBy } from '@/components/issues/board-view';
 import type { OpenProperty } from '@/components/issues/issue-row';
 import type { ViewMode } from '@/components/issues/view-toggle';
 import { stepVisualOrder } from '@/components/issues/visual-order';
 import { useHotkeys } from '@/hooks/use-hotkeys';
+import { useIssueRemoval } from '@/hooks/use-issue-removal';
 import { useTranslations } from '@/hooks/use-translations';
-import { ISSUE_ARCHIVE_MUTATION, ISSUE_UNARCHIVE_MUTATION } from '@/lib/graphql-queries';
+import { ISSUE_ARCHIVE_MUTATION } from '@/lib/graphql-queries';
 import { toIssueDetail } from '@/lib/issue-mappers';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
 import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail } from '@/types/issues';
-
-const ISSUE_DELETE_MUTATION = `
-  mutation IssueDelete($id: ID!) {
-    issueDelete(id: $id) {
-      success
-      lastSyncId
-    }
-  }
-`;
 
 interface UseIssueListPageOptions {
   /** Route to replace on Escape / detail-panel close (no query params). */
@@ -32,6 +23,8 @@ interface UseIssueListPageOptions {
   buildHref: (id: string) => string;
   /** Board grouping to start with (a saved view's stored `groupBy`). */
   initialBoardGroupBy?: BoardGroupBy;
+  /** Swimlane grouping to start with (a persisted display preference). */
+  initialSwimlaneBy?: BoardSwimlaneBy;
   /** View mode to start with (a saved view's stored `layout`). */
   initialViewMode?: ViewMode;
   /** Currently visible/filtered issues, used for j/k navigation bounds. */
@@ -89,6 +82,7 @@ export function useIssueListPage({
   basePath,
   buildHref,
   initialBoardGroupBy,
+  initialSwimlaneBy,
   initialViewMode,
   onOpen,
 }: UseIssueListPageOptions) {
@@ -102,10 +96,7 @@ export function useIssueListPage({
   const [openProperty, setOpenProperty] = useState<OpenProperty>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode ?? 'list');
   const [boardGroupBy, setBoardGroupBy] = useState<BoardGroupBy>(initialBoardGroupBy ?? 'status');
-  const [swimlaneBy, setSwimlaneBy] = useState<BoardSwimlaneBy>('none');
-  const [pendingDelete, setPendingDelete] = useState<{ id: string; identifier: string } | null>(
-    null,
-  );
+  const [swimlaneBy, setSwimlaneBy] = useState<BoardSwimlaneBy>(initialSwimlaneBy ?? 'none');
 
   const hasSelection = selectedId !== null;
 
@@ -125,46 +116,19 @@ export function useIssueListPage({
 
   // ── Archive / delete ───────────────────────────────────────────────────────
 
-  const handleUnarchive = useCallback(
-    (id: string) => {
-      issueStore.optimisticUpdate(id, { archivedAt: null });
-      txQueue.enqueue(
-        ISSUE_UNARCHIVE_MUTATION,
-        { id },
-        {
-          onError: err => {
-            toast.error(getErrorMessage(err, t('issues.restoreFailed')));
-            issueStore.optimisticUpdate(id, { archivedAt: new Date().toISOString() });
-          },
-        },
-      );
-    },
-    [issueStore, txQueue, t],
-  );
-
-  const handleArchive = useCallback(
-    (id: string) => {
-      issueStore.optimisticUpdate(id, { archivedAt: new Date().toISOString() });
-      const undoToastId = toast.undo(t('issues.archivedToast'), t('common.undo'), () =>
-        handleUnarchive(id),
-      );
-      txQueue.enqueue(
-        ISSUE_ARCHIVE_MUTATION,
-        { id },
-        {
-          onError: err => {
-            // The archive never happened server-side: retire the stale Undo
-            // affordance before surfacing the failure and rolling back.
-            toast.dismiss(undoToastId);
-            toast.error(getErrorMessage(err, t('issues.archiveFailed')));
-            issueStore.optimisticUpdate(id, { archivedAt: null });
-          },
-        },
-      );
-      setSelectedId(prev => (prev === id ? null : prev));
-    },
-    [issueStore, txQueue, t, handleUnarchive],
-  );
+  const handleRemoved = useCallback((id: string) => {
+    setSelectedId(prev => (prev === id ? null : prev));
+  }, []);
+  const handleDeleted = useCallback((id: string) => {
+    setSelectedId(prev => (prev === id ? null : prev));
+    setDetailIssueId(prev => (prev === id ? null : prev));
+  }, []);
+  const {
+    archive: handleArchive,
+    deleteDialogProps,
+    requestDelete,
+    unarchive: handleUnarchive,
+  } = useIssueRemoval({ onDeleted: handleDeleted, onRemoved: handleRemoved });
 
   /** Archive several issues with ONE undo toast instead of one per row. */
   const handleArchiveMany = useCallback(
@@ -202,57 +166,6 @@ export function useIssueListPage({
     },
     [issueStore, txQueue, t, handleUnarchive],
   );
-
-  const handleDelete = useCallback(
-    (id: string) => {
-      const snapshot = issueStore.findById(id);
-      runInAction(() => {
-        issueStore.pool.delete(id);
-      });
-      txQueue.enqueue(
-        ISSUE_DELETE_MUTATION,
-        { id },
-        {
-          onError: err => {
-            toast.error(getErrorMessage(err, t('issues.deleteFailed')));
-            // Restore the issue optimistically if the server rejects the delete
-            if (snapshot) {
-              issueStore.applySyncAction('I', id, snapshot);
-            }
-          },
-          onSuccess: () => {
-            toast.success(t('issues.deletedToast'));
-          },
-        },
-      );
-      setSelectedId(prev => (prev === id ? null : prev));
-      setDetailIssueId(prev => (prev === id ? null : prev));
-    },
-    [issueStore, txQueue, t],
-  );
-
-  // Delete is irreversible (no restore mutation), so it goes through a
-  // confirmation dialog instead of firing straight from the context menu.
-  const requestDelete = useCallback(
-    (id: string) => {
-      const issue = issueStore.findById(id);
-      setPendingDelete({ id, identifier: issue?.identifier ?? '' });
-    },
-    [issueStore],
-  );
-
-  const deleteDialogProps = {
-    message: t('issues.deleteConfirmBody', { identifier: pendingDelete?.identifier ?? '' }),
-    onCancel: () => setPendingDelete(null),
-    onConfirm: () => {
-      if (pendingDelete) {
-        handleDelete(pendingDelete.id);
-      }
-      setPendingDelete(null);
-    },
-    open: pendingDelete !== null,
-    title: t('issues.deleteConfirmTitle'),
-  };
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
 

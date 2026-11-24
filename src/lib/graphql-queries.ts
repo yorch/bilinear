@@ -302,16 +302,6 @@ export const ISSUE_UNSUBSCRIBE_MUTATION = `
   }
 `;
 
-export const CREATE_SUB_ISSUE_MUTATION = `
-  mutation CreateSubIssue($input: IssueCreateInput!) {
-    issueCreate(input: $input) {
-      success
-      lastSyncId
-      issue { id title identifier priority stateId teamId }
-    }
-  }
-`;
-
 export const PULL_REQUESTS_QUERY = `
   query IssuePullRequests($issueId: ID!) {
     issue(id: $issueId) {
