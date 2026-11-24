@@ -3,6 +3,7 @@
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import { InitiativeDetail } from '@/components/initiatives/initiative-detail';
+import { InitiativeHealthProvider } from '@/components/initiatives/initiative-health-badge';
 import { DetailPanelSkeleton } from '@/components/ui/skeleton';
 import { useStore } from '@/providers/store-provider';
 
@@ -13,7 +14,11 @@ const InitiativePage = observer(function InitiativePage() {
   if (syncStore.status === 'bootstrapping' || syncStore.status === 'idle') {
     return <DetailPanelSkeleton />;
   }
-  return <InitiativeDetail initiativeId={id} workspace={workspace} />;
+  return (
+    <InitiativeHealthProvider>
+      <InitiativeDetail initiativeId={id} workspace={workspace} />
+    </InitiativeHealthProvider>
+  );
 });
 
 export default InitiativePage;

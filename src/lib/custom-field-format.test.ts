@@ -12,7 +12,7 @@ const f = (format: NumberFieldFormat, v: number | null | undefined, locale = 'en
 describe('formatNumberValue', () => {
   it('formats plain with grouping and keeps decimals', () => {
     expect(f({ kind: 'plain' }, 1234567.891)).toBe('1,234,567.891');
-    expect(f({ kind: 'plain', decimals: 1 }, 2.25)).toBe('2.3');
+    expect(f({ decimals: 1, kind: 'plain' }, 2.25)).toBe('2.3');
   });
 
   it('formats currency, locale-aware, negative', () => {
@@ -30,7 +30,7 @@ describe('formatNumberValue', () => {
 
   it('formats percent as typed, not scaled', () => {
     expect(f({ kind: 'percent' }, 45)).toBe('45%');
-    expect(f({ kind: 'percent', decimals: 0 }, 12.6)).toBe('13%');
+    expect(f({ decimals: 0, kind: 'percent' }, 12.6)).toBe('13%');
     expect(f({ kind: 'percent' }, -3.5)).toBe('-3.5%');
   });
 
@@ -49,7 +49,7 @@ describe('formatNumberValue', () => {
   });
 
   it('renders null, undefined and NaN as empty and infinity as a symbol', () => {
-    expect(f({ kind: 'currency', currency: 'USD' }, null)).toBe('');
+    expect(f({ currency: 'USD', kind: 'currency' }, null)).toBe('');
     expect(f({ kind: 'plain' }, undefined)).toBe('');
     expect(f({ kind: 'plain' }, Number.NaN)).toBe('');
     expect(f({ kind: 'plain' }, Number.POSITIVE_INFINITY)).toBe('∞');

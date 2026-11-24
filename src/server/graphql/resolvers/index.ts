@@ -17,8 +17,8 @@ import { importResolvers } from './import';
 import { initiativeResolvers } from './initiative';
 import { issueResolvers } from './issue';
 import { issueActivityResolvers } from './issue-activity';
-import { issueReminderResolvers } from './issue-reminder';
 import { issueRelationResolvers } from './issue-relation';
+import { issueReminderResolvers } from './issue-reminder';
 import { issueTemplateResolvers } from './issue-template';
 import { labelResolvers } from './label';
 import { notificationResolvers } from './notification';
@@ -119,10 +119,6 @@ export const resolvers = {
     ...favoriteResolvers.Favorite,
   },
 
-  IssueReminder: {
-    ...issueReminderResolvers.IssueReminder,
-  },
-
   Initiative: {
     ...initiativeResolvers.Initiative,
   },
@@ -148,6 +144,10 @@ export const resolvers = {
 
   IssueRelation: {
     ...issueRelationResolvers.IssueRelation,
+  },
+
+  IssueReminder: {
+    ...issueReminderResolvers.IssueReminder,
   },
 
   IssueTemplate: {

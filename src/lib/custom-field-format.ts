@@ -140,3 +140,21 @@ export function parseNumberFormat(raw: unknown): NumberFieldFormat {
     kind,
   };
 }
+
+/**
+ * The number format stored on a definition. It lives in the definition's
+ * `options` JSON as `{ numberFormat: {...} }` (select fields keep an array
+ * there), so it syncs with the definition and is the same for every viewer.
+ * Anything else (null, an options array, junk) reads as plain.
+ */
+export function readNumberFormat(options: unknown): NumberFieldFormat {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    return DEFAULT_NUMBER_FORMAT;
+  }
+  return parseNumberFormat((options as Record<string, unknown>).numberFormat);
+}
+
+/** True when the format would render differently from the raw number. */
+export function isDefaultNumberFormat(format: NumberFieldFormat): boolean {
+  return format.kind === 'plain' && format.decimals === undefined;
+}

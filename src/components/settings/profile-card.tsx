@@ -5,6 +5,7 @@ import { observer } from 'mobx-react-lite';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { RowsSkeleton } from '@/components/ui/skeleton';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate } from '@/lib/graphql';
@@ -37,7 +38,11 @@ export const ProfileCard = observer(function ProfileCard() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   if (!user) {
-    return null;
+    return (
+      <div className="rounded-lg border border-border bg-card">
+        <RowsSkeleton className="px-5 py-4" count={3} />
+      </div>
+    );
   }
 
   const name = draft ?? user.name;
@@ -75,6 +80,7 @@ export const ProfileCard = observer(function ProfileCard() {
     try {
       const form = new FormData();
       form.append('file', file);
+      form.append('purpose', 'avatar');
       const res = await fetch('/api/upload', { body: form, method: 'POST' });
       const body = (await res.json().catch(() => ({}))) as { error?: string; url?: string };
       if (!res.ok || !body.url) {

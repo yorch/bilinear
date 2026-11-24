@@ -7,6 +7,7 @@ import { AutomationService } from '../server/services/automation.service';
 import { InitiativeService } from '../server/services/initiative.service';
 import { IssueService } from '../server/services/issue.service';
 import { IssueActivityService } from '../server/services/issue-activity.service';
+import { IssueReminderService } from '../server/services/issue-reminder.service';
 import { LabelService } from '../server/services/label.service';
 import { NotificationService } from '../server/services/notification.service';
 import { OrganizationService } from '../server/services/organization.service';
@@ -91,6 +92,7 @@ export interface MockGraphQLContext {
     initiative: InitiativeService;
     issue: IssueService;
     issueActivity: IssueActivityService;
+    issueReminder: IssueReminderService;
     label: LabelService;
     notification: NotificationService;
     organization: OrganizationService;
@@ -132,6 +134,7 @@ export function createMockContext(
       initiative: new InitiativeService(prisma as never),
       issue: new IssueService(prisma as never),
       issueActivity: new IssueActivityService(prisma as never),
+      issueReminder: new IssueReminderService(prisma as never),
       label: new LabelService(prisma as never),
       notification: new NotificationService(prisma as never),
       organization: new OrganizationService(prisma as never),

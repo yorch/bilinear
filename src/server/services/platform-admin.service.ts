@@ -1,6 +1,12 @@
 import { getSetting, validateSettingValue } from '@/lib/config';
 import { type Organization, Prisma, type PrismaClient, type User } from '../../generated/prisma';
 import { ConfigService, type SettingWriter } from '../config/config.service';
+import {
+  afterCreatedAtCursor,
+  decodeCreatedAtCursor,
+  encodeCreatedAtCursor,
+  InvalidCursorError,
+} from '../lib/created-at-cursor';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 
@@ -187,38 +193,9 @@ export interface CursorPage<T> {
   total: number;
 }
 
-/**
- * Keyset cursor over `(createdAt desc, id desc)`: `<iso>|<id>`. Unlike an
- * id-only Prisma cursor it still resolves when the anchor row has since been
- * removed, and ties on `createdAt` cannot skip or repeat a row.
- */
-export function encodeCreatedAtCursor(row: { createdAt: Date; id: string }): string {
-  return `${row.createdAt.toISOString()}|${row.id}`;
-}
+export { decodeCreatedAtCursor, encodeCreatedAtCursor, InvalidCursorError };
 
-export function decodeCreatedAtCursor(
-  cursor?: string | null,
-): { createdAt: Date; id: string } | null {
-  if (!cursor) {
-    return null;
-  }
-  const sep = cursor.indexOf('|');
-  const createdAt = new Date(cursor.slice(0, sep));
-  const id = cursor.slice(sep + 1);
-  if (sep < 1 || !id || Number.isNaN(createdAt.getTime())) {
-    return null;
-  }
-  return { createdAt, id };
-}
-
-function afterCursor(cursor?: string | null) {
-  const c = decodeCreatedAtCursor(cursor);
-  return c
-    ? {
-        OR: [{ createdAt: { lt: c.createdAt } }, { createdAt: c.createdAt, id: { lt: c.id } }],
-      }
-    : null;
-}
+const afterCursor = afterCreatedAtCursor;
 
 function daysAgo(days: number): Date {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000);

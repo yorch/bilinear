@@ -1,5 +1,69 @@
 import { Prisma, type PrismaClient } from '../../generated/prisma';
+import { applyFilters, coerceFilterSet } from '../../lib/filter-engine';
+import { type DerivedHealthResult, deriveInitiativeHealth } from '../../lib/initiative-health';
+import {
+  aggregateInsights,
+  INSIGHT_MEASURES,
+  INSIGHT_SLICES,
+  type InsightIssue,
+  type InsightMeasure,
+  type InsightResult,
+  type InsightSlice,
+} from '../../lib/insights-aggregate';
+import {
+  type BurnupForecast,
+  type BurnupPoint,
+  buildBurnupSeries,
+  forecastCompletion,
+  utcDay,
+} from '../../lib/project-burnup';
 import { toDateOnly } from '../lib/date-only';
+import { buildGuestVisibilityWhere } from '../lib/issue-visibility';
+
+/**
+ * Which issues the caller may count: only teams they belong to, and on guest
+ * teams only issues they created or are assigned to. Same rule as
+ * `searchIssues`. Every project/insights number is computed over this scope, so
+ * a private team's issues never leak into a count.
+ */
+export interface IssueVisibilityScope {
+  guestTeamIds: string[];
+  memberTeamIds: string[];
+  userId: string;
+}
+
+export function issueVisibilityWhere(scope: IssueVisibilityScope): Prisma.IssueWhereInput {
+  const ands: Prisma.IssueWhereInput[] = [{ teamId: { in: scope.memberTeamIds } }];
+  if (scope.guestTeamIds.length > 0) {
+    ands.push(
+      buildGuestVisibilityWhere({ guestTeamIds: scope.guestTeamIds, userId: scope.userId }),
+    );
+  }
+  return { AND: ands };
+}
+
+export interface ProjectBurnupResult {
+  forecast: BurnupForecast;
+  points: BurnupPoint[];
+  projectId: string;
+  targetDate: string | null;
+}
+
+export interface InitiativeHealthRollup extends DerivedHealthResult {
+  initiativeId: string;
+  /** Newest posted initiative update's health, if any — authoritative over `health`. */
+  manualHealth: string | null;
+}
+
+export class InsightsInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InsightsInputError';
+  }
+}
+
+/** Upper bound on issues scanned per insights call. */
+export const INSIGHTS_SCAN_LIMIT = 20_000;
 
 /**
  * Cross-team workflow analytics. All queries are org-scoped and optionally
@@ -501,5 +565,276 @@ export class AnalyticsService {
       sampleSize: Number(r.sample),
       stateId: r.state_id,
     }));
+  }
+
+  /**
+   * Burn-up for one project, over only the issues `scope` may see. Returns
+   * null when the project is not in the org.
+   */
+  async projectBurnup(
+    orgId: string,
+    projectId: string,
+    scope: IssueVisibilityScope,
+    now: Date = new Date(),
+  ): Promise<ProjectBurnupResult | null> {
+    const project = await this.prisma.project.findFirst({
+      select: { id: true, targetDate: true },
+      where: { archivedAt: null, id: projectId, organizationId: orgId },
+    });
+    if (!project) {
+      return null;
+    }
+    const forecasts = await this.projectBurnups(orgId, [project], scope, now);
+    return forecasts.get(project.id) as ProjectBurnupResult;
+  }
+
+  /** Shared by the single-project query and the initiative roll-up. */
+  private async projectBurnups(
+    orgId: string,
+    projects: Array<{ id: string; targetDate: Date | null }>,
+    scope: IssueVisibilityScope,
+    now: Date,
+  ): Promise<Map<string, ProjectBurnupResult>> {
+    const out = new Map<string, ProjectBurnupResult>();
+    const issues =
+      scope.memberTeamIds.length === 0 || projects.length === 0
+        ? []
+        : await this.prisma.issue.findMany({
+            select: {
+              addedToProjectAt: true,
+              canceledAt: true,
+              completedAt: true,
+              createdAt: true,
+              projectId: true,
+            },
+            where: {
+              ...issueVisibilityWhere(scope),
+              archivedAt: null,
+              organizationId: orgId,
+              projectId: { in: projects.map(p => p.id) },
+              trashed: false,
+            },
+          });
+    const byProject = new Map<string, typeof issues>();
+    for (const i of issues) {
+      const list = byProject.get(i.projectId as string) ?? [];
+      list.push(i);
+      byProject.set(i.projectId as string, list);
+    }
+    for (const p of projects) {
+      const points = buildBurnupSeries(byProject.get(p.id) ?? [], now);
+      out.set(p.id, {
+        forecast: forecastCompletion(points),
+        points,
+        projectId: p.id,
+        targetDate: p.targetDate ? toDateOnly(p.targetDate) : null,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Derived health for every live initiative (see lib/initiative-health). The
+   * result is a hint: `manualHealth` carries the latest posted initiative
+   * update so the UI can show that as the authoritative value.
+   */
+  async initiativeHealthRollups(
+    orgId: string,
+    scope: IssueVisibilityScope,
+    now: Date = new Date(),
+  ): Promise<InitiativeHealthRollup[]> {
+    const initiatives = await this.prisma.initiative.findMany({
+      select: {
+        id: true,
+        projects: {
+          select: {
+            project: {
+              select: {
+                archivedAt: true,
+                health: true,
+                healthUpdatedAt: true,
+                id: true,
+                statusType: true,
+                targetDate: true,
+              },
+            },
+          },
+        },
+        targetDate: true,
+      },
+      where: { archivedAt: null, organizationId: orgId },
+    });
+    const projects = new Map<
+      string,
+      {
+        health: string | null;
+        healthUpdatedAt: Date | null;
+        id: string;
+        statusType: string;
+        targetDate: Date | null;
+      }
+    >();
+    for (const i of initiatives) {
+      for (const link of i.projects) {
+        if (!link.project.archivedAt) {
+          projects.set(link.project.id, link.project);
+        }
+      }
+    }
+    const projectIds = [...projects.keys()];
+    const [burnups, projectUpdates, initiativeUpdates] = await Promise.all([
+      this.projectBurnups(orgId, [...projects.values()], scope, now),
+      projectIds.length === 0
+        ? []
+        : this.prisma.projectUpdate.findMany({
+            distinct: ['projectId'],
+            orderBy: [{ projectId: 'asc' }, { createdAt: 'desc' }],
+            select: { createdAt: true, health: true, projectId: true },
+            where: { archivedAt: null, projectId: { in: projectIds } },
+          }),
+      initiatives.length === 0
+        ? []
+        : this.prisma.initiativeUpdate.findMany({
+            distinct: ['initiativeId'],
+            orderBy: [{ initiativeId: 'asc' }, { createdAt: 'desc' }],
+            select: { health: true, initiativeId: true },
+            where: { archivedAt: null, initiativeId: { in: initiatives.map(i => i.id) } },
+          }),
+    ]);
+    const latestUpdate = new Map(projectUpdates.map(u => [u.projectId, u]));
+    const manualByInitiative = new Map(initiativeUpdates.map(u => [u.initiativeId, u.health]));
+    const today = utcDay(now);
+
+    return initiatives.map(i => {
+      const inputs = i.projects
+        .map(l => l.project)
+        .filter(p => !p.archivedAt)
+        .map(p => {
+          // Newest of (project health field, latest project update) wins.
+          const upd = latestUpdate.get(p.id);
+          const useUpdate =
+            upd && (!p.healthUpdatedAt || upd.createdAt.getTime() >= p.healthUpdatedAt.getTime());
+          const forecast = burnups.get(p.id)?.forecast;
+          return {
+            id: p.id,
+            manualHealth: (useUpdate ? upd.health : p.health) || null,
+            projectedFinish:
+              forecast?.status === 'projected' || forecast?.status === 'complete'
+                ? forecast.projectedFinish
+                : null,
+            statusType: p.statusType,
+            targetDate: p.targetDate ? toDateOnly(p.targetDate) : null,
+          };
+        });
+      const derived = deriveInitiativeHealth(inputs, {
+        initiativeTargetDate: i.targetDate ? toDateOnly(i.targetDate) : null,
+        today,
+      });
+      return { ...derived, initiativeId: i.id, manualHealth: manualByInitiative.get(i.id) || null };
+    });
+  }
+
+  /**
+   * Insights v0: Measure x Slice over the caller's visible issues, optionally
+   * narrowed by a saved view the caller can see. Capped at INSIGHTS_SCAN_LIMIT
+   * issues (`scanCapped`) and MAX_INSIGHT_GROUPS groups.
+   */
+  async insights(
+    orgId: string,
+    userId: string,
+    measure: string,
+    slice: string,
+    scope: IssueVisibilityScope,
+    viewId?: string | null,
+  ): Promise<InsightResult & { scanCapped: boolean }> {
+    if (!(INSIGHT_MEASURES as readonly string[]).includes(measure)) {
+      throw new InsightsInputError(`Unknown measure: ${measure}`);
+    }
+    if (!(INSIGHT_SLICES as readonly string[]).includes(slice)) {
+      throw new InsightsInputError(`Unknown slice: ${slice}`);
+    }
+    let viewTeamId: string | null = null;
+    let filters = coerceFilterSet(null);
+    if (viewId) {
+      const view = await this.prisma.customView.findFirst({
+        select: { filters: true, teamId: true },
+        where: {
+          archivedAt: null,
+          id: viewId,
+          OR: [{ creatorId: userId }, { shared: true }],
+          organizationId: orgId,
+        },
+      });
+      if (!view) {
+        throw new InsightsInputError('View not found');
+      }
+      viewTeamId = view.teamId;
+      filters = coerceFilterSet(view.filters);
+    }
+    const empty = (): InsightResult & { scanCapped: boolean } => ({
+      ...aggregateInsights([], measure as InsightMeasure, slice as InsightSlice),
+      scanCapped: false,
+    });
+    if (scope.memberTeamIds.length === 0) {
+      return empty();
+    }
+    const rows = await this.prisma.issue.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        assignee: { select: { id: true, name: true } },
+        assigneeId: true,
+        completedAt: true,
+        createdAt: true,
+        creatorId: true,
+        cycleId: true,
+        dueDate: true,
+        estimate: true,
+        id: true,
+        labelAssignments: { select: { label: { select: { id: true, name: true } } } },
+        priority: true,
+        project: { select: { id: true, name: true } },
+        projectId: true,
+        sortOrder: true,
+        startedAt: true,
+        state: { select: { name: true } },
+        stateId: true,
+        team: { select: { id: true, name: true } },
+        updatedAt: true,
+      },
+      take: INSIGHTS_SCAN_LIMIT + 1,
+      where: {
+        ...issueVisibilityWhere(scope),
+        archivedAt: null,
+        organizationId: orgId,
+        trashed: false,
+        ...(viewTeamId ? { teamId: viewTeamId } : {}),
+      },
+    });
+    const scanCapped = rows.length > INSIGHTS_SCAN_LIMIT;
+    const scanned = scanCapped ? rows.slice(0, INSIGHTS_SCAN_LIMIT) : rows;
+    const filterable = scanned.map(r => ({
+      ...r,
+      assigneeId: r.assigneeId,
+      createdAt: r.createdAt.toISOString(),
+      dueDate: r.dueDate ? toDateOnly(r.dueDate) : null,
+      labelIds: r.labelAssignments.map(l => l.label.id),
+      updatedAt: r.updatedAt.toISOString(),
+    }));
+    const kept = applyFilters(filterable, filters);
+    const issues: InsightIssue[] = kept.map(r => ({
+      assignee: r.assignee ? { id: r.assignee.id, name: r.assignee.name } : null,
+      completedAt: r.completedAt,
+      estimate: r.estimate,
+      labels: r.labelAssignments.map(l => l.label),
+      priority: r.priority,
+      project: r.project,
+      startedAt: r.startedAt,
+      state: r.state,
+      team: r.team,
+    }));
+    return {
+      ...aggregateInsights(issues, measure as InsightMeasure, slice as InsightSlice),
+      scanCapped,
+    };
   }
 }

@@ -4,6 +4,7 @@ import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../../lib/limits';
 import { childLogger } from '../../lib/logger';
 import { clampLimit } from '../../lib/pagination';
 import { isOrgAdmin, requireAuth, requireOrgRole } from '../../middleware/auth';
+import { checkFixedWindow } from '../../middleware/rate-limit';
 import type { AuditAction } from '../../services/audit-log.service';
 import {
   WEBHOOK_EVENTS,
@@ -14,6 +15,15 @@ import type { GraphQLContext } from '../context';
 import { mapServiceError } from '../types/errors';
 
 const log = childLogger({ module: 'resolver/webhook' });
+
+/**
+ * A test ping makes the server open an outbound connection and wait for it, so
+ * it is rate limited per webhook (a stuck endpoint cannot be hammered) and per
+ * user (cycling through hooks cannot be used to fan out). Fixed 1-minute window.
+ */
+export const WEBHOOK_TEST_LIMIT_PER_HOOK = 5;
+export const WEBHOOK_TEST_LIMIT_PER_USER = 15;
+const WEBHOOK_TEST_WINDOW_SECONDS = 60;
 
 const WEBHOOK_ERROR_MAP = {
   BAD_USER_INPUT: [
@@ -120,6 +130,19 @@ export const webhookResolvers = {
 
     webhookTest: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       const auth = await requireOrgAdmin(ctx);
+      const [byHook, byUser] = await Promise.all([
+        checkFixedWindow(`rl:webhook-test:hook:${id}`, WEBHOOK_TEST_LIMIT_PER_HOOK, WEBHOOK_TEST_WINDOW_SECONDS),
+        checkFixedWindow(
+          `rl:webhook-test:user:${auth.userId}`,
+          WEBHOOK_TEST_LIMIT_PER_USER,
+          WEBHOOK_TEST_WINDOW_SECONDS,
+        ),
+      ]);
+      if (byHook.exceeded || byUser.exceeded) {
+        throw new GraphQLError('Too many test events. Wait a minute and try again.', {
+          extensions: { code: 'RATELIMITED' },
+        });
+      }
       try {
         const delivery = await ctx.services.webhook.sendTest(auth.orgId, id);
         auditWebhook(

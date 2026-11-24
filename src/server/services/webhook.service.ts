@@ -81,16 +81,29 @@ const REQUEST_TIMEOUT_MS_KEY = 'webhook.requestTimeoutMs';
  * row's (status, nextAttemptAt) tuple drives the retry scheduler — see
  * `processDuePending`.
  */
+export type HostResolver = (host: string) => Promise<Array<{ address: string }>>;
+
+const defaultResolveHost: HostResolver = host => lookup(host, { all: true });
+
+/** How long create/update waits for DNS before leaving the verdict to delivery time. */
+const CREATE_TIME_DNS_TIMEOUT_MS = 2000;
+
+/** Bytes of a response body read for diagnostics; the rest is never downloaded. */
+const RESPONSE_BODY_READ_BYTES = 4096;
+const RESPONSE_BODY_STORED_CHARS = 1000;
+
 export class WebhookService {
   constructor(
     private prisma: PrismaClient,
     private config: ConfigReader = DEFAULTS_ONLY_CONFIG,
+    private resolveHost: HostResolver = defaultResolveHost,
   ) {}
 
   // ─── CRUD ─────────────────────────────────────────────────────────────────
 
   async create(orgId: string, creatorId: string, input: WebhookCreateInput): Promise<Webhook> {
     this.validateUrl(input.url);
+    await this.assertResolvesPublic(input.url);
     this.validateEvents(input.events);
     this.validateName(input.name);
 
@@ -112,6 +125,7 @@ export class WebhookService {
   async update(orgId: string, id: string, input: WebhookUpdateInput): Promise<Webhook> {
     if (input.url !== undefined) {
       this.validateUrl(input.url);
+      await this.assertResolvesPublic(input.url);
     }
     if (input.events !== undefined) {
       this.validateEvents(input.events);
@@ -479,13 +493,13 @@ export class WebhookService {
         const res = await fetch(delivery.webhook.url, init);
         responseStatus = res.status;
         // Cap response body capture; we only need diagnostic context, not full payloads.
-        responseBody = (await res.text().catch(() => '')).slice(0, 1000);
+        responseBody = await readBodyCapped(res);
         success = res.status >= 200 && res.status < 300;
       } finally {
         clearTimeout(timeout);
       }
     } catch (err) {
-      errorMessage = err instanceof Error ? err.message : String(err);
+      errorMessage = describeDeliveryError(err, requestTimeoutMs);
     }
 
     const now = new Date();
@@ -656,6 +670,45 @@ export class WebhookService {
       if (!env.ALLOW_PRIVATE_WEBHOOK_URLS) {
         throw new WebhookPrivateUrlError();
       }
+    }
+  }
+
+  /**
+   * Create/update-time DNS screen: a hostname that already resolves to a
+   * private address (`http://vm:3000/` via /etc/hosts, an internal zone) is
+   * refused up front instead of being accepted and then failing every delivery.
+   * It is a courtesy, not the guard: a lookup that fails or is slow is waved
+   * through, and a name can change answers later, so the pinned dispatcher's
+   * connect-time check (which resolves once and connects only to what it
+   * validated) remains the actual SSRF defence.
+   */
+  private async assertResolvesPublic(url: string): Promise<void> {
+    if (env.ALLOW_PRIVATE_WEBHOOK_URLS) {
+      return;
+    }
+    const raw = new URL(url).hostname;
+    const host = raw.startsWith('[') && raw.endsWith(']') ? raw.slice(1, -1) : raw;
+    if (isIP(host) || parseIpLiteral(host)) {
+      return; // literals were screened synchronously by validateUrl
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const addresses = await Promise.race([
+        this.resolveHost(host),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('dns timeout')), CREATE_TIME_DNS_TIMEOUT_MS);
+        }),
+      ]);
+      if (addresses.some(a => isPrivateIp(a.address))) {
+        throw new WebhookPrivateUrlError();
+      }
+    } catch (err) {
+      if (err instanceof WebhookPrivateUrlError) {
+        throw err;
+      }
+      // unresolvable right now: not evidence of anything; delivery re-checks.
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -915,6 +968,69 @@ const pinnedDispatcher: Dispatcher = new Agent({
     },
   },
 });
+
+/**
+ * Read at most RESPONSE_BODY_READ_BYTES of a response and keep the first
+ * RESPONSE_BODY_STORED_CHARS characters. `res.text()` would download the whole
+ * body (a hostile endpoint can stream gigabytes) before the slice; this stops
+ * pulling and cancels the stream once the cap is reached.
+ */
+export async function readBodyCapped(res: Response): Promise<string> {
+  const body = res.body;
+  if (!body || typeof body.getReader !== 'function') {
+    const text = await res.text().catch(() => '');
+    return text.slice(0, RESPONSE_BODY_STORED_CHARS);
+  }
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < RESPONSE_BODY_READ_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      chunks.push(value);
+      total += value.byteLength;
+    }
+  } catch {
+    // a broken stream still leaves whatever was read
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  return new TextDecoder()
+    .decode(Buffer.concat(chunks).subarray(0, RESPONSE_BODY_READ_BYTES))
+    .slice(0, RESPONSE_BODY_STORED_CHARS);
+}
+
+/**
+ * Human-readable reason for a failed attempt. undici reports nearly every
+ * network failure as `TypeError: fetch failed` with the real reason in
+ * `cause`, so the bare message hides whether the SSRF guard refused the
+ * address, DNS failed, TLS failed or the socket was refused. Credentials in
+ * URLs and anything long are stripped before it is stored.
+ */
+export function describeDeliveryError(err: unknown, timeoutMs?: number): string {
+  if (err instanceof Error && err.name === 'AbortError') {
+    return timeoutMs ? `Request timed out after ${timeoutMs} ms` : 'Request timed out';
+  }
+  const base = err instanceof Error ? err.message : String(err);
+  const cause = err instanceof Error ? (err as { cause?: unknown }).cause : undefined;
+  let detail = '';
+  if (cause instanceof WebhookPrivateUrlError) {
+    detail = cause.message;
+  } else if (cause && typeof cause === 'object') {
+    const { code, message } = cause as { code?: unknown; message?: unknown };
+    detail = [typeof code === 'string' ? code : '', typeof message === 'string' ? message : '']
+      .filter(Boolean)
+      .join(': ');
+  }
+  const full = detail && !base.includes(detail) ? `${base} (${detail})` : base;
+  return full
+    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, '$1***@')
+    .replace(/\s+/g, ' ')
+    .slice(0, 500);
+}
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
 

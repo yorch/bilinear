@@ -151,6 +151,57 @@
     }
   },
   "analytics": {
+    "explorer": {
+      "allIssues": "All issues",
+      "days": "{count}d",
+      "description": "Pick a measure and a slice. Only issues you can see are counted.",
+      "empty": "No issues match this selection.",
+      "exportCsv": "Export CSV",
+      "failedToLoad": "Failed to load insights",
+      "filter": "Filter",
+      "issues": "Issues",
+      "labelNote": "An issue with several labels is counted under each.",
+      "measure": "Measure",
+      "measures": {
+        "count": "Issue count",
+        "cycleTime": "Avg cycle time",
+        "estimate": "Estimate sum"
+      },
+      "none": {
+        "assignee": "Unassigned",
+        "label": "No label",
+        "priority": "No priority",
+        "project": "No project",
+        "status": "No status",
+        "team": "No team"
+      },
+      "priority": {
+        "0": "No priority",
+        "1": "Urgent",
+        "2": "High",
+        "3": "Medium",
+        "4": "Low"
+      },
+      "scanCapped": "Too many issues matched; figures cover the newest ones only. Narrow it with a saved view.",
+      "slice": "Slice",
+      "slices": {
+        "assignee": "Assignee",
+        "label": "Label",
+        "priority": "Priority",
+        "project": "Project",
+        "status": "Status",
+        "team": "Team"
+      },
+      "summary": "{issues} issues in {groups} groups.",
+      "tableCaption": "{measure} by {slice}",
+      "title": "Insights",
+      "truncated": "Showing the top {count} groups only.",
+      "valueHeader": {
+        "count": "Issues",
+        "cycleTime": "Avg days",
+        "estimate": "Points"
+      }
+    },
     "insights": {
       "avgTimeInState": "Avg time in state",
       "avgTimeInStateSubtitle": "approximation from lifecycle timestamps; full audit log is a follow-up",
@@ -373,6 +424,7 @@
       "moveToTeam": "Move to team…",
       "noAssignee": "No assignee",
       "noOptions": "No options",
+      "remindMe": "Remind me…",
       "setAssignee": "Set assignee…",
       "setCycle": "Set cycle…",
       "setDueDate": "Set due date…",
@@ -533,6 +585,24 @@
     },
     "name": "Name",
     "namePlaceholder": "e.g. Severity",
+    "numberFormat": {
+      "currency": "Currency code",
+      "decimals": "Decimal places",
+      "decimalsAuto": "Auto",
+      "decimalsCount_one": "{count} decimal",
+      "decimalsCount_other": "{count} decimals",
+      "hint": "Display only: the stored value stays a plain number, so sorting and filtering are unchanged. Saved in this browser.",
+      "invalidCurrency": "Unknown currency code",
+      "kinds": {
+        "compact": "Compact (1.2k)",
+        "currency": "Currency",
+        "duration": "Duration (minutes)",
+        "percent": "Percent",
+        "plain": "Plain number"
+      },
+      "preview": "Preview:",
+      "title": "Number format"
+    },
     "optionLabel": "Label",
     "options": "Options",
     "optionValue": "Value",
@@ -656,14 +726,26 @@
     },
     "failedToLoad": "Failed to load data. Please refresh.",
     "list": {
+      "archive": "Archive",
+      "archiveAria": "Archive {name}",
+      "archivedEmptyDescription": "Cycles you archive show up here, where you can restore them.",
+      "archivedEmptyTitle": "No archived cycles",
+      "archivedToast": "Cycle archived",
+      "archiveFailed": "Failed to archive cycle",
       "daysLeft_one": "{count} day left",
       "daysLeft_other": "{count} days left",
       "emptyDescription": "Cycles help you plan and track work in time-boxed iterations.",
       "emptyTitle": "No cycles yet",
       "enableCycles": "Enable cycles in team settings",
+      "loadArchivedFailed": "Failed to load archived cycles",
+      "restoreFailed": "Failed to restore cycle",
       "showMore": "Show {count} more",
       "teamTitle": "{team} — Cycles",
-      "title": "Cycles"
+      "title": "Cycles",
+      "views": {
+        "active": "Active",
+        "archived": "Archived"
+      }
     },
     "status": {
       "active": "Active",
@@ -892,6 +974,26 @@
       "status": "Status",
       "targetDate": "Target date",
       "updateFailed": "Couldn't save the change"
+    },
+    "health": {
+      "derived": "Derived: {health}",
+      "derivedHint": "Derived from project health and forecasts; it does not replace a posted update.",
+      "label": {
+        "atRisk": "At risk",
+        "noData": "No data",
+        "offTrack": "Off track",
+        "onTrack": "On track"
+      },
+      "posted": "Posted: {health}",
+      "reason": {
+        "initiativeTargetSlip": "projects are projected to finish after the initiative target date",
+        "noActiveProjects": "no active projects",
+        "noSignals": "no project health, target dates or forecasts yet",
+        "projectManualHealth": "a project was posted as at risk or off track",
+        "projectOverdue": "a project is past its target date and unfinished",
+        "projectProjectedLate": "a project is projected to finish after its target date"
+      },
+      "title": "Health"
     },
     "page": {
       "archivedEmptyDescription": "Initiatives you archive show up here, where you can restore them.",
@@ -1481,6 +1583,10 @@
     "allNotifications": "All notifications",
     "emptyState": {
       "detail": "No notifications yet. You'll be notified when something needs your attention.",
+      "otherDetail": "Activity on issues you follow shows up here.",
+      "otherTitle": "Nothing else",
+      "priorityDetail": "Assignments, mentions, replies and reminders land here.",
+      "priorityTitle": "No priority notifications",
       "snoozedDetail": "Snoozed notifications wait here until they wake.",
       "snoozedTitle": "Nothing snoozed",
       "title": "All caught up",
@@ -1492,7 +1598,13 @@
       "issueAssigned": "assigned you to an issue",
       "issueCommented": "commented on an issue",
       "issueMentioned": "mentioned you in an issue",
-      "issueStatusChanged": "changed the status of an issue"
+      "issueStatusChanged": "changed the status of an issue",
+      "reminder": "Reminder"
+    },
+    "lanes": {
+      "label": "Inbox sections",
+      "other": "Other",
+      "priority": "Priority"
     },
     "loadMore": "Load more",
     "markAllRead": "Mark all read",
@@ -1501,6 +1613,8 @@
     "marking": "Marking…",
     "openLink": "Open",
     "read": "Read",
+    "remindedFor": "Reminder set for {when}",
+    "reminderTitle": "Reminder: {title}",
     "snooze": {
       "buttonTitle": "Snooze",
       "fourHours": "4 hours",
@@ -1544,6 +1658,33 @@
     "archivedTab": "Archived",
     "archivedView": "Archived projects",
     "backToProjects": "Back to projects",
+    "burnup": {
+      "aheadOfTarget_one": "{count} day ahead of target ({date})",
+      "aheadOfTarget_other": "{count} days ahead of target ({date})",
+      "ariaLabel": "Project burn-up: scope and completed issues over time with a projected finish",
+      "complete": "All issues complete",
+      "completed": "Completed",
+      "description": "Scope and completed issues per day, with a forecast from recent pace.",
+      "empty": "No issues in this project yet.",
+      "failedToLoad": "Failed to load the burn-up chart",
+      "forecast": "Forecast",
+      "hover": "{date}: scope {scope}, completed {completed}",
+      "noTarget": "No target date set",
+      "notEnoughData": "Not enough data to forecast",
+      "pastTarget_one": "{count} day past target ({date})",
+      "pastTarget_other": "{count} days past target ({date})",
+      "projectedFinish": "Projected finish {date}",
+      "reason": {
+        "noCompletions": "Nothing was completed in the recent window, so there is no pace to project.",
+        "noIssues": "This project has no issues.",
+        "tooFar": "At the current pace the finish is more than two years away.",
+        "tooShort": "Needs at least a week of history."
+      },
+      "scope": "Scope",
+      "target": "Target date",
+      "title": "Burn-up",
+      "velocity": "Pace: {count} issues/week over the last {days} days"
+    },
     "completed": "Completed",
     "createProject": "Create project",
     "createProjectPrompt": "Create a project to track work across teams.",
@@ -1722,6 +1863,21 @@
       "updateDeleted": "Update deleted",
       "yes": "Yes"
     }
+  },
+  "reminders": {
+    "chipTitle": "Reminder set for {when}",
+    "clear": "Clear reminder",
+    "cleared": "Reminder cleared",
+    "clearFailed": "Couldn't clear the reminder",
+    "customLabel": "Custom date and time",
+    "laterToday": "Later today",
+    "menuItem": "Remind me…",
+    "menuItemChange": "Change reminder…",
+    "nextWeek": "Next week",
+    "pastTime": "Pick a time in the future",
+    "set": "We'll remind you {when}",
+    "setFailed": "Couldn't set the reminder",
+    "tomorrow": "Tomorrow"
   },
   "roadmap": {
     "gantt": {

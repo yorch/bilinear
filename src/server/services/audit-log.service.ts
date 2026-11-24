@@ -1,17 +1,24 @@
 import type { AuditLogEntry, PrismaClient } from '../../generated/prisma';
 import { Prisma } from '../../generated/prisma';
 import { csvCell } from '../../lib/csv-export';
+import {
+  afterCreatedAtCursor,
+  encodeCreatedAtCursor,
+} from '../lib/created-at-cursor';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 
 const log = childLogger({ module: 'audit-log' });
 
 export type AuditAction =
+  | 'audit_log.exported'
   | 'api_key.created'
   | 'api_key.revoked'
   | 'auth.login'
   | 'auth.login_failed'
   | 'auth.logout'
+  | 'github.webhook_secret_revealed'
+  | 'github.webhook_secret_rotated'
   | 'issue.archived'
   | 'issue.bulk_updated'
   | 'issue.created'
@@ -97,7 +104,11 @@ export interface AuditLogPage {
  * and never `await` it.
  */
 export class AuditLogService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    /** Injectable so the cap and the `truncated` flag are testable without 10k rows. */
+    private exportMaxRows: number = AUDIT_EXPORT_MAX_ROWS,
+  ) {}
 
   /**
    * Write an audit log entry. Fire-and-forget: errors are logged and
@@ -123,8 +134,10 @@ export class AuditLogService {
   }
 
   /**
-   * Paginate audit log entries for an org. Cursor is a createdAt ISO
-   * timestamp — entries strictly older than the cursor are returned.
+   * Paginate audit log entries for an org, newest first. The cursor is a
+   * `(createdAt, id)` keyset (`<iso>|<uuid>`), so rows sharing a timestamp at
+   * a page boundary are neither skipped nor repeated. A malformed cursor throws
+   * `InvalidCursorError`.
    */
   async findByOrg(filter: AuditLogFilter): Promise<AuditLogPage> {
     const limit = Math.min(filter.limit ?? DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
@@ -142,7 +155,7 @@ export class AuditLogService {
     if (filter.resourceType) {
       where.resourceType = filter.resourceType;
     }
-    if (filter.from || filter.to || filter.cursor) {
+    if (filter.from || filter.to) {
       where.createdAt = {};
       if (filter.from) {
         where.createdAt.gte = new Date(filter.from);
@@ -150,25 +163,23 @@ export class AuditLogService {
       if (filter.to) {
         where.createdAt.lte = new Date(filter.to);
       }
-      // Cursor-based pagination: return rows strictly before the cursor
-      if (filter.cursor) {
-        where.createdAt.lt = new Date(filter.cursor);
-      }
+    }
+    const after = afterCreatedAtCursor(filter.cursor);
+    if (after) {
+      where.AND = [after];
     }
 
     // Fetch one extra row to determine hasMore
     const rows = await this.prisma.auditLogEntry.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       where,
     });
 
     const hasMore = rows.length > limit;
     const entries = hasMore ? rows.slice(0, limit) : rows;
-    const nextCursor =
-      hasMore && entries.length > 0
-        ? (entries[entries.length - 1]?.createdAt.toISOString() ?? null)
-        : null;
+    const last = entries[entries.length - 1];
+    const nextCursor = hasMore && last ? encodeCreatedAtCursor(last) : null;
 
     return { entries, hasMore, nextCursor };
   }
@@ -182,18 +193,18 @@ export class AuditLogService {
     const entries: AuditLogEntry[] = [];
     let cursor: string | null = null;
     let truncated = false;
-    while (entries.length < AUDIT_EXPORT_MAX_ROWS) {
+    while (entries.length < this.exportMaxRows) {
       const page: AuditLogPage = await this.findByOrg({ ...filter, cursor, limit: EXPORT_BATCH });
       entries.push(...page.entries);
       if (!page.hasMore || !page.nextCursor) {
         break;
       }
       cursor = page.nextCursor;
-      if (entries.length >= AUDIT_EXPORT_MAX_ROWS) {
+      if (entries.length >= this.exportMaxRows) {
         truncated = true;
       }
     }
-    const rows = entries.slice(0, AUDIT_EXPORT_MAX_ROWS);
+    const rows = entries.slice(0, this.exportMaxRows);
 
     const userIds = [...new Set(rows.map(r => r.userId).filter((id): id is string => !!id))];
     const users = userIds.length

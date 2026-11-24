@@ -42,7 +42,9 @@ export function LoginForm({ providers }: { providers: LoginProviders }) {
   // The provider whose redirect is in flight; disables every sign-in control
   // so a double click can't mint two state tokens.
   const [oauthPending, setOauthPending] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    searchParams.get('sso') === 'unavailable' ? t('auth.sso.unavailable') : null,
+  );
   const [emailError, setEmailError] = useState<string | null>(null);
   const busy = loading || oauthPending !== null;
 
@@ -85,71 +87,73 @@ export function LoginForm({ providers }: { providers: LoginProviders }) {
   }
 
   return (
-    <form className="flex flex-col gap-4" noValidate onSubmit={handleSubmit}>
-      <AuthField
-        autoCapitalize="none"
-        autoComplete="email"
-        autoFocus
-        error={emailError}
-        id="email"
-        inputMode="email"
-        label={t('auth.emailAddress')}
-        name="email"
-        onChange={e => {
-          setEmail(e.target.value);
-          setEmailError(null);
-        }}
-        placeholder={t('auth.emailPlaceholder')}
-        required
-        spellCheck={false}
-        type="email"
-        value={email}
-      />
+    <div className="flex flex-col gap-4">
+      <form className="flex flex-col gap-4" noValidate onSubmit={handleSubmit}>
+        <AuthField
+          autoCapitalize="none"
+          autoComplete="email"
+          autoFocus
+          error={emailError}
+          id="email"
+          inputMode="email"
+          label={t('auth.emailAddress')}
+          name="email"
+          onChange={e => {
+            setEmail(e.target.value);
+            setEmailError(null);
+          }}
+          placeholder={t('auth.emailPlaceholder')}
+          required
+          spellCheck={false}
+          type="email"
+          value={email}
+        />
 
-      {error && (
-        <p className="text-sm text-danger-subtle-foreground" role="alert">
-          {error}
-        </p>
-      )}
+        {error && (
+          <p className="text-sm text-danger-subtle-foreground" role="alert">
+            {error}
+          </p>
+        )}
 
-      <Button className="w-full" data-testid="email-submit" disabled={busy} type="submit">
-        {loading ? t('auth.sending') : t('auth.continueWithEmail')}
-      </Button>
-
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-border" />
-        </div>
-        <div className="relative flex justify-center text-xs text-muted-foreground">
-          <span className="bg-background px-2">{t('common.or')}</span>
-        </div>
-      </div>
-      {providers.google && (
-        <Button
-          className="w-full"
-          disabled={busy}
-          onClick={() => startOAuth(GOOGLE_OAUTH)}
-          type="button"
-          variant="outline"
-        >
-          <GoogleIcon />
-          {t('auth.continueWithGoogle')}
+        <Button className="w-full" data-testid="email-submit" disabled={busy} type="submit">
+          {loading ? t('auth.sending') : t('auth.continueWithEmail')}
         </Button>
-      )}
-      {providers.github && (
-        <Button
-          className="w-full"
-          disabled={busy}
-          onClick={() => startOAuth(GITHUB_OAUTH)}
-          type="button"
-          variant="outline"
-        >
-          <GitHubIcon />
-          {t('auth.continueWithGitHub')}
-        </Button>
-      )}
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-border" />
+          </div>
+          <div className="relative flex justify-center text-xs text-muted-foreground">
+            <span className="bg-background px-2">{t('common.or')}</span>
+          </div>
+        </div>
+        {providers.google && (
+          <Button
+            className="w-full"
+            disabled={busy}
+            onClick={() => startOAuth(GOOGLE_OAUTH)}
+            type="button"
+            variant="outline"
+          >
+            <GoogleIcon />
+            {t('auth.continueWithGoogle')}
+          </Button>
+        )}
+        {providers.github && (
+          <Button
+            className="w-full"
+            disabled={busy}
+            onClick={() => startOAuth(GITHUB_OAUTH)}
+            type="button"
+            variant="outline"
+          >
+            <GitHubIcon />
+            {t('auth.continueWithGitHub')}
+          </Button>
+        )}
+      </form>
       <SsoEntry busy={busy} next={next} />
-    </form>
+    </div>
   );
 
   async function startOAuth(provider: OAuthStartConfig) {

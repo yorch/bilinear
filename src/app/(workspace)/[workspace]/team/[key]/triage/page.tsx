@@ -4,9 +4,12 @@ import { ArrowLeft, Inbox } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { TipTapEditor } from '@/components/editor/tiptap-editor.lazy';
 import { IssuePicker } from '@/components/issues/issue-picker';
+import { TriageDuplicateSuggestions } from '@/components/issues/triage-duplicate-suggestions';
+import { TriageKeyHint } from '@/components/issues/triage-key-hint';
+import { TriageSnoozeMenu } from '@/components/issues/triage-snooze-menu';
 import { AssigneeSelect } from '@/components/properties/assignee-select';
 import { LabelSelect } from '@/components/properties/label-select';
 import { PriorityIcon } from '@/components/properties/priority-icon';
@@ -19,7 +22,6 @@ import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
-import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
 import { gql } from '@/lib/graphql';
@@ -34,10 +36,12 @@ import { useStore } from '@/providers/store-provider';
  * state on a triage-enabled team default to the triage state and surface here.
  *
  * Actions:
- *   - Accept   → move to a target workflow state (typically backlog)
- *   - Decline  → cancel the issue
- *   - Snooze   → hide from queue until a future timestamp
- *   - Mark dup → mark as duplicate of another issue and cancel
+ *   - Accept   → move to a target workflow state (typically backlog)   [1 / A]
+ *   - Mark dup → mark as duplicate of another issue and cancel        [2 / M]
+ *   - Decline  → cancel the issue                                      [3 / D]
+ *   - Snooze   → hide from queue until a future timestamp (menu)       [H / S]
+ *   - J / K move through the queue. Keys are inert while typing or while a
+ *     popover is open (see `useHotkeys` and `isPopoverOpen`).
  */
 
 const TRIAGE_ACCEPT_MUTATION = `
@@ -80,77 +84,9 @@ const TRIAGE_SNOOZE_MUTATION = `
   }
 `;
 
-const SNOOZE_PRESETS: Array<{ labelKey: string; hours: number }> = [
-  { hours: 4, labelKey: 'settings.triage.snooze4Hours' },
-  { hours: 24, labelKey: 'settings.triage.snooze1Day' },
-  { hours: 168, labelKey: 'settings.triage.snooze1Week' },
-];
-
-/**
- * Click-to-open popover with preset items. Replaces an earlier
- * `group-hover:block` approach that was inaccessible on touch devices
- * and dismissed before the click could register on some browsers.
- */
-function SnoozeButton({
-  disabled,
-  onSelect,
-}: {
-  disabled: boolean;
-  onSelect: (hours: number) => void;
-}) {
-  const t = useTranslations();
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useOutsideClick(ref, () => setOpen(false), open);
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open]);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        aria-expanded={open}
-        aria-haspopup="menu"
-        className={buttonVariants({ size: 'sm', variant: 'outline' })}
-        disabled={disabled}
-        onClick={() => setOpen(o => !o)}
-        type="button"
-      >
-        {t('settings.triage.snooze')}
-      </button>
-      {open ? (
-        <div
-          className="absolute right-0 z-10 mt-1 min-w-[120px] rounded border border-border bg-card py-1 text-xs shadow-e2"
-          role="menu"
-        >
-          {SNOOZE_PRESETS.map(p => (
-            <button
-              className="block w-full px-3 py-1 text-left text-foreground-secondary hover:bg-muted"
-              key={p.hours}
-              onClick={() => {
-                setOpen(false);
-                onSelect(p.hours);
-              }}
-              role="menuitem"
-              type="button"
-            >
-              {t(p.labelKey)}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
+/** True while any popover (priority, label, duplicate picker, snooze…) is open. */
+function isPopoverOpen(): boolean {
+  return document.querySelector('[aria-haspopup][aria-expanded="true"]') !== null;
 }
 
 const TriagePage = observer(function TriagePage() {
@@ -164,6 +100,7 @@ const TriagePage = observer(function TriagePage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [duplicatePickerFor, setDuplicatePickerFor] = useState<string | null>(null);
+  const [snoozeOpenFor, setSnoozeOpenFor] = useState<string | null>(null);
   // Below md the queue and the preview take turns; at md+ both are always on.
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -309,7 +246,7 @@ const TriagePage = observer(function TriagePage() {
   );
 
   const submitMarkDuplicate = useCallback(
-    async (issueId: string, canonical: DBIssue) => {
+    async (issueId: string, canonical: Pick<DBIssue, 'id' | 'identifier'>) => {
       if (canonical.id === issueId) {
         toast.error(t('settings.triage.cannotMarkDuplicateOfItself'));
         return;
@@ -348,67 +285,53 @@ const TriagePage = observer(function TriagePage() {
     setDuplicatePickerFor(issueId);
   }, []);
 
-  // j/k — move focus within the queue; a/d/s/m act on the focused issue.
-  // Snooze defaults to the shortest preset since a keyboard shortcut can't
-  // drive the picker popover; the button remains for the other presets.
+  // j/k move within the queue. 1/2/3 and a/m/d are the decisions (Accept,
+  // Duplicate, Decline); h/s open the snooze menu, whose rows are then picked
+  // with the arrow keys + Enter. Every action is skipped while another
+  // popover is open so a digit typed at a menu can't also decide the issue.
+  const act = useCallback(
+    (run: (issueId: string) => void) => {
+      if (effectiveFocusedId && !busyId && !isPopoverOpen()) {
+        run(effectiveFocusedId);
+      }
+    },
+    [effectiveFocusedId, busyId],
+  );
+  const hasQueue = queue.length > 0;
+  const acceptEnabled = hasQueue && Boolean(defaultTargetStateId);
+  const accept = useCallback(() => act(handleAccept), [act, handleAccept]);
+  const decline = useCallback(() => act(handleDecline), [act, handleDecline]);
+  const duplicate = useCallback(() => act(handleMarkDuplicate), [act, handleMarkDuplicate]);
+  const snooze = useCallback(() => act(setSnoozeOpenFor), [act]);
+
   useHotkeys(
     'j',
     () => {
+      if (isPopoverOpen()) {
+        return;
+      }
       const next = Math.min(focusedIndex + 1, queue.length - 1);
       setFocusedId(queue[next]?.id ?? null);
     },
-    { enabled: queue.length > 0 },
+    { enabled: hasQueue },
     [focusedIndex, queue],
   );
   useHotkeys(
     'k',
     () => {
+      if (isPopoverOpen()) {
+        return;
+      }
       const prev = Math.max(focusedIndex - 1, 0);
       setFocusedId(queue[prev]?.id ?? null);
     },
-    { enabled: queue.length > 0 },
+    { enabled: hasQueue },
     [focusedIndex, queue],
   );
-  useHotkeys(
-    'a',
-    () => {
-      if (effectiveFocusedId && !busyId) {
-        handleAccept(effectiveFocusedId);
-      }
-    },
-    { enabled: queue.length > 0 && Boolean(defaultTargetStateId) },
-    [effectiveFocusedId, busyId, handleAccept, queue.length, defaultTargetStateId],
-  );
-  useHotkeys(
-    'd',
-    () => {
-      if (effectiveFocusedId && !busyId) {
-        handleDecline(effectiveFocusedId);
-      }
-    },
-    { enabled: queue.length > 0 },
-    [effectiveFocusedId, busyId, handleDecline, queue.length],
-  );
-  useHotkeys(
-    's',
-    () => {
-      if (effectiveFocusedId && !busyId) {
-        handleSnooze(effectiveFocusedId, SNOOZE_PRESETS[0].hours);
-      }
-    },
-    { enabled: queue.length > 0 },
-    [effectiveFocusedId, busyId, handleSnooze, queue.length],
-  );
-  useHotkeys(
-    'm',
-    () => {
-      if (effectiveFocusedId && !busyId) {
-        handleMarkDuplicate(effectiveFocusedId);
-      }
-    },
-    { enabled: queue.length > 0 },
-    [effectiveFocusedId, busyId, handleMarkDuplicate, queue.length],
-  );
+  useHotkeys(['1', 'a'], accept, { enabled: acceptEnabled }, [accept]);
+  useHotkeys(['2', 'm'], duplicate, { enabled: hasQueue }, [duplicate]);
+  useHotkeys(['3', 'd'], decline, { enabled: hasQueue }, [decline]);
+  useHotkeys(['h', 's'], snooze, { enabled: hasQueue }, [snooze]);
 
   const isLoading = syncStore.status === 'bootstrapping' || syncStore.status === 'idle';
 
@@ -527,14 +450,17 @@ const TriagePage = observer(function TriagePage() {
                 </button>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
+                    aria-keyshortcuts="1 A"
                     disabled={Boolean(busyId) || !defaultTargetStateId}
                     onClick={() => handleAccept(focusedIssue.id)}
                     size="sm"
                     type="button"
                   >
                     {t('settings.triage.accept')}
+                    <TriageKeyHint>1</TriageKeyHint>
                   </Button>
                   <Button
+                    aria-keyshortcuts="3 D"
                     disabled={Boolean(busyId)}
                     onClick={() => handleDecline(focusedIssue.id)}
                     size="sm"
@@ -542,6 +468,7 @@ const TriagePage = observer(function TriagePage() {
                     variant="outline"
                   >
                     {t('settings.triage.decline')}
+                    <TriageKeyHint>3</TriageKeyHint>
                   </Button>
                   <IssuePicker
                     disabled={Boolean(busyId)}
@@ -549,12 +476,25 @@ const TriagePage = observer(function TriagePage() {
                     forceOpen={duplicatePickerFor === focusedIssue.id}
                     onClose={() => setDuplicatePickerFor(null)}
                     onSelect={canonical => submitMarkDuplicate(focusedIssue.id, canonical)}
-                    triggerChildren={t('settings.triage.duplicate')}
-                    triggerClassName={buttonVariants({ size: 'sm', variant: 'outline' })}
+                    triggerChildren={
+                      <>
+                        {t('settings.triage.duplicate')}
+                        <TriageKeyHint>2</TriageKeyHint>
+                      </>
+                    }
+                    // `text-foreground` is explicit: the picker's own trigger
+                    // classes carry `text-muted-foreground`, which survives the
+                    // class merge and made this button read as disabled.
+                    triggerClassName={cn(
+                      buttonVariants({ size: 'sm', variant: 'outline' }),
+                      'text-foreground',
+                    )}
                     triggerTitle={t('settings.triage.markDuplicateTitle')}
                   />
-                  <SnoozeButton
+                  <TriageSnoozeMenu
                     disabled={Boolean(busyId)}
+                    forceOpen={snoozeOpenFor === focusedIssue.id}
+                    onClose={() => setSnoozeOpenFor(null)}
                     onSelect={hours => handleSnooze(focusedIssue.id, hours)}
                   />
                 </div>
@@ -607,6 +547,13 @@ const TriagePage = observer(function TriagePage() {
                     </p>
                   )}
                 </div>
+
+                <TriageDuplicateSuggestions
+                  disabled={Boolean(busyId)}
+                  issueId={focusedIssue.id}
+                  issueTitle={focusedIssue.title}
+                  onMarkDuplicate={canonical => submitMarkDuplicate(focusedIssue.id, canonical)}
+                />
               </div>
             </div>
           ) : null}
@@ -620,22 +567,17 @@ const TriagePage = observer(function TriagePage() {
             <kbd className="rounded border border-border px-1 font-mono">K</kbd>
             {t('commandPalette.footer.navigate')}
           </span>
-          <span className="flex items-center gap-1">
-            <kbd className="rounded border border-border px-1 font-mono">A</kbd>
-            {t('settings.triage.accept')}
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="rounded border border-border px-1 font-mono">D</kbd>
-            {t('settings.triage.decline')}
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="rounded border border-border px-1 font-mono">S</kbd>
-            {t('settings.triage.snooze')}
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="rounded border border-border px-1 font-mono">M</kbd>
-            {t('settings.triage.duplicate')}
-          </span>
+          {[
+            ['1', 'settings.triage.accept'],
+            ['2', 'settings.triage.duplicate'],
+            ['3', 'settings.triage.decline'],
+            ['H', 'settings.triage.snooze'],
+          ].map(([key, labelKey]) => (
+            <span className="flex items-center gap-1" key={key}>
+              <kbd className="rounded border border-border px-1 font-mono">{key}</kbd>
+              {t(labelKey)}
+            </span>
+          ))}
         </div>
       )}
     </div>

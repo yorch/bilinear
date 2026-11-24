@@ -13,8 +13,11 @@ import {
   useRef,
   useState,
 } from 'react';
+import { getReminderPresets } from '@/components/issues/reminder-presets';
 import { priorityLabelKey } from '@/components/properties/priority-icon';
 import { ColorDot } from '@/components/ui/color-dot';
+import { useFormatters } from '@/hooks/use-formatters';
+import { useIssueReminders } from '@/hooks/use-issue-reminders';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import type { RecentItem } from '@/hooks/use-recent-items';
 import { type Theme, useTheme } from '@/hooks/use-theme';
@@ -23,6 +26,7 @@ import { ACCENT_DEFINITIONS, type AccentDefinition } from '@/lib/accent';
 import type { DBIssue } from '@/lib/db';
 import { IDENTIFIER_RE } from '@/lib/identifiers';
 import { buildIssueHref } from '@/lib/issue-nav';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useAccent } from '@/providers/accent-provider';
 import { useStore } from '@/providers/store-provider';
@@ -73,7 +77,8 @@ type SubMenuMode =
   | { issueId: string; type: 'setStatus' }
   | { issueId: string; type: 'setAssignee' }
   | { issueId: string; type: 'setPriority' }
-  | { issueId: string; type: 'setLabel' };
+  | { issueId: string; type: 'setLabel' }
+  | { issueId: string; type: 'remindMe' };
 
 type SubMenuItem = {
   /** True for the issue's current value — rendered with a check mark. */
@@ -85,6 +90,7 @@ type SubMenuItem = {
 
 const SUBMENU_PLACEHOLDER_KEYS = {
   actions: 'commandPalette.submenu.actions',
+  remindMe: 'commandPalette.submenu.remindMe',
   setAssignee: 'commandPalette.submenu.setAssignee',
   setLabel: 'commandPalette.submenu.setLabel',
   setPriority: 'commandPalette.submenu.setPriority',
@@ -614,6 +620,8 @@ const SubMenuList = observer(function SubMenuList({
   const { issueStore, labelStore, userStore, workflowStateStore } = useStore();
   const t = useTranslations();
   const applyPatch = useIssueUpdate();
+  const { clearReminder, reminderFor, setReminder } = useIssueReminders();
+  const { formatDateTime } = useFormatters();
 
   let subItems: SubMenuItem[] = [];
 
@@ -625,6 +633,7 @@ const SubMenuList = observer(function SubMenuList({
         ['setAssignee', 'commandPalette.submenu.setAssignee'],
         ['setPriority', 'commandPalette.submenu.setPriority'],
         ['setLabel', 'commandPalette.submenu.setLabel'],
+        ['remindMe', 'commandPalette.submenu.remindMe'],
       ] as const
     ).map(([type, labelKey]) => ({
       id: type,
@@ -667,6 +676,42 @@ const SubMenuList = observer(function SubMenuList({
           onClose();
         },
       })),
+    ];
+  } else if (subMenu.type === 'remindMe') {
+    const { issueId } = subMenu;
+    const existing = reminderFor(issueId);
+    const when = (d: Date) =>
+      formatDateTime(d, { day: 'numeric', hour: 'numeric', minute: '2-digit', month: 'short' });
+    const presetKey = {
+      laterToday: 'reminders.laterToday',
+      nextWeek: 'reminders.nextWeek',
+      tomorrow: 'reminders.tomorrow',
+    } as const;
+    subItems = [
+      ...getReminderPresets().map(p => ({
+        id: p.key,
+        label: `${t(presetKey[p.key])} · ${when(p.at)}`,
+        onSelect: () => {
+          onClose();
+          void setReminder(issueId, p.at).then(ok => {
+            if (ok) {
+              toast.success(t('reminders.set', { when: when(p.at) }));
+            }
+          });
+        },
+      })),
+      ...(existing
+        ? [
+            {
+              id: 'clear',
+              label: t('reminders.clear'),
+              onSelect: () => {
+                onClose();
+                void clearReminder(issueId);
+              },
+            },
+          ]
+        : []),
     ];
   } else if (subMenu.type === 'setPriority') {
     const currentPriority = issueStore.findById(subMenu.issueId)?.priority;

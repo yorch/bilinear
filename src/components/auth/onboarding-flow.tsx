@@ -9,7 +9,9 @@ import { AuthHeader } from '@/components/auth/auth-header';
 import { OnboardingForm } from '@/components/auth/onboarding-form';
 import {
   deriveTeamKey,
+  onboardingResumeUrl,
   parseInviteEmails,
+  type ResumeStep,
   sanitizeTeamKey,
 } from '@/components/auth/onboarding-steps';
 import { Button } from '@/components/ui/button';
@@ -33,16 +35,28 @@ export function OnboardingFlow({
   backTo,
   defaultName,
   host,
+  resume = null,
 }: {
   /** Set when the visitor already has a workspace to return to. */
   backTo: { name: string; urlKey: string } | null;
   defaultName: string;
   host: string;
+  /** A validated step 2/3 position restored from the URL after a reload. */
+  resume?: { name: string; step: ResumeStep; urlKey: string } | null;
 }) {
   const t = useTranslations();
   const router = useRouter();
-  const [step, setStep] = useState<Step>('workspace');
-  const [created, setCreated] = useState<Created | null>(null);
+  const [step, setStep] = useState<Step>(resume?.step ?? 'workspace');
+  const [created, setCreated] = useState<Created | null>(
+    resume ? { name: resume.name, urlKey: resume.urlKey } : null,
+  );
+
+  function goTo(next: ResumeStep, urlKey: string) {
+    setStep(next);
+    // Not router.replace: nothing server-side needs to re-render now, and a
+    // history entry per step would make Back re-open a finished step.
+    window.history.replaceState(null, '', onboardingResumeUrl(next, urlKey));
+  }
 
   function finish(urlKey: string) {
     router.push(`/${urlKey}`);
@@ -81,12 +95,12 @@ export function OnboardingFlow({
           host={host}
           onCreated={org => {
             setCreated(org);
-            setStep('team');
+            goTo('team', org.urlKey);
           }}
         />
       )}
       {step === 'team' && created && (
-        <TeamStep onDone={() => setStep('invite')} workspaceName={created.name} />
+        <TeamStep onDone={() => goTo('invite', created.urlKey)} workspaceName={created.name} />
       )}
       {step === 'invite' && created && <InviteStep onDone={() => finish(created.urlKey)} />}
     </div>

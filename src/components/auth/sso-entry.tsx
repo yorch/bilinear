@@ -22,7 +22,9 @@ export function ssoInitiateUrl(urlKey: string, next: string | null): string {
  * enumerate workspaces), so the button cannot be conditional. Instead the
  * initiate route is probed without following its redirect — a redirect means
  * the IdP is ready and we go; anything else (unknown workspace, SAML off, not
- * configured) gets one identical, generic message.
+ * configured — the route answers all three identically) gets one generic
+ * message. Rendered OUTSIDE the email form: a <form> nested in a <form> is
+ * invalid and the browser would natively submit the outer one.
  */
 export function SsoEntry({ busy, next }: { busy: boolean; next: string | null }) {
   const t = useTranslations();
@@ -44,7 +46,7 @@ export function SsoEntry({ busy, next }: { busy: boolean; next: string | null })
     setError(null);
     const url = ssoInitiateUrl(key, next);
     try {
-      const res = await fetch(url, { redirect: 'manual' });
+      const res = await fetch(`${url}&probe=1`, { redirect: 'manual' });
       if (res.type === 'opaqueredirect') {
         window.location.assign(url);
         return;

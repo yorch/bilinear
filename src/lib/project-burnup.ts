@@ -33,11 +33,11 @@ export type ForecastStatus = 'complete' | 'insufficient' | 'projected';
 export type ForecastReason = 'noCompletions' | 'noIssues' | 'tooShort' | 'tooFar';
 
 export interface BurnupForecast {
-  /** Issues still open at `today`. */
-  remaining: number;
   /** YYYY-MM-DD, only when `status === 'projected'` (or the completion day when complete). */
   projectedFinish: string | null;
   reason: ForecastReason | null;
+  /** Issues still open at `today`. */
+  remaining: number;
   status: ForecastStatus;
   /** Completed issues per day over the trailing window. */
   velocityPerDay: number;

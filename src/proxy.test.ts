@@ -22,13 +22,41 @@ describe('proxy', () => {
     ).toBe('/acme');
   });
 
-  it('matcher skips api, _next and static files but covers pages', () => {
-    const re = new RegExp(`^${config.matcher[0]}$`);
-    expect(re.test('/acme/team/ENG')).toBe(true);
-    expect(re.test('/admin')).toBe(true);
-    expect(re.test('/api/graphql')).toBe(false);
-    expect(re.test('/_next/static/x.js')).toBe(false);
-    expect(re.test('/sw.js')).toBe(false);
-    expect(re.test('/offline.html')).toBe(false);
+  const re = new RegExp(`^${config.matcher[0]}$`);
+
+  it.each([
+    '/acme/team/ENG',
+    '/admin',
+    '/',
+    '/apiary/team/ENG',
+    '/api-docs',
+    '/apiary',
+    '/demo/project/v1.2',
+    '/demo/docs/release-2.0.1',
+    '/demo/issue/abc.def',
+  ])('matcher covers the page %s', path => {
+    expect(re.test(path)).toBe(true);
+  });
+
+  it.each([
+    '/api',
+    '/api/',
+    '/api/graphql',
+    '/_next/static/x.js',
+    '/_next/image',
+    '/sw.js',
+    '/offline.html',
+    '/manifest.webmanifest',
+    '/favicon.ico',
+    '/icons/icon-192.png',
+    '/icons/logo.svg',
+    '/fonts/a.woff2',
+    '/fonts/a.ttf',
+    '/chunks/app.js.map',
+    '/styles/app.css',
+    '/robots.txt',
+    '/sitemap.xml',
+  ])('matcher skips %s', path => {
+    expect(re.test(path)).toBe(false);
   });
 });

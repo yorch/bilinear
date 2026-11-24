@@ -31,6 +31,7 @@ import { CommentThread } from './comment-thread';
 import { FileAttachments } from './file-attachments';
 import { IssuePicker } from './issue-picker';
 import { IssueReactionBar } from './issue-reaction-bar';
+import { IssueReminderChip } from './issue-reminder-chip';
 import type { OpenProperty } from './issue-row';
 import { PullRequestsSection } from './pull-requests-section';
 import { RelationsSection } from './relations-section';
@@ -551,6 +552,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
             {/* The full page needs a document heading; the panel is a dialog. */}
             <h1 className="m-0 text-base font-normal">{title}</h1>
             {snoozedBadge}
+            <IssueReminderChip issueId={issue.id} />
           </div>
           {description}
           {sections}
@@ -571,6 +573,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
     <div className="flex flex-col gap-4 p-5">
       {title}
       {snoozedBadge}
+      <IssueReminderChip issueId={issue.id} />
       {properties}
       <CustomFieldsEditor issueId={issue.id} teamId={issue.teamId} />
       {description}

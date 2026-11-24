@@ -1,8 +1,8 @@
 'use client';
 
 import { TriageKeyHint } from '@/components/issues/triage-key-hint';
-import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { buttonVariants } from '@/components/ui/button';
+import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 
 export const SNOOZE_PRESETS: ReadonlyArray<{ hours: number; labelKey: string }> = [
@@ -25,7 +25,12 @@ interface TriageSnoozeMenuProps {
  * focus and focus-on-open. Rows are keyed by preset hours — stable identities,
  * so the panel never remounts under a pointer that is mid-click.
  */
-export function TriageSnoozeMenu({ disabled, forceOpen, onClose, onSelect }: TriageSnoozeMenuProps) {
+export function TriageSnoozeMenu({
+  disabled,
+  forceOpen,
+  onClose,
+  onSelect,
+}: TriageSnoozeMenuProps) {
   const t = useTranslations();
   return (
     <SelectPopover
@@ -45,6 +50,7 @@ export function TriageSnoozeMenu({ disabled, forceOpen, onClose, onSelect }: Tri
       {close =>
         SNOOZE_PRESETS.map(p => (
           <button
+            aria-selected={false}
             className={POPOVER_ITEM_CLASS}
             key={p.hours}
             onClick={() => {

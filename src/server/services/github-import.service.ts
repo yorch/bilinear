@@ -9,12 +9,14 @@ import type {
 import type { ConfigReader } from '../config/reader';
 import {
   createGithubIssuesClient,
+  GITHUB_MAX_COMMENTS_PER_ISSUE,
   type GithubIssue,
   type GithubIssuesClient,
   parseRepoSlug,
 } from '../lib/github-issues-client';
 import { MAX_RICH_TEXT_LENGTH } from '../lib/limits';
 import { childLogger } from '../lib/logger';
+import { escapeHtml, markdownToHtmlWithin, safeHref } from '../lib/markdown-to-html';
 import type { CommentService } from './comment.service';
 import type { CustomFieldService } from './custom-field.service';
 import type { IssueService } from './issue.service';
@@ -46,6 +48,12 @@ export interface GithubImportInput {
   page?: number | null;
   repo: string;
   /**
+   * The page this run began at. `limits.maxImportRows` bounds how far a single
+   * run walks from here, so a run that stops at the cap can be continued by a
+   * new run that starts where the previous one stopped.
+   */
+  startPage?: number | null;
+  /**
    * Personal access token used for this call only. Never stored or logged;
    * when absent the org's connected GitHub integration token is used, and when
    * there is none the request is anonymous (public repositories only).
@@ -64,6 +72,10 @@ export interface GithubImportPreview {
 
 /** Everything one chunk created, so the resolver can emit a SyncAction for each. */
 export interface GithubImportChunk {
+  /** Closed GitHub issues imported as open because the team has no Done/Canceled state. */
+  closedAsOpen: number;
+  /** Issues whose comment list was cut at the per-issue cap. */
+  commentsTruncated: number;
   createdComments: Comment[];
   createdFieldDefinition: CustomFieldDefinition | null;
   createdIssues: Array<Issue & { labelAssignments: Array<{ labelId: string }> }>;
@@ -72,20 +84,13 @@ export interface GithubImportChunk {
   /** Issues already imported earlier, skipped. */
   existing: number;
   fieldValues: CustomFieldValue[];
+  /** True when this run reached `limits.maxImportRows`; start a new run at `nextPage`. */
+  limitReached: boolean;
   /** Next GitHub page to request, or null when the repository is exhausted. */
   nextPage: number | null;
   /** Issues GitHub returned in this chunk (excluding pull requests). */
   processed: number;
   tokenSource: GithubTokenSource;
-}
-
-export class GithubImportTooLargeError extends Error {
-  constructor(max: number) {
-    super(
-      `This import exceeds the maximum of ${max} issues. Raise limits.maxImportRows or import in parts.`,
-    );
-    this.name = 'GithubImportTooLargeError';
-  }
 }
 
 export class GithubImportFieldUnavailableError extends Error {
@@ -113,12 +118,27 @@ function labelColor(l: GithubIssue['labels'][number]): string {
   return /^[0-9a-fA-F]{6}$/.test(raw) ? `#${raw.toLowerCase()}` : FALLBACK_LABEL_COLOR;
 }
 
-/** GitHub's markdown is stored as-is; a footer keeps provenance without a schema change. */
+/** One YYYY-MM-DD from a GitHub timestamp, or an empty string when malformed. */
+function isoDay(ts: string): string {
+  return /^\d{4}-\d{2}-\d{2}/.test(ts) ? ts.slice(0, 10) : '';
+}
+
+/**
+ * Issue descriptions and comments are TipTap HTML, so GitHub's markdown is
+ * converted (and sanitised) server-side; nothing from GitHub is stored as raw
+ * HTML. A footer keeps provenance without a schema change.
+ */
 export function buildDescription(issue: GithubIssue): string {
-  const author = issue.user?.login ? ` by @${issue.user.login}` : '';
-  const footer = `\n\n---\nImported from GitHub: ${issue.html_url}\nOpened${author} on ${issue.created_at.slice(0, 10)}.`;
-  const body = (issue.body ?? '').slice(0, MAX_RICH_TEXT_LENGTH - footer.length - 1);
-  return `${body}${footer}`.trim();
+  const href = safeHref(issue.html_url);
+  const link = href
+    ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer nofollow">${escapeHtml(issue.html_url)}</a>`
+    : escapeHtml(issue.html_url);
+  const author = issue.user?.login ? ` by @${escapeHtml(issue.user.login)}` : '';
+  const footer = `<hr><p>Imported from GitHub: ${link}<br>Opened${author} on ${escapeHtml(isoDay(issue.created_at))}.</p>`;
+  const body = (issue.body ?? '').trim()
+    ? markdownToHtmlWithin(issue.body ?? '', MAX_RICH_TEXT_LENGTH - footer.length - 1)
+    : '';
+  return `${body}${footer}`;
 }
 
 export function buildCommentBody(c: {
@@ -126,9 +146,21 @@ export function buildCommentBody(c: {
   created_at: string;
   user: { login: string } | null;
 }): string {
-  const who = c.user?.login ? `@${c.user.login}` : 'Someone';
-  return `**${who}** commented on ${c.created_at.slice(0, 10)}:\n\n${c.body}`.slice(0, 50_000);
+  const who = c.user?.login ? `@${escapeHtml(c.user.login)}` : 'Someone';
+  const head = `<p><strong>${who}</strong> commented on ${escapeHtml(isoDay(c.created_at))}:</p>`;
+  return `${head}${markdownToHtmlWithin(c.body, MAX_RICH_TEXT_LENGTH - head.length - 1)}`;
 }
+
+function validDate(ts: string | null | undefined): Date | undefined {
+  if (!ts) {
+    return undefined;
+  }
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+/** Interactive-transaction bounds for the per-team import lock (a chunk can take a while). */
+const LOCK_TX_OPTIONS = { maxWait: 60_000, timeout: 5 * 60_000 } as const;
 
 export class GithubImportService {
   constructor(
@@ -138,13 +170,27 @@ export class GithubImportService {
     private client: GithubIssuesClient = createGithubIssuesClient(),
   ) {}
 
+  /**
+   * The workspace's connected GitHub token is shared; letting any team member
+   * spend its rate limit lets one member starve everyone (and the integration).
+   * Only org owners/admins may fall back to it; members supply their own token
+   * or run anonymously.
+   */
   private async resolveToken(
     orgId: string,
+    userId: string,
     personal: string | null | undefined,
   ): Promise<{ source: GithubTokenSource; token: string | undefined }> {
     const pat = personal?.trim();
     if (pat) {
       return { source: 'personal', token: pat };
+    }
+    const membership = await this.prisma.organizationMember.findUnique({
+      select: { role: true },
+      where: { organizationId_userId: { organizationId: orgId, userId } },
+    });
+    if (!membership || !['admin', 'owner'].includes(membership.role)) {
+      return { source: 'none', token: undefined };
     }
     const integration = await this.prisma.gitHubIntegration.findUnique({
       select: { accessToken: true },
@@ -156,9 +202,13 @@ export class GithubImportService {
     return { source: 'none', token: undefined };
   }
 
-  async preview(orgId: string, input: GithubImportInput): Promise<GithubImportPreview> {
+  async preview(
+    orgId: string,
+    userId: string,
+    input: GithubImportInput,
+  ): Promise<GithubImportPreview> {
     const repo = parseRepoSlug(input.repo);
-    const { source, token } = await this.resolveToken(orgId, input.token);
+    const { source, token } = await this.resolveToken(orgId, userId, input.token);
     const totalIssues = await this.client.countIssues(repo, token);
     return { repo, tokenSource: source, totalIssues };
   }
@@ -167,6 +217,13 @@ export class GithubImportService {
    * Import one GitHub page of issues into `teamId`. Safe to repeat: issues whose
    * GitHub URL is already recorded in the source field are skipped, so an
    * interrupted import is resumed by simply starting again.
+   *
+   * Runs for one (org, team) are serialised with a transaction-scoped Postgres
+   * advisory lock held for the whole chunk: without it two concurrent runs read
+   * the same "already imported" set and both insert, and both create the
+   * "GitHub issue" field definition (neither table can carry a unique key for
+   * this). The lock is per team rather than per repo because the definition is
+   * team-wide, so it also makes the definition get-or-create atomic.
    */
   async importPage(
     orgId: string,
@@ -176,19 +233,13 @@ export class GithubImportService {
   ): Promise<GithubImportChunk> {
     const repo = parseRepoSlug(input.repo);
     const page = Math.max(1, Math.floor(input.page ?? 1));
+    const startPage = Math.min(page, Math.max(1, Math.floor(input.startPage ?? 1)));
     const maxRows = this.config ? await this.config.getInt(MAX_IMPORT_ROWS_KEY, { orgId }) : null;
-    if (maxRows !== null && (page - 1) * GITHUB_IMPORT_PAGE_SIZE >= maxRows) {
-      throw new GithubImportTooLargeError(maxRows);
-    }
+    const { source, token } = await this.resolveToken(orgId, userId, input.token);
 
-    const { source, token } = await this.resolveToken(orgId, input.token);
-    const fetched = await this.client.listIssues(repo, token, {
-      includeClosed: input.includeClosed ?? true,
-      page,
-      perPage: GITHUB_IMPORT_PAGE_SIZE,
-    });
-
-    const chunk: GithubImportChunk = {
+    const empty: GithubImportChunk = {
+      closedAsOpen: 0,
+      commentsTruncated: 0,
       createdComments: [],
       createdFieldDefinition: null,
       createdIssues: [],
@@ -196,10 +247,42 @@ export class GithubImportService {
       errors: [],
       existing: 0,
       fieldValues: [],
-      nextPage: fetched.hasNext ? page + 1 : null,
-      processed: fetched.items.length,
+      limitReached: false,
+      nextPage: null,
+      processed: 0,
       tokenSource: source,
     };
+    // The cap bounds one run, measured from where the run started. Stopping is
+    // not a failure: the caller starts a new run at `nextPage`, so later issues
+    // stay reachable instead of being locked out by an absolute page index.
+    if (maxRows !== null && (page - startPage) * GITHUB_IMPORT_PAGE_SIZE >= maxRows) {
+      return { ...empty, limitReached: true, nextPage: page };
+    }
+
+    return this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`github-import:${orgId}:${teamId}`}, 0))`;
+      return this.importLocked(orgId, userId, teamId, input, repo, page, token, empty);
+    }, LOCK_TX_OPTIONS);
+  }
+
+  private async importLocked(
+    orgId: string,
+    userId: string,
+    teamId: string,
+    input: GithubImportInput,
+    repo: string,
+    page: number,
+    token: string | undefined,
+    chunk: GithubImportChunk,
+  ): Promise<GithubImportChunk> {
+    const fetched = await this.client.listIssues(repo, token, {
+      includeClosed: input.includeClosed ?? true,
+      page,
+      perPage: GITHUB_IMPORT_PAGE_SIZE,
+    });
+
+    chunk.nextPage = fetched.hasNext ? page + 1 : null;
+    chunk.processed = fetched.items.length;
     if (fetched.items.length === 0) {
       return chunk;
     }
@@ -250,9 +333,12 @@ export class GithubImportService {
       select: { id: true, type: true },
       where: { archivedAt: null, teamId },
     });
-    const firstOfType = (type: string) => states.find(s => s.type === type)?.id;
-    const completedStateId = firstOfType('completed');
-    const canceledStateId = firstOfType('canceled') ?? completedStateId;
+    const firstOfType = (type: string) => states.find(s => s.type === type);
+    const completedState = firstOfType('completed');
+    // Closed-as-not-planned falls back to Done, and a team with only a
+    // Canceled state still gets its completed issues closed rather than open.
+    const canceledState = firstOfType('canceled') ?? completedState;
+    const doneState = completedState ?? canceledState;
 
     const needsAssignee = fetched.items.some(
       i => i.assignee?.login && !alreadyUrls.has(i.html_url),
@@ -305,17 +391,26 @@ export class GithubImportService {
         const assigneeLogin = gh.assignee?.login ?? gh.assignees?.[0]?.login;
         const assigneeId = assigneeLogin ? await resolveAssignee(assigneeLogin) : undefined;
 
-        const stateId =
+        const closedState =
           gh.state === 'closed'
             ? gh.state_reason === 'not_planned'
-              ? canceledStateId
-              : completedStateId
+              ? (canceledState ?? doneState)
+              : doneState
             : undefined;
+        if (gh.state === 'closed' && !closedState) {
+          chunk.closedAsOpen++;
+        }
+        const stateId = closedState?.id;
+
+        // Preserve GitHub's own timeline instead of stamping "now".
+        const createdAt = validDate(gh.created_at);
+        const closedAt = closedState ? validDate(gh.closed_at) : undefined;
 
         // The source-URL marker is written in the same transaction as the
         // issue: a crash between the two would otherwise leave an unmarked
         // issue that the next run imports a second time.
         let value: CustomFieldValue | undefined;
+        let stamped: Issue | undefined;
         const issue = await this.deps.issue.create(
           orgId,
           userId,
@@ -328,9 +423,22 @@ export class GithubImportService {
             title: gh.title.trim().slice(0, MAX_TITLE) || `GitHub issue #${gh.number}`,
           },
           async (tx, created) => {
-            value = await (tx as unknown as PrismaClient).customFieldValue.create({
+            const client = tx as unknown as PrismaClient;
+            value = await client.customFieldValue.create({
               data: { definitionId, issueId: created.id, value: gh.html_url },
             });
+            if (createdAt || closedAt) {
+              stamped = await client.issue.update({
+                data: {
+                  ...(createdAt ? { createdAt } : {}),
+                  ...(closedAt && closedState?.type === 'completed'
+                    ? { completedAt: closedAt }
+                    : {}),
+                  ...(closedAt && closedState?.type === 'canceled' ? { canceledAt: closedAt } : {}),
+                },
+                where: { id: created.id },
+              });
+            }
           },
         );
         if (value) {
@@ -343,11 +451,18 @@ export class GithubImportService {
               where: { issueId: issue.id },
             })
           : [];
-        chunk.createdIssues.push({ ...issue, labelAssignments });
+        chunk.createdIssues.push({ ...issue, ...(stamped ?? {}), labelAssignments });
 
         if ((input.includeComments ?? false) && gh.comments > 0) {
           try {
-            for (const c of await this.client.listComments(repo, gh.number, token)) {
+            const comments = await this.client.listComments(repo, gh.number, token);
+            if (comments.truncated) {
+              chunk.commentsTruncated++;
+              chunk.errors.push(
+                `#${gh.number}: only the first ${GITHUB_MAX_COMMENTS_PER_ISSUE} of ${gh.comments} comments were imported`,
+              );
+            }
+            for (const c of comments.items) {
               if (!c.body?.trim()) {
                 continue;
               }

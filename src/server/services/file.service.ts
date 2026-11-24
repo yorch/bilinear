@@ -10,6 +10,49 @@ export interface FileCreateInput {
   url: string;
 }
 
+/**
+ * Avatars are the one upload with no issue/project parent. The server mints
+ * their key with this prefix (a client cannot choose a key), which is how a
+ * parent-less row is recognised as an avatar without a schema column.
+ */
+export const AVATAR_KEY_PREFIX = 'avatar-';
+export const AVATAR_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp'] as const;
+export const MAX_AVATAR_SIZE = 2 * 1024 * 1024; // 2 MB
+
+const AVATAR_KEY_PATTERN = new RegExp(
+  `^${AVATAR_KEY_PREFIX}[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(${AVATAR_EXTENSIONS.join('|')})$`,
+);
+
+/**
+ * The storage key of `url` when it is exactly `<appUrl>/api/uploads/<avatar key>`
+ * — same origin, no query/fragment/userinfo — else null.
+ */
+export function avatarKeyFromUrl(url: string, appUrl: string): string | null {
+  let parsed: URL;
+  let base: URL;
+  try {
+    parsed = new URL(url);
+    base = new URL(appUrl);
+  } catch {
+    return null;
+  }
+  if (
+    parsed.origin !== base.origin ||
+    parsed.search ||
+    parsed.hash ||
+    parsed.username ||
+    parsed.password
+  ) {
+    return null;
+  }
+  const prefix = '/api/uploads/';
+  if (!parsed.pathname.startsWith(prefix)) {
+    return null;
+  }
+  const key = parsed.pathname.slice(prefix.length);
+  return AVATAR_KEY_PATTERN.test(key) ? key : null;
+}
+
 export class FileNotFoundError extends Error {
   constructor() {
     super('File not found');
@@ -123,7 +166,16 @@ export class FileService {
       });
       return ok ? file : null;
     }
-    // Orphan file (no parent issue/project) — treat as inaccessible.
+    // An avatar is shown to everyone the uploader works with, so it is readable
+    // from any org the uploader belongs to — and from no other.
+    if (file.uploaderId && file.key.startsWith(AVATAR_KEY_PREFIX)) {
+      const member = await this.prisma.organizationMember.findFirst({
+        select: { userId: true },
+        where: { organizationId: orgId, userId: file.uploaderId },
+      });
+      return member ? file : null;
+    }
+    // Any other orphan (no parent issue/project) — treat as inaccessible.
     return null;
   }
 }

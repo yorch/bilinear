@@ -39,6 +39,15 @@ export interface GithubComment {
   user: { login: string } | null;
 }
 
+/** Ceiling on comments imported per issue; beyond it the result is flagged truncated. */
+export const GITHUB_MAX_COMMENTS_PER_ISSUE = 500;
+
+export interface GithubCommentPage {
+  items: GithubComment[];
+  /** True when GitHub has more comments than the per-issue ceiling. */
+  truncated: boolean;
+}
+
 export interface GithubIssuePage {
   hasNext: boolean;
   items: GithubIssue[];
@@ -49,7 +58,7 @@ export interface GithubIssuesClient {
   countIssues(repo: string, token: string | undefined): Promise<number | null>;
   /** Public profile email for a login, or null when the user hides it. */
   getUserEmail(login: string, token: string | undefined): Promise<string | null>;
-  listComments(repo: string, number: number, token: string | undefined): Promise<GithubComment[]>;
+  listComments(repo: string, number: number, token: string | undefined): Promise<GithubCommentPage>;
   listIssues(
     repo: string,
     token: string | undefined,
@@ -170,8 +179,22 @@ export function createGithubIssuesClient(fetchImpl: typeof fetch = fetch): Githu
     },
 
     async listComments(repo, number, token) {
-      const res = await request(`/repos/${repo}/issues/${number}/comments?per_page=100`, token);
-      return (await res.json()) as GithubComment[];
+      const perPage = 100;
+      const items: GithubComment[] = [];
+      for (let page = 1; ; page++) {
+        const res = await request(
+          `/repos/${repo}/issues/${number}/comments?per_page=${perPage}&page=${page}`,
+          token,
+        );
+        items.push(...((await res.json()) as GithubComment[]));
+        const hasNext = /rel="next"/.test(res.headers.get('link') ?? '');
+        if (!hasNext) {
+          return { items, truncated: false };
+        }
+        if (items.length >= GITHUB_MAX_COMMENTS_PER_ISSUE) {
+          return { items: items.slice(0, GITHUB_MAX_COMMENTS_PER_ISSUE), truncated: true };
+        }
+      }
     },
 
     async listIssues(repo, token, opts) {

@@ -70,6 +70,17 @@ const SECTIONS: ShortcutSection[] = [
     titleKey: 'layout.shortcutHelp.sections.issueActions',
   },
   {
+    // Live only on a team's Triage page (`triage/page.tsx`); J / K move
+    // through the queue there exactly as in the issue list.
+    shortcuts: [
+      { descriptionKey: 'layout.shortcutHelp.triageAccept', keys: ['1'] },
+      { descriptionKey: 'layout.shortcutHelp.triageDuplicate', keys: ['2'] },
+      { descriptionKey: 'layout.shortcutHelp.triageDecline', keys: ['3'] },
+      { descriptionKey: 'layout.shortcutHelp.triageSnooze', keys: ['H'] },
+    ],
+    titleKey: 'layout.shortcutHelp.sections.triage',
+  },
+  {
     shortcuts: [
       { descriptionKey: 'layout.shortcutHelp.listView', keys: ['Alt', '1'] },
       { descriptionKey: 'layout.shortcutHelp.boardView', keys: ['Alt', '2'] },

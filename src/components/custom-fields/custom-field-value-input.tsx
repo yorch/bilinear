@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { SimpleSelect } from '@/components/ui/select';
+import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
+import { formatNumberValue } from '@/lib/custom-field-format';
+import { useFieldFormat } from '@/lib/custom-field-format-store';
 import type { DBCustomFieldDefinition } from '@/lib/db';
 
 /**
@@ -42,7 +45,8 @@ export function CustomFieldValueInput({
       );
     case 'number':
       return (
-        <TextInput
+        <NumberValueInput
+          definitionId={definition.id}
           label={definition.name}
           onSave={v => {
             if (v === '') {
@@ -54,8 +58,7 @@ export function CustomFieldValueInput({
               onSave(n);
             }
           }}
-          type="number"
-          value={value == null ? '' : String(value)}
+          value={value}
         />
       );
     case 'date':
@@ -113,7 +116,10 @@ function TextInput({
   onSave,
   placeholder,
   type = 'text',
+  display,
 }: {
+  /** Shown instead of `value` (as text) while the input is not focused. */
+  display?: string;
   label: string;
   value: string;
   onSave: (next: string) => void;
@@ -121,28 +127,58 @@ function TextInput({
   type?: 'text' | 'url' | 'number';
 }) {
   const [draft, setDraft] = useState(value);
+  const [focused, setFocused] = useState(false);
   useEffect(() => setDraft(value), [value]);
+  const showDisplay = display !== undefined && !focused;
 
   return (
     <input
       aria-label={label}
       className="rounded-md border border-border bg-card px-2 py-1 text-xs"
       onBlur={() => {
+        setFocused(false);
         if (draft !== value) {
           onSave(draft);
         }
       }}
       onChange={e => setDraft(e.target.value)}
+      onFocus={() => setFocused(true)}
       onKeyDown={e => {
         if (e.key === 'Enter') {
           e.currentTarget.blur();
         }
       }}
       placeholder={placeholder}
-      type={type}
-      value={draft}
+      type={showDisplay ? 'text' : type}
+      value={showDisplay ? display : draft}
     />
   );
+}
+
+/**
+ * Number field: the raw number while editing (type=number keeps the native
+ * stepper and numeric parsing), the formatted display when at rest. The saved
+ * value is always the raw number.
+ */
+function NumberValueInput({
+  definitionId,
+  label,
+  onSave,
+  value,
+}: {
+  definitionId: string;
+  label: string;
+  onSave: (next: string) => void;
+  value: unknown;
+}) {
+  const format = useFieldFormat(definitionId);
+  const { intlLocale } = useFormatters();
+  const raw = typeof value === 'number' ? String(value) : '';
+  const display =
+    format.kind !== 'plain' && raw !== ''
+      ? formatNumberValue(value as number, format, intlLocale)
+      : undefined;
+  return <TextInput display={display} label={label} onSave={onSave} type="number" value={raw} />;
 }
 
 // ---------------------------------------------------------------------------

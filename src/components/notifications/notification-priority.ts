@@ -22,9 +22,11 @@ function str(value: unknown): string | null {
  * are reminded, or the status of an issue *you* are assigned changed. Everything
  * else (comments and status changes on issues you merely subscribe to) is Other.
  * Unknown types fall to Other so a new notification type is never promoted by
- * accident. A reply is recognised by any of `isReply`, `replyToUserId` or
- * `parentAuthorId` in the payload; a comment notification with none of them is
- * ordinary subscribed activity.
+ * accident. The server marks a reply with ONE field,
+ * `replyToUserId` (the parent comment's author); the row is Priority only for
+ * that viewer. Legacy rows may carry `parentAuthorId` (same meaning) or a bare
+ * `isReply: true`, which are still honoured. A comment notification with none
+ * of them is ordinary subscribed activity.
  */
 export function classifyNotification(
   notification: Pick<DBNotification, 'data' | 'issueId' | 'type'>,

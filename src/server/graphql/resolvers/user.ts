@@ -120,14 +120,53 @@ export const userResolvers = {
 
     userUpdateProfile: async (
       _parent: unknown,
-      { input }: { input: { avatarUrl?: string | null; name?: string } },
+      { input }: { input: { avatarUrl?: string | null; name?: string | null } },
       ctx: GraphQLContext,
     ) => {
       // Org-less on purpose: onboarding offers the name step before the first
       // workspace exists, when the session has a user but no org.
       requireUserId(ctx);
+      const userId = ctx.userId;
+      const memberships = await ctx.services.user.listOrganizationsForUser(userId);
+      // The update and every workspace's SyncAction commit together: a person
+      // is visible in each workspace they belong to, so a partial fan-out
+      // would leave some of them showing the old name until something else
+      // re-touched the row. Publishing waits for the commit (no phantoms).
+      let result: {
+        changed: boolean;
+        recorded: Awaited<ReturnType<typeof ctx.services.sync.recordSyncAction>>[];
+        user: User;
+      };
       try {
-        await ctx.services.user.updateProfile(ctx.userId, input);
+        result = await ctx.prisma.$transaction(async tx => {
+          const { changed, user: updated } = await ctx.services.user.updateProfile(
+            userId,
+            input,
+            tx as never,
+          );
+          if (!changed) {
+            return { changed, recorded: [], user: updated };
+          }
+          // Sensitive columns omitted, as in bootstrap.
+          const user = await tx.user.findUnique({ omit: USER_SYNC_OMIT, where: { id: userId } });
+          if (!user) {
+            throw new GraphQLError('User not found', { extensions: { code: 'NOT_FOUND' } });
+          }
+          const recorded = [];
+          for (const { organization } of memberships) {
+            recorded.push(
+              await ctx.services.sync.recordSyncAction(
+                tx,
+                organization.id,
+                'U',
+                'User',
+                user.id,
+                user,
+              ),
+            );
+          }
+          return { changed, recorded, user: updated };
+        });
       } catch (err) {
         if ((err as Error).name === 'InvalidProfileError') {
           throw new GraphQLError((err as Error).message, {
@@ -136,30 +175,12 @@ export const userResolvers = {
         }
         throw err;
       }
-      // A person is visible in every workspace they belong to, so announce the
-      // change to each (sensitive columns omitted, as in bootstrap). The
-      // current org's id is the one handed back for the client's sync fence.
-      const [user, memberships] = await Promise.all([
-        ctx.prisma.user.findUnique({ omit: USER_SYNC_OMIT, where: { id: ctx.userId } }),
-        ctx.services.user.listOrganizationsForUser(ctx.userId),
-      ]);
-      if (!user) {
-        throw new GraphQLError('User not found', { extensions: { code: 'NOT_FOUND' } });
+      for (const action of result.recorded) {
+        ctx.services.sync.publish(action);
       }
-      let lastSyncId: string | null = null;
-      for (const { organization } of memberships) {
-        const sync = await ctx.services.sync.createSyncAction(
-          organization.id,
-          'U',
-          'User',
-          user.id,
-          user,
-        );
-        if (organization.id === ctx.orgId) {
-          lastSyncId = sync.id.toString();
-        }
-      }
-      return { lastSyncId, success: true, user };
+      // The current org's id is the one handed back for the client's sync fence.
+      const own = result.recorded.find(a => a.organizationId === ctx.orgId);
+      return { lastSyncId: own ? own.id.toString() : null, success: true, user: result.user };
     },
   },
 

@@ -357,6 +357,28 @@ export class NotificationService {
     });
   }
 
+  /**
+   * Author of the comment `commentId` replies to, or null when it is a
+   * top-level comment, the parent is gone, the author is the actor, or the
+   * author is no longer a member of the issue's team (so a reply never leaks
+   * to someone who lost access).
+   */
+  private async resolveReplyTarget(commentId: string, actorId: string): Promise<string | null> {
+    const comment = await this.prisma.comment.findUnique({
+      select: { issue: { select: { teamId: true } }, parent: { select: { authorId: true } } },
+      where: { id: commentId },
+    });
+    const parentAuthorId = comment?.parent?.authorId;
+    if (!parentAuthorId || parentAuthorId === actorId || !comment.issue) {
+      return null;
+    }
+    const membership = await this.prisma.teamMembership.findFirst({
+      select: { userId: true },
+      where: { teamId: comment.issue.teamId, userId: parentAuthorId },
+    });
+    return membership ? parentAuthorId : null;
+  }
+
   async notifyCommentSubscribers(
     orgId: string,
     issueId: string,
@@ -365,7 +387,14 @@ export class NotificationService {
     excerpt?: string,
   ): Promise<{ count: number }> {
     const subscribers = await this.getSubscribers(issueId);
-    const recipientIds = subscribers.filter(id => id !== actorId);
+    const replyToUserId = await this.resolveReplyTarget(commentId, actorId);
+    const recipients = new Set(subscribers.filter(id => id !== actorId));
+    // The parent comment's author is told about a direct reply even if they
+    // never subscribed (or have since been dropped from the subscriber set).
+    if (replyToUserId) {
+      recipients.add(replyToUserId);
+    }
+    const recipientIds = [...recipients];
     if (recipientIds.length === 0) {
       return { count: 0 };
     }
@@ -373,7 +402,10 @@ export class NotificationService {
     const result = await this.prisma.notification.createMany({
       data: recipientIds.map(userId => ({
         actorId,
-        data: { commentId, excerpt, issueId },
+        // `replyToUserId` is the ONE reply marker: the inbox puts the row in
+        // the Priority lane for the viewer it names, and in Other for every
+        // other subscriber of the same thread.
+        data: { commentId, excerpt, issueId, ...(replyToUserId ? { replyToUserId } : {}) },
         issueId,
         organizationId: orgId,
         type: 'ISSUE_COMMENTED',

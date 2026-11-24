@@ -54,3 +54,22 @@ export function parseInviteEmails(text: string): { invalid: string[]; valid: str
   }
   return { invalid, valid };
 }
+
+/** The post-create steps that can be resumed from the URL (step 1 never is). */
+export type ResumeStep = 'invite' | 'team';
+
+/** `?step=` value → a resumable step, or null for anything else. */
+export function parseResumeStep(value: string | string[] | undefined): ResumeStep | null {
+  const v = Array.isArray(value) ? value[0] : value;
+  return v === 'team' || v === 'invite' ? v : null;
+}
+
+/**
+ * Where a refresh of step 2/3 lands. The step lives in the URL (not only in
+ * component state) so a reload does not drop the visitor back onto the
+ * "create workspace" form — where re-submitting would mint a duplicate. The
+ * server re-validates that the viewer owns `urlKey` before trusting it.
+ */
+export function onboardingResumeUrl(step: ResumeStep, urlKey: string): string {
+  return `/onboarding?${new URLSearchParams({ org: urlKey, step }).toString()}`;
+}

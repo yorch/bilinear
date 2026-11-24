@@ -1,5 +1,6 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { parseResumeStep } from '@/components/auth/onboarding-steps';
 import { OnboardingFlow } from '@/components/auth/onboarding-flow';
 import { titleMetadata } from '@/lib/page-metadata';
 import { prisma } from '@/server/lib/prisma';
@@ -13,7 +14,11 @@ export async function generateMetadata() {
   };
 }
 
-export default async function OnboardingPage() {
+export default async function OnboardingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ org?: string | string[]; step?: string | string[] }>;
+}) {
   // Creating a workspace needs an account. A signed-out visitor used to get the
   // form and a failure on submit; send them to sign in and bring them back.
   const claim = await readSessionClaim();
@@ -33,6 +38,23 @@ export default async function OnboardingPage() {
     claim.orgId ? userService.findUsableMembership(claim.userId, claim.orgId) : null,
   ]);
 
+  // A reload mid-flow: `?step=team&org=<key>` restores steps 2-3, but only for a
+  // workspace this viewer owns — the URL is attacker-editable.
+  const { org: orgParam, step: stepParam } = await searchParams;
+  const resumeStep = parseResumeStep(stepParam);
+  const resumeKey = Array.isArray(orgParam) ? orgParam[0] : orgParam;
+  const owned =
+    resumeStep && resumeKey
+      ? await prisma.organizationMember.findFirst({
+          include: { organization: true },
+          where: {
+            organization: { archivedAt: null, suspendedAt: null, urlKey: resumeKey },
+            role: 'owner',
+            userId: claim.userId,
+          },
+        })
+      : null;
+
   return (
     <OnboardingFlow
       backTo={
@@ -42,6 +64,11 @@ export default async function OnboardingPage() {
       }
       defaultName={user?.name ?? ''}
       host={host}
+      resume={
+        owned && resumeStep
+          ? { name: owned.organization.name, step: resumeStep, urlKey: owned.organization.urlKey }
+          : null
+      }
     />
   );
 }

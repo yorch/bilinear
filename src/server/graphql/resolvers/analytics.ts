@@ -1,6 +1,15 @@
 import { GraphQLError } from 'graphql';
-import { requireAuth, requireOrgRole, requireTeamMember } from '../../middleware/auth';
-import type { AnalyticsRange } from '../../services/analytics.service';
+import {
+  getGuestTeamIds,
+  requireAuth,
+  requireOrgRole,
+  requireTeamMember,
+} from '../../middleware/auth';
+import {
+  type AnalyticsRange,
+  InsightsInputError,
+  type IssueVisibilityScope,
+} from '../../services/analytics.service';
 import type { GraphQLContext } from '../context';
 
 interface AnalyticsInput {
@@ -28,6 +37,20 @@ async function buildFilter(
     orgId: ctx.orgId,
     range: { from: input?.from ?? null, to: input?.to ?? null },
     teamId,
+  };
+}
+
+/** The viewer's issue scope: member teams, guest restriction on guest teams. */
+async function visibilityScope(ctx: GraphQLContext): Promise<IssueVisibilityScope> {
+  requireAuth(ctx);
+  const memberships = await ctx.prisma.teamMembership.findMany({
+    select: { teamId: true },
+    where: { team: { organizationId: ctx.orgId }, userId: ctx.userId },
+  });
+  return {
+    guestTeamIds: await getGuestTeamIds(ctx.prisma, ctx.userId, ctx.orgId),
+    memberTeamIds: memberships.map(m => m.teamId),
+    userId: ctx.userId,
   };
 }
 
@@ -89,6 +112,51 @@ export const analyticsResolvers = {
       requireAuth(ctx);
       requireOrgRole(ctx, ['owner', 'admin']);
       return ctx.services.analytics.workspaceOverview(ctx.orgId);
+    },
+
+    initiativeHealthRollups: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      return ctx.services.analytics.initiativeHealthRollups(ctx.orgId, await visibilityScope(ctx));
+    },
+
+    insights: async (
+      _p: unknown,
+      args: { measure: string; slice: string; viewId?: string | null },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      try {
+        return await ctx.services.analytics.insights(
+          ctx.orgId,
+          ctx.userId,
+          args.measure,
+          args.slice,
+          await visibilityScope(ctx),
+          args.viewId,
+        );
+      } catch (err) {
+        if (err instanceof InsightsInputError) {
+          throw new GraphQLError(err.message, { extensions: { code: 'BAD_USER_INPUT' } });
+        }
+        throw err;
+      }
+    },
+
+    projectBurnup: async (
+      _p: unknown,
+      { projectId }: { projectId: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      const result = await ctx.services.analytics.projectBurnup(
+        ctx.orgId,
+        projectId,
+        await visibilityScope(ctx),
+      );
+      if (!result) {
+        throw new GraphQLError('Project not found', { extensions: { code: 'NOT_FOUND' } });
+      }
+      return result;
     },
   },
 };

@@ -12,9 +12,9 @@
  */
 
 const ESCAPES: Record<string, string> = {
+  "'": '&#39;',
   '"': '&quot;',
   '&': '&amp;',
-  "'": '&#39;',
   '<': '&lt;',
   '>': '&gt;',
 };
@@ -169,14 +169,19 @@ function renderBlocks(src: string, depth: number): string {
       }
       const tag = ordered ? 'ol' : 'ul';
       const lis = items.map(item => {
-        const body = depth < 4 ? renderBlocks(item.join('\n'), depth + 1) : escapeText(item.join(' '));
+        const body =
+          depth < 4 ? renderBlocks(item.join('\n'), depth + 1) : escapeText(item.join(' '));
         return `<li>${body.startsWith('<p>') ? body : `<p></p>${body}`}</li>`;
       });
       out.push(`<${tag}>${lis.join('')}</${tag}>`);
       continue;
     }
     const para: string[] = [];
-    while (i < lines.length && (lines[i] as string).trim() && (para.length === 0 || !isBlockStart(lines[i] as string))) {
+    while (
+      i < lines.length &&
+      (lines[i] as string).trim() &&
+      (para.length === 0 || !isBlockStart(lines[i] as string))
+    ) {
       para.push((lines[i] as string).trim());
       i++;
     }

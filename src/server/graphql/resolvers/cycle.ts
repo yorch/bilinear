@@ -294,6 +294,24 @@ export const cycleResolvers = {
       }
     },
 
+    cycleUnarchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+
+      const existing = await ctx.services.cycle.findById(id);
+      if (!existing || existing.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Cycle not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+
+      const cycle = await ctx.services.cycle.unarchive(id);
+      // 'U', not 'A': clients upsert on both, but the sync log should not read
+      // "archived" for the opposite operation.
+      const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Cycle', id, cycle);
+      return { cycle, lastSyncId: sync.id.toString(), success: true };
+    },
+
     cycleUpdate: async (
       _parent: unknown,
       { id, input }: { id: string; input: CycleUpdateInput },

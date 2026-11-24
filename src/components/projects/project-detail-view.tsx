@@ -5,6 +5,7 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useMemo, useState } from 'react';
+import { ProjectBurnupSection } from '@/components/analytics/project-burnup-section';
 import { ProgressSparkline } from '@/components/projects/progress-sparkline';
 import { ProjectDocumentsSection } from '@/components/projects/project-documents-section';
 import { ProjectMilestonesSection } from '@/components/projects/project-milestones-section';
@@ -314,6 +315,7 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               <ProgressSparkline projectId={project.id} />
             </div>
           </SectionCard>
+          <ProjectBurnupSection projectId={project.id} />
           <SectionCard className="mt-6" title={t('projects.properties')}>
             <ProjectPropertiesPanel project={project} />
           </SectionCard>

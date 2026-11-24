@@ -37,16 +37,18 @@ describe('extractQueryTerms', () => {
 describe('FtsDuplicateScorer', () => {
   it('builds an OR tsquery from sanitised terms and scopes by team and state', async () => {
     const prisma = createMockPrisma();
-    prisma.$queryRaw.mockResolvedValue([{ id: 'x', score: 0.4 }]);
+    prisma.$queryRaw.mockResolvedValue([{ id: 'x', matched: ['crash'], score: 0.4 }]);
     const out = await new FtsDuplicateScorer(prisma as never).score({
       limit: 3,
       orgId: TEST_ORG.id,
       scope: SCOPE,
       source: { ...SOURCE, title: "crash' | !(x) & login" },
     });
-    expect(out).toEqual([{ issueId: 'x', score: 0.4 }]);
+    expect(out).toEqual([{ issueId: 'x', matchedTerms: ['crash'], score: 0.4 }]);
     const { sql, values } = sqlOf(prisma.$queryRaw.mock.calls[0][0]);
     expect(values).toContain('crash | login');
+    expect(values).toContainEqual(['crash', 'login']);
+    expect(values).toContain(1);
     expect(values).toContainEqual(['team-a']);
     expect(values).toContain('src');
     expect(sql).toContain('archived_at IS NULL');
@@ -160,7 +162,7 @@ describe('DuplicateSuggestionService', () => {
         { issueId: 'mine', score: 0.9 },
         { issueId: 'other', score: 0.8 },
       ],
-      [row('mine', { creatorId: 'user-1' }), row('other', { creatorId: 'u2', assigneeId: null })],
+      [row('mine', { creatorId: 'user-1' }), row('other', { assigneeId: null, creatorId: 'u2' })],
     );
     const out = await service.suggest(TEST_ORG.id, 'src', { ...SCOPE, guestTeamIds: ['team-a'] });
     expect(out.map(r => r.issue.id)).toEqual(['mine']);

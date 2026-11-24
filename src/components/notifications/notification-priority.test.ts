@@ -30,6 +30,18 @@ describe('classifyNotification', () => {
     ).toBe('other');
   });
 
+  it('still honours legacy reply markers on old rows', () => {
+    expect(
+      classifyNotification(n('ISSUE_COMMENTED', { data: { parentAuthorId: 'me' } }), 'me', lookups),
+    ).toBe('priority');
+    expect(
+      classifyNotification(n('ISSUE_COMMENTED', { data: { parentAuthorId: 'x' } }), 'me', lookups),
+    ).toBe('other');
+    expect(
+      classifyNotification(n('ISSUE_COMMENTED', { data: { isReply: true } }), 'me', lookups),
+    ).toBe('priority');
+  });
+
   it('promotes status changes only on issues assigned to the viewer', () => {
     expect(
       classifyNotification(n('ISSUE_STATUS_CHANGED', { issueId: 'mine' }), 'me', lookups),
@@ -37,9 +49,9 @@ describe('classifyNotification', () => {
     expect(
       classifyNotification(n('ISSUE_STATUS_CHANGED', { issueId: 'theirs' }), 'me', lookups),
     ).toBe('other');
-    expect(classifyNotification(n('ISSUE_STATUS_CHANGED', { issueId: 'mine' }), null, lookups)).toBe(
-      'other',
-    );
+    expect(
+      classifyNotification(n('ISSUE_STATUS_CHANGED', { issueId: 'mine' }), null, lookups),
+    ).toBe('other');
   });
 
   it('sends unknown types to other', () => {
@@ -58,7 +70,9 @@ describe('partitionByLane', () => {
 
 describe('reminderTime / nextLane', () => {
   it('reads a valid remindAt only', () => {
-    expect(reminderTime({ data: { remindAt: '2026-11-25T09:00:00Z' } })).toBe('2026-11-25T09:00:00Z');
+    expect(reminderTime({ data: { remindAt: '2026-11-25T09:00:00Z' } })).toBe(
+      '2026-11-25T09:00:00Z',
+    );
     expect(reminderTime({ data: { remindAt: 'nope' } })).toBeNull();
     expect(reminderTime({ data: {} })).toBeNull();
   });

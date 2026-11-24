@@ -6,6 +6,7 @@ import { DocumentStore } from './document-store';
 import { FavoriteStore } from './favorite-store';
 import { InitiativeStore } from './initiative-store';
 import { IssueRelationStore } from './issue-relation-store';
+import { IssueReminderStore } from './issue-reminder-store';
 import { IssueStore } from './issue-store';
 import { IssueTemplateStore } from './issue-template-store';
 import { LabelStore } from './label-store';
@@ -25,6 +26,7 @@ export class RootStore {
   documentStore: DocumentStore;
   favoriteStore: FavoriteStore;
   initiativeStore: InitiativeStore;
+  issueReminderStore: IssueReminderStore;
   issueRelationStore: IssueRelationStore;
   issueStore: IssueStore;
   issueTemplateStore: IssueTemplateStore;
@@ -50,6 +52,7 @@ export class RootStore {
     this.documentStore = new DocumentStore();
     this.favoriteStore = new FavoriteStore();
     this.initiativeStore = new InitiativeStore();
+    this.issueReminderStore = new IssueReminderStore();
     this.issueRelationStore = new IssueRelationStore();
     this.issueStore = new IssueStore();
     this.issueTemplateStore = new IssueTemplateStore();

@@ -3,6 +3,7 @@
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { InsightsExplorer } from '@/components/analytics/insights-explorer';
 import { StatCard } from '@/components/analytics/stat-card';
 import { barPercent, maxCompletedCount } from '@/components/analytics/velocity-utils';
 import { InlineRetry } from '@/components/shared/inline-retry';
@@ -301,6 +302,8 @@ const WorkspaceAnalyticsPage = observer(function WorkspaceAnalyticsPage() {
             )}
           </>
         )}
+
+        <InsightsExplorer />
       </div>
     </div>
   );

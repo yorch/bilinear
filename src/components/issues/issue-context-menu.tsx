@@ -11,6 +11,7 @@ import { POPOVER_ITEM_CLASS } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useFavoriteToggle } from '@/hooks/use-favorite-toggle';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useIssueReminders } from '@/hooks/use-issue-reminders';
 import { useIssueSnooze } from '@/hooks/use-issue-snooze';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
@@ -31,6 +32,7 @@ import {
   TeamPanel,
   useParentExclusions,
 } from './issue-context-submenus';
+import { IssueReminderPanel } from './issue-reminder-panel';
 import { getSnoozePresets, isIssueSnoozed, snoozeUntilDate } from './snooze-presets';
 
 type SubMenu =
@@ -39,6 +41,7 @@ type SubMenu =
   | 'priority'
   | 'assignee'
   | 'label'
+  | 'remind'
   | 'snooze'
   | 'project'
   | 'cycle'
@@ -123,6 +126,8 @@ export const IssueContextMenu = observer(function IssueContextMenu({
   const [submenu, setSubmenu] = useState<SubMenu>('root');
   const { isFavorite, toggle: toggleFavorite } = useFavoriteToggle('Issue', issueId);
   const { snooze, unsnooze } = useIssueSnooze();
+  const { reminderFor } = useIssueReminders();
+  const hasReminder = reminderFor(issueId) !== null;
   const snoozed = isIssueSnoozed(issueStore.findById(issueId)?.snoozedUntilAt);
   const snoozePresets = getSnoozePresets();
   const txQueue = useMemo(() => new TransactionQueue(), []);
@@ -320,6 +325,10 @@ export const IssueContextMenu = observer(function IssueContextMenu({
           label: t('issues.snooze.snooze'),
           onClick: () => setSubmenu('snooze'),
         },
+    {
+      label: hasReminder ? t('reminders.menuItemChange') : t('reminders.menuItem'),
+      onClick: () => setSubmenu('remind'),
+    },
     ...(onArchive || onDelete ? ([{ separator: true }] as MenuEntry[]) : []),
     ...(onArchive
       ? ([
@@ -357,6 +366,7 @@ export const IssueContextMenu = observer(function IssueContextMenu({
     parent: 'commandPalette.submenu.setParent',
     priority: 'commandPalette.submenu.setPriority',
     project: 'commandPalette.submenu.setProject',
+    remind: 'reminders.menuItem',
     snooze: 'issues.snooze.snooze',
     status: 'commandPalette.submenu.setStatus',
     subIssue: 'commandPalette.submenu.addSubIssue',
@@ -508,6 +518,7 @@ export const IssueContextMenu = observer(function IssueContextMenu({
                 ))}
               </>
             )}
+            {submenu === 'remind' && <IssueReminderPanel issueId={issueId} onClose={onClose} />}
             {submenu === 'snooze' && (
               <>
                 {snoozePresets.map(preset => (

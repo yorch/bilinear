@@ -262,30 +262,6 @@ export const triageResolvers = {
   },
 
   Query: {
-    triageQueue: async (_parent: unknown, { teamId }: { teamId: string }, ctx: GraphQLContext) => {
-      requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
-
-      const team = await ctx.services.team.findById(teamId);
-      if (!team || team.organizationId !== ctx.orgId) {
-        throw new GraphQLError('Team not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
-      }
-
-      return ctx.services.triage.getQueue(teamId);
-    },
-
-    triageQueueCount: async (
-      _parent: unknown,
-      { teamId }: { teamId: string },
-      ctx: GraphQLContext,
-    ) => {
-      requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
-      return ctx.services.triage.getQueueCount(teamId);
-    },
-
     triageDuplicateSuggestions: async (
       _parent: unknown,
       { first, issueId }: { first?: number | null; issueId: string },
@@ -322,6 +298,29 @@ export const triageResolvers = {
         }
         throw err;
       }
+    },
+    triageQueue: async (_parent: unknown, { teamId }: { teamId: string }, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
+
+      const team = await ctx.services.team.findById(teamId);
+      if (!team || team.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Team not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
+      return ctx.services.triage.getQueue(teamId);
+    },
+
+    triageQueueCount: async (
+      _parent: unknown,
+      { teamId }: { teamId: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
+      return ctx.services.triage.getQueueCount(teamId);
     },
   },
 };

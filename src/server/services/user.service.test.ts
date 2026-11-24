@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TEST_ORG, TEST_USER, TEST_USER_2 } from '../../test/fixtures';
 import { createMockPrisma } from '../../test/prisma-mock';
-import { InvalidAccentError, InvalidProfileError, UserService } from './user.service';
+import {
+  deriveInitials,
+  InvalidAccentError,
+  InvalidProfileError,
+  UserService,
+} from './user.service';
 
 describe('UserService', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
@@ -324,40 +329,134 @@ describe('UserService', () => {
   });
 
   describe('updateProfile', () => {
+    const APP = 'http://localhost:3000';
+    const KEY = 'avatar-0b1c2d3e-0000-4000-8000-000000000001.png';
+    const OWN = `${APP}/api/uploads/${KEY}`;
+    const current = { ...TEST_USER, avatarUrl: null, name: 'Old Name' };
+
+    beforeEach(() => {
+      prisma.user.findUnique.mockResolvedValue(current);
+      prisma.user.update.mockImplementation(async ({ data }: { data: object }) => ({
+        ...current,
+        ...data,
+      }));
+    });
+
     it('trims the name, mirrors displayName and recomputes initials', async () => {
-      prisma.user.update.mockResolvedValue({ ...TEST_USER, name: 'Ada Lovelace' });
+      const res = await service.updateProfile(TEST_USER.id, { name: '  Ada   Lovelace ' });
 
-      await service.updateProfile(TEST_USER.id, { name: '  Ada   Lovelace ' });
-
+      expect(res.changed).toBe(true);
       expect(prisma.user.update).toHaveBeenCalledWith({
         data: { displayName: 'Ada   Lovelace', initials: 'AL', name: 'Ada   Lovelace' },
         where: { id: TEST_USER.id },
       });
     });
 
-    it.each(['', '   ', 'x'.repeat(256)])('rejects an out-of-range name (%#)', async name => {
-      await expect(service.updateProfile(TEST_USER.id, { name })).rejects.toThrow(
+    it.each(['', '   ', 'x'.repeat(256), '\u200B', ' \u200B\u200D\u2060 ', '\u202E\u202C'])(
+      'rejects an out-of-range or invisible name (%#)',
+      async name => {
+        await expect(service.updateProfile(TEST_USER.id, { name })).rejects.toThrow(
+          InvalidProfileError,
+        );
+        expect(prisma.user.update).not.toHaveBeenCalled();
+      },
+    );
+
+    it('rejects a null name instead of crashing', async () => {
+      await expect(service.updateProfile(TEST_USER.id, { name: null })).rejects.toThrow(
         InvalidProfileError,
       );
       expect(prisma.user.update).not.toHaveBeenCalled();
     });
 
+    it('strips zero-width and bidi-override characters from a visible name', async () => {
+      await service.updateProfile(TEST_USER.id, { name: 'A\u200Bd\u202Ea' });
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ name: 'Ada' }) }),
+      );
+    });
+
+    it('builds initials from code points, not UTF-16 units', async () => {
+      await service.updateProfile(TEST_USER.id, { name: '\u{1F600} \u{1F601}' });
+      const data = prisma.user.update.mock.calls[0][0].data;
+      expect(data.initials).toBe('\u{1F600}\u{1F601}');
+      expect(deriveInitials('\u{1F600}')).toBe('\u{1F600}');
+    });
+
     it('accepts a 255-char name', async () => {
-      prisma.user.update.mockResolvedValue(TEST_USER);
       await service.updateProfile(TEST_USER.id, { name: 'x'.repeat(255) });
       expect(prisma.user.update).toHaveBeenCalled();
     });
 
-    it('rejects a non-http avatar and allows null to clear', async () => {
-      await expect(
-        service.updateProfile(TEST_USER.id, { avatarUrl: 'javascript:alert(1)' }),
-      ).rejects.toThrow(InvalidProfileError);
-      prisma.user.update.mockResolvedValue(TEST_USER);
+    it('rejects empty input', async () => {
+      await expect(service.updateProfile(TEST_USER.id, {})).rejects.toThrow(InvalidProfileError);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing and reports unchanged when the input matches the profile', async () => {
+      const res = await service.updateProfile(TEST_USER.id, { name: 'Old Name' });
+      expect(res.changed).toBe(false);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('clears the avatar with null', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...current, avatarUrl: OWN });
       await service.updateProfile(TEST_USER.id, { avatarUrl: null });
       expect(prisma.user.update).toHaveBeenCalledWith({
         data: { avatarUrl: null },
         where: { id: TEST_USER.id },
       });
+    });
+
+    it('accepts an avatar the caller uploaded as an avatar', async () => {
+      prisma.file.findFirst.mockResolvedValue({ id: 'f1' });
+      await service.updateProfile(TEST_USER.id, { avatarUrl: OWN });
+      expect(prisma.file.findFirst).toHaveBeenCalledWith({
+        select: { id: true },
+        where: { issueId: null, key: KEY, projectId: null, uploaderId: TEST_USER.id },
+      });
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        data: { avatarUrl: OWN },
+        where: { id: TEST_USER.id },
+      });
+    });
+
+    it.each([
+      ['external host', `https://evil.example/api/uploads/${KEY}`],
+      ['cloud metadata host', 'http://169.254.169.254/latest/meta-data'],
+      ['localhost on another port', `http://localhost:9999/api/uploads/${KEY}`],
+      ['tracking pixel', 'https://track.example/p.gif'],
+      ['javascript: URL', 'javascript:alert(1)'],
+      ['data: URL', 'data:image/png;base64,AAAA'],
+      ['non-avatar upload key', `${APP}/api/uploads/0b1c2d3e-0000-4000-8000-000000000001.png`],
+      ['query string', `${OWN}?x=1`],
+      ['path traversal', `${APP}/api/uploads/../${KEY}`],
+      ['not a url', 'nope'],
+    ])('rejects %s', async (_label, avatarUrl) => {
+      prisma.file.findFirst.mockResolvedValue({ id: 'f1' });
+      await expect(service.updateProfile(TEST_USER.id, { avatarUrl })).rejects.toThrow(
+        InvalidProfileError,
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects another user's (or a non-avatar) file at an otherwise valid URL", async () => {
+      prisma.file.findFirst.mockResolvedValue(null);
+      await expect(service.updateProfile(TEST_USER.id, { avatarUrl: OWN })).rejects.toThrow(
+        InvalidProfileError,
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('keeps an avatar the account already has (e.g. an OAuth picture)', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        ...current,
+        avatarUrl: 'https://avatars.githubusercontent.com/u/1',
+      });
+      const res = await service.updateProfile(TEST_USER.id, {
+        avatarUrl: 'https://avatars.githubusercontent.com/u/1',
+      });
+      expect(res.changed).toBe(false);
     });
   });
 });

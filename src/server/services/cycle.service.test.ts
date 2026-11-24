@@ -121,6 +121,19 @@ describe('CycleService', () => {
     });
   });
 
+  describe('unarchive', () => {
+    it('clears archivedAt', async () => {
+      prisma.cycle.update.mockResolvedValue({ ...TEST_CYCLE, archivedAt: null });
+
+      const result = await service.unarchive(TEST_CYCLE.id);
+      expect(result.archivedAt).toBeNull();
+      expect(prisma.cycle.update).toHaveBeenCalledWith({
+        data: { archivedAt: null },
+        where: { id: TEST_CYCLE.id },
+      });
+    });
+  });
+
   describe('archive', () => {
     it('sets archivedAt', async () => {
       const now = new Date();

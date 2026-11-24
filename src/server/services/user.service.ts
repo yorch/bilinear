@@ -1,7 +1,9 @@
 import { isAccent } from '@/lib/accent';
 import { isLocale } from '@/lib/i18n';
 import type { PrismaClient, User } from '../../generated/prisma';
+import { env } from '../lib/env';
 import { MAX_LOGO_URL_LENGTH } from '../lib/limits';
+import { avatarKeyFromUrl } from './file.service';
 
 /**
  * Whether the given (transaction or root) Prisma client sees an empty users
@@ -190,16 +192,34 @@ export class UserService {
   }
 
   /**
-   * Edit the viewer's own profile. `name` is required to be 1-255 chars after
-   * trimming; initials are recomputed from it so the avatar fallback follows a
-   * rename. `avatarUrl` is optional: omitted leaves it alone, `null` clears it,
-   * a string must be a bounded http(s) URL (the upload route returns one).
+   * Edit the viewer's own profile. `name` is required to be 1-255 characters
+   * after control/format characters (zero-width, bidi overrides) are stripped
+   * and the result trimmed, and must keep at least one visible character;
+   * initials are recomputed from it so the avatar fallback follows a rename.
+   * `avatarUrl` is optional: omitted leaves it alone, `null` clears it, and a
+   * string must be this app's own `/api/uploads/<avatar key>` URL for a file
+   * the caller uploaded as an avatar — the value is broadcast to every
+   * workspace and rendered in a raw <img>, so an arbitrary host (internal
+   * addresses, tracking pixels) is refused. Re-sending the avatar the account
+   * already has (an OAuth provider's picture) is accepted unchanged.
    * `displayName` mirrors `name` — nothing in the product distinguishes them.
+   *
+   * Returns `changed: false` (and writes nothing) when the input matches the
+   * stored profile, so the caller can skip the cross-org SyncAction fan-out.
+   * Pass a transaction client to make the write atomic with those SyncActions.
    */
   async updateProfile(
     userId: string,
-    input: { avatarUrl?: string | null; name?: string },
-  ): Promise<User> {
+    input: { avatarUrl?: string | null; name?: string | null },
+    client: Pick<PrismaClient, 'file' | 'user'> = this.prisma,
+  ): Promise<{ changed: boolean; user: User }> {
+    if (input.name === undefined && input.avatarUrl === undefined) {
+      throw new InvalidProfileError('Nothing to update');
+    }
+    const current = await client.user.findUnique({ where: { id: userId } });
+    if (!current) {
+      throw new InvalidProfileError('User not found');
+    }
     const data: {
       avatarUrl?: string | null;
       displayName?: string;
@@ -207,37 +227,51 @@ export class UserService {
       name?: string;
     } = {};
     if (input.name !== undefined) {
-      const name = input.name.trim();
+      if (typeof input.name !== 'string') {
+        throw new InvalidProfileError('Name is required');
+      }
+      const name = sanitizeProfileName(input.name);
       if (name.length < 1 || name.length > MAX_PROFILE_NAME_LENGTH) {
         throw new InvalidProfileError(`Name must be 1-${MAX_PROFILE_NAME_LENGTH} characters`);
       }
-      data.name = name;
-      data.displayName = name;
-      data.initials = deriveInitials(name);
+      if (name !== current.name) {
+        data.name = name;
+        data.displayName = name;
+        data.initials = deriveInitials(name);
+      }
     }
-    if (input.avatarUrl !== undefined) {
-      if (input.avatarUrl !== null && !isHttpUrl(input.avatarUrl)) {
-        throw new InvalidProfileError('Avatar must be an http(s) URL');
+    if (input.avatarUrl !== undefined && input.avatarUrl !== current.avatarUrl) {
+      if (input.avatarUrl !== null) {
+        await this.assertOwnAvatar(client, userId, input.avatarUrl);
       }
       data.avatarUrl = input.avatarUrl;
     }
-    return this.prisma.user.update({ data, where: { id: userId } });
+    if (Object.keys(data).length === 0) {
+      return { changed: false, user: current };
+    }
+    const user = await client.user.update({ data, where: { id: userId } });
+    return { changed: true, user };
+  }
+
+  private async assertOwnAvatar(
+    client: Pick<PrismaClient, 'file'>,
+    userId: string,
+    url: string,
+  ): Promise<void> {
+    const key = url.length <= MAX_LOGO_URL_LENGTH ? avatarKeyFromUrl(url, env.APP_URL) : null;
+    const file = key
+      ? await client.file.findFirst({
+          select: { id: true },
+          where: { issueId: null, key, projectId: null, uploaderId: userId },
+        })
+      : null;
+    if (!file) {
+      throw new InvalidProfileError('Avatar must be an image you uploaded');
+    }
   }
 }
 
 export const MAX_PROFILE_NAME_LENGTH = 255;
-
-function isHttpUrl(value: string): boolean {
-  if (value.length > MAX_LOGO_URL_LENGTH) {
-    return false;
-  }
-  try {
-    const { protocol } = new URL(value);
-    return protocol === 'http:' || protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
 
 export class InvalidProfileError extends Error {
   constructor(message: string) {
@@ -260,10 +294,18 @@ export class InvalidAccentError extends Error {
   }
 }
 
-function deriveInitials(name: string): string {
+/** Strip control and format characters (zero-width, bidi overrides), then trim. */
+export function sanitizeProfileName(raw: string): string {
+  return raw.replace(/[\p{Cc}\p{Cf}]/gu, '').trim();
+}
+
+// Code points, not UTF-16 units: `[0]` of an emoji is a lone surrogate.
+export function deriveInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
+  const first = Array.from(parts[0]);
   if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
+    return first.slice(0, 2).join('').toUpperCase();
   }
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  const last = Array.from(parts[parts.length - 1]);
+  return (first[0] + last[0]).toUpperCase();
 }

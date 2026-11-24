@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 export function TriageKeyHint({ children, className }: { children: string; className?: string }) {
   return (
     <kbd
-      aria-hidden="true"
+      aria-hidden
       className={cn(
         'rounded border border-current px-1 font-mono text-[10px] leading-4 opacity-60 max-md:hidden [@media(hover:none)]:hidden',
         className,

@@ -188,6 +188,13 @@ export class CycleService {
     });
   }
 
+  async unarchive(id: string): Promise<Cycle> {
+    return this.prisma.cycle.update({
+      data: { archivedAt: null },
+      where: { id },
+    });
+  }
+
   /**
    * Delete a cycle. Unassigns any issues currently on it (returning the
    * affected ids so the caller can emit one `'U' Issue` SyncAction per row

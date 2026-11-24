@@ -17,10 +17,6 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import {
-  NOTIFICATION_MARK_UNREAD_MUTATION,
-  NOTIFICATION_UNSNOOZE_MUTATION,
-} from '@/components/notifications/notification-queries';
-import {
   type InboxLane,
   nextLane,
   partitionByLane,
@@ -28,6 +24,10 @@ import {
   reminderTime,
   writeStoredLane,
 } from '@/components/notifications/notification-priority';
+import {
+  NOTIFICATION_MARK_UNREAD_MUTATION,
+  NOTIFICATION_UNSNOOZE_MUTATION,
+} from '@/components/notifications/notification-queries';
 import { resolveNotificationTarget } from '@/components/notifications/notification-target';
 import {
   fetchNotifications,
@@ -368,7 +368,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
   // Priority vs Other. Starts on Priority (SSR-safe) and adopts the last-used
   // lane once mounted, so the hydration markup never depends on storage.
   const [lane, setLaneState] = useState<InboxLane>('priority');
-  const laneRef = useRef<HTMLDivElement>(null);
+  const laneRef = useRef<HTMLFieldSetElement>(null);
   useEffect(() => {
     const stored = readStoredLane();
     if (stored) {
@@ -585,13 +585,8 @@ export const NotificationInbox = observer(function NotificationInbox() {
       />
 
       <Toolbar>
-        {/* biome-ignore lint/a11y/noStaticElementInteractions: arrow keys on the focused segment move between lanes */}
-        <div
-          aria-label={t('notifications.lanes.label')}
-          onKeyDown={handleLaneKeyDown}
-          ref={laneRef}
-          role="group"
-        >
+        <fieldset className="m-0 min-w-0 border-0 p-0" onKeyDown={handleLaneKeyDown} ref={laneRef}>
+          <legend className="sr-only">{t('notifications.lanes.label')}</legend>
           <SegmentedControl
             onChange={setLane}
             options={[
@@ -620,7 +615,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
             ]}
             value={lane}
           />
-        </div>
+        </fieldset>
         <SegmentedControl
           onChange={setTab}
           options={[

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { deriveTeamKey, parseInviteEmails, sanitizeTeamKey } from './onboarding-steps';
+import {
+  deriveTeamKey,
+  onboardingResumeUrl,
+  parseInviteEmails,
+  parseResumeStep,
+  sanitizeTeamKey,
+} from './onboarding-steps';
 
 describe('deriveTeamKey', () => {
   it('uses initials for multi-word names and a prefix for one word', () => {
@@ -25,5 +31,17 @@ describe('parseInviteEmails', () => {
       invalid: ['nope'],
       valid: ['a@x.io', 'B@x.io', 'c@y.co'],
     });
+  });
+});
+
+describe('resume step', () => {
+  it('only team and invite are resumable', () => {
+    expect(parseResumeStep('team')).toBe('team');
+    expect(parseResumeStep(['invite', 'x'])).toBe('invite');
+    expect(parseResumeStep('workspace')).toBeNull();
+    expect(parseResumeStep(undefined)).toBeNull();
+  });
+  it('builds an encoded resume URL', () => {
+    expect(onboardingResumeUrl('team', 'a&b')).toBe('/onboarding?org=a%26b&step=team');
   });
 });

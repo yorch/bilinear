@@ -9,6 +9,7 @@ export class CycleStore {
     makeObservable(this, {
       all: computed,
       applySyncAction: action,
+      archived: computed,
       optimisticUpdate: action,
       pool: observable,
       upsertMany: action,
@@ -18,6 +19,13 @@ export class CycleStore {
   get all(): DBCycle[] {
     return Array.from(this.pool.values())
       .filter(c => !c.archivedAt)
+      .sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime());
+  }
+
+  /** Archived cycles held in the pool (loaded by the list's Archived view). */
+  get archived(): DBCycle[] {
+    return Array.from(this.pool.values())
+      .filter(c => c.archivedAt)
       .sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime());
   }
 

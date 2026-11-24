@@ -151,6 +151,57 @@
     }
   },
   "analytics": {
+    "explorer": {
+      "allIssues": "Todas las incidencias",
+      "days": "{count} d",
+      "description": "Elige una medida y una segmentación. Solo se cuentan las incidencias que puedes ver.",
+      "empty": "Ninguna incidencia coincide con esta selección.",
+      "exportCsv": "Exportar CSV",
+      "failedToLoad": "No se pudieron cargar los datos",
+      "filter": "Filtro",
+      "issues": "Incidencias",
+      "labelNote": "Una incidencia con varias etiquetas se cuenta en cada una.",
+      "measure": "Medida",
+      "measures": {
+        "count": "Nº de incidencias",
+        "cycleTime": "Tiempo de ciclo medio",
+        "estimate": "Suma de estimaciones"
+      },
+      "none": {
+        "assignee": "Sin asignar",
+        "label": "Sin etiqueta",
+        "priority": "Sin prioridad",
+        "project": "Sin proyecto",
+        "status": "Sin estado",
+        "team": "Sin equipo"
+      },
+      "priority": {
+        "0": "Sin prioridad",
+        "1": "Urgente",
+        "2": "Alta",
+        "3": "Media",
+        "4": "Baja"
+      },
+      "scanCapped": "Coinciden demasiadas incidencias; las cifras cubren solo las más recientes. Acota con una vista guardada.",
+      "slice": "Segmentar por",
+      "slices": {
+        "assignee": "Responsable",
+        "label": "Etiqueta",
+        "priority": "Prioridad",
+        "project": "Proyecto",
+        "status": "Estado",
+        "team": "Equipo"
+      },
+      "summary": "{issues} incidencias en {groups} grupos.",
+      "tableCaption": "{measure} por {slice}",
+      "title": "Análisis",
+      "truncated": "Se muestran solo los {count} grupos principales.",
+      "valueHeader": {
+        "count": "Incidencias",
+        "cycleTime": "Días (media)",
+        "estimate": "Puntos"
+      }
+    },
     "insights": {
       "avgTimeInState": "Tiempo promedio en estado",
       "avgTimeInStateSubtitle": "aproximación a partir de las marcas de tiempo del ciclo de vida; el registro de auditoría completo llegará después",
@@ -373,6 +424,7 @@
       "moveToTeam": "Mover a otro equipo…",
       "noAssignee": "Sin responsable",
       "noOptions": "Sin opciones",
+      "remindMe": "Recordarme…",
       "setAssignee": "Establecer responsable…",
       "setCycle": "Establecer ciclo…",
       "setDueDate": "Establecer fecha límite…",
@@ -533,6 +585,24 @@
     },
     "name": "Nombre",
     "namePlaceholder": "p. ej. Severidad",
+    "numberFormat": {
+      "currency": "Código de moneda",
+      "decimals": "Decimales",
+      "decimalsAuto": "Automático",
+      "decimalsCount_one": "{count} decimal",
+      "decimalsCount_other": "{count} decimales",
+      "hint": "Solo visualización: el valor guardado sigue siendo un número simple, así que ordenar y filtrar no cambia. Se guarda en este navegador.",
+      "invalidCurrency": "Código de moneda desconocido",
+      "kinds": {
+        "compact": "Compacto (1,2k)",
+        "currency": "Moneda",
+        "duration": "Duración (minutos)",
+        "percent": "Porcentaje",
+        "plain": "Número simple"
+      },
+      "preview": "Vista previa:",
+      "title": "Formato numérico"
+    },
     "optionLabel": "Etiqueta",
     "options": "Opciones",
     "optionValue": "Valor",
@@ -656,14 +726,26 @@
     },
     "failedToLoad": "No se pudieron cargar los datos. Por favor, actualiza la página.",
     "list": {
+      "archive": "Archivar",
+      "archiveAria": "Archivar {name}",
+      "archivedEmptyDescription": "Los ciclos que archives aparecen aquí, donde puedes restaurarlos.",
+      "archivedEmptyTitle": "No hay ciclos archivados",
+      "archivedToast": "Ciclo archivado",
+      "archiveFailed": "No se pudo archivar el ciclo",
       "daysLeft_one": "Queda {count} día",
       "daysLeft_other": "Quedan {count} días",
       "emptyDescription": "Los ciclos te ayudan a planificar y hacer seguimiento del trabajo en iteraciones de tiempo definido.",
       "emptyTitle": "Aún no hay ciclos",
       "enableCycles": "Activar ciclos en los ajustes del equipo",
+      "loadArchivedFailed": "No se pudieron cargar los ciclos archivados",
+      "restoreFailed": "No se pudo restaurar el ciclo",
       "showMore": "Mostrar {count} más",
       "teamTitle": "{team} — Ciclos",
-      "title": "Ciclos"
+      "title": "Ciclos",
+      "views": {
+        "active": "Activos",
+        "archived": "Archivados"
+      }
     },
     "status": {
       "active": "Activo",
@@ -892,6 +974,26 @@
       "status": "Estado",
       "targetDate": "Fecha objetivo",
       "updateFailed": "No se pudo guardar el cambio"
+    },
+    "health": {
+      "derived": "Derivada: {health}",
+      "derivedHint": "Derivada de la salud y las previsiones de los proyectos; no sustituye a una actualización publicada.",
+      "label": {
+        "atRisk": "En riesgo",
+        "noData": "Sin datos",
+        "offTrack": "Fuera de plazo",
+        "onTrack": "En plazo"
+      },
+      "posted": "Publicada: {health}",
+      "reason": {
+        "initiativeTargetSlip": "se prevé que los proyectos terminen después de la fecha objetivo de la iniciativa",
+        "noActiveProjects": "sin proyectos activos",
+        "noSignals": "aún sin salud, fechas objetivo ni previsiones de proyectos",
+        "projectManualHealth": "un proyecto se publicó como en riesgo o fuera de plazo",
+        "projectOverdue": "un proyecto superó su fecha objetivo sin terminar",
+        "projectProjectedLate": "se prevé que un proyecto termine después de su fecha objetivo"
+      },
+      "title": "Salud"
     },
     "page": {
       "archivedEmptyDescription": "Las iniciativas que archives aparecerán aquí, donde podrás restaurarlas.",
@@ -1481,6 +1583,10 @@
     "allNotifications": "Todas las notificaciones",
     "emptyState": {
       "detail": "Todavía no hay notificaciones. Te avisaremos cuando algo necesite tu atención.",
+      "otherDetail": "La actividad de las tareas que sigues aparece aquí.",
+      "otherTitle": "Nada más",
+      "priorityDetail": "Aquí llegan asignaciones, menciones, respuestas y recordatorios.",
+      "priorityTitle": "Sin notificaciones prioritarias",
       "snoozedDetail": "Las notificaciones pospuestas esperan aquí hasta que vuelvan.",
       "snoozedTitle": "Nada pospuesto",
       "title": "Todo al día",
@@ -1492,7 +1598,13 @@
       "issueAssigned": "te asignó una tarea",
       "issueCommented": "comentó en una tarea",
       "issueMentioned": "te mencionó en una tarea",
-      "issueStatusChanged": "cambió el estado de una tarea"
+      "issueStatusChanged": "cambió el estado de una tarea",
+      "reminder": "Recordatorio"
+    },
+    "lanes": {
+      "label": "Secciones de la bandeja",
+      "other": "Otras",
+      "priority": "Prioridad"
     },
     "loadMore": "Cargar más",
     "markAllRead": "Marcar todo como leído",
@@ -1501,6 +1613,8 @@
     "marking": "Marcando…",
     "openLink": "Abrir",
     "read": "Leídas",
+    "remindedFor": "Recordatorio para {when}",
+    "reminderTitle": "Recordatorio: {title}",
     "snooze": {
       "buttonTitle": "Posponer",
       "fourHours": "4 horas",
@@ -1544,6 +1658,33 @@
     "archivedTab": "Archivados",
     "archivedView": "Proyectos archivados",
     "backToProjects": "Volver a proyectos",
+    "burnup": {
+      "aheadOfTarget_one": "{count} día antes del objetivo ({date})",
+      "aheadOfTarget_other": "{count} días antes del objetivo ({date})",
+      "ariaLabel": "Burn-up del proyecto: alcance e incidencias completadas a lo largo del tiempo con fecha de fin proyectada",
+      "complete": "Todas las incidencias completadas",
+      "completed": "Completadas",
+      "description": "Alcance e incidencias completadas por día, con una previsión basada en el ritmo reciente.",
+      "empty": "Aún no hay incidencias en este proyecto.",
+      "failedToLoad": "No se pudo cargar el gráfico de burn-up",
+      "forecast": "Previsión",
+      "hover": "{date}: alcance {scope}, completadas {completed}",
+      "noTarget": "Sin fecha objetivo",
+      "notEnoughData": "Datos insuficientes para prever",
+      "pastTarget_one": "{count} día después del objetivo ({date})",
+      "pastTarget_other": "{count} días después del objetivo ({date})",
+      "projectedFinish": "Fin proyectado: {date}",
+      "reason": {
+        "noCompletions": "No se completó nada en el periodo reciente, así que no hay ritmo que proyectar.",
+        "noIssues": "Este proyecto no tiene incidencias.",
+        "tooFar": "Al ritmo actual el final queda a más de dos años.",
+        "tooShort": "Se necesita al menos una semana de historial."
+      },
+      "scope": "Alcance",
+      "target": "Fecha objetivo",
+      "title": "Burn-up",
+      "velocity": "Ritmo: {count} incidencias/semana en los últimos {days} días"
+    },
     "completed": "Completados",
     "createProject": "Crear proyecto",
     "createProjectPrompt": "Crea un proyecto para hacer seguimiento del trabajo entre equipos.",
@@ -1722,6 +1863,21 @@
       "updateDeleted": "Actualización eliminada",
       "yes": "Sí"
     }
+  },
+  "reminders": {
+    "chipTitle": "Recordatorio para {when}",
+    "clear": "Quitar recordatorio",
+    "cleared": "Recordatorio eliminado",
+    "clearFailed": "No se pudo quitar el recordatorio",
+    "customLabel": "Fecha y hora personalizadas",
+    "laterToday": "Más tarde hoy",
+    "menuItem": "Recordarme…",
+    "menuItemChange": "Cambiar recordatorio…",
+    "nextWeek": "La semana que viene",
+    "pastTime": "Elige una hora futura",
+    "set": "Te lo recordaremos {when}",
+    "setFailed": "No se pudo crear el recordatorio",
+    "tomorrow": "Mañana"
   },
   "roadmap": {
     "gantt": {

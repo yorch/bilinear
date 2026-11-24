@@ -56,7 +56,9 @@ describe('markdownToHtml', () => {
     });
 
     it('cannot break out of an attribute or a code block', () => {
-      const html = markdownToHtml('[a](https://x.test/"onmouseover="alert(1)) \n\n```\n</code></pre><script>x</script>\n```');
+      const html = markdownToHtml(
+        '[a](https://x.test/"onmouseover="alert(1)) \n\n```\n</code></pre><script>x</script>\n```',
+      );
       expect(html).not.toMatch(/"onmouseover=/);
       expect(html).not.toContain('<script');
       expect(html).toContain('&lt;/code&gt;&lt;/pre&gt;');

@@ -25,6 +25,8 @@ export interface DuplicateSource {
 
 export interface ScoredCandidate {
   issueId: string;
+  /** Source terms this candidate matched, if the scorer knows (stem-aware). */
+  matchedTerms?: string[];
   /** Higher is more similar. Scale is scorer-defined; only the order is relied on. */
   score: number;
 }
@@ -91,29 +93,45 @@ export class FtsDuplicateScorer implements DuplicateScorer {
           )`
         : Prisma.sql``;
 
-    const rows = await this.prisma.$queryRaw<Array<{ id: string; score: number }>>(
+    // One shared match among generic words ("page", "customer") is noise, so a
+    // title with 3+ usable terms must share at least two of them. Matching is
+    // per-term through `plainto_tsquery`, so it is stem-aware ("statuses" ~
+    // "status") and the same array doubles as the "why" shown to the user.
+    const minMatches = terms.length >= 3 ? 2 : 1;
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: string; matched: string[]; score: number }>
+    >(
       Prisma.sql`
-        SELECT i.id,
-               ts_rank(
-                 to_tsvector('english', i.title || ' ' || COALESCE(i.description, '')),
-                 to_tsquery('english', ${tsQuery})
-               ) * (CASE WHEN i.team_id = ${source.teamId}::uuid THEN 1.0 ELSE 0.8 END) AS score
-        FROM issues i
-        JOIN workflow_states ws ON ws.id = i.state_id
-        WHERE i.organization_id = ${orgId}::uuid
-          AND i.id != ${source.id}::uuid
-          AND i.archived_at IS NULL
-          AND i.trashed = false
-          AND ws.type::text != 'triage'
-          AND i.team_id = ANY(${scope.memberTeamIds}::uuid[])
-          ${guestFilter}
-          AND to_tsvector('english', i.title || ' ' || COALESCE(i.description, ''))
-              @@ to_tsquery('english', ${tsQuery})
-        ORDER BY score DESC, i.created_at DESC
+        SELECT c.id, c.score, c.matched
+        FROM (
+          SELECT i.id,
+                 i.created_at,
+                 ts_rank(v.tsv, to_tsquery('english', ${tsQuery}))
+                   * (CASE WHEN i.team_id = ${source.teamId}::uuid THEN 1.0 ELSE 0.8 END) AS score,
+                 ARRAY(
+                   SELECT t FROM unnest(${terms}::text[]) AS t
+                   WHERE v.tsv @@ plainto_tsquery('english', t)
+                 ) AS matched
+          FROM issues i
+          JOIN workflow_states ws ON ws.id = i.state_id
+          CROSS JOIN LATERAL (
+            SELECT to_tsvector('english', i.title || ' ' || COALESCE(i.description, '')) AS tsv
+          ) v
+          WHERE i.organization_id = ${orgId}::uuid
+            AND i.id != ${source.id}::uuid
+            AND i.archived_at IS NULL
+            AND i.trashed = false
+            AND ws.type::text != 'triage'
+            AND i.team_id = ANY(${scope.memberTeamIds}::uuid[])
+            ${guestFilter}
+            AND v.tsv @@ to_tsquery('english', ${tsQuery})
+        ) c
+        WHERE cardinality(c.matched) >= ${minMatches}
+        ORDER BY c.score DESC, c.created_at DESC
         LIMIT ${limit}
       `,
     );
-    return rows.map(r => ({ issueId: r.id, score: Number(r.score) }));
+    return rows.map(r => ({ issueId: r.id, matchedTerms: r.matched, score: Number(r.score) }));
   }
 }
 
@@ -173,7 +191,7 @@ export class DuplicateSuggestionService {
       const haystack = new Set(extractQueryTerms(`${issue.title} ${issue.description ?? ''}`));
       results.push({
         issue,
-        matchedTerms: sourceTerms.filter(term => haystack.has(term)),
+        matchedTerms: c.matchedTerms ?? sourceTerms.filter(term => haystack.has(term)),
         score: c.score,
       });
     }

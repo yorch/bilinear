@@ -8,7 +8,6 @@ import { mapServiceError } from '../types/errors';
 const GITHUB_IMPORT_ERRORS = {
   BAD_USER_INPUT: [
     'GithubInvalidRepoError',
-    'GithubImportTooLargeError',
     'GithubImportFieldUnavailableError',
     'GithubTokenInvalidError',
   ],
@@ -87,6 +86,7 @@ export const importResolvers = {
           includeComments?: boolean | null;
           page?: number | null;
           repo: string;
+          startPage?: number | null;
           teamId: string;
           token?: string | null;
         };
@@ -135,12 +135,15 @@ export const importResolvers = {
       }
 
       return {
+        closedAsOpen: chunk.closedAsOpen,
         commentsCreated: chunk.createdComments.length,
+        commentsTruncated: chunk.commentsTruncated,
         created: chunk.createdIssues.length,
         errors: chunk.errors,
         existing: chunk.existing,
         labelsCreated: chunk.createdLabels.length,
         lastSyncId,
+        limitReached: chunk.limitReached,
         nextPage: chunk.nextPage,
         processed: chunk.processed,
         success: true,
@@ -162,7 +165,7 @@ export const importResolvers = {
       requireAuth(ctx);
       await requireTeamMemberNotGuest(ctx.prisma, teamId, ctx.userId, ctx.orgId);
       try {
-        return await githubImporter(ctx).preview(ctx.orgId, { repo, token });
+        return await githubImporter(ctx).preview(ctx.orgId, ctx.userId, { repo, token });
       } catch (err) {
         mapServiceError(err, GITHUB_IMPORT_ERRORS);
       }

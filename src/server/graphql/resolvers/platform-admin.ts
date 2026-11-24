@@ -1,4 +1,5 @@
 import { GraphQLError } from 'graphql';
+import { InvalidCursorError } from '../../lib/created-at-cursor';
 import { requirePlatformAdmin } from '../../middleware/auth';
 import {
   ImpersonationTargetError,
@@ -26,7 +27,8 @@ function mapPlatformError(err: unknown): never {
     err instanceof LastPlatformAdminError ||
     err instanceof SelfTargetError ||
     err instanceof ImpersonationTargetError ||
-    err instanceof InvalidTenantLimitsError
+    err instanceof InvalidTenantLimitsError ||
+    err instanceof InvalidCursorError
   ) {
     throw new GraphQLError(err.message, { extensions: { code: 'BAD_USER_INPUT' } });
   }
@@ -205,7 +207,7 @@ export const platformAdminResolvers = {
       ctx: GraphQLContext,
     ) => {
       await requirePlatformAdmin(ctx.prisma, ctx);
-      return ctx.services.platformAdmin.listTenantsPage(args);
+      return mapped(() => ctx.services.platformAdmin.listTenantsPage(args));
     },
 
     platformUser: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
@@ -228,7 +230,7 @@ export const platformAdminResolvers = {
       ctx: GraphQLContext,
     ) => {
       await requirePlatformAdmin(ctx.prisma, ctx);
-      return ctx.services.platformAdmin.listUsersPage(args);
+      return mapped(() => ctx.services.platformAdmin.listUsersPage(args));
     },
   },
 };

@@ -23,8 +23,8 @@ import { ImportService } from '../services/import.service';
 import { InitiativeService } from '../services/initiative.service';
 import { IssueService } from '../services/issue.service';
 import { IssueActivityService } from '../services/issue-activity.service';
-import { IssueReminderService } from '../services/issue-reminder.service';
 import { IssueRelationService } from '../services/issue-relation.service';
+import { IssueReminderService } from '../services/issue-reminder.service';
 import { IssueTemplateService } from '../services/issue-template.service';
 import { LabelService } from '../services/label.service';
 import { NotificationService } from '../services/notification.service';
@@ -179,8 +179,8 @@ export async function createContext(req: NextRequest): Promise<GraphQLContext> {
       initiative: initiativeService,
       issue: issueService,
       issueActivity: issueActivityService,
-      issueReminder: issueReminderService,
       issueRelation: issueRelationService,
+      issueReminder: issueReminderService,
       issueTemplate: issueTemplateService,
       label: labelService,
       notification: notificationService,

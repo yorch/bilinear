@@ -3,6 +3,7 @@ import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock'
 import {
   decodeCreatedAtCursor,
   encodeCreatedAtCursor,
+  InvalidCursorError,
   ImpersonationTargetError,
   InvalidTenantLimitsError,
   LastPlatformAdminError,
@@ -296,7 +297,7 @@ describe('PlatformAdminService', () => {
       createdAt: new Date(Date.UTC(2026, 0, 100 - n)),
       displayName: `U${n}`,
       email: `u${n}@x.test`,
-      id: `u${n}`,
+      id: `00000000-0000-0000-0000-00000000000${n}`,
       isPlatformAdmin: false,
       lastSeen: null,
       orgMemberships: [],
@@ -309,7 +310,7 @@ describe('PlatformAdminService', () => {
 
       const page = await service.listUsersPage({ limit: 2 });
 
-      expect(page.items.map(u => u.id)).toEqual(['u1', 'u2']);
+      expect(page.items.map(u => u.displayName)).toEqual(['U1', 'U2']);
       expect(page.total).toBe(7);
       expect(page.hasMore).toBe(true);
       expect(page.nextCursor).toBe(encodeCreatedAtCursor(mkUser(2)));
@@ -339,7 +340,7 @@ describe('PlatformAdminService', () => {
       expect(args.where.AND[1]).toEqual({
         OR: [
           { createdAt: { lt: mkUser(2).createdAt } },
-          { createdAt: mkUser(2).createdAt, id: { lt: 'u2' } },
+          { createdAt: mkUser(2).createdAt, id: { lt: mkUser(2).id } },
         ],
       });
       // total counts the filter only, never the cursor
@@ -370,10 +371,32 @@ describe('PlatformAdminService', () => {
       expect(prisma.organization.count).toHaveBeenCalledWith({ where: { archivedAt: null } });
     });
 
-    it('decodeCreatedAtCursor ignores malformed cursors instead of throwing', () => {
-      expect(decodeCreatedAtCursor('garbage')).toBeNull();
-      expect(decodeCreatedAtCursor('not-a-date|id')).toBeNull();
+    it('decodeCreatedAtCursor rejects malformed cursors with a typed error (never reaches Postgres)', () => {
+      const ID = '00000000-0000-0000-0000-000000000001';
+      for (const bad of [
+        'garbage',
+        'not-a-date|' + ID,
+        '2026-01-01T00:00:00Z|notauuid',
+        '2026-01-01T00:00:00.000Z|',
+        '|' + ID,
+        '2026-13-45T00:00:00.000Z|' + ID,
+      ]) {
+        expect(() => decodeCreatedAtCursor(bad), bad).toThrow(InvalidCursorError);
+      }
       expect(decodeCreatedAtCursor(null)).toBeNull();
+      expect(decodeCreatedAtCursor('')).toBeNull();
+      expect(decodeCreatedAtCursor(`2026-01-01T00:00:00.000Z|${ID}`)).toEqual({
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        id: ID,
+      });
+    });
+
+    it('list pages reject a bad cursor before querying', async () => {
+      const cursor = '2026-01-01T00:00:00Z|notauuid';
+      await expect(service.listUsersPage({ cursor })).rejects.toBeInstanceOf(InvalidCursorError);
+      await expect(service.listTenantsPage({ cursor })).rejects.toBeInstanceOf(InvalidCursorError);
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+      expect(prisma.organization.findMany).not.toHaveBeenCalled();
     });
   });
 });

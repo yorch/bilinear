@@ -274,7 +274,7 @@ export class IssueReminderService {
     }
     if (fired.length > 0) {
       log.info(
-        { delivered: fired.filter(f => f.notification).length, claimed: fired.length },
+        { claimed: fired.length, delivered: fired.filter(f => f.notification).length },
         'Fired due issue reminders',
       );
     }

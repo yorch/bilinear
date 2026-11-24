@@ -324,4 +324,93 @@ describe('NotificationService', () => {
       });
     });
   });
+  describe('notifyCommentSubscribers', () => {
+    const COMMENT_ID = '00000000-0000-0000-0000-000000000c01';
+    const PARENT_AUTHOR = TEST_USER_2.id;
+    const ACTOR = '00000000-0000-0000-0000-0000000000a7';
+    const BYSTANDER = '00000000-0000-0000-0000-0000000000b8';
+
+    function rows(): Array<{ data: Record<string, unknown>; userId: string }> {
+      return prisma.notification.createMany.mock.calls[0]?.[0].data;
+    }
+
+    beforeEach(() => {
+      prisma.notification.createMany.mockResolvedValue({ count: 0 });
+    });
+
+    it('adds no reply marker to a top-level comment', async () => {
+      prisma.notificationSubscription.findMany.mockResolvedValue([{ userId: BYSTANDER }]);
+      prisma.comment.findUnique.mockResolvedValue({
+        issue: { teamId: 't1' },
+        parent: null,
+      });
+
+      await service.notifyCommentSubscribers(TEST_ORG.id, TEST_ISSUE.id, ACTOR, COMMENT_ID);
+
+      expect(rows()).toHaveLength(1);
+      expect(rows()[0]?.data).not.toHaveProperty('replyToUserId');
+      expect(prisma.teamMembership.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('marks every row of a reply and notifies a non-subscribed parent author', async () => {
+      prisma.notificationSubscription.findMany.mockResolvedValue([{ userId: BYSTANDER }]);
+      prisma.comment.findUnique.mockResolvedValue({
+        issue: { teamId: 't1' },
+        parent: { authorId: PARENT_AUTHOR },
+      });
+      prisma.teamMembership.findFirst.mockResolvedValue({ userId: PARENT_AUTHOR });
+
+      await service.notifyCommentSubscribers(TEST_ORG.id, TEST_ISSUE.id, ACTOR, COMMENT_ID);
+
+      expect(rows().map(r => r.userId).sort()).toEqual([BYSTANDER, PARENT_AUTHOR].sort());
+      for (const r of rows()) {
+        expect(r.data).toMatchObject({ commentId: COMMENT_ID, replyToUserId: PARENT_AUTHOR });
+      }
+    });
+
+    it('does not duplicate a parent author who already subscribes', async () => {
+      prisma.notificationSubscription.findMany.mockResolvedValue([{ userId: PARENT_AUTHOR }]);
+      prisma.comment.findUnique.mockResolvedValue({
+        issue: { teamId: 't1' },
+        parent: { authorId: PARENT_AUTHOR },
+      });
+      prisma.teamMembership.findFirst.mockResolvedValue({ userId: PARENT_AUTHOR });
+
+      await service.notifyCommentSubscribers(TEST_ORG.id, TEST_ISSUE.id, ACTOR, COMMENT_ID);
+
+      expect(rows()).toHaveLength(1);
+    });
+
+    it('does not notify the actor when replying to their own comment', async () => {
+      prisma.notificationSubscription.findMany.mockResolvedValue([]);
+      prisma.comment.findUnique.mockResolvedValue({
+        issue: { teamId: 't1' },
+        parent: { authorId: ACTOR },
+      });
+
+      const result = await service.notifyCommentSubscribers(
+        TEST_ORG.id,
+        TEST_ISSUE.id,
+        ACTOR,
+        COMMENT_ID,
+      );
+
+      expect(result).toEqual({ count: 0 });
+      expect(prisma.notification.createMany).not.toHaveBeenCalled();
+    });
+
+    it('skips a parent author who is no longer on the issue team', async () => {
+      prisma.notificationSubscription.findMany.mockResolvedValue([{ userId: BYSTANDER }]);
+      prisma.comment.findUnique.mockResolvedValue({
+        issue: { teamId: 't1' },
+        parent: { authorId: PARENT_AUTHOR },
+      });
+      prisma.teamMembership.findFirst.mockResolvedValue(null);
+
+      await service.notifyCommentSubscribers(TEST_ORG.id, TEST_ISSUE.id, ACTOR, COMMENT_ID);
+
+      expect(rows().map(r => r.userId)).toEqual([BYSTANDER]);
+      expect(rows()[0]?.data).not.toHaveProperty('replyToUserId');
+    });
+  });
 });

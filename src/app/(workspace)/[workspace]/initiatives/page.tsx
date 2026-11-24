@@ -6,6 +6,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { InitiativeArchivedView } from '@/components/initiatives/initiative-archived-view';
 import {
+  InitiativeHealthBadge,
+  InitiativeHealthProvider,
+} from '@/components/initiatives/initiative-health-badge';
+import {
   INITIATIVE_UNARCHIVE_MUTATION,
   INITIATIVE_UPDATE_MUTATION,
 } from '@/components/initiatives/initiative-mutations';
@@ -267,6 +271,10 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
             ) : null}
           </span>
           {/* No status badge: the group header above the row already says it. */}
+          <InitiativeHealthBadge
+            className="hidden shrink-0 sm:inline-flex"
+            initiativeId={initiative.id}
+          />
           <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
             {t('initiatives.row.projectCount', { count: projectIds.length })}
           </span>
@@ -531,96 +539,98 @@ const InitiativesPage = observer(function InitiativesPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      <PageHeader
-        actions={
-          <Button
-            onClick={() => setCreating(c => !c)}
-            size="sm"
-            type="button"
-            variant={creating ? 'outline' : 'default'}
-          >
-            {creating ? (
-              t('common.cancel')
-            ) : (
-              <>
-                <Plus className="h-3.5 w-3.5" />
-                {t('initiatives.page.newInitiative')}
-              </>
-            )}
-          </Button>
-        }
-        count={rootInitiatives.length}
-        title={t('initiatives.page.title')}
-      />
-
-      <Toolbar>
-        <SegmentedControl
-          onChange={setView}
-          options={[
-            { label: t('initiatives.page.views.active'), value: 'active' },
-            { label: t('initiatives.page.views.archived'), value: 'archived' },
-          ]}
-          value={view}
+    <InitiativeHealthProvider>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <PageHeader
+          actions={
+            <Button
+              onClick={() => setCreating(c => !c)}
+              size="sm"
+              type="button"
+              variant={creating ? 'outline' : 'default'}
+            >
+              {creating ? (
+                t('common.cancel')
+              ) : (
+                <>
+                  <Plus className="h-3.5 w-3.5" />
+                  {t('initiatives.page.newInitiative')}
+                </>
+              )}
+            </Button>
+          }
+          count={rootInitiatives.length}
+          title={t('initiatives.page.title')}
         />
-      </Toolbar>
 
-      {creating && view === 'active' ? (
         <Toolbar>
-          <Input
-            className="flex-1"
-            onChange={e => setName(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                handleCreate();
-              } else if (e.key === 'Escape') {
-                setCreating(false);
-                setName('');
-              }
-            }}
-            placeholder={t('initiatives.page.namePlaceholder')}
-            ref={inputRef}
-            value={name}
+          <SegmentedControl
+            onChange={setView}
+            options={[
+              { label: t('initiatives.page.views.active'), value: 'active' },
+              { label: t('initiatives.page.views.archived'), value: 'archived' },
+            ]}
+            value={view}
           />
-          <Button onClick={handleCreate} size="sm" type="button">
-            {t('common.create')}
-          </Button>
         </Toolbar>
-      ) : null}
 
-      <div className="flex-1 overflow-y-auto">
-        {view === 'archived' ? (
-          <InitiativeArchivedView />
-        ) : grouped.length === 0 ? (
-          <EmptyState
-            action={
-              <Button onClick={() => setCreating(true)} size="sm" type="button">
-                <Plus className="h-3.5 w-3.5" />
-                {t('initiatives.page.newInitiative')}
-              </Button>
-            }
-            description={t('initiatives.page.emptyDescription')}
-            icon={<Flag className="h-5 w-5" />}
-            testId="empty-state"
-            title={t('initiatives.page.emptyTitle')}
-          />
-        ) : (
-          grouped.map(({ status, items }) => (
-            <div key={status}>
-              <div className="border-b border-border bg-card px-4 py-1.5">
-                <span className="text-xs font-medium text-foreground-secondary">
-                  {STATUS_LABELS[status]}
-                </span>
-                <span className="ml-2 text-xs text-muted-foreground">{items.length}</span>
+        {creating && view === 'active' ? (
+          <Toolbar>
+            <Input
+              className="flex-1"
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  handleCreate();
+                } else if (e.key === 'Escape') {
+                  setCreating(false);
+                  setName('');
+                }
+              }}
+              placeholder={t('initiatives.page.namePlaceholder')}
+              ref={inputRef}
+              value={name}
+            />
+            <Button onClick={handleCreate} size="sm" type="button">
+              {t('common.create')}
+            </Button>
+          </Toolbar>
+        ) : null}
+
+        <div className="flex-1 overflow-y-auto">
+          {view === 'archived' ? (
+            <InitiativeArchivedView />
+          ) : grouped.length === 0 ? (
+            <EmptyState
+              action={
+                <Button onClick={() => setCreating(true)} size="sm" type="button">
+                  <Plus className="h-3.5 w-3.5" />
+                  {t('initiatives.page.newInitiative')}
+                </Button>
+              }
+              description={t('initiatives.page.emptyDescription')}
+              icon={<Flag className="h-5 w-5" />}
+              testId="empty-state"
+              title={t('initiatives.page.emptyTitle')}
+            />
+          ) : (
+            grouped.map(({ status, items }) => (
+              <div key={status}>
+                <div className="border-b border-border bg-card px-4 py-1.5">
+                  <span className="text-xs font-medium text-foreground-secondary">
+                    {STATUS_LABELS[status]}
+                  </span>
+                  <span className="ml-2 text-xs text-muted-foreground">{items.length}</span>
+                </div>
+                {items.map(initiative => (
+                  <InitiativeRow initiative={initiative} key={initiative.id} />
+                ))}
               </div>
-              {items.map(initiative => (
-                <InitiativeRow initiative={initiative} key={initiative.id} />
-              ))}
-            </div>
-          ))
-        )}
+            ))
+          )}
+        </div>
       </div>
-    </div>
+    </InitiativeHealthProvider>
   );
 });
 

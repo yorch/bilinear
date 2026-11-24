@@ -290,7 +290,7 @@ test.describe('Triage', () => {
     // Open the preset popover from the preview toolbar, then pick "1 day"
     // (the page exposes 4 hours / 1 day / 1 week presets).
     await page.getByRole('button', { name: 'Snooze' }).click();
-    await page.getByRole('menuitem', { name: '1 day' }).click();
+    await page.getByRole('option', { name: '1 day' }).click();
 
     // The snoozed row leaves the active queue.
     await expect(freshRow).not.toBeVisible({ timeout: 10_000 });

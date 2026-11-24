@@ -1181,6 +1181,25 @@ export const typeDefs = `
     color: String
   }
 
+  enum CustomFieldNumberFormatKind {
+    plain
+    currency
+    percent
+    duration
+    compact
+  }
+
+  """
+  Display format of a number field, stored with the definition so it is the
+  same for every viewer. Number fields only; currency is a 3-letter upper-case
+  ISO 4217 code (required for the currency kind), decimals an integer 0-6.
+  """
+  input CustomFieldNumberFormatInput {
+    kind: CustomFieldNumberFormatKind!
+    currency: String
+    decimals: Int
+  }
+
   input CustomFieldDefinitionCreateInput {
     """
     Team to attach the definition to. Pass null to create a workspace-scoped
@@ -1192,6 +1211,7 @@ export const typeDefs = `
     description: String
     required: Boolean
     options: [CustomFieldOptionInput!]
+    numberFormat: CustomFieldNumberFormatInput
     sortOrder: Float
   }
 
@@ -1200,6 +1220,8 @@ export const typeDefs = `
     description: String
     required: Boolean
     options: [CustomFieldOptionInput!]
+    """Omit to keep; null clears back to plain. Number fields only."""
+    numberFormat: CustomFieldNumberFormatInput
     sortOrder: Float
   }
 
@@ -1547,6 +1569,66 @@ export const typeDefs = `
     to: Date
   }
 
+  type ProjectBurnupPoint {
+    "UTC day, YYYY-MM-DD."
+    date: String!
+    scope: Int!
+    completed: Int!
+  }
+
+  type ProjectBurnupForecast {
+    "projected | complete | insufficient"
+    status: String!
+    "YYYY-MM-DD; set when status is projected or complete."
+    projectedFinish: String
+    "Why a forecast is unavailable: noIssues | noCompletions | tooShort | tooFar."
+    reason: String
+    remaining: Int!
+    velocityPerDay: Float!
+    windowDays: Int!
+  }
+
+  type ProjectBurnup {
+    projectId: ID!
+    targetDate: String
+    points: [ProjectBurnupPoint!]!
+    forecast: ProjectBurnupForecast!
+  }
+
+  type InsightsRow {
+    key: String!
+    label: String!
+    value: Float!
+    issueCount: Int!
+    sampleSize: Int!
+  }
+
+  type InsightsResult {
+    measure: String!
+    slice: String!
+    rows: [InsightsRow!]!
+    issueCount: Int!
+    totalGroups: Int!
+    "True when groups beyond the cap were dropped."
+    truncated: Boolean!
+    "True when more issues matched than the scan limit; numbers cover the newest ones."
+    scanCapped: Boolean!
+  }
+
+  type InitiativeHealthReason {
+    code: String!
+    projectId: ID
+  }
+
+  type InitiativeHealthRollup {
+    initiativeId: ID!
+    "Derived: onTrack | atRisk | offTrack | noData. Never overrides manualHealth."
+    health: String!
+    reasons: [InitiativeHealthReason!]!
+    "Health of the newest posted initiative update, if any."
+    manualHealth: String
+  }
+
   type AnalyticsHistogramBucket {
     bucketStart: Float!
     """
@@ -1745,6 +1827,11 @@ export const typeDefs = `
     includeComments: Boolean
     """1-based GitHub page; the client advances it with nextPage."""
     page: Int
+    """
+    The page this run began at. limits.maxImportRows caps how far one run walks
+    from here; when a chunk reports limitReached, start a new run at nextPage.
+    """
+    startPage: Int
   }
 
   type GithubImportPreview {
@@ -1763,6 +1850,12 @@ export const typeDefs = `
     commentsCreated: Int!
     labelsCreated: Int!
     errors: [String!]!
+    "Closed GitHub issues imported as open: the team has no Done/Canceled state."
+    closedAsOpen: Int!
+    "Issues whose comments were cut at the per-issue ceiling."
+    commentsTruncated: Int!
+    "The run hit limits.maxImportRows; start a new run at nextPage to continue."
+    limitReached: Boolean!
     "Next page to request, or null when the repository is fully read."
     nextPage: Int
     tokenSource: String!
@@ -1901,6 +1994,9 @@ export const typeDefs = `
     analyticsCycleVelocityTrend(input: AnalyticsInput): CycleVelocityTrendResult!
     analyticsCycleScopeMetrics(cycleId: ID!): CycleScopeMetrics!
     analyticsWorkspaceOverview: WorkspaceOverviewResult!
+    projectBurnup(projectId: ID!): ProjectBurnup!
+    initiativeHealthRollups: [InitiativeHealthRollup!]!
+    insights(measure: String!, slice: String!, viewId: ID): InsightsResult!
 
     # Audit log — org admin only
     auditLogs(filter: AuditLogFilter): AuditLogPage!
@@ -2073,6 +2169,7 @@ export const typeDefs = `
     cycleCreate(input: CycleCreateInput!): CyclePayload!
     cycleUpdate(id: ID!, input: CycleUpdateInput!): CyclePayload!
     cycleArchive(id: ID!): CyclePayload!
+    cycleUnarchive(id: ID!): CyclePayload!
     cycleDelete(id: ID!): DeletePayload!
     cycleAddIssue(cycleId: ID!, issueId: ID!): IssuePayload!
     cycleRemoveIssue(issueId: ID!): IssuePayload!
@@ -2300,9 +2397,9 @@ export const typeDefs = `
   }
 
   input UserUpdateProfileInput {
-    "Display name, 1-255 characters after trimming."
+    "Display name, 1-255 characters after trimming; null is rejected."
     name: String
-    "http(s) URL of an uploaded avatar; null clears it."
+    "URL of an avatar uploaded via /api/upload (purpose=avatar); null clears it."
     avatarUrl: String
   }
 

@@ -1,20 +1,23 @@
 'use client';
 
 import { differenceInCalendarDays } from 'date-fns';
-import { Calendar, Plus, RefreshCw } from 'lucide-react';
+import { Archive, Calendar, Plus, RefreshCw } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { CreateCycleModal } from '@/components/cycles/create-cycle-modal';
+import { CycleArchivedView } from '@/components/cycles/cycle-archived-view';
+import { useCycleArchive } from '@/components/cycles/use-cycle-archive';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { readTeamExtras } from '@/components/teams/team-settings-helpers';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CollapsibleGroup } from '@/components/ui/collapsible-group';
 import { EmptyState } from '@/components/ui/empty-state';
-import { PageHeader } from '@/components/ui/page-header';
+import { PageHeader, Toolbar } from '@/components/ui/page-header';
 import { ProgressBar } from '@/components/ui/progress-bar';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
@@ -22,6 +25,7 @@ import type { DBCycle } from '@/lib/db';
 import { gqlQuery } from '@/lib/graphql';
 import { CYCLES_PROGRESS_QUERY } from '@/lib/graphql-queries';
 import { toast } from '@/lib/toast';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 interface CycleListViewProps {
@@ -53,6 +57,7 @@ export const CycleListView = observer(function CycleListView({
   const t = useTranslations();
   const router = useRouter();
   const [creating, setCreating] = useState(false);
+  const [view, setView] = useState<'active' | 'archived'>('active');
 
   const team = teamStore.findById(teamId);
   const cyclesEnabled = team?.cyclesEnabled ?? false;
@@ -128,6 +133,17 @@ export const CycleListView = observer(function CycleListView({
         title={t('cycles.list.teamTitle', { team: team?.displayName ?? team?.name ?? '' })}
       />
 
+      <Toolbar>
+        <SegmentedControl
+          onChange={setView}
+          options={[
+            { label: t('cycles.list.views.active'), value: 'active' },
+            { label: t('cycles.list.views.archived'), value: 'archived' },
+          ]}
+          value={view}
+        />
+      </Toolbar>
+
       <CreateCycleModal
         defaultDurationWeeks={readTeamExtras(team).cycleDuration ?? 2}
         onClose={() => setCreating(false)}
@@ -141,7 +157,9 @@ export const CycleListView = observer(function CycleListView({
       />
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
-        {hasNoCycles ? (
+        {view === 'archived' ? (
+          <CycleArchivedView teamId={teamId} />
+        ) : hasNoCycles ? (
           <EmptyState
             action={
               cyclesEnabled ? (
@@ -235,6 +253,7 @@ const CycleGroup = observer(function CycleGroup({
   const t = useTranslations();
   const { formatDate } = useFormatters();
   const [showAll, setShowAll] = useState(false);
+  const { archive } = useCycleArchive();
   // Enabling cycles generates a dozen-plus upcoming cycles at once; showing all
   // of them pushes Completed off-screen and adds nothing, so only the next few
   // render until asked.
@@ -268,44 +287,62 @@ const CycleGroup = observer(function CycleGroup({
               : null;
 
           return (
-            <Link
-              className="group flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:border-border hover:bg-accent"
-              href={`/${workspaceKey}/team/${teamKey}/cycles/${cycle.id}`}
+            <div
+              className="group flex items-center gap-1 rounded-lg border border-transparent pr-2 transition-colors hover:border-border hover:bg-accent"
               key={cycle.id}
             >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
-                <RefreshCw className="h-3.5 w-3.5" />
-              </span>
-
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm font-medium text-foreground">
-                  {getCycleDisplayName(cycle, t)}
+              <Link
+                className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5"
+                href={`/${workspaceKey}/team/${teamKey}/cycles/${cycle.id}`}
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+                  <RefreshCw className="h-3.5 w-3.5" />
                 </span>
-                <div className="mt-0.5 flex items-center gap-2">
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Calendar className="h-3 w-3" />
-                    {formatRange(cycle)}
-                  </span>
-                </div>
-              </div>
 
-              {stats !== undefined && stats.scope > 0 && (
-                <div className="flex items-center gap-2">
-                  <ProgressBar className="h-1.5 w-16" value={progress} />
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    {completedCount}/{stats.scope}
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {getCycleDisplayName(cycle, t)}
                   </span>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Calendar className="h-3 w-3" />
+                      {formatRange(cycle)}
+                    </span>
+                  </div>
                 </div>
-              )}
 
-              {/* The group header already says Upcoming / Completed; a pill per
+                {stats !== undefined && stats.scope > 0 && (
+                  <div className="flex items-center gap-2">
+                    <ProgressBar className="h-1.5 w-16" value={progress} />
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {completedCount}/{stats.scope}
+                    </span>
+                  </div>
+                )}
+
+                {/* The group header already says Upcoming / Completed; a pill per
                   row repeated it. Active keeps one, with the time left. */}
-              {status === 'active' && (
-                <Badge tone="success" variant="pill">
-                  {t('cycles.list.daysLeft', { count: daysLeft ?? 0 })}
-                </Badge>
-              )}
-            </Link>
+                {status === 'active' && (
+                  <Badge tone="success" variant="pill">
+                    {t('cycles.list.daysLeft', { count: daysLeft ?? 0 })}
+                  </Badge>
+                )}
+              </Link>
+              {/* Outside the link: a button nested in an anchor is invalid and
+                would navigate. Revealed on hover, always present on touch. */}
+              <button
+                aria-label={t('cycles.list.archiveAria', { name: getCycleDisplayName(cycle, t) })}
+                className={cn(
+                  'shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground-secondary focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100',
+                  TOUCH_TARGET,
+                )}
+                onClick={() => void archive(cycle)}
+                title={t('cycles.list.archive')}
+                type="button"
+              >
+                <Archive className="h-3.5 w-3.5" />
+              </button>
+            </div>
           );
         })}
         {hidden > 0 && (

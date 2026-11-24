@@ -5,7 +5,14 @@
  */
 
 export const INSIGHT_MEASURES = ['count', 'estimate', 'cycleTime'] as const;
-export const INSIGHT_SLICES = ['status', 'assignee', 'label', 'project', 'priority', 'team'] as const;
+export const INSIGHT_SLICES = [
+  'status',
+  'assignee',
+  'label',
+  'project',
+  'priority',
+  'team',
+] as const;
 export type InsightMeasure = (typeof INSIGHT_MEASURES)[number];
 export type InsightSlice = (typeof INSIGHT_SLICES)[number];
 
@@ -46,7 +53,10 @@ export interface InsightResult {
 
 const PRIORITY_LABELS = ['No priority', 'Urgent', 'High', 'Medium', 'Low'];
 
-function groupsFor(issue: InsightIssue, slice: InsightSlice): Array<{ key: string; label: string }> {
+function groupsFor(
+  issue: InsightIssue,
+  slice: InsightSlice,
+): Array<{ key: string; label: string }> {
   switch (slice) {
     case 'status':
       return [{ key: issue.state.name.toLowerCase(), label: issue.state.name }];
@@ -132,15 +142,11 @@ export function aggregateInsights(
   };
 }
 
-/** Neutralise spreadsheet formula injection: a cell starting with = + - @ is prefixed. */
-function csvCell(v: string | number): string {
-  let s = String(v);
-  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) {
-    s = `'${s}`;
-  }
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-export function toCsv(header: string[], rows: Array<Array<string | number>>): string {
-  return [header, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+/**
+ * Neutralise spreadsheet formula injection for exported text cells: label and
+ * project names are user-controlled, and a cell starting with = + - @ would
+ * run as a formula when the CSV is opened. Numbers must not go through this.
+ */
+export function csvSafeText(v: string): string {
+  return /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
 }

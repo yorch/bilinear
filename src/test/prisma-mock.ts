@@ -57,6 +57,7 @@ export type MockPrismaClient = {
     | 'issue'
     | 'issueActivity'
     | 'issueLabel'
+    | 'issueReminder'
     | 'issueLabelAssignment'
     | 'issueReaction'
     | 'issueRelation'
@@ -132,6 +133,7 @@ export function createMockPrisma(): MockPrismaClient {
     issueLabelAssignment: createMockModel(),
     issueReaction: createMockModel(),
     issueRelation: createMockModel(),
+    issueReminder: createMockModel(),
     issueTemplate: createMockModel(),
     notification: createMockModel(),
     notificationSubscription: createMockModel(),

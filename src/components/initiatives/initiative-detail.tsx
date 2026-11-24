@@ -4,6 +4,7 @@ import { ArrowLeft, Flag } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { InitiativeHealthBadge } from '@/components/initiatives/initiative-health-badge';
 import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
 import { useInitiativeUpdate } from '@/components/initiatives/use-initiative-update';
 import { AssigneeSelect } from '@/components/properties/assignee-select';
@@ -140,6 +141,12 @@ export const InitiativeDetail = observer(function InitiativeDetail({
                   value={initiative.status}
                   variant="ghost"
                 />
+              </div>
+            </div>
+            <div className={rowClass}>
+              <span className={labelClass}>{t('initiatives.health.title')}</span>
+              <div className="col-span-2">
+                <InitiativeHealthBadge initiativeId={initiative.id} showReasons />
               </div>
             </div>
             <div className={rowClass}>
