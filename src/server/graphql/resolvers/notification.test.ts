@@ -208,6 +208,36 @@ describe('notificationResolvers', () => {
     });
   });
 
+  describe('Query.notifications arguments', () => {
+    const run = async (args: object) => {
+      const spy = vi.spyOn(ctx.services.notification, 'findByUserId').mockResolvedValue([]);
+      await notificationResolvers.Query.notifications(null, args, ctx as never);
+      return spy.mock.calls[0] as [string, string, number, { before?: Date; snoozed?: boolean }];
+    };
+
+    it('forwards snoozed and the before cursor as a Date', async () => {
+      const [userId, orgId, , opts] = await run({
+        before: '2026-01-02T03:04:05.000Z',
+        snoozed: true,
+      });
+      expect(userId).toBe(ctx.userId);
+      expect(orgId).toBe(ctx.orgId);
+      expect(opts.snoozed).toBe(true);
+      expect(opts.before).toEqual(new Date('2026-01-02T03:04:05.000Z'));
+    });
+
+    it('defaults to the live (non-snoozed), first page', async () => {
+      const [, , , opts] = await run({});
+      expect(opts.snoozed).toBe(false);
+      expect(opts.before).toBeUndefined();
+    });
+
+    it('clamps an oversized limit', async () => {
+      const [, , limit] = await run({ limit: 100000 });
+      expect(limit).toBeLessThanOrEqual(200);
+    });
+  });
+
   describe('Query.notifications', () => {
     it('throws UNAUTHENTICATED when not logged in', async () => {
       await testAuthGuard(

@@ -709,11 +709,10 @@ export class InitiativeService {
       if (depth >= maxDepth) {
         throw new InitiativeMaxDepthError(maxDepth);
       }
-      const next: { id: string; parentId: string | null } | null =
-        await db.initiative.findUnique({
-          select: { id: true, parentId: true },
-          where: { id: cursor.parentId },
-        });
+      const next: { id: string; parentId: string | null } | null = await db.initiative.findUnique({
+        select: { id: true, parentId: true },
+        where: { id: cursor.parentId },
+      });
       cursor = next;
     }
   }

@@ -23,6 +23,14 @@ const DATA_KEYS: Array<[key: string, kind: EntityKind]> = [
   ['initiativeId', 'initiative'],
 ];
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Only a UUID may be spliced into an href: the payload is free-form, so `../` is possible. */
+function entityId(value: unknown): string | null {
+  const id = str(value);
+  return id && UUID_RE.test(id) ? id : null;
+}
+
 function str(value: unknown): string | null {
   return typeof value === 'string' && value ? value : null;
 }
@@ -36,6 +44,13 @@ function str(value: unknown): string | null {
  * Before this, the inbox only knew `issueId`, so any other notification was an
  * unlinked, titleless row. Returns null when nothing resolves, so the row can
  * say what it knows without a dead link.
+ *
+ * NOTE: as of writing no server producer sets `projectId` / `documentId` /
+ * `initiativeId` / `entityType` on a notification (every producer in
+ * `notification.service.ts` and the reminder sweep sets `issueId`), so the
+ * non-issue branches are forward-looking. They are kept and covered by tests;
+ * ids from the payload are validated as UUIDs because they are interpolated
+ * into an href.
  */
 export function resolveNotificationTarget(
   notification: Pick<DBNotification, 'data' | 'issueId'>,
@@ -57,13 +72,15 @@ export function resolveNotificationTarget(
   const fallbackTitle = str(data.title) ?? str(data.name);
   const candidates: Array<[EntityKind, string]> = [];
   for (const [key, kind] of DATA_KEYS) {
-    const id = str(data[key]);
+    // A project resolves through the store and links by its own slug, so its
+    // payload id never reaches the href; the others do, so they must be UUIDs.
+    const id = kind === 'project' ? str(data[key]) : entityId(data[key]);
     if (id) {
       candidates.push([kind, id]);
     }
   }
   const genericType = str(data.entityType)?.toLowerCase();
-  const genericId = str(data.entityId);
+  const genericId = genericType === 'project' ? str(data.entityId) : entityId(data.entityId);
   if (
     genericId &&
     (genericType === 'project' || genericType === 'document' || genericType === 'initiative')

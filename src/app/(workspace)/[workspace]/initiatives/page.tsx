@@ -17,12 +17,12 @@ import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-up
 import { FavoriteToggle } from '@/components/layouts/favorite-toggle';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { PromptDialog } from '@/components/shared/prompt-dialog';
+import { TabSwitcher, tabPanelProps } from '@/components/shared/tab-switcher';
 import { Button } from '@/components/ui/button';
 import { ColorDot } from '@/components/ui/color-dot';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { UserAvatar } from '@/components/ui/user-avatar';
@@ -564,7 +564,9 @@ const InitiativesPage = observer(function InitiativesPage() {
         />
 
         <Toolbar>
-          <SegmentedControl
+          <TabSwitcher
+            ariaLabel={t('initiatives.page.views.label')}
+            idPrefix="initiatives-view"
             onChange={setView}
             options={[
               { label: t('initiatives.page.views.active'), value: 'active' },
@@ -597,7 +599,7 @@ const InitiativesPage = observer(function InitiativesPage() {
           </Toolbar>
         ) : null}
 
-        <div className="flex-1 overflow-y-auto">
+        <div {...tabPanelProps('initiatives-view', view)} className="flex-1 overflow-y-auto">
           {view === 'archived' ? (
             <InitiativeArchivedView />
           ) : grouped.length === 0 ? (

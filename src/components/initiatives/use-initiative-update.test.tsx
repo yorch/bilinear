@@ -53,16 +53,33 @@ describe('useInitiativeUpdate', () => {
     });
   });
 
-  it('rolls back only the touched fields and toasts when the server refuses', async () => {
-    gqlMutateMock.mockRejectedValue(new Error('nope'));
+  it('rolls back only the touched fields, leaving a field changed mid-flight alone', async () => {
+    let rejectWrite: (e: Error) => void = () => undefined;
+    gqlMutateMock.mockReturnValue(
+      new Promise((_, reject) => {
+        rejectWrite = reject;
+      }),
+    );
     const { result } = renderHook(() => useInitiativeUpdate());
+    let pending: Promise<boolean> = Promise.resolve(true);
+    act(() => {
+      pending = result.current('i1', { description: 'new', parentId: 'i1-bad' });
+    });
+    // A sync action for a field this edit never touched lands while the write is in flight.
+    act(() => store.optimisticUpdate('i1', { name: 'Renamed remotely' }));
+
     let ok = true;
     await act(async () => {
-      ok = await result.current('i1', { description: 'new', parentId: 'i1-bad' });
+      rejectWrite(new Error('Server says: Initiative parent cannot be itself'));
+      ok = await pending;
     });
+
     expect(ok).toBe(false);
     expect(store.findById('i1')?.description).toBe('old');
     expect(store.findById('i1')?.parentId).toBeUndefined();
+    expect(store.findById('i1')?.name).toBe('Renamed remotely');
+    // The localized fallback, never the server's English.
     expect(toastErrorMock).toHaveBeenCalledTimes(1);
+    expect(toastErrorMock).toHaveBeenCalledWith('initiatives.detail.updateFailed');
   });
 });

@@ -175,4 +175,36 @@ describe('InitiativeStore', () => {
       expect(store.all.map(i => i.id)).toEqual(['live']);
     });
   });
+
+  describe('roots with orphaned children', () => {
+    it('lists a child whose parent is archived, missing or in a cycle, but not a nested live child', () => {
+      store.upsertMany([
+        makeInitiative({ archivedAt: '2026-02-01T00:00:00Z', id: 'dead' }),
+        makeInitiative({ id: 'under-archived', parentId: 'dead' }),
+        makeInitiative({ id: 'under-missing', parentId: 'gone' }),
+        makeInitiative({ id: 'c1', parentId: 'c2' }),
+        makeInitiative({ id: 'c2', parentId: 'c1' }),
+        makeInitiative({ id: 'top' }),
+        makeInitiative({ id: 'nested', parentId: 'top' }),
+      ]);
+      expect(store.roots.map(i => i.id).sort()).toEqual([
+        'c1',
+        'c2',
+        'top',
+        'under-archived',
+        'under-missing',
+      ]);
+    });
+
+    it('a restored parent takes its child back under it', () => {
+      store.upsertMany([
+        makeInitiative({ archivedAt: '2026-02-01T00:00:00Z', id: 'p' }),
+        makeInitiative({ id: 'k', parentId: 'p' }),
+      ]);
+      expect(store.roots.map(i => i.id)).toEqual(['k']);
+      store.optimisticUpdate('p', { archivedAt: null });
+      expect(store.roots.map(i => i.id)).toEqual(['p']);
+      expect(store.getChildren('p').map(i => i.id)).toEqual(['k']);
+    });
+  });
 });

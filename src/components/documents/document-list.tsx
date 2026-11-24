@@ -15,10 +15,10 @@ import {
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { PromptDialog } from '@/components/shared/prompt-dialog';
+import { TabSwitcher, tabPanelProps } from '@/components/shared/tab-switcher';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Toolbar } from '@/components/ui/page-header';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { UserAvatar } from '@/components/ui/user-avatar';
@@ -162,7 +162,9 @@ export const DocumentList = observer(function DocumentList({
 
   const toolbar = hideArchivedToggle ? null : (
     <Toolbar>
-      <SegmentedControl
+      <TabSwitcher
+        ariaLabel={t('documents.views.label')}
+        idPrefix="docs-view"
         onChange={setView}
         options={[
           { label: t('documents.views.active'), value: 'active' },
@@ -173,56 +175,59 @@ export const DocumentList = observer(function DocumentList({
     </Toolbar>
   );
 
+  // The tab switcher controls this region, so it carries the tabpanel role.
+  const withPanel = (node: ReactNode) => (
+    <>
+      {toolbar}
+      {hideArchivedToggle ? (
+        node
+      ) : (
+        <div {...tabPanelProps('docs-view', view)} className="flex min-h-0 flex-1 flex-col">
+          {node}
+        </div>
+      )}
+    </>
+  );
+
   if (archivedView && archivedLoad.error) {
-    return (
-      <>
-        {toolbar}
-        <InlineRetry message={t('documents.loadArchivedFailed')} onRetry={archivedLoad.retry} />
-      </>
+    return withPanel(
+      <InlineRetry message={t('documents.loadArchivedFailed')} onRetry={archivedLoad.retry} />,
     );
   }
 
   if (archivedView && archivedLoad.loading && documents.length === 0) {
-    return (
-      <>
-        {toolbar}
-        <RowsSkeleton className="px-4 py-4" count={4} />
-      </>
-    );
+    return withPanel(<RowsSkeleton className="px-4 py-4" count={4} />);
   }
 
   if (documents.length === 0) {
     // The shared EmptyState, not a bare grey icon over a text link: this was
     // the fourth distinct empty-state treatment in the app.
-    return (
-      <>
-        {toolbar}
-        {archivedView ? (
-          <EmptyState
-            description={t('documents.archivedEmptyDescription')}
-            icon={<Archive className="h-5 w-5" />}
-            testId="empty-state"
-            title={t('documents.archivedEmptyTitle')}
-          />
-        ) : (
-          <EmptyState
-            action={
-              <Button
-                className="min-w-32"
-                disabled={creating}
-                onClick={() => void create()}
-                size="sm"
-              >
-                {creating ? t('documents.creating') : t('documents.createFirst')}
-              </Button>
-            }
-            description={t('documents.emptyDescription')}
-            icon={<FileText className="h-5 w-5" />}
-            testId="empty-state"
-            title={t('documents.emptyState')}
-          />
-        )}
-      </>
+    return withPanel(
+      archivedView ? (
+        <EmptyState
+          description={t('documents.archivedEmptyDescription')}
+          icon={<Archive className="h-5 w-5" />}
+          testId="empty-state"
+          title={t('documents.archivedEmptyTitle')}
+        />
+      ) : (
+        <EmptyState
+          action={
+            <Button
+              className="min-w-32"
+              disabled={creating}
+              onClick={() => void create()}
+              size="sm"
+            >
+              {creating ? t('documents.creating') : t('documents.createFirst')}
+            </Button>
+          }
+          description={t('documents.emptyDescription')}
+          icon={<FileText className="h-5 w-5" />}
+          testId="empty-state"
+          title={t('documents.emptyState')}
+        />
+      ),
     );
   }
 
@@ -354,49 +359,46 @@ export const DocumentList = observer(function DocumentList({
     );
   };
 
-  return (
-    <>
-      {toolbar}
-      <div className="flex flex-col gap-1 px-4 py-4">
-        {/* -mx-2 + px-2 on the row: hover background bleeds out while the icon and
+  return withPanel(
+    <div className="flex flex-col gap-1 px-4 py-4">
+      {/* -mx-2 + px-2 on the row: hover background bleeds out while the icon and
             title line up with the PageHeader title. */}
-        <ul className="-mx-2 flex flex-col gap-0.5">
-          {documents.map(doc => renderRow(doc, 0, new Set()))}
-        </ul>
-        <PromptDialog
-          initialValue={action?.kind === 'rename' ? action.title : ''}
-          label={t('documents.titleLabel')}
-          onCancel={() => setAction(null)}
-          onSubmit={value => {
-            const target = action;
-            setAction(null);
-            const title = value.trim();
-            if (target?.kind === 'rename' && title) {
-              txQueue.enqueue(DOCUMENT_UPDATE_MUTATION, { id: target.id, input: { title } }, {});
-            }
-          }}
-          open={action?.kind === 'rename'}
-          title={t('documents.rename')}
-        />
-        <ConfirmDialog
-          confirmLabel={action?.kind === 'archive' ? t('documents.archive') : t('common.delete')}
-          message={
-            action?.kind === 'archive'
-              ? t('documents.archiveConfirm', { title: action.title })
-              : t('documents.deleteConfirm', { title: action?.title ?? '' })
+      <ul className="-mx-2 flex flex-col gap-0.5">
+        {documents.map(doc => renderRow(doc, 0, new Set()))}
+      </ul>
+      <PromptDialog
+        initialValue={action?.kind === 'rename' ? action.title : ''}
+        label={t('documents.titleLabel')}
+        onCancel={() => setAction(null)}
+        onSubmit={value => {
+          const target = action;
+          setAction(null);
+          const title = value.trim();
+          if (target?.kind === 'rename' && title) {
+            txQueue.enqueue(DOCUMENT_UPDATE_MUTATION, { id: target.id, input: { title } }, {});
           }
-          onCancel={() => setAction(null)}
-          onConfirm={() => {
-            const target = action;
-            setAction(null);
-            if (target && target.kind !== 'rename') {
-              void runAction(target.kind, target.id);
-            }
-          }}
-          open={action !== null && action.kind !== 'rename'}
-          title={action?.kind === 'archive' ? t('documents.archive') : t('common.delete')}
-        />
-      </div>
-    </>
+        }}
+        open={action?.kind === 'rename'}
+        title={t('documents.rename')}
+      />
+      <ConfirmDialog
+        confirmLabel={action?.kind === 'archive' ? t('documents.archive') : t('common.delete')}
+        message={
+          action?.kind === 'archive'
+            ? t('documents.archiveConfirm', { title: action.title })
+            : t('documents.deleteConfirm', { title: action?.title ?? '' })
+        }
+        onCancel={() => setAction(null)}
+        onConfirm={() => {
+          const target = action;
+          setAction(null);
+          if (target && target.kind !== 'rename') {
+            void runAction(target.kind, target.id);
+          }
+        }}
+        open={action !== null && action.kind !== 'rename'}
+        title={action?.kind === 'archive' ? t('documents.archive') : t('common.delete')}
+      />
+    </div>,
   );
 });

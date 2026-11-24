@@ -15,10 +15,9 @@ import {
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   type InboxLane,
-  nextLane,
   partitionByLane,
   readStoredLane,
   reminderTime,
@@ -36,11 +35,11 @@ import {
 } from '@/components/notifications/use-notification-sync';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SectionHeader } from '@/components/shared/section-header';
+import { TabSwitcher, tabPanelProps } from '@/components/shared/tab-switcher';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -368,7 +367,6 @@ export const NotificationInbox = observer(function NotificationInbox() {
   // Priority vs Other. Starts on Priority (SSR-safe) and adopts the last-used
   // lane once mounted, so the hydration markup never depends on storage.
   const [lane, setLaneState] = useState<InboxLane>('priority');
-  const laneRef = useRef<HTMLFieldSetElement>(null);
   useEffect(() => {
     const stored = readStoredLane();
     if (stored) {
@@ -378,18 +376,6 @@ export const NotificationInbox = observer(function NotificationInbox() {
   const setLane = (next: InboxLane) => {
     setLaneState(next);
     writeStoredLane(next);
-  };
-  const handleLaneKeyDown = (e: React.KeyboardEvent) => {
-    const next = nextLane(lane, e.key);
-    if (!next) {
-      return;
-    }
-    e.preventDefault();
-    setLane(next);
-    // Keep focus on the control after the selected segment changes.
-    requestAnimationFrame(() =>
-      laneRef.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus(),
-    );
   };
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
@@ -585,38 +571,40 @@ export const NotificationInbox = observer(function NotificationInbox() {
       />
 
       <Toolbar>
-        <fieldset className="m-0 min-w-0 border-0 p-0" onKeyDown={handleLaneKeyDown} ref={laneRef}>
-          <legend className="sr-only">{t('notifications.lanes.label')}</legend>
-          <SegmentedControl
-            onChange={setLane}
-            options={[
-              {
-                label: (
-                  <>
-                    {t('notifications.lanes.priority')}
-                    <span className="font-mono tabular-nums" data-testid="lane-count-priority">
-                      {laneUnread.priority}
-                    </span>
-                  </>
-                ),
-                value: 'priority',
-              },
-              {
-                label: (
-                  <>
-                    {t('notifications.lanes.other')}
-                    <span className="font-mono tabular-nums" data-testid="lane-count-other">
-                      {laneUnread.other}
-                    </span>
-                  </>
-                ),
-                value: 'other',
-              },
-            ]}
-            value={lane}
-          />
-        </fieldset>
-        <SegmentedControl
+        <TabSwitcher
+          ariaLabel={t('notifications.lanes.label')}
+          idPrefix="inbox-lane"
+          onChange={setLane}
+          options={[
+            {
+              label: (
+                <>
+                  {t('notifications.lanes.priority')}
+                  <span className="font-mono tabular-nums" data-testid="lane-count-priority">
+                    {laneUnread.priority}
+                  </span>
+                </>
+              ),
+              value: 'priority',
+            },
+            {
+              label: (
+                <>
+                  {t('notifications.lanes.other')}
+                  <span className="font-mono tabular-nums" data-testid="lane-count-other">
+                    {laneUnread.other}
+                  </span>
+                </>
+              ),
+              value: 'other',
+            },
+          ]}
+          panelId="inbox-tab-panel"
+          value={lane}
+        />
+        <TabSwitcher
+          ariaLabel={t('notifications.tabs.label')}
+          idPrefix="inbox-tab"
           onChange={setTab}
           options={[
             { label: t('notifications.tabs.all'), value: 'all' },
@@ -627,7 +615,7 @@ export const NotificationInbox = observer(function NotificationInbox() {
         />
       </Toolbar>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div {...tabPanelProps('inbox-tab', tab)} className="min-h-0 flex-1 overflow-y-auto">
         {loading && <RowsSkeleton className="px-4 py-4" count={6} />}
 
         {/* Load failure — never render the empty state for a rejected read */}

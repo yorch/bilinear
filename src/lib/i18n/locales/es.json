@@ -793,7 +793,8 @@
     "untitled": "Sin título",
     "views": {
       "active": "Activos",
-      "archived": "Archivados"
+      "archived": "Archivados",
+      "label": "Vista de documentos"
     }
   },
   "editor": {
@@ -1009,7 +1010,8 @@
       "title": "Iniciativas",
       "views": {
         "active": "Activas",
-        "archived": "Archivadas"
+        "archived": "Archivadas",
+        "label": "Vista de iniciativas"
       }
     },
     "row": {
@@ -1629,6 +1631,7 @@
     "snoozedUntil": "Pospuesta hasta {when}",
     "tabs": {
       "all": "Todas",
+      "label": "Filtro de la bandeja",
       "snoozed": "Pospuestas",
       "unread": "Sin leer"
     },
@@ -1766,7 +1769,8 @@
     "title": "Proyectos",
     "trend": "Tendencia",
     "unknownAuthor": "Desconocido",
-    "updatesCount": "Actualizaciones ({count})"
+    "updatesCount": "Actualizaciones ({count})",
+    "viewLabel": "Vista de proyectos"
   },
   "properties": {
     "assignee": {

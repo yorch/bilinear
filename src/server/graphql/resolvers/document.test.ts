@@ -44,18 +44,19 @@ describe('documentResolvers', () => {
       ['documentArchive', { id: DOC.id }],
       ['documentUpdate', { id: DOC.id, input: { title: 'x' } }],
       ['documentDelete', { id: DOC.id }],
-    ] as const)('%s on a hidden-team document is NOT_FOUND and writes nothing', async (name, args) => {
-      await expect(call(name, args)).rejects.toMatchObject({
-        extensions: { code: 'NOT_FOUND' },
-      });
-      expect(ctx.prisma.document.update).not.toHaveBeenCalled();
-      expect(ctx.prisma.document.delete).not.toHaveBeenCalled();
-    });
+    ] as const)(
+      '%s on a hidden-team document is NOT_FOUND and writes nothing',
+      async (name, args) => {
+        await expect(call(name, args)).rejects.toMatchObject({
+          extensions: { code: 'NOT_FOUND' },
+        });
+        expect(ctx.prisma.document.update).not.toHaveBeenCalled();
+        expect(ctx.prisma.document.delete).not.toHaveBeenCalled();
+      },
+    );
 
     it('Query.document returns null for a hidden-team document', async () => {
-      expect(
-        await documentResolvers.Query.document(null, { id: DOC.id }, ctx as never),
-      ).toBeNull();
+      expect(await documentResolvers.Query.document(null, { id: DOC.id }, ctx as never)).toBeNull();
     });
 
     it('Query.documents passes the hidden teams to the query, even with includeArchived', async () => {
@@ -71,6 +72,15 @@ describe('documentResolvers', () => {
       await expect(
         call('documentCreate', { input: { teamId: PRIVATE_TEAM, title: 'x' } }),
       ).rejects.toMatchObject({ extensions: { code: 'NOT_FOUND' } });
+    });
+  });
+
+  describe('Query.documents archive flag', () => {
+    it('hides archived documents unless includeArchived is asked for', async () => {
+      ctx.prisma.document.findMany.mockResolvedValue([]);
+      await documentResolvers.Query.documents(null, {}, ctx as never);
+      const where = (ctx.prisma.document.findMany.mock.calls[0] as [{ where: object }])[0].where;
+      expect(where).toMatchObject({ archivedAt: null });
     });
   });
 

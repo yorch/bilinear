@@ -68,8 +68,8 @@ function seed(rows: DBNotification[]) {
   });
 }
 
-const priorityBtn = () => screen.getByRole('button', { name: /notifications\.lanes\.priority/ });
-const otherBtn = () => screen.getByRole('button', { name: /notifications\.lanes\.other/ });
+const priorityBtn = () => screen.getByRole('tab', { name: /notifications\.lanes\.priority/ });
+const otherBtn = () => screen.getByRole('tab', { name: /notifications\.lanes\.other/ });
 const count = (lane: 'other' | 'priority') => screen.getByTestId(`lane-count-${lane}`).textContent;
 
 beforeEach(() => {
@@ -77,13 +77,31 @@ beforeEach(() => {
   seq = 0;
 });
 
+describe('NotificationInbox tab semantics', () => {
+  it('exposes the filter as a tablist whose panel is labelled by the selected tab', () => {
+    seed(MIXED);
+    render(<NotificationInbox />);
+    const tabs = screen.getByRole('tablist', { name: 'notifications.tabs.label' });
+    const all = within(tabs).getByRole('tab', { name: 'notifications.tabs.all' });
+    expect(all).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', all.id);
+
+    fireEvent.click(within(tabs).getByRole('tab', { name: 'notifications.tabs.unread' }));
+    const unread = within(tabs).getByRole('tab', { name: 'notifications.tabs.unread' });
+    expect(unread).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', unread.id);
+    // The lane switcher drives the same panel.
+    expect(priorityBtn()).toHaveAttribute('aria-controls', screen.getByRole('tabpanel').id);
+  });
+});
+
 describe('NotificationInbox lanes', () => {
   it('opens on Priority with per-lane unread counts and only priority rows', () => {
     seed(MIXED);
     render(<NotificationInbox />);
 
-    expect(priorityBtn()).toHaveAttribute('aria-pressed', 'true');
-    expect(otherBtn()).toHaveAttribute('aria-pressed', 'false');
+    expect(priorityBtn()).toHaveAttribute('aria-selected', 'true');
+    expect(otherBtn()).toHaveAttribute('aria-selected', 'false');
     // Priority: assigned + reply are unread (the mention is read). Other: 3.
     expect(count('priority')).toBe('2');
     expect(count('other')).toBe('3');
@@ -101,7 +119,7 @@ describe('NotificationInbox lanes', () => {
 
     fireEvent.click(otherBtn());
 
-    expect(otherBtn()).toHaveAttribute('aria-pressed', 'true');
+    expect(otherBtn()).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByText('notifications.labels.issueAssigned')).toBeNull();
     expect(screen.queryByText('notifications.labels.issueMentioned')).toBeNull();
     expect(screen.getAllByText('notifications.labels.issueCommented')).toHaveLength(2);
@@ -114,23 +132,23 @@ describe('NotificationInbox lanes', () => {
   it('moves between lanes with ArrowRight / ArrowLeft, wrapping at both ends', async () => {
     seed(MIXED);
     render(<NotificationInbox />);
-    const group = screen.getByRole('group', { name: 'notifications.lanes.label' });
+    const group = screen.getByRole('tablist', { name: 'notifications.lanes.label' });
 
     fireEvent.keyDown(priorityBtn(), { key: 'ArrowRight' });
-    expect(otherBtn()).toHaveAttribute('aria-pressed', 'true');
+    expect(otherBtn()).toHaveAttribute('aria-selected', 'true');
     // Focus follows the selected segment.
     await waitFor(() => expect(otherBtn()).toHaveFocus());
 
     fireEvent.keyDown(otherBtn(), { key: 'ArrowRight' });
-    expect(priorityBtn()).toHaveAttribute('aria-pressed', 'true');
+    expect(priorityBtn()).toHaveAttribute('aria-selected', 'true');
 
     fireEvent.keyDown(priorityBtn(), { key: 'ArrowLeft' });
-    expect(otherBtn()).toHaveAttribute('aria-pressed', 'true');
+    expect(otherBtn()).toHaveAttribute('aria-selected', 'true');
 
     // Unrelated keys leave the lane alone.
     fireEvent.keyDown(otherBtn(), { key: 'ArrowDown' });
-    expect(otherBtn()).toHaveAttribute('aria-pressed', 'true');
-    expect(within(group).getAllByRole('button')).toHaveLength(2);
+    expect(otherBtn()).toHaveAttribute('aria-selected', 'true');
+    expect(within(group).getAllByRole('tab')).toHaveLength(2);
   });
 
   it('shows a lane-specific empty state for an empty lane only', () => {
@@ -172,7 +190,7 @@ describe('NotificationInbox lanes', () => {
     first.unmount();
 
     render(<NotificationInbox />);
-    expect(otherBtn()).toHaveAttribute('aria-pressed', 'true');
+    expect(otherBtn()).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('notifications.labels.issueStatusChanged')).toBeInTheDocument();
   });
 
@@ -180,7 +198,7 @@ describe('NotificationInbox lanes', () => {
     window.localStorage.setItem('inbox.lane', 'nonsense');
     seed(MIXED);
     render(<NotificationInbox />);
-    expect(priorityBtn()).toHaveAttribute('aria-pressed', 'true');
+    expect(priorityBtn()).toHaveAttribute('aria-selected', 'true');
   });
 
   it('reclassifies live when a new reply to the viewer arrives', () => {

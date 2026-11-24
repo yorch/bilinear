@@ -3,10 +3,10 @@
 import { ArrowLeft, Flag } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import { InitiativeHealthBadge } from '@/components/initiatives/initiative-health-badge';
 import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
 import { useInitiativeUpdate } from '@/components/initiatives/use-initiative-update';
+import { useSeededField } from '@/components/initiatives/use-seeded-field';
 import { AssigneeSelect } from '@/components/properties/assignee-select';
 import { DueDatePicker } from '@/components/properties/due-date-picker';
 import { SectionCard } from '@/components/shared/section-card';
@@ -44,14 +44,9 @@ export const InitiativeDetail = observer(function InitiativeDetail({
   const initiative = initiativeStore.findById(initiativeId);
   useDocumentTitle(initiative?.name);
 
-  const [name, setName] = useState(initiative?.name ?? '');
-  const [description, setDescription] = useState(initiative?.description ?? '');
-  // Re-seed when the row changes underneath us (a sync action or a rollback);
-  // typing is not interrupted because these only fire on the stored value.
-  const storedName = initiative?.name;
-  const storedDescription = initiative?.description;
-  useEffect(() => setName(storedName ?? ''), [storedName]);
-  useEffect(() => setDescription(storedDescription ?? ''), [storedDescription]);
+  // Follows the stored value, but never overwrites a focused or dirty field.
+  const nameField = useSeededField(initiative?.name ?? '');
+  const descriptionField = useSeededField(initiative?.description ?? '');
 
   if (!initiative || initiative.archivedAt) {
     return (
@@ -74,9 +69,12 @@ export const InitiativeDetail = observer(function InitiativeDetail({
   ];
 
   const commitName = () => {
-    const next = name.trim();
+    if (!nameField.finish()) {
+      return;
+    }
+    const next = nameField.value.trim();
     if (!next) {
-      setName(initiative.name);
+      nameField.reset();
       return;
     }
     if (next !== initiative.name) {
@@ -107,28 +105,29 @@ export const InitiativeDetail = observer(function InitiativeDetail({
             aria-label={t('initiatives.page.namePlaceholder')}
             className="text-base font-semibold"
             onBlur={commitName}
-            onChange={e => setName(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter') {
                 e.currentTarget.blur();
               } else if (e.key === 'Escape') {
-                setName(initiative.name);
+                nameField.reset();
                 e.currentTarget.blur();
               }
             }}
-            value={name}
+            {...nameField.inputProps}
           />
           <Textarea
             aria-label={t('initiatives.detail.description')}
             className="mt-3 min-h-24"
             onBlur={() => {
-              if (description !== (initiative.description ?? '')) {
-                void update(initiative.id, { description });
+              if (
+                descriptionField.finish() &&
+                descriptionField.value !== (initiative.description ?? '')
+              ) {
+                void update(initiative.id, { description: descriptionField.value });
               }
             }}
-            onChange={e => setDescription(e.target.value)}
             placeholder={t('initiatives.detail.descriptionPlaceholder')}
-            value={description}
+            {...descriptionField.inputProps}
           />
           <SectionCard className="mt-6" title={t('initiatives.detail.properties')}>
             <div className={rowClass}>

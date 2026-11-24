@@ -8,9 +8,9 @@ import { CreateProjectModal } from '@/components/projects/create-project-modal';
 import { ProjectArchivedView } from '@/components/projects/project-archived-view';
 import { ProjectListView } from '@/components/projects/project-list-view';
 import { ProjectRoadmapView } from '@/components/projects/project-roadmap-view';
+import { TabSwitcher, tabPanelProps } from '@/components/shared/tab-switcher';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useTranslations } from '@/hooks/use-translations';
 import { gql } from '@/lib/graphql';
@@ -81,7 +81,9 @@ export default observer(function ProjectsPage() {
       <PageHeader
         actions={
           <>
-            <SegmentedControl
+            <TabSwitcher
+              ariaLabel={t('projects.viewLabel')}
+              idPrefix="projects-view"
               onChange={setLayoutPersisted}
               options={[
                 {
@@ -127,13 +129,15 @@ export default observer(function ProjectsPage() {
         count={projectStore.all.length}
         title={t('projects.title')}
       />
-      {layout === 'list' ? (
-        <ProjectListView workspaceKey={workspace} />
-      ) : layout === 'archived' ? (
-        <ProjectArchivedView />
-      ) : (
-        <ProjectRoadmapView workspaceKey={workspace} />
-      )}
+      <div {...tabPanelProps('projects-view', layout)} className="flex min-h-0 flex-1 flex-col">
+        {layout === 'list' ? (
+          <ProjectListView workspaceKey={workspace} />
+        ) : layout === 'archived' ? (
+          <ProjectArchivedView />
+        ) : (
+          <ProjectRoadmapView workspaceKey={workspace} />
+        )}
+      </div>
       <CreateProjectModal
         onClose={() => uiStore.closeCreateProjectModal()}
         onSubmit={handleCreateProject}

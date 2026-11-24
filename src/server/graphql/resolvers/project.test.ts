@@ -607,9 +607,9 @@ describe('projectResolvers', () => {
   describe('Query.projects', () => {
     it('forwards archivedOnly and defaults both archive flags to false', async () => {
       const spy = vi.spyOn(ctx.services.project, 'findByOrgId').mockResolvedValue([]);
-      await projectResolvers.Query.projects(null, { archivedOnly: true }, ctx);
+      await projectResolvers.Query.projects(null, { archivedOnly: true }, ctx as never);
       expect(spy).toHaveBeenLastCalledWith(TEST_ORG.id, false, undefined, true);
-      await projectResolvers.Query.projects(null, {}, ctx);
+      await projectResolvers.Query.projects(null, {}, ctx as never);
       expect(spy).toHaveBeenLastCalledWith(TEST_ORG.id, false, undefined, false);
     });
 

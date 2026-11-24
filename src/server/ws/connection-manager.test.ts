@@ -71,7 +71,7 @@ describe('ConnectionManager.broadcastActions', () => {
     expect(filter).toHaveBeenCalledTimes(1);
   });
 
-  it('never sends another user\'s Notification row to any socket', async () => {
+  it("never sends another user's Notification row to any socket", async () => {
     const cm = new ConnectionManager();
     const mine = fakeWs();
     const theirs = fakeWs();
@@ -94,7 +94,7 @@ describe('ConnectionManager.broadcastActions', () => {
     expect(lockedMine.send).toHaveBeenCalledWith(JSON.stringify({ cmd: 'sync', sync: [issue] }));
   });
 
-  it('sends nothing to a user when the batch is only another user\'s Notification', async () => {
+  it("sends nothing to a user when the batch is only another user's Notification", async () => {
     const cm = new ConnectionManager();
     const theirs = fakeWs();
     cm.add('org-1', 'other', theirs);

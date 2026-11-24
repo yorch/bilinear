@@ -73,9 +73,35 @@ export class InitiativeStore {
     return this.all.filter(i => i.id !== id && !below.has(i.id));
   }
 
-  /** Root initiatives (no parent). */
+  /**
+   * Initiatives the list shows at its top level: those with no parent, plus any
+   * whose parent would never render them — missing from the pool (not visible,
+   * deleted), archived, or part of a parent cycle. Filtering on `!parentId`
+   * alone made a restored or re-parented child vanish: it was no root, and its
+   * parent's row never expanded to it.
+   */
   get roots(): DBInitiative[] {
-    return this.all.filter(i => !i.parentId);
+    return this.all.filter(i => this.isRoot(i));
+  }
+
+  isRoot(i: DBInitiative): boolean {
+    if (!i.parentId) {
+      return true;
+    }
+    const parent = this.pool.get(i.parentId);
+    if (!parent || parent.archivedAt) {
+      return true;
+    }
+    const seen = new Set<string>([i.id]);
+    let cursor: DBInitiative | undefined = parent;
+    while (cursor) {
+      if (seen.has(cursor.id)) {
+        return true;
+      }
+      seen.add(cursor.id);
+      cursor = cursor.parentId ? this.pool.get(cursor.parentId) : undefined;
+    }
+    return false;
   }
 
   findById(id: string): DBInitiative | null {

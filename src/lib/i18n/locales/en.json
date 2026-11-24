@@ -793,7 +793,8 @@
     "untitled": "Untitled",
     "views": {
       "active": "Active",
-      "archived": "Archived"
+      "archived": "Archived",
+      "label": "Document view"
     }
   },
   "editor": {
@@ -1009,7 +1010,8 @@
       "title": "Initiatives",
       "views": {
         "active": "Active",
-        "archived": "Archived"
+        "archived": "Archived",
+        "label": "Initiative view"
       }
     },
     "row": {
@@ -1629,6 +1631,7 @@
     "snoozedUntil": "Snoozed until {when}",
     "tabs": {
       "all": "All",
+      "label": "Inbox filter",
       "snoozed": "Snoozed",
       "unread": "Unread"
     },
@@ -1766,7 +1769,8 @@
     "title": "Projects",
     "trend": "Trend",
     "unknownAuthor": "Unknown",
-    "updatesCount": "Updates ({count})"
+    "updatesCount": "Updates ({count})",
+    "viewLabel": "Projects view"
   },
   "properties": {
     "assignee": {

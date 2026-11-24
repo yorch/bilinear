@@ -15,6 +15,10 @@ interface TabSwitcherProps<T extends string> {
   idPrefix: string;
   onChange: (value: T) => void;
   options: TabOption<T>[];
+  /** Override the controlled region's id when two switchers drive one panel (inbox lane + tab). */
+  panelId?: string;
+  /** `md` where tabs carry an icon (matches `SegmentedControl`). */
+  size?: 'md' | 'sm';
   value: T;
 }
 
@@ -42,6 +46,8 @@ export function TabSwitcher<T extends string>({
   idPrefix,
   onChange,
   options,
+  panelId,
+  size = 'sm',
   value,
 }: TabSwitcherProps<T>) {
   const buttons = useRef(new Map<T, HTMLButtonElement>());
@@ -68,7 +74,6 @@ export function TabSwitcher<T extends string>({
   };
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: arrow keys bubble up from the focused tab
     <div
       aria-label={ariaLabel}
       className="flex rounded-md border border-border p-0.5"
@@ -79,11 +84,12 @@ export function TabSwitcher<T extends string>({
         const selected = value === opt.value;
         return (
           <button
-            aria-controls={`${idPrefix}-panel`}
+            aria-controls={panelId ?? `${idPrefix}-panel`}
             aria-label={opt.ariaLabel}
             aria-selected={selected}
             className={cn(
-              'flex items-center gap-1 rounded px-2 py-0.5 text-xs transition-colors',
+              'flex items-center gap-1 rounded px-2 text-xs transition-colors',
+              size === 'md' ? 'py-1' : 'py-0.5',
               selected ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
             id={`${idPrefix}-tab-${opt.value}`}

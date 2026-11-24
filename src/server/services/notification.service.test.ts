@@ -142,6 +142,52 @@ describe('NotificationService', () => {
     });
   });
 
+  describe('ownership guard (IDOR)', () => {
+    const OTHER_ORG = '00000000-0000-0000-0000-0000000000ff';
+    const cases: Array<[string, () => Promise<unknown>]> = [
+      ['markUnread', () => service.markUnread(TEST_NOTIFICATION.id, TEST_USER.id, TEST_ORG.id)],
+      ['unsnooze', () => service.unsnooze(TEST_NOTIFICATION.id, TEST_USER.id, TEST_ORG.id)],
+    ];
+
+    it.each(cases)("%s refuses another user's notification and writes nothing", async (_n, run) => {
+      prisma.notification.findUnique.mockResolvedValue({
+        ...TEST_NOTIFICATION,
+        userId: TEST_USER_2.id,
+      });
+      await expect(run()).rejects.toThrow(NotificationNotFoundError);
+      expect(prisma.notification.update).not.toHaveBeenCalled();
+    });
+
+    it.each(cases)('%s refuses a notification from another org', async (_n, run) => {
+      prisma.notification.findUnique.mockResolvedValue({
+        ...TEST_NOTIFICATION,
+        organizationId: OTHER_ORG,
+      });
+      await expect(run()).rejects.toThrow(NotificationNotFoundError);
+      expect(prisma.notification.update).not.toHaveBeenCalled();
+    });
+
+    it.each(cases)('%s refuses a missing notification', async (_n, run) => {
+      prisma.notification.findUnique.mockResolvedValue(null);
+      await expect(run()).rejects.toThrow(NotificationNotFoundError);
+      expect(prisma.notification.update).not.toHaveBeenCalled();
+    });
+
+    it('markRead and snooze refuse a notification from another org too', async () => {
+      prisma.notification.findUnique.mockResolvedValue({
+        ...TEST_NOTIFICATION,
+        organizationId: OTHER_ORG,
+      });
+      await expect(
+        service.markRead(TEST_NOTIFICATION.id, TEST_USER.id, TEST_ORG.id),
+      ).rejects.toThrow(NotificationNotFoundError);
+      await expect(
+        service.snooze(TEST_NOTIFICATION.id, TEST_USER.id, new Date(), TEST_ORG.id),
+      ).rejects.toThrow(NotificationNotFoundError);
+      expect(prisma.notification.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('markRead', () => {
     it('marks notification as read', async () => {
       const readNotification = {
