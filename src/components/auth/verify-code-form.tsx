@@ -14,6 +14,9 @@ import { safeRelativePath } from '@/lib/safe-path';
 /** Seconds before "Resend code" unlocks — the first code was just sent. */
 const RESEND_COOLDOWN_SECONDS = 30;
 
+/** Codes already auto-submitted in this page session (survives a remount). */
+const autoSubmittedCodes = new Set<string>();
+
 export function VerifyCodeForm() {
   const router = useRouter();
   const t = useTranslations();
@@ -55,12 +58,23 @@ export function VerifyCodeForm() {
     }
   }, [error]);
 
-  // Auto-submit if code prefilled via URL (intentionally only runs once on mount)
+  // Auto-submit a code prefilled via the magic link — once. A code is single
+  // use, so re-submitting it on a reload, a back navigation or a StrictMode
+  // remount only burns the verify rate limit. The code is also stripped from the
+  // URL so it is not left in history or re-sent by a refresh.
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional mount-only effect
   useEffect(() => {
-    if (prefillCode.length === 6) {
-      handleVerify(prefillCode);
+    if (prefillCode.length !== 6) {
+      return;
     }
+    const url = new URL(window.location.href);
+    url.searchParams.delete('code');
+    window.history.replaceState(window.history.state, '', url);
+    if (autoSubmittedCodes.has(prefillCode)) {
+      return;
+    }
+    autoSubmittedCodes.add(prefillCode);
+    handleVerify(prefillCode);
   }, []);
 
   async function handleVerify(verifyCode: string) {

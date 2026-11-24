@@ -31,7 +31,13 @@ describe('POST /roadmap/[slug]/unlock', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     passwordHash = await hashRoadmapPassword('hunter2');
-    findUnique.mockResolvedValue({ enabled: true, id: 'rm1', passwordHash, slug: SLUG });
+    findUnique.mockResolvedValue({
+      enabled: true,
+      id: 'rm1',
+      organization: { archivedAt: null, suspendedAt: null },
+      passwordHash,
+      slug: SLUG,
+    });
     checkFixedWindow.mockResolvedValue({ count: 1, exceeded: false });
   });
 
@@ -48,6 +54,19 @@ describe('POST /roadmap/[slug]/unlock', () => {
     expect(cookie?.httpOnly).toBe(true);
     expect(cookie?.path).toBe('/roadmap/acme');
     expect(isRoadmapUnlockTokenValid(cookie?.value, SLUG, passwordHash)).toBe(true);
+  });
+
+  it('refuses to unlock the roadmap of a suspended workspace', async () => {
+    findUnique.mockResolvedValue({
+      enabled: true,
+      id: 'rm1',
+      organization: { archivedAt: null, suspendedAt: new Date() },
+      passwordHash,
+      slug: SLUG,
+    });
+    const res = await post('hunter2');
+    expect(res.headers.get('location')).toBe('/roadmap/acme');
+    expect(res.cookies.get('roadmap_unlock_acme')).toBeUndefined();
   });
 
   it('sets no cookie and flags an error on a wrong password', async () => {

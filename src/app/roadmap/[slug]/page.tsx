@@ -7,6 +7,7 @@ import { getServerTranslations } from '@/lib/i18n/server';
 import { prisma } from '@/server/lib/prisma';
 import { ProjectService } from '@/server/services/project.service';
 import {
+  isRoadmapOrgLive,
   isRoadmapUnlockTokenValid,
   roadmapUnlockCookieName,
 } from '@/server/services/roadmap.service';
@@ -17,13 +18,16 @@ interface Props {
 }
 
 const getRoadmapBySlug = cache((slug: string) =>
-  prisma.publicRoadmap.findUnique({ where: { slug } }),
+  prisma.publicRoadmap.findUnique({
+    include: { organization: { select: { archivedAt: true, suspendedAt: true } } },
+    where: { slug },
+  }),
 );
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const roadmap = await getRoadmapBySlug(slug);
-  if (!roadmap) {
+  if (!roadmap || !isRoadmapOrgLive(roadmap.organization)) {
     const { t } = await getServerTranslations();
     return { title: t('meta.roadmapNotFound') };
   }
@@ -36,7 +40,7 @@ export default async function PublicRoadmapPage({ params, searchParams }: Props)
 
   const roadmap = await getRoadmapBySlug(slug);
 
-  if (!roadmap?.enabled) {
+  if (!roadmap?.enabled || !isRoadmapOrgLive(roadmap.organization)) {
     notFound();
   }
 
@@ -50,6 +54,7 @@ export default async function PublicRoadmapPage({ params, searchParams }: Props)
       roadmap.passwordHash,
     );
   const requiresPassword = !unlocked;
+  const { organization: _org, ...publicRoadmap } = roadmap;
   let projects: Array<{
     color: string;
     health: string | null;
@@ -99,7 +104,7 @@ export default async function PublicRoadmapPage({ params, searchParams }: Props)
       passwordError={error === 'rate' ? 'rate' : error ? 'wrong' : false}
       projects={projects}
       requiresPassword={requiresPassword}
-      roadmap={{ ...roadmap, passwordHash: null }}
+      roadmap={{ ...publicRoadmap, passwordHash: null }}
     />
   );
 }

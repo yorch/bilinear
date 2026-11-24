@@ -11,6 +11,7 @@ import { createMockPrisma } from '@/test/prisma-mock';
 import { checkFixedWindow } from '../middleware/rate-limit';
 import {
   hashRoadmapPassword,
+  isRoadmapOrgLive,
   isRoadmapUnlockTokenValid,
   RoadmapPasswordError,
   RoadmapService,
@@ -336,5 +337,17 @@ describe('RoadmapService.isPasswordAttemptLimited', () => {
     expect(await svc.isPasswordAttemptLimited(ROADMAP_ID, null)).toBe(true);
     await svc.isPasswordAttemptLimited(ROADMAP_ID, null);
     expect(warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('isRoadmapOrgLive', () => {
+  it('serves a live org', () => {
+    expect(isRoadmapOrgLive({ archivedAt: null, suspendedAt: null })).toBe(true);
+  });
+
+  it('refuses suspended, archived and missing orgs', () => {
+    expect(isRoadmapOrgLive({ archivedAt: null, suspendedAt: new Date() })).toBe(false);
+    expect(isRoadmapOrgLive({ archivedAt: new Date(), suspendedAt: null })).toBe(false);
+    expect(isRoadmapOrgLive(null)).toBe(false);
   });
 });

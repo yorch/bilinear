@@ -20,7 +20,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const payload = await readSessionClaim();
   if (!payload) {
-    redirect('/login');
+    redirect(`/login?next=${encodeURIComponent('/admin')}`);
   }
   // Impersonated sessions are locked out of the console entirely.
   if (payload.impersonatorId) {

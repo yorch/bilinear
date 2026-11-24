@@ -69,7 +69,7 @@
       "colOrganization": "Organization",
       "colStatus": "Status",
       "createdPrefix": "created",
-      "deleteConfirm": "Delete (archive) \"{name}\"? Members lose access immediately. Data is retained and this can be undone from the database.",
+      "deleteConfirm": "Delete (archive) \"{name}\"? Members lose access immediately. Data is retained and the workspace can be restored from this console.",
       "deleteConfirmDetail": "Delete (archive) \"{name}\"? Members lose access immediately. Data is retained.",
       "empty": "No tenants found.",
       "impersonate": "Impersonate",
@@ -848,7 +848,11 @@
       "projects": "Projects ({count})",
       "removedProject": "Removed {name}",
       "removeProjectFailed": "Failed to remove project",
-      "removeProjectTitle": "Remove {name} from this initiative"
+      "removeProjectTitle": "Remove {name} from this initiative",
+      "rename": "Rename",
+      "renameFailed": "Failed to rename initiative",
+      "statusUpdateFailed": "Failed to update status",
+      "unarchiveFailed": "Failed to restore initiative"
     },
     "status": {
       "active": "Active",
@@ -1415,6 +1419,7 @@
     "failedToCreateMilestone": "Failed to create milestone",
     "failedToDelete": "Failed to delete project",
     "failedToDeleteMilestone": "Failed to delete milestone",
+    "failedToUnarchive": "Failed to restore project",
     "failedToUpdate": "Failed to update project",
     "failedToUpdateDates": "Failed to update project dates",
     "failedToUpdateHealth": "Failed to update health",

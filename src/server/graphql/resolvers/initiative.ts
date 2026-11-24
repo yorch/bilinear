@@ -285,6 +285,26 @@ export const initiativeResolvers = {
       return { initiative: primary, lastSyncId: sync.id.toString(), success: true };
     },
 
+    initiativeUnarchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+
+      try {
+        const initiative = await ctx.services.initiative.unarchive(ctx.orgId, id);
+        // 'U', not 'A': clients apply both by upserting the row, but 'A' reads
+        // as "archived" in the sync log and this is the opposite.
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'U',
+          'Initiative',
+          id,
+          initiative,
+        );
+        return { initiative, lastSyncId: sync.id.toString(), success: true };
+      } catch (err) {
+        mapServiceError(err, INITIATIVE_ERROR_MAP);
+      }
+    },
+
     initiativeUpdate: async (
       _parent: unknown,
       { id, input }: { id: string; input: InitiativeUpdateInput },

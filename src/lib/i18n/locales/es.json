@@ -69,7 +69,7 @@
       "colOrganization": "Organización",
       "colStatus": "Estado",
       "createdPrefix": "creada el",
-      "deleteConfirm": "¿Eliminar (archivar) \"{name}\"? Los miembros pierden el acceso de inmediato. Los datos se conservan y esto se puede deshacer desde la base de datos.",
+      "deleteConfirm": "¿Eliminar (archivar) \"{name}\"? Los miembros pierden el acceso de inmediato. Los datos se conservan y el espacio se puede restaurar desde esta consola.",
       "deleteConfirmDetail": "¿Eliminar (archivar) \"{name}\"? Los miembros pierden el acceso de inmediato. Los datos se conservan.",
       "empty": "No se encontraron organizaciones.",
       "impersonate": "Suplantar",
@@ -848,7 +848,11 @@
       "projects": "Proyectos ({count})",
       "removedProject": "Se quitó {name}",
       "removeProjectFailed": "No se pudo quitar el proyecto",
-      "removeProjectTitle": "Quitar {name} de esta iniciativa"
+      "removeProjectTitle": "Quitar {name} de esta iniciativa",
+      "rename": "Renombrar",
+      "renameFailed": "No se pudo renombrar la iniciativa",
+      "statusUpdateFailed": "No se pudo actualizar el estado",
+      "unarchiveFailed": "No se pudo restaurar la iniciativa"
     },
     "status": {
       "active": "Activa",
@@ -1415,6 +1419,7 @@
     "failedToCreateMilestone": "No se pudo crear el hito",
     "failedToDelete": "Error al eliminar el proyecto",
     "failedToDeleteMilestone": "No se pudo eliminar el hito",
+    "failedToUnarchive": "No se pudo restaurar el proyecto",
     "failedToUpdate": "Error al actualizar el proyecto",
     "failedToUpdateDates": "No se pudieron actualizar las fechas del proyecto",
     "failedToUpdateHealth": "No se pudo actualizar el estado de salud",

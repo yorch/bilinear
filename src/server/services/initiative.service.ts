@@ -315,6 +315,22 @@ export class InitiativeService {
     return updated;
   }
 
+  /** Undo of `archive`: clears `archivedAt`. Scoped to the org like every other write. */
+  async unarchive(orgId: string, id: string): Promise<Initiative> {
+    const claim = await this.prisma.initiative.updateMany({
+      data: { archivedAt: null },
+      where: { id, organizationId: orgId },
+    });
+    if (claim.count !== 1) {
+      throw new InitiativeNotFoundError();
+    }
+    const updated = await this.prisma.initiative.findUnique({ where: { id } });
+    if (!updated) {
+      throw new InitiativeNotFoundError();
+    }
+    return updated;
+  }
+
   async delete(orgId: string, id: string): Promise<Initiative> {
     const existing = await this.findById(orgId, id);
     if (!existing) {

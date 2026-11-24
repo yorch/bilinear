@@ -311,6 +311,13 @@ export class ProjectService {
     });
   }
 
+  async unarchive(id: string): Promise<Project> {
+    return this.prisma.project.update({
+      data: { archivedAt: null },
+      where: { id },
+    });
+  }
+
   async archive(id: string): Promise<Project> {
     return this.prisma.project.update({
       data: { archivedAt: new Date() },

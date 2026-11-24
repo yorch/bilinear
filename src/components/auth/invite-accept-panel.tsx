@@ -10,6 +10,15 @@ import { ORGANIZATION_INVITE_ACCEPT_MUTATION } from '@/lib/graphql-queries';
 import { createClientLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/utils';
 
+// Localized role names live under settings.roles; an unknown role (a value the
+// server adds later) falls back to the raw string rather than a missing key.
+const ROLE_LABEL_KEYS: Record<string, string> = {
+  admin: 'settings.roles.admin',
+  guest: 'settings.roles.guest',
+  member: 'settings.roles.member',
+  owner: 'settings.roles.owner',
+};
+
 const log = createClientLogger('InviteAcceptPanel');
 
 interface InviteAcceptPanelProps {
@@ -31,6 +40,7 @@ export function InviteAcceptPanel({
   viewerEmail,
 }: InviteAcceptPanelProps) {
   const t = useTranslations();
+  const roleKey = ROLE_LABEL_KEYS[role];
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
@@ -94,7 +104,9 @@ export function InviteAcceptPanel({
           ? t('invite.invitedBy', { inviter: inviterName, organization: organizationName })
           : t('invite.invitedTo', { organization: organizationName })}
       </p>
-      <p className="text-sm text-muted-foreground">{t('invite.invitedAs', { role })}</p>
+      <p className="text-sm text-muted-foreground">
+        {t('invite.invitedAs', { role: roleKey ? t(roleKey) : role })}
+      </p>
 
       {matches ? (
         <Button disabled={accepting} onClick={() => void handleAccept()}>

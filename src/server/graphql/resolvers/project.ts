@@ -13,6 +13,7 @@ import type {
   ProjectUpdateInput,
   ProjectUpdateUpdateInput,
 } from '../../services/project.service';
+import type { SyncActionRow } from '../../services/sync.service';
 import type { GraphQLContext } from '../context';
 
 const PROJECT_MEMBERSHIP_ROLES = ['owner', 'admin', 'member'] as const;
@@ -26,6 +27,38 @@ function mapProjectError(err: unknown): never {
     });
   }
   throw err;
+}
+
+/**
+ * Archiving or restoring a project changes what its initiatives roll up
+ * (`recomputeProgress` skips archived projects), so each linked initiative —
+ * and every ancestor, or ancestor progress drifts on connected clients until
+ * the next bootstrap (PATTERNS.md §46) — gets a fresh SyncAction. Returns the
+ * last sync action created, or `sync` unchanged when nothing was linked.
+ */
+async function syncLinkedInitiativeRollups(
+  ctx: GraphQLContext,
+  orgId: string,
+  projectId: string,
+  sync: SyncActionRow,
+): Promise<SyncActionRow> {
+  let last = sync;
+  const initiatives = await ctx.services.initiative.getInitiativesForProject(projectId);
+  for (const init of initiatives) {
+    const { self, ancestors } = await ctx.services.initiative.recomputeProgressCascade(init.id);
+    for (const updated of [self, ...ancestors].filter(
+      (i): i is NonNullable<typeof i> => i !== null,
+    )) {
+      last = await ctx.services.sync.createSyncAction(
+        orgId,
+        'U',
+        'Initiative',
+        updated.id,
+        updated,
+      );
+    }
+  }
+  return last;
 }
 
 // Per-request cache to avoid duplicate getProgress calls when both progress and scope are queried
@@ -114,28 +147,7 @@ export const projectResolvers = {
 
       const project = await ctx.services.project.archive(id);
       let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Project', id, project);
-      // Archiving a project effectively removes it from initiative
-      // progress calculations (recomputeProgress filters out archived
-      // projects). Update each linked initiative so the rollup stays
-      // current.
-      const initiatives = await ctx.services.initiative.getInitiativesForProject(id);
-      for (const init of initiatives) {
-        // Cascade up the parent chain — without this, ancestor progress
-        // drifts on connected clients until next bootstrap (see
-        // PATTERNS.md §46).
-        const { self, ancestors } = await ctx.services.initiative.recomputeProgressCascade(init.id);
-        for (const updated of [self, ...ancestors].filter(
-          (i): i is NonNullable<typeof i> => i !== null,
-        )) {
-          sync = await ctx.services.sync.createSyncAction(
-            ctx.orgId,
-            'U',
-            'Initiative',
-            updated.id,
-            updated,
-          );
-        }
-      }
+      sync = await syncLinkedInitiativeRollups(ctx, ctx.orgId, id, sync);
       return { lastSyncId: sync.id.toString(), project, success: true };
     },
     projectCreate: async (
@@ -372,6 +384,23 @@ export const projectResolvers = {
         projectId,
         project,
       );
+      return { lastSyncId: sync.id.toString(), project, success: true };
+    },
+    projectUnarchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+
+      const existing = await ctx.services.project.findById(id);
+      if (!existing || existing.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Project not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+
+      const project = await ctx.services.project.unarchive(id);
+      let sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'U', 'Project', id, project);
+      // The mirror of archive: the project counts toward its initiatives'
+      // progress again.
+      sync = await syncLinkedInitiativeRollups(ctx, ctx.orgId, id, sync);
       return { lastSyncId: sync.id.toString(), project, success: true };
     },
 

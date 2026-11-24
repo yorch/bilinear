@@ -1,11 +1,12 @@
 'use client';
 
-import { Archive, Flag, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import { Archive, Flag, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useRef, useState } from 'react';
 import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
 import { FavoriteToggle } from '@/components/layouts/favorite-toggle';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { PromptDialog } from '@/components/shared/prompt-dialog';
 import { Button } from '@/components/ui/button';
 import { ColorDot } from '@/components/ui/color-dot';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -78,6 +79,10 @@ const INITIATIVE_ARCHIVE_MUTATION = `
   mutation InitiativeArchive($id: ID!) { initiativeArchive(id: $id) { success lastSyncId } }
 `;
 
+const INITIATIVE_UNARCHIVE_MUTATION = `
+  mutation InitiativeUnarchive($id: ID!) { initiativeUnarchive(id: $id) { success lastSyncId } }
+`;
+
 const INITIATIVE_DELETE_MUTATION = `
   mutation InitiativeDelete($id: ID!) { initiativeDelete(id: $id) { success lastSyncId } }
 `;
@@ -111,6 +116,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
   const viewerId = userStore.currentUser?.id ?? '';
   const [expanded, setExpanded] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [pendingAction, setPendingAction] = useState<'archive' | 'delete' | null>(null);
   // Progress must come from the server. Computing it from `issueStore` divides
   // over whatever issues this client happens to hold, and a guest's pool is
@@ -167,10 +173,55 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
     initiativeStore.optimisticUpdate(initiative.id, { archivedAt: new Date().toISOString() });
     try {
       await gqlMutate(INITIATIVE_ARCHIVE_MUTATION, { id: initiative.id });
-      toast.success(t('initiatives.row.archived'));
+      toast.undo(t('initiatives.row.archived'), t('common.undo'), () => void handleUnarchive());
     } catch (err) {
       initiativeStore.optimisticUpdate(initiative.id, { archivedAt: null });
       toast.error(getErrorMessage(err, t('initiatives.row.archiveFailed')));
+    }
+  };
+
+  // Optimistic like archive: the pressed state moves at once, and a refusal
+  // (or a dropped request) puts the previous status back with a toast rather
+  // than leaving the UI claiming a change the server never made.
+  const handleStatusChange = async (status: string) => {
+    if (status === initiative.status) {
+      return;
+    }
+    const previous = initiative.status;
+    initiativeStore.optimisticUpdate(initiative.id, { status });
+    try {
+      await gqlMutate(INITIATIVE_UPDATE_MUTATION, { id: initiative.id, input: { status } });
+    } catch (err) {
+      initiativeStore.optimisticUpdate(initiative.id, { status: previous });
+      toast.error(getErrorMessage(err, t('initiatives.row.statusUpdateFailed')));
+    }
+  };
+
+  const handleUnarchive = async () => {
+    initiativeStore.optimisticUpdate(initiative.id, { archivedAt: null });
+    try {
+      await gqlMutate(INITIATIVE_UNARCHIVE_MUTATION, { id: initiative.id });
+    } catch (err) {
+      initiativeStore.optimisticUpdate(initiative.id, {
+        archivedAt: new Date().toISOString(),
+      });
+      toast.error(getErrorMessage(err, t('initiatives.row.unarchiveFailed')));
+    }
+  };
+
+  const handleRename = async (raw: string) => {
+    setRenaming(false);
+    const name = raw.trim();
+    if (!name || name === initiative.name) {
+      return;
+    }
+    const previous = initiative.name;
+    initiativeStore.optimisticUpdate(initiative.id, { name });
+    try {
+      await gqlMutate(INITIATIVE_UPDATE_MUTATION, { id: initiative.id, input: { name } });
+    } catch (err) {
+      initiativeStore.optimisticUpdate(initiative.id, { name: previous });
+      toast.error(getErrorMessage(err, t('initiatives.row.renameFailed')));
     }
   };
 
@@ -251,6 +302,17 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
                 className={cn(POPOVER_ITEM_CLASS, 'text-foreground-secondary')}
                 onClick={() => {
                   close();
+                  setRenaming(true);
+                }}
+                type="button"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                {t('initiatives.row.rename')}
+              </button>
+              <button
+                className={cn(POPOVER_ITEM_CLASS, 'text-foreground-secondary')}
+                onClick={() => {
+                  close();
                   setPendingAction('archive');
                 }}
                 type="button"
@@ -273,6 +335,14 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
           )}
         </SelectPopover>
       </div>
+      <PromptDialog
+        initialValue={initiative.name}
+        label={t('initiatives.page.namePlaceholder')}
+        onCancel={() => setRenaming(false)}
+        onSubmit={value => void handleRename(value)}
+        open={renaming}
+        title={t('initiatives.row.rename')}
+      />
       <ConfirmDialog
         confirmLabel={
           pendingAction === 'archive' ? t('initiatives.row.archive') : t('common.delete')
@@ -393,12 +463,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
                     : 'border-border',
                 )}
                 key={s}
-                onClick={async () => {
-                  await gql(INITIATIVE_UPDATE_MUTATION, {
-                    id: initiative.id,
-                    input: { status: s },
-                  });
-                }}
+                onClick={() => void handleStatusChange(s)}
                 type="button"
               >
                 {STATUS_LABELS[s]}

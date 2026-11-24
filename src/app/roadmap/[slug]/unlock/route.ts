@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/lib/prisma';
 import { getClientIp } from '@/server/lib/request-security';
 import {
+  isRoadmapOrgLive,
   isValidRoadmapSlug,
   MAX_ROADMAP_PASSWORD_LENGTH,
   ROADMAP_UNLOCK_TTL_SECONDS,
@@ -37,9 +38,18 @@ export async function POST(
 
   const form = await request.formData().catch(() => null);
   const password = form?.get('password');
-  const roadmap = await prisma.publicRoadmap.findUnique({ where: { slug } });
+  const roadmap = await prisma.publicRoadmap.findUnique({
+    include: { organization: { select: { archivedAt: true, suspendedAt: true } } },
+    where: { slug },
+  });
 
-  if (!roadmap?.enabled || !roadmap.passwordHash || typeof password !== 'string' || !password) {
+  if (
+    !roadmap?.enabled ||
+    !isRoadmapOrgLive(roadmap.organization) ||
+    !roadmap.passwordHash ||
+    typeof password !== 'string' ||
+    !password
+  ) {
     return redirectTo(back);
   }
   if (password.length > MAX_ROADMAP_PASSWORD_LENGTH) {
