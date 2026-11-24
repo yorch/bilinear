@@ -1,108 +1,104 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslations } from '@/hooks/use-translations';
-import { gqlMutate, gqlQuery } from '@/lib/graphql';
+import type { DBIssueReminder } from '@/lib/db';
 import { toast } from '@/lib/toast';
-import { getErrorMessage } from '@/lib/utils';
+import { TransactionQueue } from '@/lib/transaction-queue';
 import { useStore } from '@/providers/store-provider';
-
-export const MY_ISSUE_REMINDERS_QUERY = `
-  query MyIssueReminders {
-    myIssueReminders { id issueId remindAt }
-  }
-`;
+import { isReminderPending } from '@/stores/issue-reminder-store';
 
 export const ISSUE_REMINDER_SET_MUTATION = `
   mutation IssueReminderSet($issueId: ID!, $remindAt: DateTime!) {
     issueReminderSet(issueId: $issueId, remindAt: $remindAt) {
       success
-      reminder { id issueId remindAt }
+      lastSyncId
+      reminder { id issueId organizationId userId remindAt createdAt updatedAt }
     }
   }
 `;
 
 export const ISSUE_REMINDER_CLEAR_MUTATION = `
   mutation IssueReminderClear($issueId: ID!) {
-    issueReminderClear(issueId: $issueId) { success }
+    issueReminderClear(issueId: $issueId) { success lastSyncId }
   }
 `;
 
-/** Re-fetch at most this often when consumers mount; mutations patch the store directly. */
-const STALE_AFTER_MS = 60_000;
-
 /**
- * The viewer's issue reminders. Reminders are private and not delivered through
- * sync, so the first consumer to mount loads them with `myIssueReminders` and
- * later ones refresh when the copy is older than a minute. Callers must be
- * `observer()`s: `reminderFor` is a live store read.
+ * The viewer's issue reminders. They are an ordinary synced pool (bootstrap,
+ * delta and WebSocket fill `issueReminderStore`), so there is nothing to fetch
+ * here. Writes go through the offline-capable `TransactionQueue` exactly like
+ * issue updates: the store changes first (the chip appears at once, even
+ * offline), the mutation drains when it can, and a permanent failure rolls the
+ * store back with a toast. Callers must be `observer()`s: `reminderFor` is a
+ * live store read.
  */
 export function useIssueReminders() {
-  const { issueReminderStore } = useStore();
+  const { issueReminderStore, issueStore, userStore } = useStore();
   const t = useTranslations();
-
-  useEffect(() => {
-    if (Date.now() - issueReminderStore.fetchedAt < STALE_AFTER_MS) {
-      return;
-    }
-    // Claim the slot first so sibling consumers mounting in the same tick don't all fetch.
-    const previous = issueReminderStore.fetchedAt;
-    issueReminderStore.setFetchedAt(Date.now());
-    gqlQuery<Array<{ id: string; issueId: string; remindAt: string }>>(
-      MY_ISSUE_REMINDERS_QUERY,
-      {},
-      'myIssueReminders',
-    )
-      .then(rows => issueReminderStore.replaceAll(rows))
-      .catch(() => {
-        // Non-fatal: chips just stay hidden. Let the next mount retry.
-        issueReminderStore.setFetchedAt(previous);
-      });
-  }, [issueReminderStore]);
+  const txQueue = useMemo(() => new TransactionQueue(), []);
 
   const setReminder = useCallback(
-    async (issueId: string, remindAt: Date): Promise<boolean> => {
-      try {
-        const data = await gqlMutate(ISSUE_REMINDER_SET_MUTATION, {
-          issueId,
-          remindAt: remindAt.toISOString(),
-        });
-        const reminder = (
-          data.issueReminderSet as { reminder?: { id: string; issueId: string; remindAt: string } }
-        ).reminder;
-        if (reminder) {
-          issueReminderStore.upsert(reminder);
-        }
-        return true;
-      } catch (err) {
-        toast.error(getErrorMessage(err, t('reminders.setFailed')));
-        return false;
-      }
+    (issueId: string, remindAt: Date): void => {
+      const prev = issueReminderStore.setOptimistic(issueId, remindAt.toISOString(), {
+        organizationId: issueStore.findById(issueId)?.organizationId ?? '',
+        userId: userStore.currentUserId ?? '',
+      });
+      txQueue.enqueue(
+        ISSUE_REMINDER_SET_MUTATION,
+        { issueId, remindAt: remindAt.toISOString() },
+        {
+          onError: () => {
+            // Localized text only: the server's English reason (past time, over
+            // a year) is already prevented by the picker's own validation.
+            toast.error(t('reminders.setFailed'));
+            if (prev) {
+              issueReminderStore.applySyncAction('U', prev.id, prev);
+            } else {
+              issueReminderStore.clearForIssue(issueId);
+            }
+          },
+          onSuccess: data => {
+            const confirmed = (data as { issueReminderSet?: { reminder?: DBIssueReminder } })
+              ?.issueReminderSet?.reminder;
+            if (confirmed) {
+              issueReminderStore.applySyncAction('U', confirmed.id, confirmed);
+            }
+          },
+        },
+      );
     },
-    [issueReminderStore, t],
+    [issueReminderStore, issueStore, t, txQueue, userStore],
   );
 
   const clearReminder = useCallback(
-    async (issueId: string): Promise<boolean> => {
-      const prev = issueReminderStore.forIssue(issueId);
-      issueReminderStore.remove(issueId);
-      try {
-        await gqlMutate(ISSUE_REMINDER_CLEAR_MUTATION, { issueId });
-        toast.success(t('reminders.cleared'));
-        return true;
-      } catch (err) {
-        if (prev) {
-          issueReminderStore.upsert(prev);
-        }
-        toast.error(getErrorMessage(err, t('reminders.clearFailed')));
-        return false;
-      }
+    (issueId: string): void => {
+      const prev = issueReminderStore.clearForIssue(issueId);
+      txQueue.enqueue(
+        ISSUE_REMINDER_CLEAR_MUTATION,
+        { issueId },
+        {
+          onError: () => {
+            toast.error(t('reminders.clearFailed'));
+            if (prev) {
+              issueReminderStore.applySyncAction('U', prev.id, prev);
+            }
+          },
+          onSuccess: () => {
+            toast.success(t('reminders.cleared'));
+          },
+        },
+      );
     },
-    [issueReminderStore, t],
+    [issueReminderStore, t, txQueue],
   );
 
+  /** The viewer's still-pending reminder on `issueId`, or null (none, or its time has passed). */
   const reminderFor = useCallback(
-    (issueId: string) => issueReminderStore.forIssue(issueId),
+    (issueId: string): DBIssueReminder | null => {
+      const row = issueReminderStore.forIssue(issueId);
+      return row && isReminderPending(row) ? row : null;
+    },
     [issueReminderStore],
   );
 

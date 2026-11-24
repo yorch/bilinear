@@ -371,6 +371,16 @@ export interface DBFavorite {
   userId: string;
 }
 
+export interface DBIssueReminder {
+  createdAt: string;
+  id: string;
+  issueId: string;
+  organizationId: string;
+  remindAt: string;
+  updatedAt: string;
+  userId: string;
+}
+
 export interface DBSyncMetadata {
   key: string;
   value: unknown;
@@ -417,6 +427,7 @@ export class AppDatabase extends Dexie {
   customViews!: Table<DBCustomView, string>;
   notifications!: Table<DBNotification, string>;
   favorites!: Table<DBFavorite, string>;
+  issueReminders!: Table<DBIssueReminder, string>;
   pendingTransactions!: Table<DBPendingTransaction, string>;
   syncMetadata!: Table<DBSyncMetadata, string>;
 
@@ -466,6 +477,7 @@ export class AppDatabase extends Dexie {
       initiatives: 'id, organizationId, status, ownerId',
       issueLabels: 'id, organizationId, teamId, parentId',
       issueRelations: 'id, issueId, relatedIssueId',
+      issueReminders: 'id, userId, organizationId, issueId',
       issues: 'id, teamId, stateId, assigneeId, organizationId, identifier, projectId, cycleId',
       issueTemplates: 'id, teamId, creatorId',
       notifications: 'id, userId, organizationId, issueId, read',

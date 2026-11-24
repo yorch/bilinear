@@ -6,6 +6,7 @@ type MockModel = {
   count: ReturnType<typeof vi.fn>;
   create: ReturnType<typeof vi.fn>;
   createMany: ReturnType<typeof vi.fn>;
+  createManyAndReturn: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
   deleteMany: ReturnType<typeof vi.fn>;
   findFirst: ReturnType<typeof vi.fn>;
@@ -23,6 +24,7 @@ function createMockModel(): MockModel {
     count: vi.fn(),
     create: vi.fn(),
     createMany: vi.fn(),
+    createManyAndReturn: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
     findFirst: vi.fn(),

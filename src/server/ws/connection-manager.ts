@@ -1,6 +1,6 @@
 import type { WebSocket } from 'ws';
 import { isUnrestricted, type SyncVisibility } from '@/server/lib/sync-visibility';
-import { dropForeignNotifications } from '@/server/services/sync.service';
+import { dropForeignUserRows } from '@/server/services/sync.service';
 
 export interface ClientInfo {
   orgId: string;
@@ -119,10 +119,10 @@ export class ConnectionManager {
     const filteredByUser = new Map<string, Promise<string | null>>();
     const pending: Promise<void>[] = [];
     for (const info of set) {
-      // A Notification row belongs to one recipient and must never reach any
+      // A per-user row (Notification, Favorite, IssueReminder) belongs to one recipient and must never reach any
       // other socket, restricted or not — so the shared frame is only safe
       // when this user's own view of the batch is identical to the whole batch.
-      const own = dropForeignNotifications(
+      const own = dropForeignUserRows(
         actions as unknown as Array<{ data: unknown; modelName: string }>,
         info.userId,
       ) as unknown as T[];

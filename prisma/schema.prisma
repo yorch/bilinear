@@ -1456,18 +1456,19 @@ model Favorite {
 // ---------------------------------------------------------------------------
 
 /// A private, per-user reminder on one issue. One row per (issue, user): setting
-/// a reminder again moves it (and re-arms it by clearing `firedAt`). The
-/// background sweep claims due rows with an atomic
-/// `UPDATE ... WHERE fired_at IS NULL RETURNING`, so concurrent workers fire a
-/// reminder at most once. Not replicated to clients (see the service doc): the
-/// row is private to its owner and SyncActions broadcast org-wide.
+/// a reminder again moves it. The background sweep claims due rows with an atomic
+/// `DELETE ... FOR UPDATE SKIP LOCKED ... RETURNING`, so concurrent workers fire
+/// a reminder exactly once and a fired reminder leaves no row behind (the table
+/// only ever holds PENDING reminders, which keeps the sweep's index scan tiny).
+/// Replicated like any entity (`I`/`U`/`D` SyncActions) but, like `Favorite` and
+/// `Notification`, it is per-user: the payload carries `userId` and every sync
+/// path drops rows whose `userId` is not the recipient (`dropForeignUserRows`).
 model IssueReminder {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid
   issueId        String    @map("issue_id") @db.Uuid
   userId         String    @map("user_id") @db.Uuid
   remindAt       DateTime  @map("remind_at") @db.Timestamptz
-  firedAt        DateTime? @map("fired_at") @db.Timestamptz
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -1476,9 +1477,10 @@ model IssueReminder {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([issueId, userId], map: "issue_reminders_issue_user_uniq")
-  // The sweep scans "unfired and due"; the viewer's own list filters by user.
-  @@index([remindAt, firedAt])
-  @@index([userId, firedAt])
+  // The sweep scans "due" rows in remind_at order; the viewer's own list
+  // filters by user. Fired rows are deleted, so neither index carries history.
+  @@index([remindAt])
+  @@index([userId])
   @@index([organizationId])
   @@map("issue_reminders")
 }

@@ -36,6 +36,10 @@ class MockSyncService {
     return { id: BigInt(1) } as { id: bigint };
   }
 
+  async getLastSyncId(_orgId: string) {
+    return '1';
+  }
+
   // In-transaction marker write (atomic-sync path). Returns the same
   // predictable id so resolvers that record-then-publish still assert '1'.
   async recordSyncAction(

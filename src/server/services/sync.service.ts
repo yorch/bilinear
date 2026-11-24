@@ -134,17 +134,32 @@ interface RawSyncActionRow {
 }
 
 /**
- * Per-recipient rows (`Notification`) are never org-wide: the payload carries
- * titles and @mention excerpts meant for exactly one user. Applies to every
- * caller, restricted or not, so it runs ahead of the `isUnrestricted` fast
- * path. A delete (`data: null`) carries only an id and passes through.
+ * Models whose rows belong to exactly one user. SyncActions broadcast org-wide,
+ * so each of these must be narrowed to its owner on every path that ships
+ * them: a `Notification` payload carries titles and @mention excerpts, a
+ * `Favorite` shows what a colleague pins, and an `IssueReminder` says which
+ * issue someone chose to be nudged about and when.
  */
-export function dropForeignNotifications<T extends { data: unknown; modelName: string }>(
+export const PER_USER_MODELS: ReadonlySet<string> = new Set([
+  'Favorite',
+  'IssueReminder',
+  'Notification',
+]);
+
+/**
+ * Drop per-user rows (`PER_USER_MODELS`) that belong to someone other than
+ * `userId`. Applies to every caller, restricted or not, so it runs ahead of the
+ * `isUnrestricted` fast path. The owner is read from `data.userId`, so the
+ * emitters must put it in the payload — including on deletes where the owner
+ * would otherwise be unknowable (`IssueReminder` deletes carry `{id, userId, …}`).
+ * A delete with `data: null` carries only an id and passes through.
+ */
+export function dropForeignUserRows<T extends { data: unknown; modelName: string }>(
   rows: T[],
   userId: string,
 ): T[] {
   return rows.filter(row => {
-    if (row.modelName !== 'Notification' || !row.data || typeof row.data !== 'object') {
+    if (!PER_USER_MODELS.has(row.modelName) || !row.data || typeof row.data !== 'object') {
       return true;
     }
     return (row.data as { userId?: unknown }).userId === userId;
@@ -415,6 +430,7 @@ export class SyncService {
       customFieldValues,
       initiatives,
       initiativeProjects,
+      issueReminders,
     ] = await Promise.all([
       // The `authSettings`/`securitySettings`/`themeSettings` blobs that used
       // to be omitted here no longer exist: they were schemaless placeholders
@@ -551,6 +567,17 @@ export class SyncService {
       this.prisma.initiativeProject.findMany({
         where: { initiative: { archivedAt: null, organizationId: orgId } },
       }),
+      // The VIEWER's pending reminders only — per-user rows (PER_USER_MODELS),
+      // scoped by `userId` here exactly as the delta/WS paths scope by payload —
+      // on issues they may still see (same hidden/guest narrowing as `issues`).
+      this.prisma.issueReminder.findMany({
+        orderBy: { remindAt: 'asc' },
+        where: {
+          issue: withVisibility({ archivedAt: null, organizationId: orgId, trashed: false }),
+          organizationId: orgId,
+          userId,
+        },
+      }),
     ]);
 
     // Denormalize label IDs onto each issue
@@ -585,6 +612,7 @@ export class SyncService {
       initiatives,
       issueLabels,
       issueRelations,
+      issueReminders,
       issues: issues.map(i => ({
         ...i,
         labelIds: labelIdsByIssue.get(i.id) ?? [],
@@ -771,7 +799,7 @@ export class SyncService {
     }
 
     return {
-      actions: visibility ? dropForeignNotifications(page, visibility.userId) : page,
+      actions: visibility ? dropForeignUserRows(page, visibility.userId) : page,
       hasMore,
       nextCursor,
       staleCursor: false,
@@ -814,7 +842,7 @@ export class SyncService {
     rows: SyncActionRow[],
     visibility: SyncVisibility,
   ): Promise<SyncActionRow[]> {
-    rows = dropForeignNotifications(rows, visibility.userId);
+    rows = dropForeignUserRows(rows, visibility.userId);
     if (isUnrestricted(visibility)) {
       return rows;
     }

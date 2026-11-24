@@ -9,7 +9,10 @@ vi.mock('@/hooks/use-translations', () => ({
   useTranslations: () => (key: string) => key,
 }));
 vi.mock('@/hooks/use-formatters', () => ({
-  useFormatters: () => ({ formatDate: (v: Date | string) => String(v) }),
+  useFormatters: () => ({
+    formatDate: (v: Date | string) => String(v),
+    formatDateTime: (v: Date | string) => String(v),
+  }),
 }));
 vi.mock('next/navigation', () => ({
   useParams: () => ({ workspace: 'acme' }),
@@ -126,6 +129,37 @@ describe('IssueContextMenu', () => {
     expect(screen.queryByRole('menuitem', { name: 'issues.snooze.snooze' })).toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: 'issues.snooze.unsnooze' }));
     expect(unsnoozeSpy).toHaveBeenCalledWith('issue-1');
+  });
+
+  it('offers "Remind me…" and queues the chosen preset through the transaction queue', () => {
+    seedIssue();
+    render(<IssueContextMenu {...baseProps} />);
+    expect(screen.queryByRole('menuitem', { name: 'reminders.menuItemChange' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'reminders.menuItem' }));
+    fireEvent.click(screen.getByText('reminders.tomorrow'));
+
+    const call = enqueueSpy.mock.calls.find(c => String(c[0]).includes('issueReminderSet'));
+    expect(call?.[1]).toMatchObject({ issueId: 'issue-1' });
+    expect(baseProps.onClose).toHaveBeenCalled();
+  });
+
+  it('says "Change reminder…" while the viewer has a pending reminder on the issue', () => {
+    seedIssue();
+    runInAction(() => {
+      storeHolder.current.issueReminderStore.applySyncAction('I', 'r1', {
+        createdAt: '2026-09-01T00:00:00Z',
+        id: 'r1',
+        issueId: 'issue-1',
+        organizationId: 'org',
+        remindAt: new Date(Date.now() + 86_400_000).toISOString(),
+        updatedAt: '2026-09-01T00:00:00Z',
+        userId: 'u1',
+      });
+    });
+    render(<IssueContextMenu {...baseProps} />);
+    expect(screen.getByRole('menuitem', { name: 'reminders.menuItemChange' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'reminders.menuItem' })).toBeNull();
   });
 
   it('labels the favorites item from the store state and toggles it', () => {

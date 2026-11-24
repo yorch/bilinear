@@ -258,6 +258,15 @@ describe('OrganizationService.removeMember', () => {
     expect(prisma.organizationMember.delete).toHaveBeenCalled();
   });
 
+  it("deletes the member's pending reminders in that workspace in the same transaction", async () => {
+    prisma.issueReminder.deleteMany.mockResolvedValue({ count: 2 });
+    await svc.removeMember(TEST_ORG.id, TARGET, ACTOR);
+    expect(prisma.issueReminder.deleteMany).toHaveBeenCalledWith({
+      where: { organizationId: TEST_ORG.id, userId: TARGET },
+    });
+    expect(prisma.$transaction).toHaveBeenCalled();
+  });
+
   it('never touches the global user.active flag', async () => {
     // Removing someone from one workspace must not sign them out of their
     // others — that is what SCIM's org-scoped deprovisioning gets right too.

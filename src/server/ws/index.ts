@@ -532,12 +532,13 @@ const cycleRolloverTimer = setInterval(() => {
 }, CYCLE_ROLLOVER_INTERVAL_MS);
 
 // ─── Issue reminder scheduler ───────────────────────────────────────────────
-// Claims due reminders with an atomic UPDATE ... RETURNING (safe with several
-// ws workers) and emits one REMINDER notification each, plus its SyncAction so
-// open inboxes update live.
+// Claims due reminders with an atomic DELETE ... RETURNING (safe with several
+// ws workers), emits one REMINDER notification each, and a delete SyncAction per
+// reminder so open clients drop the chip and the inbox updates live. `sweep`
+// loops over full batches within a time budget and guards against re-entrancy.
 const issueReminderService = new IssueReminderService(prisma, { sync: syncService });
 const reminderTimer = setInterval(() => {
-  issueReminderService.fireDue().catch((err: Error) => {
+  issueReminderService.sweep().catch((err: Error) => {
     log.error({ err }, 'Issue reminder sweep failed');
   });
 }, REMINDER_SWEEP_INTERVAL_MS);

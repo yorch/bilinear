@@ -38,6 +38,7 @@ const TABLE_NAMES = [
   'customViews',
   'notifications',
   'issueRelations',
+  'issueReminders',
   'issueTemplates',
   'customFieldDefinitions',
   'customFieldValues',
@@ -136,6 +137,7 @@ function createFakeStores() {
     'customFieldStore',
     'notificationStore',
     'issueRelationStore',
+    'issueReminderStore',
     'issueTemplateStore',
     'organizationMemberStore',
   ] as const;
@@ -432,6 +434,37 @@ describe('SyncManager', () => {
       });
     });
 
+    it('bootstrap replaces the reminder pool with the IssueReminder lines and caches them', async () => {
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+      const reminder = { id: 'r1', issueId: 'i1', userId: 'me' };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            `IssueReminder=${JSON.stringify(reminder)}\n_metadata_=${JSON.stringify({ lastSyncId: '42-1' })}`,
+        }),
+      );
+
+      await (manager as Instance).fullBootstrap();
+
+      expect(stores.issueReminderStore.replaceAll).toHaveBeenCalledWith([reminder]);
+      expect(fakeTables.issueReminders.clear).toHaveBeenCalled();
+      expect(fakeTables.issueReminders.bulkPut).toHaveBeenCalledWith([reminder]);
+    });
+
+    it('loads cached reminders from IndexedDB into the store on a warm start', async () => {
+      const stores = createFakeStores();
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+      seedWarmCache({ stamp: CACHED_COLLECTIONS });
+      const reminder = { id: 'r1', issueId: 'i1', userId: 'me' };
+      fakeTables.issueReminders.toArray.mockResolvedValue([reminder]);
+
+      expect(await (manager as Instance).loadFromIndexedDB()).toBe(true);
+      expect(stores.issueReminderStore.upsertMany).toHaveBeenCalledWith([reminder]);
+    });
+
     it('serializes fullBootstrap against a live apply that arrives mid-write', async () => {
       // The bootstrap write is an authoritative load: it clears Dexie and
       // clears the roster pool outright. It is reached from deltaSync's
@@ -580,6 +613,44 @@ describe('SyncManager', () => {
       );
       // Skipping the row must not stall the cursor.
       expect(stores.syncStore.lastSyncId).toBe(expectedCursor('1000', '2'));
+    });
+
+    it("applies the current user's IssueReminder I/U/D to the store and Dexie, and drops another user's", async () => {
+      const stores = createFakeStores();
+      (stores.userStore as unknown as { currentUserId: string }).currentUserId = 'me';
+      const manager = new SyncManager(stores, createFakeWsClient() as unknown as WsClient);
+      const mine = { id: 'r-mine', issueId: 'i1', userId: 'me' };
+
+      await (manager as Instance).applyActions([
+        makeAction({
+          data: { id: 'r-other', issueId: 'i1', userId: 'colleague' },
+          id: '1',
+          modelId: 'r-other',
+          modelName: 'IssueReminder',
+        }),
+        makeAction({
+          action: 'I',
+          data: mine,
+          id: '2',
+          modelId: 'r-mine',
+          modelName: 'IssueReminder',
+        }),
+        makeAction({
+          action: 'D',
+          data: mine,
+          id: '3',
+          modelId: 'r-mine',
+          modelName: 'IssueReminder',
+        }),
+      ]);
+
+      const apply = stores.issueReminderStore.applySyncAction as ReturnType<typeof vi.fn>;
+      expect(apply.mock.calls.map(c => [c[0], c[1]])).toEqual([
+        ['I', 'r-mine'],
+        ['D', 'r-mine'],
+      ]);
+      expect(fakeTables.issueReminders.bulkPut).toHaveBeenCalledWith([mine]);
+      expect(fakeTables.issueReminders.delete).toHaveBeenCalledWith('r-mine');
     });
 
     it('cascades a hard-deleted issue to its custom-field values and relation edges', async () => {

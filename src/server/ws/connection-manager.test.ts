@@ -106,6 +106,31 @@ describe('ConnectionManager.broadcastActions', () => {
     expect(theirs.send).not.toHaveBeenCalled();
   });
 
+  it.each(['Favorite', 'IssueReminder'])(
+    "never sends another user's %s row to any socket (incl. an owner-carrying delete)",
+    async modelName => {
+      const cm = new ConnectionManager();
+      const mine = fakeWs();
+      const theirs = fakeWs();
+      const lockedTheirs = fakeWs();
+      cm.add('org-1', 'me', mine);
+      cm.add('org-1', 'other', theirs);
+      cm.add('org-1', 'locked', lockedTheirs, {
+        guestTeamIds: [],
+        hiddenTeamIds: ['t-hidden'],
+        userId: 'locked',
+      });
+      const upsert = { action: 'I', data: { id: 'x', userId: 'me' }, modelName };
+      const del = { action: 'D', data: { id: 'x', userId: 'me' }, modelName };
+
+      await cm.broadcastActions('org-1', [upsert, del], async (_v, batch) => batch);
+
+      expect(mine.send).toHaveBeenCalledWith(JSON.stringify({ cmd: 'sync', sync: [upsert, del] }));
+      expect(theirs.send).not.toHaveBeenCalled();
+      expect(lockedTheirs.send).not.toHaveBeenCalled();
+    },
+  );
+
   it('runs the filter once per restricted user, not once per socket', async () => {
     const cm = new ConnectionManager();
     const a = fakeWs();

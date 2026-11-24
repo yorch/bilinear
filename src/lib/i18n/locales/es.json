@@ -1891,19 +1891,24 @@
     }
   },
   "reminders": {
+    "chipLabel": "Recordatorio: {when}",
     "chipTitle": "Recordatorio para {when}",
     "clear": "Quitar recordatorio",
     "cleared": "Recordatorio eliminado",
     "clearFailed": "No se pudo quitar el recordatorio",
     "customLabel": "Fecha y hora personalizadas",
+    "invalidTime": "Introduce una fecha y hora válidas",
     "laterToday": "Más tarde hoy",
     "menuItem": "Recordarme…",
     "menuItemChange": "Cambiar recordatorio…",
     "nextWeek": "La semana que viene",
     "pastTime": "Elige una hora futura",
-    "set": "Te lo recordaremos {when}",
+    "set": "Te lo recordaremos el {when}",
+    "setCustom": "Crear recordatorio",
     "setFailed": "No se pudo crear el recordatorio",
-    "tomorrow": "Mañana"
+    "shifted": "Esa hora no existe por el cambio de hora. El recordatorio se fijará para {when}.",
+    "tomorrow": "Mañana",
+    "tooFar": "Los recordatorios pueden fijarse con un año de antelación como máximo"
   },
   "roadmap": {
     "gantt": {

@@ -13,8 +13,10 @@ describe('issueReminderResolvers', () => {
   let ctx: MockGraphQLContext;
   const anon = () => createMockContext({ orgId: null, userId: null });
 
+  let syncSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     ctx = createMockContext();
+    syncSpy = vi.spyOn(ctx.services.sync, 'createSyncAction');
   });
 
   it('requires authentication on every operation', async () => {
@@ -30,17 +32,13 @@ describe('issueReminderResolvers', () => {
       anon(),
       'UNAUTHENTICATED',
     );
-    await testAuthGuard(
-      issueReminderResolvers.Query.myIssueReminders,
-      {},
-      anon(),
-      'UNAUTHENTICATED',
-    );
   });
 
-  it('set scopes to the caller (ignores any other user) and returns the reminder', async () => {
-    const reminder = { id: 'r1', issueId: ISSUE_ID };
-    const spy = vi.spyOn(ctx.services.issueReminder, 'set').mockResolvedValue(reminder as never);
+  it('set scopes to the caller, emits an I SyncAction carrying userId and returns lastSyncId', async () => {
+    const reminder = { id: 'r1', issueId: ISSUE_ID, userId: ctx.userId };
+    const spy = vi
+      .spyOn(ctx.services.issueReminder, 'set')
+      .mockResolvedValue({ created: true, reminder } as never);
     const at = new Date(Date.now() + 3600_000);
 
     const out = await issueReminderResolvers.Mutation.issueReminderSet(
@@ -50,7 +48,28 @@ describe('issueReminderResolvers', () => {
     );
 
     expect(spy).toHaveBeenCalledWith(ctx.orgId, ctx.userId, ISSUE_ID, at);
-    expect(out).toEqual({ reminder, success: true });
+    expect(syncSpy).toHaveBeenCalledWith(
+      ctx.orgId,
+      'I',
+      'IssueReminder',
+      'r1',
+      expect.objectContaining({ userId: ctx.userId }),
+    );
+    expect(out).toEqual({ lastSyncId: '1', reminder, success: true });
+  });
+
+  it('set emits a U when it moved an existing reminder', async () => {
+    const reminder = { id: 'r1', issueId: ISSUE_ID, userId: ctx.userId };
+    vi.spyOn(ctx.services.issueReminder, 'set').mockResolvedValue({
+      created: false,
+      reminder,
+    } as never);
+    await issueReminderResolvers.Mutation.issueReminderSet(
+      {},
+      { issueId: ISSUE_ID, remindAt: new Date(Date.now() + 3600_000) },
+      ctx as never,
+    );
+    expect(syncSpy).toHaveBeenCalledWith(ctx.orgId, 'U', 'IssueReminder', 'r1', expect.anything());
   });
 
   it('set remaps not-found (hidden/foreign issue) to NOT_FOUND', async () => {
@@ -75,18 +94,35 @@ describe('issueReminderResolvers', () => {
     );
   });
 
-  it('clear and list are scoped to the caller', async () => {
-    const clear = vi.spyOn(ctx.services.issueReminder, 'clear').mockResolvedValue(true);
-    const list = vi.spyOn(ctx.services.issueReminder, 'findPendingByUser').mockResolvedValue([]);
+  it('clear is scoped to the caller and emits a D whose payload carries userId', async () => {
+    const removed = { id: 'r1', issueId: ISSUE_ID, userId: ctx.userId };
+    const clear = vi.spyOn(ctx.services.issueReminder, 'clear').mockResolvedValue(removed as never);
 
-    await issueReminderResolvers.Mutation.issueReminderClear(
+    const out = await issueReminderResolvers.Mutation.issueReminderClear(
       {},
       { issueId: ISSUE_ID },
       ctx as never,
     );
-    await issueReminderResolvers.Query.myIssueReminders({}, {}, ctx as never);
 
     expect(clear).toHaveBeenCalledWith(ctx.orgId, ctx.userId, ISSUE_ID);
-    expect(list).toHaveBeenCalledWith(ctx.orgId, ctx.userId);
+    expect(syncSpy).toHaveBeenCalledWith(
+      ctx.orgId,
+      'D',
+      'IssueReminder',
+      'r1',
+      expect.objectContaining({ userId: ctx.userId }),
+    );
+    expect(out).toEqual({ lastSyncId: '1', success: true });
+  });
+
+  it('clear with nothing to clear emits no SyncAction but still succeeds', async () => {
+    vi.spyOn(ctx.services.issueReminder, 'clear').mockResolvedValue(null);
+    const out = await issueReminderResolvers.Mutation.issueReminderClear(
+      {},
+      { issueId: ISSUE_ID },
+      ctx as never,
+    );
+    expect(syncSpy).not.toHaveBeenCalled();
+    expect(out.success).toBe(true);
   });
 });

@@ -385,6 +385,9 @@ export class OrganizationService {
       await tx.teamMembership.deleteMany({
         where: { team: { organizationId: orgId }, userId },
       });
+      // Pending reminders are personal to a workspace the user is leaving; the
+      // sweep also consumes any it races past without notifying.
+      await tx.issueReminder.deleteMany({ where: { organizationId: orgId, userId } });
       return tx.organizationMember.delete({
         where: { organizationId_userId: { organizationId: orgId, userId } },
       });

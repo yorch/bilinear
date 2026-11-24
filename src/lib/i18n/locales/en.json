@@ -1891,19 +1891,24 @@
     }
   },
   "reminders": {
+    "chipLabel": "Reminder: {when}",
     "chipTitle": "Reminder set for {when}",
     "clear": "Clear reminder",
     "cleared": "Reminder cleared",
     "clearFailed": "Couldn't clear the reminder",
     "customLabel": "Custom date and time",
+    "invalidTime": "Enter a valid date and time",
     "laterToday": "Later today",
     "menuItem": "Remind me…",
     "menuItemChange": "Change reminder…",
     "nextWeek": "Next week",
     "pastTime": "Pick a time in the future",
-    "set": "We'll remind you {when}",
+    "set": "We'll remind you on {when}",
+    "setCustom": "Set reminder",
     "setFailed": "Couldn't set the reminder",
-    "tomorrow": "Tomorrow"
+    "shifted": "That time doesn't exist because the clocks change. The reminder is set for {when}.",
+    "tomorrow": "Tomorrow",
+    "tooFar": "Reminders can be at most one year ahead"
   },
   "roadmap": {
     "gantt": {

@@ -693,11 +693,8 @@ const SubMenuList = observer(function SubMenuList({
         label: `${t(presetKey[p.key])} · ${when(p.at)}`,
         onSelect: () => {
           onClose();
-          void setReminder(issueId, p.at).then(ok => {
-            if (ok) {
-              toast.success(t('reminders.set', { when: when(p.at) }));
-            }
-          });
+          setReminder(issueId, p.at);
+          toast.success(t('reminders.set', { when: when(p.at) }));
         },
       })),
       ...(existing
@@ -707,7 +704,7 @@ const SubMenuList = observer(function SubMenuList({
               label: t('reminders.clear'),
               onSelect: () => {
                 onClose();
-                void clearReminder(issueId);
+                clearReminder(issueId);
               },
             },
           ]

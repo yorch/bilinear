@@ -2014,8 +2014,6 @@ export const typeDefs = `
 
     # Favorites — sidebar pinning, per user
     favorites: [Favorite!]!
-    # Issue reminders — the viewer's own pending reminders
-    myIssueReminders: [IssueReminder!]!
 
     # GitHub Integration
     githubIntegration: GitHubIntegration
@@ -2289,7 +2287,7 @@ export const typeDefs = `
     favoriteDelete(id: ID!): DeletePayload!
     favoriteReorder(entries: [FavoriteReorderEntryInput!]!): FavoriteListPayload!
 
-    # Issue reminders (private to the caller; not replicated through sync)
+    # Issue reminders (private to the caller; replicated as per-user SyncActions)
     issueReminderSet(issueId: ID!, remindAt: DateTime!): IssueReminderPayload!
     issueReminderClear(issueId: ID!): IssueReminderClearPayload!
 
@@ -2420,24 +2418,29 @@ export const typeDefs = `
 
   """
   A private "remind me about this issue" reminder. Only ever returned to its
-  owner. When it fires the sweep emits a REMINDER notification and the row
-  stops appearing in myIssueReminders.
+  owner (per-user SyncActions). When it fires the sweep emits a REMINDER
+  notification and deletes the row, which clients see as a delete.
   """
   type IssueReminder {
     id: ID!
+    organizationId: ID!
+    userId: ID!
     issueId: ID!
     remindAt: DateTime!
     createdAt: DateTime!
+    updatedAt: DateTime!
     issue: Issue
   }
 
   type IssueReminderPayload {
     success: Boolean!
     reminder: IssueReminder
+    lastSyncId: String!
   }
 
   type IssueReminderClearPayload {
     success: Boolean!
+    lastSyncId: String!
   }
 
   # ---------------------------------------------------------------------------

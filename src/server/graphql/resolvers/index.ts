@@ -224,7 +224,6 @@ export const resolvers = {
     ...commentResolvers.Query,
     ...documentResolvers.Query,
     ...favoriteResolvers.Query,
-    ...issueReminderResolvers.Query,
     ...fileResolvers.Query,
     ...githubResolvers.Query,
     ...initiativeResolvers.Query,

@@ -46,6 +46,7 @@ export const CACHED_COLLECTIONS = [
   'initiatives',
   'issueLabels',
   'issueRelations',
+  'issueReminders',
   'issueTemplates',
   'issues',
   'notifications',
