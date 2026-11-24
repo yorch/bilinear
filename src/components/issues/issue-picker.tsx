@@ -1,13 +1,15 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import type { ReactNode } from 'react';
+import { type ReactNode, useMemo } from 'react';
 import { SearchableSelectPopover } from '@/components/ui/searchable-select-popover';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
 import { useStore } from '@/providers/store-provider';
 
 interface IssuePickerProps {
+  /** Which edge of the trigger the panel is anchored to; use `right` in right-hand rails. */
+  align?: 'left' | 'right';
   disabled?: boolean;
   /** Issue id to exclude from results (typically the issue being linked itself). */
   excludeId?: string;
@@ -30,6 +32,7 @@ interface IssuePickerProps {
  * search-and-pick list.
  */
 export const IssuePicker = observer(function IssuePicker({
+  align,
   disabled,
   excludeId,
   excludeIds,
@@ -42,13 +45,27 @@ export const IssuePicker = observer(function IssuePicker({
 }: IssuePickerProps) {
   const t = useTranslations();
   const { issueStore } = useStore();
+  const poolSize = issueStore.pool.size;
+  // Before anything is typed, offer the most recently touched issues rather
+  // than a bare input.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: poolSize stands in for the observable pool
+  const recent = useMemo(
+    () =>
+      Array.from(issueStore.pool.values())
+        .filter(i => !i.trashed && !i.archivedAt && i.id !== excludeId && !excludeIds?.has(i.id))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .slice(0, 5),
+    [issueStore, poolSize, excludeId, excludeIds],
+  );
 
   return (
     <SearchableSelectPopover<DBIssue>
+      align={align}
       disabled={disabled}
       emptyText={t('issues.pickerNoIssuesFound')}
       forceOpen={forceOpen}
       getKey={issue => issue.id}
+      idleItems={recent}
       listClassName="max-h-56"
       onClose={onClose}
       onSearch={query =>

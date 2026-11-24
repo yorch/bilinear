@@ -249,6 +249,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
   const parentField = (
     <div className="flex min-w-0 items-center gap-1">
       <IssuePicker
+        align="right"
         excludeId={issue.id}
         excludeIds={parentExcluded}
         onSelect={picked => handleUpdate(issue.id, { parentId: picked.id })}
