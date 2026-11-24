@@ -11,7 +11,7 @@ import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlQuery } from '@/lib/graphql';
 import { buildIssueHref } from '@/lib/issue-nav';
-import { TOUCH_TARGET } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 
 /**
  * Quiet period before suggestions are fetched. Holding J/K moves focus ~30
@@ -117,7 +117,7 @@ export function TriageDuplicateSuggestions({
       <ul className="mt-2 divide-y divide-border rounded-md border border-border">
         {data.map(s => (
           <li
-            className="flex items-center gap-3 px-3 py-2"
+            className="flex flex-col items-stretch gap-2 px-3 py-2 sm:flex-row sm:items-center sm:gap-3"
             data-testid="triage-duplicate-suggestion"
             key={s.issue.id}
           >
@@ -143,7 +143,7 @@ export function TriageDuplicateSuggestions({
               ) : null}
             </div>
             <Button
-              className={TOUCH_TARGET}
+              className={cn(TOUCH_TARGET, 'sm:shrink-0')}
               disabled={disabled}
               onClick={() => onMarkDuplicate(s.issue)}
               size="xs"

@@ -125,10 +125,10 @@ export const BulkActionBar = observer(function BulkActionBar({
   return (
     <div
       className={cn(
-        // Phone: full-width single row that scrolls sideways. md+: the floating,
-        // wrapping card it always was.
-        'fixed inset-x-0 bottom-0 z-50 flex flex-nowrap items-center gap-1 overflow-x-auto border-t border-border bg-card px-3 py-2 shadow-e3',
-        'md:inset-x-auto md:bottom-6 md:left-1/2 md:max-w-[calc(100vw-2rem)] md:-translate-x-1/2 md:flex-wrap md:overflow-visible md:rounded-lg md:border md:border-border',
+        // Phone: full-width bar whose actions wrap onto further rows, so Delete
+        // is never scrolled out of sight. md+: the floating card it always was.
+        'fixed inset-x-0 bottom-0 z-50 flex max-h-[40vh] flex-wrap items-center gap-1 overflow-y-auto border-t border-border bg-card px-3 py-2 shadow-e3',
+        'md:inset-x-auto md:bottom-6 md:left-1/2 md:max-w-[calc(100vw-2rem)] md:-translate-x-1/2 md:max-h-none md:overflow-visible md:rounded-lg md:border md:border-border',
       )}
       data-testid="bulk-action-bar"
     >
