@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildBacklogViewFilters,
+  effectiveCompletedMode,
   excludeTriageIssues,
   filterCompletedIssues,
   stateIdsOfType,
@@ -60,5 +62,37 @@ describe('stateIdsOfType', () => {
       { id: 's3', type: 'canceled' },
     ];
     expect([...stateIdsOfType(states, ['completed', 'canceled'])]).toEqual(['s1', 's3']);
+  });
+});
+
+describe('buildBacklogViewFilters', () => {
+  const cond = (value: string) => ({ field: 'priority' as const, operator: 'eq' as const, value });
+
+  it('puts the backlog scope first and keeps every AND condition', () => {
+    const out = buildBacklogViewFilters({ composition: 'and', conditions: [cond('1')] }, ['b1']);
+    expect(out).toEqual({
+      composition: 'and',
+      conditions: [{ field: 'status', operator: 'in', value: ['b1'] }, cond('1')],
+    });
+  });
+
+  it('keeps a single-condition OR set (it is equivalent to AND)', () => {
+    const out = buildBacklogViewFilters({ composition: 'or', conditions: [cond('1')] }, ['b1']);
+    expect(out?.composition).toBe('and');
+    expect(out?.conditions).toHaveLength(2);
+  });
+
+  it('refuses a multi-condition OR set rather than silently dropping its conditions', () => {
+    expect(
+      buildBacklogViewFilters({ composition: 'or', conditions: [cond('1'), cond('2')] }, ['b1']),
+    ).toBeNull();
+  });
+});
+
+describe('effectiveCompletedMode', () => {
+  it('applies the preference in list mode only', () => {
+    expect(effectiveCompletedMode('list', 'none')).toBe('none');
+    expect(effectiveCompletedMode('board', 'none')).toBe('all');
+    expect(effectiveCompletedMode('timeline', 'pastWeek')).toBe('all');
   });
 });

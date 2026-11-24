@@ -30,4 +30,26 @@ describe('NumberFormatPicker', () => {
     });
     expect(onChange).toHaveBeenCalledWith({ currency: 'USD', kind: 'currency' });
   });
+  it('offers the currency input only for the currency kind', () => {
+    const { rerender } = render(
+      <NumberFormatPicker onChange={() => {}} value={{ kind: 'percent' }} />,
+    );
+    expect(screen.queryByLabelText('customFields.numberFormat.currency')).toBeNull();
+    rerender(<NumberFormatPicker onChange={() => {}} value={{ kind: 'currency' }} />);
+    expect(screen.getByLabelText('customFields.numberFormat.currency')).toBeInTheDocument();
+  });
+
+  it('hides decimals for duration and previews minutes as h/m', () => {
+    render(<NumberFormatPicker onChange={() => {}} value={{ kind: 'duration' }} />);
+    expect(screen.queryByLabelText('customFields.numberFormat.decimals')).toBeNull();
+    expect(screen.getByTestId('number-format-preview')).toHaveTextContent('1h 30m');
+  });
+
+  it('reports a kind change through the select, keeping the other fields', () => {
+    const onChange = vi.fn();
+    render(<NumberFormatPicker onChange={onChange} value={{ decimals: 1, kind: 'plain' }} />);
+    fireEvent.click(screen.getByLabelText('customFields.numberFormat.title'));
+    fireEvent.click(screen.getByText('customFields.numberFormat.kinds.percent'));
+    expect(onChange).toHaveBeenCalledWith({ decimals: 1, kind: 'percent' });
+  });
 });

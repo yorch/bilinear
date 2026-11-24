@@ -5,9 +5,9 @@ import { getTeamKey, getWorkspaceKey } from '../fixtures/workspace';
 test.use({ storageState: ADMIN_STATE });
 
 /**
- * Team backlog: page renders and shows seeded issues. The seed creates issues
- * in the `Backlog`, `Todo`, and `In Progress` workflow states; the backlog
- * view filters to the team's backlog set.
+ * Team backlog: the page lists only issues in backlog-category workflow states.
+ * The seed puts ENG-7..9 in `Backlog` (ENG-1..3 are Todo/In Progress and
+ * ENG-4..6 are Triage, so they do not appear here).
  */
 test.describe('Backlog', () => {
   test.beforeEach(async ({ page }) => {
@@ -22,10 +22,16 @@ test.describe('Backlog', () => {
   });
 
   test('renders without runtime error', async ({ page }) => {
-    // The backlog page may legitimately be empty for the seeded team;
-    // assert that a Next.js error overlay isn't shown rather than tying
-    // the test to a specific empty-state copy that may evolve.
+    // Assert that a Next.js error overlay isn't shown rather than tying the
+    // test to specific copy that may evolve.
     await expect(page.locator('text=Application error')).toHaveCount(0);
     await expect(page.locator('text=Something went wrong')).toHaveCount(0);
+  });
+
+  test('lists the seeded backlog issues and not Todo or Triage ones', async ({ page }) => {
+    await expect(page.getByText('ENG-7', { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('ENG-8', { exact: true })).toBeVisible();
+    await expect(page.getByText('ENG-3', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('ENG-4', { exact: true })).toHaveCount(0);
   });
 });

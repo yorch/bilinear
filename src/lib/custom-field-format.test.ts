@@ -4,6 +4,8 @@ import {
   isValidCurrencyCode,
   type NumberFieldFormat,
   parseNumberFormat,
+  readNumberFormat,
+  toNumberFormatInput,
 } from './custom-field-format';
 
 const f = (format: NumberFieldFormat, v: number | null | undefined, locale = 'en-US') =>
@@ -57,6 +59,8 @@ describe('formatNumberValue', () => {
 
   it('clamps absurd decimals', () => {
     expect(f({ decimals: 99, kind: 'plain' }, 1.5)).toBe('1.5');
+    expect(f({ decimals: 99, kind: 'plain' }, 1 / 3)).toBe('0.333333');
+    expect(f({ decimals: -4, kind: 'plain' }, 1.5)).toBe('2');
   });
 });
 
@@ -68,5 +72,39 @@ describe('parseNumberFormat', () => {
       currency: 'EUR',
       kind: 'currency',
     });
+  });
+});
+
+describe('readNumberFormat', () => {
+  it('reads the format from a definition options object', () => {
+    expect(readNumberFormat({ numberFormat: { currency: 'GBP', kind: 'currency' } })).toEqual({
+      currency: 'GBP',
+      kind: 'currency',
+    });
+  });
+
+  it('is plain for null, a select options array, or junk', () => {
+    expect(readNumberFormat(null)).toEqual({ kind: 'plain' });
+    expect(readNumberFormat([{ label: 'A', value: 'a' }])).toEqual({ kind: 'plain' });
+    expect(readNumberFormat({ numberFormat: 'nope' })).toEqual({ kind: 'plain' });
+  });
+});
+
+describe('toNumberFormatInput', () => {
+  it('is null for plain with no decimals (clears the stored format)', () => {
+    expect(toNumberFormatInput({ kind: 'plain' })).toBeNull();
+  });
+
+  it('drops keys that do not apply to the kind', () => {
+    expect(toNumberFormatInput({ currency: 'usd', decimals: 2, kind: 'currency' })).toEqual({
+      currency: 'USD',
+      decimals: 2,
+      kind: 'currency',
+    });
+    expect(toNumberFormatInput({ currency: 'USD', decimals: 3, kind: 'percent' })).toEqual({
+      decimals: 3,
+      kind: 'percent',
+    });
+    expect(toNumberFormatInput({ decimals: 2, kind: 'duration' })).toEqual({ kind: 'duration' });
   });
 });

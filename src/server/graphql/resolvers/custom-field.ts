@@ -13,6 +13,7 @@ import { mapServiceError } from '../types/errors';
 interface CustomFieldDefinitionCreateGqlInput {
   description?: string;
   name: string;
+  numberFormat?: CustomFieldDefinitionCreateInput['numberFormat'];
   options?: Array<{ color?: string; label: string; value: string }>;
   required?: boolean;
   sortOrder?: number;
@@ -22,6 +23,7 @@ interface CustomFieldDefinitionCreateGqlInput {
 
 const CUSTOM_FIELD_ERRORS = {
   BAD_USER_INPUT: [
+    'CustomFieldInvalidFormatError',
     'CustomFieldInvalidOptionsError',
     'CustomFieldInvalidValueError',
     'CustomFieldLimitExceededError',

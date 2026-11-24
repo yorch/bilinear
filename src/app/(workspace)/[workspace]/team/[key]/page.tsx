@@ -29,6 +29,7 @@ import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
 import { useListDisplayPrefs } from '@/hooks/use-list-display-prefs';
 import { useRecentItems } from '@/hooks/use-recent-items';
+import { useTriageCount } from '@/hooks/use-triage-count';
 import { useTranslations } from '@/hooks/use-translations';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
 import {
@@ -41,6 +42,7 @@ import {
 import { gql } from '@/lib/graphql';
 import {
   type CompletedIssuesMode,
+  effectiveCompletedMode,
   excludeTriageIssues,
   filterCompletedIssues,
   stateIdsOfType,
@@ -135,29 +137,25 @@ const TeamIssues = observer(function TeamIssues() {
   const states = rawStates;
 
   // Triage-enabled teams keep un-triaged issues out of the working list and
-  // board — they belong to the triage queue, linked from the toolbar below.
+  // board — they belong to the triage queue, linked from the toolbar below. The
+  // Triage state is then dropped from the filter and board columns too, so they
+  // don't offer a status nothing here can be in.
   const triageStateIds = stateIdsOfType(rawStates, ['triage']);
   const triageOn = Boolean(team?.triageEnabled);
-  const triageCount =
-    triageOn && teamId
-      ? issueStore
-          .findByTeamId(teamId)
-          .filter(
-            i =>
-              triageStateIds.has(i.stateId) &&
-              (!i.snoozedUntilAt || new Date(i.snoozedUntilAt).getTime() <= Date.now()),
-          ).length
-      : 0;
+  const visibleStates = triageOn ? rawStates.filter(s => s.type !== 'triage') : rawStates;
+  const teamIssues = teamId ? issueStore.findByTeamId(teamId) : [];
+  const triageCount = useTriageCount(teamIssues, triageStateIds, triageOn);
 
-  const allIssues: IssueDetail[] = (() => {
+  const closedStateIds = stateIdsOfType(rawStates, ['completed', 'canceled']);
+  const visibleIssues = (completedMode: CompletedIssuesMode): IssueDetail[] => {
     if (!teamId) {
       return [];
     }
     const statePositionMap = new Map(rawStates.map(s => [s.id, s.position]));
     return filterCompletedIssues(
-      excludeTriageIssues(issueStore.findByTeamId(teamId), triageOn, triageStateIds),
-      completed,
-      stateIdsOfType(rawStates, ['completed', 'canceled']),
+      excludeTriageIssues(teamIssues, triageOn, triageStateIds),
+      completedMode,
+      closedStateIds,
     )
       .map(i => toIssueDetail(i, labelStore))
       .sort((a, b) => {
@@ -168,7 +166,7 @@ const TeamIssues = observer(function TeamIssues() {
         }
         return a.sortOrder - b.sortOrder;
       });
-  })();
+  };
 
   // Plain selector rather than useMemo. The previous `[..., definitions.size]`
   // dep ignored in-place mutations (rename, options change) — size is
@@ -184,16 +182,20 @@ const TeamIssues = observer(function TeamIssues() {
   );
 
   // Same rationale as `customFieldDefs`: stop memoizing on `.size`. Filters
-  // depend on the actual field values, not their cardinality.
-  const filtered = applyFilters(
-    allIssues,
-    filterSet,
-    (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
-    buildFilterContext(rawStates),
-  );
-  // "Manual" keeps the team's own order (workflow position, then drag order);
-  // any other choice orders across the whole list before it is grouped.
-  const issues = applySorting(filtered, orderByToSort(orderBy));
+  // depend on the actual field values, not their cardinality. "Manual" keeps
+  // the team's own order (workflow position, then drag order); any other choice
+  // orders across the whole list before it is grouped. A function of the view
+  // mode because the "Completed issues" option only applies in list mode.
+  const issuesFor = (mode: string): IssueDetail[] =>
+    applySorting(
+      applyFilters(
+        visibleIssues(effectiveCompletedMode(mode, completed)),
+        filterSet,
+        (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
+        buildFilterContext(rawStates),
+      ),
+      orderByToSort(orderBy),
+    );
 
   const lookups = useFilterLookups(teamId);
   const users: IssueUser[] = toIssueUsers(userStore.all);
@@ -214,6 +216,7 @@ const TeamIssues = observer(function TeamIssues() {
     handleArchiveMany,
     handleDeleteMany,
     handleOpen,
+    issues,
     openProperty,
     requestDelete,
     selectedId,
@@ -234,7 +237,7 @@ const TeamIssues = observer(function TeamIssues() {
     initialBoardGroupBy: displayPrefs.boardGroupBy,
     initialSwimlaneBy: displayPrefs.swimlaneBy,
     initialViewMode: displayPrefs.viewMode,
-    issues,
+    issues: issuesFor,
     onOpen: id => {
       const issue = issueStore.findById(id);
       const issueTeam = issue ? teamStore.findById(issue.teamId) : null;
@@ -374,7 +377,7 @@ const TeamIssues = observer(function TeamIssues() {
           labels={labels}
           onChange={setFilterSet}
           projects={lookups.projects}
-          states={states}
+          states={visibleStates}
           users={users}
         />
         <div className="flex items-center gap-1">
@@ -448,7 +451,7 @@ const TeamIssues = observer(function TeamIssues() {
             openProperty={openProperty}
             projects={lookups.projects}
             selectedId={selectedId}
-            states={states}
+            states={visibleStates}
             teamId={teamId ?? undefined}
             users={users}
           />
@@ -477,7 +480,7 @@ const TeamIssues = observer(function TeamIssues() {
             onSelect={setSelectedId}
             onUpdate={handleUpdate}
             selectedId={selectedId}
-            states={states}
+            states={visibleStates}
             swimlaneBy={swimlaneBy}
             users={users}
           />

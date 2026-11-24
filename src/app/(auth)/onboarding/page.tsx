@@ -1,7 +1,7 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { parseResumeStep } from '@/components/auth/onboarding-steps';
 import { OnboardingFlow } from '@/components/auth/onboarding-flow';
+import { parseResumeStep } from '@/components/auth/onboarding-steps';
 import { titleMetadata } from '@/lib/page-metadata';
 import { prisma } from '@/server/lib/prisma';
 import { readSessionClaim } from '@/server/lib/session-claim';

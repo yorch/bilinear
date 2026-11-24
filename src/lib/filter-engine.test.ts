@@ -281,6 +281,21 @@ describe('applyFilters', () => {
       expect(ids(applyFilters(timed, cond('before', '2026-05-16')))).toEqual(['t']);
     });
 
+    it('eq / neq / in / nin compare the calendar day when the due date carries a time', () => {
+      const timed = [
+        issue({ dueDate: '2026-12-06T00:00:00.000Z', id: 'a' }),
+        issue({ dueDate: '2026-12-07T00:00:00.000Z', id: 'b' }),
+      ];
+      expect(ids(applyFilters(timed, cond('eq', '2026-12-06')))).toEqual(['a']);
+      expect(ids(applyFilters(timed, cond('neq', '2026-12-06')))).toEqual(['b']);
+      const list = (operator: 'in' | 'nin'): FilterSet => ({
+        composition: 'and',
+        conditions: [{ field: 'dueDate', operator, value: ['2026-12-06', '2026-12-09'] }],
+      });
+      expect(ids(applyFilters(timed, list('in')))).toEqual(['a']);
+      expect(ids(applyFilters(timed, list('nin')))).toEqual(['b']);
+    });
+
     it('overdue matches past due dates only, excluding closed states', () => {
       // 3 is due 2026-05-01 (overdue); 1 is due in June; 2 has no date.
       expect(ids(applyFilters(ISSUES, cond('overdue'), undefined, { now: NOW }))).toEqual(['3']);

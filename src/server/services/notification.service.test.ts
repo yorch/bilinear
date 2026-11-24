@@ -362,7 +362,11 @@ describe('NotificationService', () => {
 
       await service.notifyCommentSubscribers(TEST_ORG.id, TEST_ISSUE.id, ACTOR, COMMENT_ID);
 
-      expect(rows().map(r => r.userId).sort()).toEqual([BYSTANDER, PARENT_AUTHOR].sort());
+      expect(
+        rows()
+          .map(r => r.userId)
+          .sort(),
+      ).toEqual([BYSTANDER, PARENT_AUTHOR].sort());
       for (const r of rows()) {
         expect(r.data).toMatchObject({ commentId: COMMENT_ID, replyToUserId: PARENT_AUTHOR });
       }
@@ -387,6 +391,7 @@ describe('NotificationService', () => {
         issue: { teamId: 't1' },
         parent: { authorId: ACTOR },
       });
+      prisma.teamMembership.findFirst.mockResolvedValue({ userId: ACTOR });
 
       const result = await service.notifyCommentSubscribers(
         TEST_ORG.id,

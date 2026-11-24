@@ -5,6 +5,8 @@
  * page.
  */
 
+import type { FilterSet } from '@/lib/filter-engine';
+
 export type CompletedIssuesMode = 'all' | 'pastWeek' | 'none';
 
 export const COMPLETED_ISSUES_MODES: readonly CompletedIssuesMode[] = ['all', 'pastWeek', 'none'];
@@ -15,6 +17,18 @@ interface CompletableIssue {
   canceledAt?: string | null;
   completedAt?: string | null;
   stateId: string;
+}
+
+/**
+ * The "Completed issues" option only has a control in list mode, so it must
+ * only filter in list mode — on a board or timeline, with no control to undo
+ * it, hidden issues would be unrecoverable.
+ */
+export function effectiveCompletedMode(
+  viewMode: string,
+  completed: CompletedIssuesMode,
+): CompletedIssuesMode {
+  return viewMode === 'list' ? completed : 'all';
 }
 
 /**
@@ -66,4 +80,30 @@ export function excludeTriageIssues<T extends { stateId: string }>(
     return issues;
   }
   return issues.filter(i => !triageStateIds.has(i.stateId));
+}
+
+/**
+ * The filters to store when saving the backlog page as a view: the backlog
+ * scope (`status in <backlog states>`) ANDed with the user's conditions.
+ *
+ * The filter model is flat — one composition for the whole set — so a user set
+ * combined with OR (of two or more conditions) cannot be ANDed with the scope
+ * without changing its meaning, and dropping the user's conditions would save a
+ * different view than the one on screen. Returns `null` for that case so the
+ * caller can refuse rather than save something wrong.
+ */
+export function buildBacklogViewFilters(
+  filterSet: FilterSet,
+  backlogStateIds: readonly string[],
+): FilterSet | null {
+  if (filterSet.composition === 'or' && filterSet.conditions.length > 1) {
+    return null;
+  }
+  return {
+    composition: 'and',
+    conditions: [
+      { field: 'status', operator: 'in', value: [...backlogStateIds] },
+      ...filterSet.conditions,
+    ],
+  };
 }

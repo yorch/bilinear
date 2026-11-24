@@ -28,8 +28,13 @@ interface UseIssueListPageOptions {
   initialSwimlaneBy?: BoardSwimlaneBy;
   /** View mode to start with (a saved view's stored `layout`). */
   initialViewMode?: ViewMode;
-  /** Currently visible/filtered issues, used for j/k navigation bounds. */
-  issues: IssueDetail[];
+  /**
+   * Currently visible/filtered issues, used for j/k navigation bounds. A
+   * function receives the live view mode, for pages whose visible set depends on
+   * the layout (the list-only "Completed issues" option); the resolved array is
+   * returned as `issues`.
+   */
+  issues: IssueDetail[] | ((viewMode: ViewMode) => IssueDetail[]);
   /** Extra side effect to run when an issue is opened (e.g. recent-items tracking). */
   onOpen?: (id: string) => void;
 }
@@ -79,7 +84,7 @@ function syncUrl(href: string): void {
  * `<ConfirmDialog {...deleteDialogProps} />` to complete it.
  */
 export function useIssueListPage({
-  issues,
+  issues: issuesOrFor,
   basePath,
   buildHref,
   initialBoardGroupBy,
@@ -98,6 +103,7 @@ export function useIssueListPage({
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode ?? 'list');
   const [boardGroupBy, setBoardGroupBy] = useState<BoardGroupBy>(initialBoardGroupBy ?? 'status');
   const [swimlaneBy, setSwimlaneBy] = useState<BoardSwimlaneBy>(initialSwimlaneBy ?? 'none');
+  const issues = typeof issuesOrFor === 'function' ? issuesOrFor(viewMode) : issuesOrFor;
 
   const hasSelection = selectedId !== null;
 
@@ -332,6 +338,7 @@ export function useIssueListPage({
     handleDeleteMany,
     handleOpen,
     hasSelection,
+    issues,
     openProperty,
     requestDelete,
     selectedId,

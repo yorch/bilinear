@@ -379,7 +379,6 @@ describe('AuthService — GitHub OAuth login', () => {
     const integrationState = await signGithubOAuthState({
       orgId: '00000000-0000-0000-0000-000000000001',
       userId: TEST_USER.id,
-      webhookSecret: 'whsec',
     });
     await expect(service.exchangeGithubCode('code', integrationState)).rejects.toThrow(
       /Invalid or expired OAuth state/,

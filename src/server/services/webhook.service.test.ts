@@ -387,7 +387,7 @@ describe('WebhookService', () => {
 
     beforeEach(() => {
       fetchMock.mockReset();
-      vi.stubGlobal('fetch', fetchMock);
+      service = new WebhookService(prisma as never, undefined, undefined, fetchMock as never);
       vi.useFakeTimers();
       vi.setSystemTime(FROZEN_NOW);
     });

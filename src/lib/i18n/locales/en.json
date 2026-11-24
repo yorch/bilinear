@@ -1423,6 +1423,7 @@
     "restoreFailed": "Failed to restore issue",
     "saveCurrentFiltersAsView": "Save current filters as a view",
     "saveView": "Save view",
+    "saveViewBacklogOrUnsupported": "A backlog view can't be saved while the filters are combined with OR. Switch them to AND, or save from the team issues page.",
     "saveViewSummary_one": "{count} filter · {layout}",
     "saveViewSummary_other": "{count} filters · {layout}",
     "scope": {

@@ -1423,6 +1423,7 @@
     "restoreFailed": "Error al restaurar la tarea",
     "saveCurrentFiltersAsView": "Guardar filtros actuales como vista",
     "saveView": "Guardar vista",
+    "saveViewBacklogOrUnsupported": "No se puede guardar una vista del backlog con filtros combinados con OR. Cámbialos a AND o guarda desde la página de incidencias del equipo.",
     "saveViewSummary_one": "{count} filtro · {layout}",
     "saveViewSummary_other": "{count} filtros · {layout}",
     "scope": {

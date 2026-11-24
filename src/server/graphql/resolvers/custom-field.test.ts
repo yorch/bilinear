@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testAuthGuard } from '../../../test/auth-guard-helper';
 import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
 import { TEST_ISSUE, TEST_ORG, TEST_TEAM, TEST_USER } from '../../../test/fixtures';
@@ -259,6 +259,162 @@ describe('customFieldResolvers', () => {
         { id: TEST_DEFINITION.id, input: { options: [] } },
         ctx,
         'BAD_USER_INPUT',
+      );
+    });
+  });
+
+  describe('numberFormat on definitions', () => {
+    const NUMBER_DEFINITION = { ...TEST_DEFINITION, options: null, type: 'number' };
+
+    function allowTeam() {
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
+        teamId: TEST_TEAM.id,
+        userId: TEST_USER.id,
+      });
+      ctx.prisma.team.findUnique.mockResolvedValue(TEST_TEAM);
+    }
+
+    it('create rejects a format on a non-number field with BAD_USER_INPUT (real service)', async () => {
+      allowTeam();
+      ctx.prisma.customFieldDefinition.count.mockResolvedValue(0);
+
+      await testAuthGuard(
+        customFieldResolvers.Mutation.customFieldDefinitionCreate,
+        {
+          input: {
+            name: 'Notes',
+            numberFormat: { kind: 'percent' },
+            teamId: TEST_TEAM.id,
+            type: 'text',
+          },
+        },
+        ctx,
+        'BAD_USER_INPUT',
+      );
+      expect(ctx.prisma.customFieldDefinition.create).not.toHaveBeenCalled();
+    });
+
+    it('create rejects a malformed currency with BAD_USER_INPUT (real service)', async () => {
+      allowTeam();
+      ctx.prisma.customFieldDefinition.count.mockResolvedValue(0);
+
+      await testAuthGuard(
+        customFieldResolvers.Mutation.customFieldDefinitionCreate,
+        {
+          input: {
+            name: 'Budget',
+            numberFormat: { currency: 'usd', kind: 'currency' },
+            teamId: TEST_TEAM.id,
+            type: 'number',
+          },
+        },
+        ctx,
+        'BAD_USER_INPUT',
+      );
+    });
+
+    it('create by a non-admin of a workspace-scoped format field is FORBIDDEN', async () => {
+      ctx.orgRole = 'member';
+      await testAuthGuard(
+        customFieldResolvers.Mutation.customFieldDefinitionCreate,
+        {
+          input: {
+            name: 'Budget',
+            numberFormat: { kind: 'compact' },
+            teamId: null,
+            type: 'number',
+          },
+        },
+        ctx,
+        'FORBIDDEN',
+      );
+      expect(ctx.prisma.customFieldDefinition.create).not.toHaveBeenCalled();
+    });
+
+    it('create persists the format and emits an I SyncAction carrying it', async () => {
+      allowTeam();
+      ctx.prisma.customFieldDefinition.count.mockResolvedValue(0);
+      const created = {
+        ...NUMBER_DEFINITION,
+        options: { numberFormat: { currency: 'USD', kind: 'currency' } },
+      };
+      ctx.prisma.customFieldDefinition.create.mockResolvedValue(created);
+      const syncSpy = vi.spyOn(ctx.services.sync, 'createSyncAction');
+
+      const result = await customFieldResolvers.Mutation.customFieldDefinitionCreate(
+        null,
+        {
+          input: {
+            name: 'Budget',
+            numberFormat: { currency: 'USD', kind: 'currency' },
+            teamId: TEST_TEAM.id,
+            type: 'number',
+          },
+        },
+        ctx as never,
+      );
+
+      expect(ctx.prisma.customFieldDefinition.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          options: { numberFormat: { currency: 'USD', kind: 'currency' } },
+        }),
+      });
+      expect(syncSpy).toHaveBeenCalledWith(
+        TEST_ORG.id,
+        'I',
+        'CustomFieldDefinition',
+        created.id,
+        created,
+      );
+      expect(result?.lastSyncId).toBe('1');
+    });
+
+    it('update rejects decimals out of range with BAD_USER_INPUT (real service)', async () => {
+      ctx.prisma.customFieldDefinition.findUnique.mockResolvedValue(NUMBER_DEFINITION);
+      allowTeam();
+
+      await testAuthGuard(
+        customFieldResolvers.Mutation.customFieldDefinitionUpdate,
+        { id: NUMBER_DEFINITION.id, input: { numberFormat: { decimals: 9, kind: 'plain' } } },
+        ctx,
+        'BAD_USER_INPUT',
+      );
+      expect(ctx.prisma.customFieldDefinition.update).not.toHaveBeenCalled();
+    });
+
+    it('update by a non-member is FORBIDDEN and writes nothing', async () => {
+      ctx.prisma.customFieldDefinition.findUnique.mockResolvedValue(NUMBER_DEFINITION);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue(null);
+
+      await testAuthGuard(
+        customFieldResolvers.Mutation.customFieldDefinitionUpdate,
+        { id: NUMBER_DEFINITION.id, input: { numberFormat: { kind: 'percent' } } },
+        ctx,
+        'FORBIDDEN',
+      );
+      expect(ctx.prisma.customFieldDefinition.update).not.toHaveBeenCalled();
+    });
+
+    it('update emits a U SyncAction with the new format', async () => {
+      ctx.prisma.customFieldDefinition.findUnique.mockResolvedValue(NUMBER_DEFINITION);
+      allowTeam();
+      const updated = { ...NUMBER_DEFINITION, options: { numberFormat: { kind: 'percent' } } };
+      ctx.prisma.customFieldDefinition.update.mockResolvedValue(updated);
+      const syncSpy = vi.spyOn(ctx.services.sync, 'createSyncAction');
+
+      await customFieldResolvers.Mutation.customFieldDefinitionUpdate(
+        null,
+        { id: NUMBER_DEFINITION.id, input: { numberFormat: { kind: 'percent' } } },
+        ctx as never,
+      );
+
+      expect(syncSpy).toHaveBeenCalledWith(
+        TEST_ORG.id,
+        'U',
+        'CustomFieldDefinition',
+        NUMBER_DEFINITION.id,
+        updated,
       );
     });
   });

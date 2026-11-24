@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { Agent, type Dispatcher } from 'undici';
+import { Agent, type Dispatcher, fetch as undiciFetch, type RequestInit as UndiciRequestInit } from 'undici';
 import type { PrismaClient, Webhook, WebhookDelivery } from '../../generated/prisma';
 import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { env } from '../lib/env';
@@ -97,6 +97,11 @@ export class WebhookService {
     private prisma: PrismaClient,
     private config: ConfigReader = DEFAULTS_ONLY_CONFIG,
     private resolveHost: HostResolver = defaultResolveHost,
+    // The pinned dispatcher is an npm-`undici` Agent. It must be driven by that
+    // same package's fetch: Node's bundled fetch speaks an older handler
+    // protocol and fails every request with "invalid onRequestStart method"
+    // when handed a newer Agent (verified on Node 22 + undici 8).
+    private fetchImpl: typeof undiciFetch = undiciFetch,
   ) {}
 
   // ─── CRUD ─────────────────────────────────────────────────────────────────
@@ -471,7 +476,7 @@ export class WebhookService {
         // could answer differently; the pinned dispatcher resolves once,
         // inside the connect step, and only the addresses it validated are
         // ever connected to.
-        const init: RequestInit & { dispatcher: Dispatcher } = {
+        const init: UndiciRequestInit & { dispatcher: Dispatcher } = {
           body: rawBody,
           dispatcher: pinnedDispatcher,
           headers: {
@@ -490,7 +495,7 @@ export class WebhookService {
           redirect: 'manual',
           signal: controller.signal,
         };
-        const res = await fetch(delivery.webhook.url, init);
+        const res = await this.fetchImpl(delivery.webhook.url, init);
         responseStatus = res.status;
         // Cap response body capture; we only need diagnostic context, not full payloads.
         responseBody = await readBodyCapped(res);
@@ -975,7 +980,10 @@ const pinnedDispatcher: Dispatcher = new Agent({
  * body (a hostile endpoint can stream gigabytes) before the slice; this stops
  * pulling and cancels the stream once the cap is reached.
  */
-export async function readBodyCapped(res: Response): Promise<string> {
+export async function readBodyCapped(res: {
+  body: { getReader(): ReadableStreamDefaultReader<Uint8Array> } | null;
+  text(): Promise<string>;
+}): Promise<string> {
   const body = res.body;
   if (!body || typeof body.getReader !== 'function') {
     const text = await res.text().catch(() => '');

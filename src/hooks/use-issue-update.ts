@@ -38,6 +38,29 @@ export interface IssueUpdateAdapter {
 }
 
 /**
+ * The server stamps `completedAt`/`canceledAt` when an issue enters a closed
+ * state and clears them on reopen. Mirror that in the optimistic patch so
+ * views keyed on the timestamp (the "Completed: past week" filter) don't hide
+ * an issue the moment it is marked Done, until the server echo arrives.
+ * Applied to the forward patch only — never to the rollback snapshot.
+ */
+export function withCloseTimestamps(
+  patch: Record<string, unknown>,
+  targetStateType: string | undefined,
+  now: Date = new Date(),
+): Record<string, unknown> {
+  if (!('stateId' in patch) || !targetStateType) {
+    return patch;
+  }
+  const stamp = now.toISOString();
+  return {
+    ...patch,
+    canceledAt: targetStateType === 'canceled' ? stamp : null,
+    completedAt: targetStateType === 'completed' ? stamp : null,
+  };
+}
+
+/**
  * Optimistic issue field update shared by the issue surfaces (team page,
  * my-issues, backlog, custom views, command palette, and — via `overrides` —
  * the standalone issue route): apply the patch immediately, enqueue the
@@ -47,7 +70,7 @@ export interface IssueUpdateAdapter {
 export function useIssueUpdate(
   overrides?: Partial<IssueUpdateAdapter>,
 ): (id: string, patch: Record<string, unknown>) => void {
-  const { issueStore } = useStore();
+  const { issueStore, workflowStateStore } = useStore();
   const t = useTranslations();
   const txQueue = useMemo(() => new TransactionQueue(), []);
 
@@ -84,7 +107,10 @@ export function useIssueUpdate(
   return useCallback(
     (id: string, patch: Record<string, unknown>) => {
       const prior = snapshot(id);
-      apply(id, patch);
+      apply(
+        id,
+        withCloseTimestamps(patch, workflowStateStore.findById(String(patch.stateId))?.type),
+      );
 
       txQueue.enqueue(
         ISSUE_UPDATE_MUTATION,
@@ -106,6 +132,6 @@ export function useIssueUpdate(
         },
       );
     },
-    [apply, snapshot, reconcile, txQueue, t],
+    [apply, snapshot, reconcile, txQueue, t, workflowStateStore],
   );
 }

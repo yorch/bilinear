@@ -17,3 +17,20 @@ export function loginRedirectPath(requestPath: string | null | undefined, fallba
   const next = safeRelativePath(requestPath) ?? fallback;
   return `/login?next=${encodeURIComponent(next)}`;
 }
+
+/**
+ * `requestPath` with its first segment (the workspace url key) replaced —
+ * where a link to a renamed workspace should land. Null when the path is
+ * missing or unsafe, so the caller falls back to the new workspace root.
+ */
+export function withWorkspaceKey(
+  requestPath: string | null | undefined,
+  newKey: string,
+): string | null {
+  const safe = safeRelativePath(requestPath);
+  if (!safe) {
+    return null;
+  }
+  const rest = safe.replace(/^\/[^/?#]*/, '');
+  return `/${newKey}${rest}`;
+}

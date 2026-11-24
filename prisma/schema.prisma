@@ -52,6 +52,7 @@ model Organization {
   archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
   members        OrganizationMember[]
+  urlKeyAliases  OrganizationUrlKeyAlias[]
   teams          Team[]
   issues         Issue[]
   labels         IssueLabel[]
@@ -172,6 +173,22 @@ model User {
   uploadedFiles             File[]                     @relation("UploadedFiles")
 
   @@map("users")
+}
+
+/// A workspace URL key an organization used to have. Kept reserved for that
+/// organization (nobody else can register it) and resolved to the current key
+/// by the workspace layout, so shared links survive a rename instead of
+/// landing in a stranger's workspace.
+model OrganizationUrlKeyAlias {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  urlKey         String   @unique @map("url_key") @db.VarChar(63)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("organization_url_key_aliases")
 }
 
 model OrganizationMember {

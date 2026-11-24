@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loginRedirectPath } from './deep-link';
+import { loginRedirectPath, withWorkspaceKey } from './deep-link';
 
 describe('loginRedirectPath', () => {
   it('keeps the full deep path, search included', () => {
@@ -18,4 +18,17 @@ describe('loginRedirectPath', () => {
       expect(loginRedirectPath(bad, '/admin')).toBe('/login?next=%2Fadmin');
     },
   );
+});
+
+describe('withWorkspaceKey', () => {
+  it('swaps the first segment and keeps the rest, search included', () => {
+    expect(withWorkspaceKey('/old/team/ENG/issue/ENG-1?tab=a', 'new')).toBe(
+      '/new/team/ENG/issue/ENG-1?tab=a',
+    );
+    expect(withWorkspaceKey('/old', 'new')).toBe('/new');
+  });
+  it('is null for a missing or unsafe path', () => {
+    expect(withWorkspaceKey(null, 'new')).toBeNull();
+    expect(withWorkspaceKey('//evil.example', 'new')).toBeNull();
+  });
 });

@@ -12,6 +12,11 @@ import { useFormatters } from '@/hooks/use-formatters';
 import { usePending } from '@/hooks/use-pending-ids';
 import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
+import {
+  formatNumberValue,
+  isDefaultNumberFormat,
+  readNumberFormat,
+} from '@/lib/custom-field-format';
 import type { DBCustomFieldDefinition } from '@/lib/db';
 import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
@@ -101,7 +106,11 @@ interface IssueRowProps {
  * em-dashes is a column of noise: the reader scans these cells for the ones
  * that *have* a value, and every placeholder glyph competes with those.
  */
-function renderCustomFieldValue(def: DBCustomFieldDefinition, value: unknown): string {
+function renderCustomFieldValue(
+  def: DBCustomFieldDefinition,
+  value: unknown,
+  locale?: string,
+): string {
   if (value === null || value === undefined || value === '') {
     return '';
   }
@@ -118,8 +127,16 @@ function renderCustomFieldValue(def: DBCustomFieldDefinition, value: unknown): s
       }
       return value.map(v => def.options?.find(o => o.value === v)?.label ?? String(v)).join(', ');
     }
-    case 'number':
-      return typeof value === 'number' ? String(value) : '';
+    case 'number': {
+      if (typeof value !== 'number') {
+        return '';
+      }
+      const format = readNumberFormat(def.options);
+      // A field with no format keeps the raw number, exactly as before.
+      return isDefaultNumberFormat(format)
+        ? String(value)
+        : formatNumberValue(value, format, locale);
+    }
     default:
       return String(value);
   }
@@ -149,7 +166,7 @@ export function IssueRow({
   trailing,
 }: IssueRowProps) {
   const t = useTranslations();
-  const { formatDate } = useFormatters();
+  const { formatDate, intlLocale } = useFormatters();
   const pending = usePending(issue.id);
   const isBulkMode = onCheck !== undefined;
   // If no visibility function is provided, every built-in column renders
@@ -468,7 +485,7 @@ export function IssueRow({
           key={def.id}
           title={def.name}
         >
-          {renderCustomFieldValue(def, getCustomFieldValue?.(def.id))}
+          {renderCustomFieldValue(def, getCustomFieldValue?.(def.id), intlLocale)}
         </span>
       ))}
 

@@ -3,7 +3,7 @@ import { ADMIN_STATE, openWorkspace } from '../fixtures/auth';
 import { gqlInPage } from '../fixtures/graphql';
 
 /**
- * Archive every issue the run created, leaving only the six the seed makes.
+ * Archive every issue the run created, leaving only the nine the seed makes.
  *
  * Specs create throwaway issues and mostly don't remove them, which makes the
  * suite non-idempotent in a way that fails *other* tests. `GroupSection`
@@ -22,13 +22,23 @@ import { gqlInPage } from '../fixtures/graphql';
  * queries filter on `archivedAt IS NULL`, so it is precisely the state that
  * decides whether the threshold is crossed, and no history is destroyed.
  *
- * The seeded six are matched by identifier rather than by "existed before the
+ * The seeded nine are matched by identifier rather than by "existed before the
  * run", so a run that inherits a dirty database converges back to the seed
- * instead of preserving the mess. Specs may freely mutate those six — only
+ * instead of preserving the mess. Specs may freely mutate those nine — only
  * how many rows the list renders matters here.
  */
 
-const SEEDED_IDENTIFIERS = new Set(['ENG-1', 'ENG-2', 'ENG-3', 'ENG-4', 'ENG-5', 'ENG-6']);
+const SEEDED_IDENTIFIERS = new Set([
+  'ENG-1',
+  'ENG-2',
+  'ENG-3',
+  'ENG-4',
+  'ENG-5',
+  'ENG-6',
+  'ENG-7',
+  'ENG-8',
+  'ENG-9',
+]);
 
 /** `Query.issues` clamps `first` to MAX_LIST_LIMIT (200). */
 const PAGE_SIZE = 200;

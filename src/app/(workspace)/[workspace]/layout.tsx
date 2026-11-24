@@ -1,9 +1,10 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { WorkspaceMismatch } from '@/components/layouts/workspace-mismatch';
-import { loginRedirectPath, REQUEST_PATH_HEADER } from '@/lib/deep-link';
+import { loginRedirectPath, REQUEST_PATH_HEADER, withWorkspaceKey } from '@/lib/deep-link';
 import { prisma } from '@/server/lib/prisma';
 import { readSessionClaim } from '@/server/lib/session-claim';
+import { OrganizationService } from '@/server/services/organization.service';
 import { UserService } from '@/server/services/user.service';
 
 /**
@@ -53,6 +54,18 @@ export default async function WorkspaceGuardLayout({
 
   if (urlOrg && urlOrg.id === claim.orgId) {
     return <>{children}</>;
+  }
+
+  // A key nobody holds may be one a workspace renamed away from. Follow it —
+  // but only for a member, same as any other workspace the viewer can't see.
+  if (!urlOrg) {
+    const renamed = await new OrganizationService(prisma).findByRetiredUrlKey(workspace);
+    if (renamed && (await new UserService(prisma).findUsableMembership(claim.userId, renamed.id))) {
+      redirect(
+        withWorkspaceKey((await headers()).get(REQUEST_PATH_HEADER), renamed.urlKey) ??
+          `/${renamed.urlKey}`,
+      );
+    }
   }
 
   // The session's own org is re-derived rather than trusted, so a claim

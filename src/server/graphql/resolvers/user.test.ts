@@ -28,8 +28,8 @@ describe('userUpdateProfile', () => {
     // A distinct id per workspace, so `lastSyncId` proves the CURRENT org's
     // action is the one returned (not just "some action").
     const ids = new Map([
-      [TEST_ORG.id, 11n],
-      [OTHER_ORG.id, 22n],
+      [TEST_ORG.id, BigInt(11)],
+      [OTHER_ORG.id, BigInt(22)],
     ]);
     return vi
       .spyOn(ctx.services.sync, 'recordSyncAction')
@@ -60,7 +60,9 @@ describe('userUpdateProfile', () => {
 
   it('publishes nothing when the fan-out fails part-way (the transaction rolls back)', async () => {
     const spy = recordSpy();
-    spy.mockImplementationOnce(async (_c, orgId) => ({ id: 1n, organizationId: orgId }) as never);
+    spy.mockImplementationOnce(
+      async (_c, orgId) => ({ id: BigInt(1), organizationId: orgId }) as never,
+    );
     spy.mockImplementationOnce(async () => {
       throw new Error('boom');
     });

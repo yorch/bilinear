@@ -4,8 +4,11 @@ import { useEffect, useState } from 'react';
 import { SimpleSelect } from '@/components/ui/select';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
-import { formatNumberValue } from '@/lib/custom-field-format';
-import { useFieldFormat } from '@/lib/custom-field-format-store';
+import {
+  formatNumberValue,
+  isDefaultNumberFormat,
+  readNumberFormat,
+} from '@/lib/custom-field-format';
 import type { DBCustomFieldDefinition } from '@/lib/db';
 
 /**
@@ -46,7 +49,7 @@ export function CustomFieldValueInput({
     case 'number':
       return (
         <NumberValueInput
-          definitionId={definition.id}
+          definitionOptions={definition.options}
           label={definition.name}
           onSave={v => {
             if (v === '') {
@@ -161,21 +164,21 @@ function TextInput({
  * value is always the raw number.
  */
 function NumberValueInput({
-  definitionId,
+  definitionOptions,
   label,
   onSave,
   value,
 }: {
-  definitionId: string;
+  definitionOptions: unknown;
   label: string;
   onSave: (next: string) => void;
   value: unknown;
 }) {
-  const format = useFieldFormat(definitionId);
+  const format = readNumberFormat(definitionOptions);
   const { intlLocale } = useFormatters();
   const raw = typeof value === 'number' ? String(value) : '';
   const display =
-    format.kind !== 'plain' && raw !== ''
+    !isDefaultNumberFormat(format) && raw !== ''
       ? formatNumberValue(value as number, format, intlLocale)
       : undefined;
   return <TextInput display={display} label={label} onSave={onSave} type="number" value={raw} />;

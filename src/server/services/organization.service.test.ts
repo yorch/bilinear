@@ -356,3 +356,68 @@ describe('OrganizationService.update — input validation', () => {
     await expect(svc.update(TEST_ORG.id, { logoUrl: null })).resolves.toBeDefined();
   });
 });
+
+describe('OrganizationService URL key aliases', () => {
+  let prisma: MockPrismaClient;
+  let svc: OrganizationService;
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    svc = new OrganizationService(prisma as never);
+    prisma.organization.findUnique.mockResolvedValue({ urlKey: 'old-key' });
+    prisma.organization.update.mockResolvedValue({ ...TEST_ORG, urlKey: 'new-key' });
+    prisma.organizationUrlKeyAlias.findUnique.mockResolvedValue(null);
+  });
+
+  it('retires the old key to an alias in the same transaction as the rename', async () => {
+    await svc.update(TEST_ORG.id, { urlKey: 'new-key' });
+    expect(prisma.$transaction).toHaveBeenCalled();
+    expect(prisma.organizationUrlKeyAlias.create).toHaveBeenCalledWith({
+      data: { organizationId: TEST_ORG.id, urlKey: 'old-key' },
+    });
+  });
+
+  it('refuses a key another workspace used to have', async () => {
+    prisma.organizationUrlKeyAlias.findUnique.mockResolvedValue({
+      id: 'a1',
+      organizationId: 'someone-else',
+    });
+    await expect(svc.update(TEST_ORG.id, { urlKey: 'new-key' })).rejects.toBeInstanceOf(
+      UrlKeyTakenError,
+    );
+    expect(prisma.organization.update).not.toHaveBeenCalled();
+  });
+
+  it('lets a workspace take back its own retired key', async () => {
+    prisma.organizationUrlKeyAlias.findUnique.mockResolvedValue({
+      id: 'a1',
+      organizationId: TEST_ORG.id,
+    });
+    await svc.update(TEST_ORG.id, { urlKey: 'new-key' });
+    expect(prisma.organizationUrlKeyAlias.delete).toHaveBeenCalledWith({ where: { id: 'a1' } });
+  });
+
+  it('does not create an alias when the key is unchanged or only the name changes', async () => {
+    await svc.update(TEST_ORG.id, { urlKey: 'old-key' });
+    await svc.update(TEST_ORG.id, { name: 'Renamed' });
+    expect(prisma.organizationUrlKeyAlias.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses to register a workspace under a retired key', async () => {
+    prisma.organizationUrlKeyAlias.findUnique.mockResolvedValue({ id: 'a1' });
+    await expect(
+      svc.createWithOwner(TEST_USER.id, { name: 'Squat', urlKey: 'old-key' }),
+    ).rejects.toBeInstanceOf(UrlKeyTakenError);
+    expect(prisma.organization.create).not.toHaveBeenCalled();
+  });
+
+  it('resolves a retired key to its current workspace', async () => {
+    prisma.organizationUrlKeyAlias.findUnique.mockResolvedValue({
+      organization: { id: TEST_ORG.id, urlKey: 'new-key' },
+    });
+    expect(await svc.findByRetiredUrlKey('old-key')).toEqual({
+      id: TEST_ORG.id,
+      urlKey: 'new-key',
+    });
+  });
+});

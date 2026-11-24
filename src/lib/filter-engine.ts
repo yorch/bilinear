@@ -134,7 +134,11 @@ function matchesAny(
     // An unset value matches an explicit null target and nothing else.
     return wanted.some(w => w === null || w === undefined);
   }
-  return wanted.some(w => w !== null && w !== undefined && String(w) === String(fieldValue));
+  // A due date is a calendar day: the store keeps an ISO timestamp
+  // (`2026-12-06T00:00:00.000Z`) while the picker emits `2026-12-06`, so
+  // compare days like before/after do.
+  const norm = (v: unknown) => (field === 'dueDate' ? String(v).slice(0, 10) : String(v));
+  return wanted.some(w => w !== null && w !== undefined && norm(w) === norm(fieldValue));
 }
 
 function matchCondition(

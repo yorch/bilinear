@@ -37,6 +37,7 @@ import {
 } from '@/lib/filter-engine';
 import { gql } from '@/lib/graphql';
 import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
+import { buildBacklogViewFilters } from '@/lib/issue-list-visibility';
 import { buildIssueHref } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
@@ -142,6 +143,12 @@ const BacklogPage = observer(function BacklogPage() {
       buildFilterContext(rawStates),
     ),
     orderByToSort(orderBy),
+  );
+
+  // Backlog scope + the user's conditions; null when an OR set can't be scoped.
+  const backlogViewFilters = buildBacklogViewFilters(
+    filterSet,
+    states.map(s => s.id),
   );
 
   const users: IssueUser[] = toIssueUsers(userStore.all);
@@ -315,7 +322,13 @@ const BacklogPage = observer(function BacklogPage() {
               'flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
               TOUCH_TARGET_SQUARE,
             )}
-            onClick={() => setSaveViewOpen(true)}
+            onClick={() => {
+              if (backlogViewFilters) {
+                setSaveViewOpen(true);
+              } else {
+                toast.error(t('issues.saveViewBacklogOrUnsupported'));
+              }
+            }}
             title={t('issues.saveCurrentFiltersAsView')}
             type="button"
           >
@@ -404,14 +417,7 @@ const BacklogPage = observer(function BacklogPage() {
       {/* Save the current filters as a view. The backlog scope is written into the
           view as a status condition, so the saved view shows the same issues. */}
       <SaveViewModal
-        initialFilters={{
-          ...filterSet,
-          composition: 'and',
-          conditions: [
-            { field: 'status', operator: 'in', value: states.map(s => s.id) },
-            ...(filterSet.composition === 'and' ? filterSet.conditions : []),
-          ],
-        }}
+        initialFilters={backlogViewFilters ?? undefined}
         initialGroupBy={
           viewMode === 'board' ? boardGroupBy : viewMode === 'list' ? listGroupBy : undefined
         }
@@ -432,7 +438,7 @@ const BacklogPage = observer(function BacklogPage() {
         }}
         open={saveViewOpen}
         summary={t('issues.saveViewSummary', {
-          count: filterSet.conditions.length + 1,
+          count: backlogViewFilters?.conditions.length ?? 0,
           layout: t(`issues.layout${viewMode.charAt(0).toUpperCase()}${viewMode.slice(1)}`),
         })}
         teamId={teamId ?? undefined}

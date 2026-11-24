@@ -158,3 +158,20 @@ export function readNumberFormat(options: unknown): NumberFieldFormat {
 export function isDefaultNumberFormat(format: NumberFieldFormat): boolean {
   return format.kind === 'plain' && format.decimals === undefined;
 }
+
+/**
+ * The `numberFormat` GraphQL input for a format, or null for "plain" (which
+ * clears a stored format). Drops keys that do not apply to the kind so the
+ * server's strict validation never trips on a leftover from a previous choice.
+ */
+export function toNumberFormatInput(format: NumberFieldFormat): NumberFieldFormat | null {
+  if (isDefaultNumberFormat(format)) {
+    return null;
+  }
+  const decimals = clampDecimals(format.decimals);
+  return {
+    ...(format.kind === 'currency' ? { currency: format.currency?.trim().toUpperCase() } : {}),
+    ...(decimals !== undefined && format.kind !== 'duration' ? { decimals } : {}),
+    kind: format.kind,
+  };
+}
