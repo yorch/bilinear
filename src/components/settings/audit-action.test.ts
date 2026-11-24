@@ -5,6 +5,7 @@ import es from '@/lib/i18n/locales/es.json';
 import {
   AUDIT_ACTIONS,
   auditActionLabel,
+  auditResourceLabel,
   endOfDayIso,
   humanizeAction,
   startOfDayIso,
@@ -47,5 +48,24 @@ describe('day boundaries', () => {
   it('rejects garbage', () => {
     expect(startOfDayIso('nope')).toBeNull();
     expect(endOfDayIso('')).toBeNull();
+  });
+});
+
+describe('auditResourceLabel', () => {
+  it('localises the resource type instead of echoing the model name', () => {
+    const en = auditResourceLabel(tEn, 'OrganizationMember', 'f6681a4d-0000', undefined);
+    const es = auditResourceLabel(tEs, 'OrganizationMember', 'f6681a4d-0000', undefined);
+    expect(en.type).toBe('Member');
+    expect(es.type).not.toBe(en.type);
+    expect(en.id).toBe('f6681a4d');
+  });
+
+  it('prefers a resolved name over the short id', () => {
+    const r = auditResourceLabel(tEn, 'Team', 'abc-123', () => 'Engineering');
+    expect(r.id).toBe('Engineering');
+  });
+
+  it('humanises an unknown type', () => {
+    expect(auditResourceLabel(tEn, 'FooBar', null).type).toBe('Foo Bar');
   });
 });

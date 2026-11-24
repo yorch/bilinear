@@ -61,6 +61,29 @@ export function auditActionLabel(
   return label === key ? humanizeAction(action) : label;
 }
 
+/**
+ * Display text for an audit row's Resource column: the localised type plus the
+ * best name we can resolve (`resolveName`, from the client stores), else the
+ * short id. The raw model name ("OrganizationMember") is never shown to people.
+ */
+export function auditResourceLabel(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  resourceType: string,
+  resourceId: string | null,
+  resolveName?: (type: string, id: string) => string | null,
+): { id: string | null; type: string } {
+  const key = `settings.auditLog.resourceTypes.${resourceType}`;
+  const translated = t(key);
+  const type =
+    translated === key
+      ? resourceType.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase())
+      : translated;
+  if (!resourceId) {
+    return { id: null, type };
+  }
+  return { id: resolveName?.(resourceType, resourceId) ?? resourceId.slice(0, 8), type };
+}
+
 /** `YYYY-MM-DD` (a date input value) -> ISO instant at the start of that local day. */
 export function startOfDayIso(date: string): string | null {
   const d = new Date(`${date}T00:00:00`);

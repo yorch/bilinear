@@ -53,6 +53,7 @@ import { useStore } from '@/providers/store-provider';
 import { useMobileDrawer } from './use-mobile-drawer';
 
 interface FavoriteMeta {
+  createdAt: string;
   entity:
     | { __typename: 'Issue'; id: string; identifier: string; title: string; teamId: string }
     | {
@@ -75,7 +76,6 @@ interface FavoriteMeta {
     | { __typename: 'Document'; id: string; title: string; documentTeamId: string | null }
     | { __typename: 'Team'; id: string; name: string; key: string; icon?: string | null }
     | null;
-  createdAt: string;
   entityId: string;
   entityType: string;
   id: string;
@@ -193,15 +193,17 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
       // The bootstrap never streams favourites, so this authoritative read is
       // what lets the header star and context menu know what is favourited.
       favoriteStore.replaceAll(
-        (list ?? []).map(({ createdAt, entityId, entityType, id, organizationId, sortOrder, userId }) => ({
-          createdAt,
-          entityId,
-          entityType,
-          id,
-          organizationId,
-          sortOrder,
-          userId,
-        })),
+        (list ?? []).map(
+          ({ createdAt, entityId, entityType, id, organizationId, sortOrder, userId }) => ({
+            createdAt,
+            entityId,
+            entityType,
+            id,
+            organizationId,
+            sortOrder,
+            userId,
+          }),
+        ),
       );
       return (list ?? []).filter(f => f.entity !== null).sort((a, b) => a.sortOrder - b.sortOrder);
     },

@@ -6,6 +6,7 @@ import { Fragment, useState } from 'react';
 import {
   AUDIT_ACTIONS,
   auditActionLabel,
+  auditResourceLabel,
   endOfDayIso,
   startOfDayIso,
 } from '@/components/settings/audit-action';
@@ -87,7 +88,9 @@ const AUDIT_LOGS_QUERY = `
 
 const AuditLogPage = observer(function AuditLogPage() {
   const t = useTranslations();
-  const { organizationMemberStore, userStore } = useStore();
+  const { organizationMemberStore, teamStore, userStore } = useStore();
+  const resolveResourceName = (type: string, id: string): string | null =>
+    type === 'Team' ? (teamStore.findById(id)?.name ?? null) : null;
   const memberRoles = organizationMemberStore.rolesByUserId as Record<string, unknown>;
   const memberOptions = userStore.all
     .filter(u => memberRoles[u.id] !== undefined)
@@ -358,6 +361,14 @@ const AuditLogPage = observer(function AuditLogPage() {
               <tbody className="divide-y divide-border">
                 {entries.map(entry => {
                   const open = expanded.has(entry.id);
+                  const resource = entry.resourceType
+                    ? auditResourceLabel(
+                        t,
+                        entry.resourceType,
+                        entry.resourceId,
+                        resolveResourceName,
+                      )
+                    : null;
                   const meta = entry.metadata && Object.keys(entry.metadata).length > 0;
                   return (
                     <Fragment key={entry.id}>
@@ -411,15 +422,15 @@ const AuditLogPage = observer(function AuditLogPage() {
                           )}
                         </td>
                         <td className="px-4 py-2">
-                          {entry.resourceType ? (
+                          {resource ? (
                             <span className="text-xs text-muted-foreground">
-                              {entry.resourceType}
-                              {entry.resourceId ? (
+                              {resource.type}
+                              {resource.id ? (
                                 <span
                                   className="ml-1 font-mono text-muted-foreground"
-                                  title={entry.resourceId}
+                                  title={entry.resourceId ?? undefined}
                                 >
-                                  {entry.resourceId.slice(0, 8)}
+                                  {resource.id}
                                 </span>
                               ) : null}
                             </span>

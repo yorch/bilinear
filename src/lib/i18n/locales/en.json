@@ -2061,6 +2061,16 @@
       "forbidden": "You need admin access to view audit logs.",
       "loadMore": "Load more",
       "noEntriesFound": "No audit log entries found.",
+      "resourceTypes": {
+        "AuditLog": "Audit log",
+        "GitHubIntegration": "GitHub integration",
+        "Issue": "Issue",
+        "OrganizationInvite": "Invite",
+        "OrganizationMember": "Member",
+        "Setting": "Setting",
+        "Team": "Team",
+        "Webhook": "Webhook"
+      },
       "system": "system",
       "title": "Audit Log",
       "toggleDetails": "Show details"
@@ -2207,7 +2217,7 @@
       "githubDisconnected": "GitHub disconnected",
       "loadGithubError": "Failed to load GitHub integration",
       "notConfigured": "Not configured on this server",
-      "notConfiguredHint": "{provider} sign-in needs {envVars} in the server environment. Ask whoever runs this deployment to set them; see .env.example.",
+      "notConfiguredHint": "The {provider} integration isn't set up on this server. Ask whoever runs this deployment to configure it.",
       "rotateWebhookSecret": "Generate new webhook secret",
       "rotateWebhookSecretConfirm": "Generate a new webhook secret? The current one stops working immediately, so update the secret in GitHub's webhook settings or inbound events will be rejected.",
       "showWebhookSecret": "Show webhook secret",

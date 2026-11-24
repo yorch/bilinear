@@ -2061,6 +2061,16 @@
       "forbidden": "Necesitas acceso de administrador para ver el registro de auditoría.",
       "loadMore": "Cargar más",
       "noEntriesFound": "No se encontraron entradas en el registro de auditoría.",
+      "resourceTypes": {
+        "AuditLog": "Registro de auditoría",
+        "GitHubIntegration": "Integración de GitHub",
+        "Issue": "Tarea",
+        "OrganizationInvite": "Invitación",
+        "OrganizationMember": "Miembro",
+        "Setting": "Ajuste",
+        "Team": "Equipo",
+        "Webhook": "Webhook"
+      },
       "system": "sistema",
       "title": "Registro de auditoría",
       "toggleDetails": "Mostrar detalles"
@@ -2207,7 +2217,7 @@
       "githubDisconnected": "GitHub desconectado",
       "loadGithubError": "Error al cargar la integración de GitHub",
       "notConfigured": "No configurado en este servidor",
-      "notConfiguredHint": "{provider} necesita {envVars} en el entorno del servidor. Pide a quien administra esta instalación que los defina; consulta .env.example.",
+      "notConfiguredHint": "La integración con {provider} no está configurada en este servidor. Pide a quien administra esta instalación que la configure.",
       "rotateWebhookSecret": "Generar nuevo secreto del webhook",
       "rotateWebhookSecretConfirm": "¿Generar un nuevo secreto de webhook? El actual deja de funcionar de inmediato, así que actualiza el secreto en la configuración del webhook de GitHub o se rechazarán los eventos entrantes.",
       "showWebhookSecret": "Mostrar secreto del webhook",
