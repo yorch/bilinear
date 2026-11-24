@@ -13,8 +13,13 @@ test.use({ storageState: ADMIN_STATE });
  *
  * Returns the title that was used so the caller can locate the new row.
  */
-async function createFreshTriageIssue(page: Page, teamKey: string): Promise<string> {
-  const title = `Triage action ${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+async function createFreshTriageIssue(
+  page: Page,
+  teamKey: string,
+  explicitTitle?: string,
+): Promise<string> {
+  const title =
+    explicitTitle ?? `Triage action ${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const result = await page.evaluate(
     async ({ title, teamKey }) => {
       // 1. Look up the team id by key.
@@ -73,6 +78,30 @@ async function focusTriageRow(page: Page, title: string) {
   return row;
 }
 
+/** Distinctive, FTS-friendly word so suggestion tests only match their own issues. */
+function uniqueWord(): string {
+  return `quokka${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/** Create the issues on the team page first, then land on /triage (bootstrap picks them up). */
+async function openTriageWith(page: Page, titles: string[]): Promise<void> {
+  const ws = getWorkspaceKey(page);
+  const team = getTeamKey(page);
+  await page.goto(`/${ws}/team/${team}`);
+  await page.waitForSelector('[data-testid="issue-list-view"], [data-testid="empty-state"]');
+  for (const title of titles) {
+    await createFreshTriageIssue(page, team, title);
+  }
+  await page.goto(`/${ws}/team/${team}/triage`);
+  await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
+  // The Accept button only renders once an issue is focused, i.e. the page's
+  // hotkeys are bound; waiting on it avoids the press-before-bind window.
+  await expect(page.getByRole('button', { exact: true, name: 'Accept' })).toBeEnabled();
+}
+
+const rowOf = (page: Page, title: string) =>
+  page.getByTestId('triage-row').filter({ hasText: title });
+
 /**
  * Triage queue page.
  *
@@ -122,7 +151,7 @@ test.describe('Triage', () => {
     await expect(page.getByText(/to triage/i)).toBeVisible({ timeout: 15_000 });
 
     // One Accept button, in the preview pane, acting on the focused issue.
-    await expect(page.getByRole('button', { name: 'Accept' })).toBeVisible();
+    await expect(page.getByRole('button', { exact: true, name: 'Accept' })).toBeVisible();
     // …and one row per queued issue.
     expect(await page.getByTestId('triage-row').count()).toBeGreaterThanOrEqual(1);
 
@@ -169,7 +198,7 @@ test.describe('Triage', () => {
     // Focus THAT issue, not whatever the queue happens to show first.
     const freshRow = await focusTriageRow(page, freshTitle);
 
-    await page.getByRole('button', { name: 'Accept' }).click();
+    await page.getByRole('button', { exact: true, name: 'Accept' }).click();
 
     // The accepted row leaves the active queue. Assert against `freshRow` (a
     // queue-scoped locator) rather than `getByText(freshTitle)` page-wide,
@@ -195,7 +224,7 @@ test.describe('Triage', () => {
 
     const freshRow = await focusTriageRow(page, freshTitle);
 
-    await page.getByRole('button', { name: 'Decline' }).click();
+    await page.getByRole('button', { exact: true, name: 'Decline' }).click();
 
     await expect(freshRow).not.toBeVisible({ timeout: 10_000 });
   });
@@ -262,7 +291,7 @@ test.describe('Triage', () => {
 
     // The Duplicate flow opens a searchable issue picker — search by
     // identifier and pick the matching result.
-    await page.getByRole('button', { name: 'Duplicate' }).click();
+    await page.getByRole('button', { exact: true, name: 'Duplicate' }).click();
     await page.getByRole('combobox').fill(canonicalIdentifier);
     await page
       .getByRole('option', { name: new RegExp(canonicalIdentifier) })
@@ -289,10 +318,95 @@ test.describe('Triage', () => {
 
     // Open the preset popover from the preview toolbar, then pick "1 day"
     // (the page exposes 4 hours / 1 day / 1 week presets).
-    await page.getByRole('button', { name: 'Snooze' }).click();
+    await page.getByRole('button', { exact: true, name: 'Snooze' }).click();
     await page.getByRole('option', { name: '1 day' }).click();
 
     // The snoozed row leaves the active queue.
     await expect(freshRow).not.toBeVisible({ timeout: 10_000 });
+  });
+
+  // Keyboard flow. Titles are unique per test so neither the suggestion list
+  // (which matches on shared words) nor `getByRole` name matching can collide
+  // with rows other specs left behind.
+  test('1 accepts the focused issue, offers Undo, and Undo returns it to the queue', async ({
+    page,
+  }) => {
+    const word = uniqueWord();
+    const title = `${word} keyboard accept`;
+    await openTriageWith(page, [title]);
+    await focusTriageRow(page, title);
+
+    await page.keyboard.press('1');
+    await expect(rowOf(page, title)).toHaveCount(0, { timeout: 10_000 });
+    const toast = page.getByText(/Accepted ENG-\d+/);
+    await expect(toast).toBeVisible();
+
+    await page.getByRole('button', { exact: true, name: 'Undo' }).click();
+    await expect(rowOf(page, title)).toHaveCount(1, { timeout: 10_000 });
+  });
+
+  test('3 declines and focus moves to the next row; J and K move the focus', async ({ page }) => {
+    const word = uniqueWord();
+    const first = `${word} alpha first`;
+    const second = `${word} beta second`;
+    const third = `${word} gamma third`;
+    await openTriageWith(page, [first, second, third]);
+    await focusTriageRow(page, first);
+    // The queue is oldest-first, so the next row after `first` is `second`.
+    await page.keyboard.press('j');
+    await expect(rowOf(page, second)).toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('k');
+    await expect(rowOf(page, first)).toHaveAttribute('aria-current', 'true');
+
+    await page.keyboard.press('3');
+    await expect(rowOf(page, first)).toHaveCount(0, { timeout: 10_000 });
+    // Focus lands on the following row, not back at the top of the queue.
+    await expect(rowOf(page, second)).toHaveAttribute('aria-current', 'true');
+  });
+
+  test('decision keys do nothing while the shortcut help dialog is open', async ({ page }) => {
+    const title = `${uniqueWord()} behind modal`;
+    await openTriageWith(page, [title]);
+    await focusTriageRow(page, title);
+
+    await page.keyboard.press('?');
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.keyboard.press('3');
+    await page.keyboard.press('1');
+    await page.waitForTimeout(500);
+    await expect(rowOf(page, title)).toHaveCount(1);
+    await page.keyboard.press('Escape');
+  });
+
+  test('the snooze menu opens with H and picks with the keyboard', async ({ page }) => {
+    const title = `${uniqueWord()} snooze by key`;
+    await openTriageWith(page, [title]);
+    await focusTriageRow(page, title);
+
+    await page.keyboard.press('h');
+    await expect(page.getByRole('option', { name: '1 day' })).toBeVisible();
+    await page.getByRole('option', { name: '1 day' }).click();
+    await expect(rowOf(page, title)).toHaveCount(0, { timeout: 10_000 });
+  });
+
+  test('lists possible duplicates, including a peer still in triage, and resolves one', async ({
+    page,
+  }) => {
+    const word = uniqueWord();
+    const peer = `${word} export fails on large files`;
+    const source = `${word} export fails on large uploads`;
+    await openTriageWith(page, [peer, source]);
+    await focusTriageRow(page, source);
+
+    const suggestions = page.getByRole('region', { name: 'Possible duplicates' });
+    await expect(suggestions).toBeVisible({ timeout: 20_000 });
+    const item = suggestions.getByTestId('triage-duplicate-suggestion').filter({ hasText: peer });
+    await expect(item).toHaveCount(1);
+    await expect(item.getByText('In triage')).toBeVisible();
+
+    await item.getByRole('button', { name: /Mark as duplicate of ENG-\d+/ }).click();
+    await expect(rowOf(page, source)).toHaveCount(0, { timeout: 10_000 });
+    // The peer it was resolved against stays in the queue.
+    await expect(rowOf(page, peer)).toHaveCount(1);
   });
 });

@@ -258,6 +258,7 @@ describe('TriagePage outcomes', () => {
     expect(issueStore.findById('i1')?.stateId).toBe('st-canceled');
     expect(screen.getAllByTestId('triage-row')).toHaveLength(2);
     // And the next decision still works (the old bug wedged every later action).
+    await act(async () => {}); // let the in-flight guard clear
     gql.mockClear();
     gql.mockResolvedValue({ data: {} });
     press('1');
