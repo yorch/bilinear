@@ -729,7 +729,7 @@ export class IssueService {
           where: { issueId: id },
         });
         const staleLabels = (stale ?? []).filter(
-          a => a.label.teamId != null && a.label.teamId !== effectiveTeamId,
+          a => a.label.teamId != null && a.label.teamId === effectiveTeamId,
         );
         if (staleLabels.length > 0) {
           await tx.issueLabelAssignment.deleteMany({
@@ -790,6 +790,9 @@ export class IssueService {
       const withLabels = {
         ...issue,
         ...(customFieldValues ? { customFieldValues } : {}),
+        // Lets sync visibility filtering tell a viewer who just lost sight of
+        // the issue (private/guest destination) to delete their stale copy.
+        ...(isTeamMove ? { movedFromTeamId: existing.teamId } : {}),
         labelAssignments: await tx.issueLabelAssignment.findMany({
           select: { labelId: true },
           where: { issueId: id },

@@ -131,32 +131,28 @@ describe('cycleResolvers Mutation.cycleUnarchive', () => {
     expect(result).toEqual({ cycle: restored, lastSyncId: '1', success: true });
   });
 
-  // PARITY, not endorsement: every cycle mutation (cycleArchive included) gates
-  // on team membership only, so a guest-role team member passes. This pins that
-  // unarchive does not diverge from archive; tightening both to
-  // requireTeamMemberNotGuest is a product decision tracked in the report.
-  it('treats a guest-role team member exactly like cycleArchive does', async () => {
+  // Cycle writes are not guest-visible work: a guest-role team member is
+  // refused on every cycle write, archive and unarchive included.
+  it.each([
+    ['cycleUnarchive', { id: ARCHIVED_CYCLE.id }],
+    ['cycleArchive', { id: ARCHIVED_CYCLE.id }],
+    ['cycleDelete', { id: ARCHIVED_CYCLE.id }],
+    ['cycleUpdate', { id: ARCHIVED_CYCLE.id, input: { name: 'x' } }],
+    ['cycleCreate', { input: { teamId: TEST_TEAM.id } }],
+  ] as const)('%s rejects a guest-role team member', async (name, args) => {
     ctx.prisma.cycle.findUnique.mockResolvedValue(ARCHIVED_CYCLE);
-    ctx.prisma.cycle.update.mockResolvedValue({ ...ARCHIVED_CYCLE, archivedAt: null });
-    ctx.prisma.teamMembership.findUnique.mockResolvedValue({
-      role: 'guest',
-      team: { organizationId: TEST_ORG.id },
-      teamId: TEST_TEAM.id,
-      userId: TEST_USER.id,
-    });
+    memberOf(ctx);
+    ctx.prisma.teamMemberRole.findUnique.mockResolvedValue({ role: 'guest' });
     ctx.orgRole = 'guest';
 
-    const unarchive = await cycleResolvers.Mutation.cycleUnarchive(
-      null,
-      { id: ARCHIVED_CYCLE.id },
-      ctx as never,
+    await testAuthGuard(
+      (cycleResolvers.Mutation as Record<string, never>)[name],
+      args,
+      ctx,
+      'FORBIDDEN',
     );
-    const archive = await cycleResolvers.Mutation.cycleArchive(
-      null,
-      { id: ARCHIVED_CYCLE.id },
-      ctx as never,
-    );
-    expect(unarchive.success).toBe(true);
-    expect(archive.success).toBe(true);
+    expect(ctx.prisma.cycle.update).not.toHaveBeenCalled();
+    expect(ctx.prisma.cycle.create).not.toHaveBeenCalled();
+    expect(ctx.prisma.cycle.delete).not.toHaveBeenCalled();
   });
 });

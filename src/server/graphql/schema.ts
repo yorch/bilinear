@@ -318,6 +318,11 @@ export const typeDefs = `
     success: Boolean!
     issue: Issue
     lastSyncId: String!
+    """
+    Names of team-scoped labels removed because they do not exist in the
+    destination team after a team move.
+    """
+    droppedLabelNames: [String!]
   }
 
   type IssueLabelPayload {

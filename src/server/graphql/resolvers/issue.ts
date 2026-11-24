@@ -39,6 +39,7 @@ const TRACKED_ACTIVITY_FIELDS = [
   'trashed',
   'cycleId',
   'parentId',
+  'teamId',
 ] as const;
 
 function issueFieldToString(issue: Issue, field: string): string | null {
@@ -684,15 +685,32 @@ export const issueResolvers = {
         ctx.services.sync.publish(s);
       }
 
-      // Record an activity entry for each changed tracked field
+      // Record an activity entry for each changed tracked field. The NEW value
+      // is read from the returned row, not from `input`: a team move rewrites
+      // stateId/cycleId implicitly, and those changes never appear in input.
+      const isTeamMove = existing.teamId !== issue.teamId;
       const activities: IssueActivityCreateInput[] = [];
       for (const field of TRACKED_ACTIVITY_FIELDS) {
-        if (!(field in input) || (input as Record<string, unknown>)[field] === undefined) {
+        const implicit = isTeamMove && (field === 'stateId' || field === 'cycleId');
+        if (field === 'teamId') {
+          if (isTeamMove) {
+            // Identifiers (ENG-12 -> OPS-3) are what a reader recognises; the
+            // raw team ids would render as UUIDs in the timeline.
+            activities.push({
+              actorId: ctx.userId,
+              field,
+              issueId: id,
+              newValue: issue.identifier,
+              oldValue: existing.identifier,
+            });
+          }
+          continue;
+        }
+        if (!implicit && (!(field in input) || (input as Record<string, unknown>)[field] === undefined)) {
           continue;
         }
         const oldStr = issueFieldToString(existing, field);
-        const newRaw = (input as Record<string, unknown>)[field];
-        const newStr = newRaw != null ? String(newRaw) : null;
+        const newStr = issueFieldToString(issue, field);
         if (oldStr !== newStr) {
           activities.push({
             actorId: ctx.userId,
@@ -761,9 +779,9 @@ export const issueResolvers = {
 
       // Notifications: status change — oldStatus/newStatus are workflow-state UUIDs;
       // human-readable names are resolved in the notification UI via the state store.
-      if ('stateId' in input && input.stateId && input.stateId !== existing.stateId) {
+      if (issue.stateId !== existing.stateId) {
         void ctx.services.notification
-          .createForStatusChange(ctx.orgId, issue.id, ctx.userId, existing.stateId, input.stateId)
+          .createForStatusChange(ctx.orgId, issue.id, ctx.userId, existing.stateId, issue.stateId)
           .catch(err => log.error({ err }, 'Failed to create status change notification'));
       }
 
@@ -794,6 +812,15 @@ export const issueResolvers = {
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'issue.updated', issue, issue.teamId)
         .catch(err => log.error({ err }, 'webhook dispatch failed: issue.updated'));
+      if (isTeamMove) {
+        // Subscribers scoped to the team the issue LEFT would otherwise never
+        // learn it moved (org-wide hooks already got the delivery above).
+        void ctx.services.webhook
+          .dispatchEvent(ctx.orgId, 'issue.updated', issue, existing.teamId, {
+            teamScopedOnly: true,
+          })
+          .catch(err => log.error({ err }, 'webhook dispatch failed: issue.updated (old team)'));
+      }
 
       // Automation triggers — fire one per kind of change. The service
       // de-dupes by trigger_type so a single field change can only match
@@ -806,9 +833,9 @@ export const issueResolvers = {
           .evaluateForIssue(ctx.orgId, { changes, issue, type }, ctx.userId)
           .catch(err => log.error({ err, type }, 'automation evaluate failed'));
       };
-      if (input.stateId && input.stateId !== existing.stateId) {
+      if (issue.stateId !== existing.stateId) {
         fireAutomation('issue_state_changed', {
-          stateId: { newValue: input.stateId, oldValue: existing.stateId },
+          stateId: { newValue: issue.stateId, oldValue: existing.stateId },
         });
       }
       if (input.priority !== undefined && input.priority !== existing.priority) {
@@ -830,7 +857,12 @@ export const issueResolvers = {
         });
       }
 
-      return { issue, lastSyncId: issueSync?.id.toString() ?? '0', success: true };
+      return {
+        droppedLabelNames: updateResult.droppedLabelNames,
+        issue,
+        lastSyncId: issueSync?.id.toString() ?? '0',
+        success: true,
+      };
     },
   },
 

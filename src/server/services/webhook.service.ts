@@ -313,6 +313,7 @@ export class WebhookService {
     event: WebhookEvent | string,
     data: object,
     teamId?: string | null,
+    opts: { teamScopedOnly?: boolean } = {},
   ): Promise<WebhookDelivery[]> {
     // Team-scoped filter:
     //  - Team-level event (teamId passed): include org-wide hooks AND
@@ -326,7 +327,11 @@ export class WebhookService {
         enabled: true,
         events: { has: event },
         organizationId: orgId,
-        ...(teamId == null ? { teamId: null } : { OR: [{ teamId: null }, { teamId }] }),
+        ...(teamId == null
+          ? { teamId: null }
+          : opts.teamScopedOnly
+            ? { teamId }
+            : { OR: [{ teamId: null }, { teamId }] }),
       },
     });
     if (subscribers.length === 0) {

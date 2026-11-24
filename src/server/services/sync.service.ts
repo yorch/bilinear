@@ -877,6 +877,16 @@ export class SyncService {
             : !hiddenTeamSet.has(data.teamId);
         if (visible) {
           out.push(row);
+        } else if (
+          row.modelName === 'Issue' &&
+          row.action !== 'D' &&
+          typeof data.movedFromTeamId === 'string' &&
+          !hiddenTeamSet.has(data.movedFromTeamId)
+        ) {
+          // The issue moved OUT of a team this caller could see into one they
+          // cannot. Dropping the row would leave their cached copy stale
+          // forever; rewrite to a delete like the Team case above.
+          out.push({ ...row, action: 'D', data: null });
         }
         continue;
       }

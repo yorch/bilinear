@@ -1,7 +1,7 @@
 import { GraphQLError } from 'graphql';
 import type { Cycle } from '../../../generated/prisma';
 import { logger } from '../../lib/logger';
-import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import { requireAuth, requireTeamMember, requireTeamMemberNotGuest } from '../../middleware/auth';
 import type { CycleCreateInput, CycleUpdateInput } from '../../services/cycle.service';
 import { IssueService } from '../../services/issue.service';
 import type { GraphQLContext } from '../context';
@@ -116,7 +116,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
       const cycle = await ctx.services.cycle.archive(id);
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'A', 'Cycle', id, cycle);
@@ -129,7 +129,7 @@ export const cycleResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
 
       // Verify team belongs to user's org
       const team = await ctx.services.team.findById(input.teamId);
@@ -172,7 +172,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
       const { unassignedIssueIds } = await ctx.services.cycle.delete(id);
       // Re-read the affected issues so remote clients see the cleared
@@ -303,7 +303,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
       const cycle = await ctx.services.cycle.unarchive(id);
       // 'U', not 'A': clients upsert on both, but the sync log should not read
@@ -325,7 +325,7 @@ export const cycleResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, existing.teamId, ctx.userId, ctx.orgId);
 
       try {
         const cycle = await ctx.services.cycle.update(id, input);
