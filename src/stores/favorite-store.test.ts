@@ -62,3 +62,30 @@ describe('FavoriteStore', () => {
     });
   });
 });
+
+describe('FavoriteStore.replaceAll', () => {
+  const fav = (id: string, entityId: string, sortOrder = 1) =>
+    makeFavorite({ entityId, entityType: 'Project', id, sortOrder });
+
+  it('makes a server-side favourite visible to getByEntityId', () => {
+    const store = new FavoriteStore();
+    store.replaceAll([fav('f-1', 'p-1')]);
+    expect(store.getByEntityId('p-1')?.id).toBe('f-1');
+  });
+
+  it('drops rows the server no longer returns', () => {
+    const store = new FavoriteStore();
+    store.replaceAll([fav('f-1', 'p-1'), fav('f-2', 'p-2')]);
+    store.replaceAll([fav('f-2', 'p-2')]);
+    expect(store.getByEntityId('p-1')).toBeNull();
+    expect(store.pool.size).toBe(1);
+  });
+
+  it('is a no-op for an identical list so a keyed observer does not loop', () => {
+    const store = new FavoriteStore();
+    store.replaceAll([fav('f-1', 'p-1')]);
+    const before = store.pool.get('f-1');
+    store.replaceAll([fav('f-1', 'p-1')]);
+    expect(store.pool.get('f-1')).toBe(before);
+  });
+});

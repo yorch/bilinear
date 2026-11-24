@@ -75,9 +75,13 @@ interface FavoriteMeta {
     | { __typename: 'Document'; id: string; title: string; documentTeamId: string | null }
     | { __typename: 'Team'; id: string; name: string; key: string; icon?: string | null }
     | null;
+  createdAt: string;
+  entityId: string;
   entityType: string;
   id: string;
+  organizationId: string;
   sortOrder: number;
+  userId: string;
 }
 
 function favoriteIcon(entityType: string) {
@@ -186,6 +190,19 @@ const SidebarFavoritesSection = observer(function SidebarFavoritesSection({
   } = useRetryableFetch<FavoriteMeta[]>(
     async () => {
       const list = await gqlQuery<FavoriteMeta[] | null>(FAVORITES_QUERY, {}, 'favorites');
+      // The bootstrap never streams favourites, so this authoritative read is
+      // what lets the header star and context menu know what is favourited.
+      favoriteStore.replaceAll(
+        (list ?? []).map(({ createdAt, entityId, entityType, id, organizationId, sortOrder, userId }) => ({
+          createdAt,
+          entityId,
+          entityType,
+          id,
+          organizationId,
+          sortOrder,
+          userId,
+        })),
+      );
       return (list ?? []).filter(f => f.entity !== null).sort((a, b) => a.sortOrder - b.sortOrder);
     },
     [favStoreKey],

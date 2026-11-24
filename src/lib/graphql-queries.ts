@@ -218,6 +218,9 @@ export const FAVORITES_QUERY = `
   query SidebarFavorites {
     favorites {
       id
+      userId
+      organizationId
+      createdAt
       entityType
       entityId
       sortOrder
