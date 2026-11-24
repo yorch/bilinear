@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changedWebhookFields } from './webhook-form';
+import { changedWebhookFields, isHttpUrl } from './webhook-form';
 
 const current = {
   events: ['issue.created', 'issue.updated'],
@@ -29,5 +29,15 @@ describe('changedWebhookFields', () => {
         url: 'https://b.test',
       }),
     ).toEqual({ events: ['issue.created'], url: 'https://b.test' });
+  });
+});
+
+describe('isHttpUrl', () => {
+  it('accepts http(s) and rejects everything else', () => {
+    expect(isHttpUrl('https://example.com/hook')).toBe(true);
+    expect(isHttpUrl('http://example.com')).toBe(true);
+    expect(isHttpUrl('not-a-url')).toBe(false);
+    expect(isHttpUrl('ftp://example.com')).toBe(false);
+    expect(isHttpUrl('javascript:alert(1)')).toBe(false);
   });
 });

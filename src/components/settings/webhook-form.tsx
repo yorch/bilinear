@@ -38,6 +38,16 @@ export function changedWebhookFields(
   return changed;
 }
 
+/** Cheap pre-flight; the server remains the authority (private hosts, DNS). */
+export function isHttpUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 interface WebhookFormProps {
   availableEvents: string[];
   busy: boolean;
@@ -79,6 +89,8 @@ export function WebhookForm({
     }
     if (!url.trim()) {
       errs.url = t('settings.webhooks.urlRequired');
+    } else if (!isHttpUrl(url.trim())) {
+      errs.url = t('settings.webhooks.urlInvalid');
     }
     if (selectedEvents.size === 0) {
       errs.events = t('settings.webhooks.eventsRequired');

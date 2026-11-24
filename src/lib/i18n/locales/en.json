@@ -2592,6 +2592,7 @@
       "title": "Webhooks",
       "updateError": "Failed to update webhook",
       "url": "URL",
+      "urlInvalid": "Enter a valid http(s) URL, e.g. https://example.com/hook.",
       "urlRequired": "Enter the URL that should receive events.",
       "webhookCreated": "Webhook created",
       "webhookDeleted": "Webhook deleted",

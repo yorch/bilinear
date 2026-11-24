@@ -348,20 +348,31 @@ test.describe('Triage', () => {
   test('3 declines and focus moves to the next row; J and K move the focus', async ({ page }) => {
     const word = uniqueWord();
     const first = `${word} alpha first`;
-    const second = `${word} beta second`;
-    const third = `${word} gamma third`;
-    await openTriageWith(page, [first, second, third]);
-    await focusTriageRow(page, first);
-    // The queue is oldest-first, so the next row after `first` is `second`.
+    await openTriageWith(page, [first, `${word} beta second`, `${word} gamma third`]);
+    const firstRow = await focusTriageRow(page, first);
+    // Tests in this file run in parallel against one shared team queue, so
+    // another test's issue can land between ours. Resolve "the next row" from
+    // the DOM instead of assuming it is our second issue.
+    const nextRow = firstRow.locator(
+      'xpath=following-sibling::button[@data-testid="triage-row"][1]',
+    );
+    await expect(nextRow).toBeVisible();
+    // Identify it by issue key: the row's relative timestamp ("just now") changes.
+    const nextKey = (await nextRow.innerText()).match(/[A-Z]+-\d+/)?.[0];
+    expect(nextKey).toBeTruthy();
+    const sameNext = page
+      .getByTestId('triage-row')
+      .filter({ hasText: new RegExp(`${nextKey}(?!\\d)`) });
+
     await page.keyboard.press('j');
-    await expect(rowOf(page, second)).toHaveAttribute('aria-current', 'true');
+    await expect(sameNext).toHaveAttribute('aria-current', 'true');
     await page.keyboard.press('k');
     await expect(rowOf(page, first)).toHaveAttribute('aria-current', 'true');
 
     await page.keyboard.press('3');
     await expect(rowOf(page, first)).toHaveCount(0, { timeout: 10_000 });
     // Focus lands on the following row, not back at the top of the queue.
-    await expect(rowOf(page, second)).toHaveAttribute('aria-current', 'true');
+    await expect(sameNext).toHaveAttribute('aria-current', 'true');
   });
 
   test('decision keys do nothing while the shortcut help dialog is open', async ({ page }) => {
