@@ -2,16 +2,16 @@
 
 import { Archive, Target, Undo2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useArchivedLoad } from '@/hooks/use-archived-load';
+import { useLoadMore } from '@/hooks/use-load-more';
 import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /** The few fields the archived list renders — not a full `DBProject`. */
@@ -23,13 +23,39 @@ interface ArchivedProjectRow {
   name: string;
 }
 
+/** Archived-view page size: well under the server's list ceiling, so "Load more" is reachable. */
+const ARCHIVED_PAGE_SIZE = 50;
+
+/** Server-side `archivedOnly` filter: live rows never take up a page slot. */
 const ARCHIVED_PROJECTS_QUERY = `
-  query ArchivedProjects {
-    projects(includeArchived: true, first: 200) {
+  query ArchivedProjects($first: Int, $after: String) {
+    projects(archivedOnly: true, first: $first, after: $after) {
       nodes { id name icon color archivedAt }
+      pageInfo { hasNextPage endCursor }
     }
   }
 `;
+
+interface ArchivedPage {
+  nextCursor: string | null;
+  rows: ArchivedProjectRow[];
+}
+
+interface ArchivedProjectsResponse {
+  nodes: ArchivedProjectRow[];
+  pageInfo: { endCursor: string | null; hasNextPage: boolean };
+}
+
+function fetchArchivedPage(after?: string): Promise<ArchivedPage> {
+  return gqlQuery<ArchivedProjectsResponse>(
+    ARCHIVED_PROJECTS_QUERY,
+    { after: after ?? null, first: ARCHIVED_PAGE_SIZE },
+    'projects',
+  ).then(data => ({
+    nextCursor: data.pageInfo.hasNextPage ? data.pageInfo.endCursor : null,
+    rows: data.nodes.filter(p => Boolean(p.archivedAt)),
+  }));
+}
 
 const PROJECT_UNARCHIVE_MUTATION = `
   mutation ProjectUnarchive($id: ID!) { projectUnarchive(id: $id) { success lastSyncId } }
@@ -48,20 +74,29 @@ const PROJECT_UNARCHIVE_MUTATION = `
 export const ProjectArchivedView = observer(function ProjectArchivedView() {
   const t = useTranslations();
   const { projectStore } = useStore();
-  const [fetched, setFetched] = useState<ArchivedProjectRow[]>([]);
+  const [page, setPage] = useState<ArchivedPage>({ nextCursor: null, rows: [] });
+  const fetched = page.rows;
   const [restoring, setRestoring] = useState<Set<string>>(new Set());
 
-  const load = useArchivedLoad<ArchivedProjectRow>(
+  // The first page rides `useArchivedLoad` (retry, error and skeleton states);
+  // later pages come from `useLoadMore`, which drops a response that arrives
+  // after the page it extends has been replaced.
+  const load = useArchivedLoad<ArchivedPage>(
     true,
-    async () => {
-      const data = await gqlQuery<{ nodes: Array<ArchivedProjectRow | { archivedAt: null }> }>(
-        ARCHIVED_PROJECTS_QUERY,
-        {},
-        'projects',
-      );
-      return data.nodes.filter((p): p is ArchivedProjectRow => Boolean(p.archivedAt));
-    },
-    setFetched,
+    async () => [await fetchArchivedPage()],
+    ([first]) => first && setPage(first),
+  );
+  const { loadMore, loadingMore } = useLoadMore<ArchivedPage>({
+    fetchMore: fetchArchivedPage,
+    merge: (prev, next) => ({ nextCursor: next.nextCursor, rows: [...prev.rows, ...next.rows] }),
+    onError: () => toast.error(t('projects.loadMoreArchivedFailed')),
+    page,
+    resetKey: 'archived',
+    setPage: update => setPage(update),
+  });
+  const dropFetched = useCallback(
+    (id: string) => setPage(prev => ({ ...prev, rows: prev.rows.filter(f => f.id !== id) })),
+    [],
   );
 
   const inSession: ArchivedProjectRow[] = projectStore.archived.map(p => ({
@@ -81,11 +116,11 @@ export const ProjectArchivedView = observer(function ProjectArchivedView() {
     projectStore.optimisticUpdate(row.id, { archivedAt: null });
     try {
       await gqlMutate(PROJECT_UNARCHIVE_MUTATION, { id: row.id });
-      setFetched(prev => prev.filter(f => f.id !== row.id));
+      dropFetched(row.id);
       toast.success(t('projects.projectRestored', { name: row.name }));
-    } catch (err) {
+    } catch {
       projectStore.optimisticUpdate(row.id, { archivedAt: row.archivedAt });
-      toast.error(getErrorMessage(err, t('projects.failedToUnarchive')));
+      toast.error(t('projects.failedToUnarchive'));
     } finally {
       setRestoring(prev => {
         const next = new Set(prev);
@@ -137,6 +172,18 @@ export const ProjectArchivedView = observer(function ProjectArchivedView() {
           </li>
         ))}
       </ul>
+      {page.nextCursor && (
+        <div className="flex justify-center py-3">
+          <Button
+            disabled={loadingMore}
+            onClick={() => void loadMore()}
+            size="sm"
+            variant="outline"
+          >
+            {loadingMore ? t('common.loading') : t('projects.loadMoreArchived')}
+          </Button>
+        </div>
+      )}
     </div>
   );
 });

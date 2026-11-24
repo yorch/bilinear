@@ -16,6 +16,7 @@ import { useIssueSnooze } from '@/hooks/use-issue-snooze';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
 import { getBranchName, PRIORITY_OPTIONS } from '@/lib/issue-utils';
+import { toMarkdownLink } from '@/lib/markdown-link';
 import { isRovingFocusKey, nextRovingIndex } from '@/lib/roving-focus';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
@@ -131,7 +132,7 @@ export const IssueContextMenu = observer(function IssueContextMenu({
   const snoozed = isIssueSnoozed(issueStore.findById(issueId)?.snoozedUntilAt);
   const snoozePresets = getSnoozePresets();
   const txQueue = useMemo(() => new TransactionQueue(), []);
-  const { cycleStore, teamStore, workflowStateStore } = useStore();
+  const { cycleStore, teamStore } = useStore();
   const issueRow = issueStore.findById(issueId);
   const parentExclusions = useParentExclusions(issueId);
 
@@ -188,6 +189,19 @@ export const IssueContextMenu = observer(function IssueContextMenu({
 
   const canQuickEdit = Boolean(onUpdate);
 
+  // Clipboard writes reject without permission or focus; say so rather than
+  // letting the menu close as if the copy had worked.
+  const copyText = (text: string, successMessage?: string) => {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        if (successMessage) {
+          toast.success(successMessage);
+        }
+      })
+      .catch(() => toast.error(t('issueDetail.properties.copyFailed')));
+  };
+
   const items: MenuEntry[] = [
     ...(onOpen
       ? ([
@@ -218,23 +232,21 @@ export const IssueContextMenu = observer(function IssueContextMenu({
     {
       label: t('issues.copyIssueUrl'),
       onClick: () => {
-        navigator.clipboard.writeText(issueUrl).catch(() => undefined);
+        copyText(issueUrl);
         onClose();
       },
     },
     {
       label: t('issues.copyAsMarkdown'),
       onClick: () => {
-        navigator.clipboard
-          .writeText(`[${identifier} ${title}](${issueUrl})`)
-          .catch(() => undefined);
+        copyText(toMarkdownLink(`${identifier} ${title}`, issueUrl), t('issues.markdownCopied'));
         onClose();
       },
     },
     {
       label: t('issues.copyBranchName'),
       onClick: () => {
-        navigator.clipboard.writeText(getBranchName(identifier, title)).catch(() => undefined);
+        copyText(getBranchName(identifier, title));
         onClose();
       },
     },
@@ -373,21 +385,21 @@ export const IssueContextMenu = observer(function IssueContextMenu({
     team: 'commandPalette.submenu.moveToTeam',
   };
 
-  // Mark as duplicate: record the relation, then close the issue out by moving
-  // it to the team's first canceled state (what a duplicate means in practice).
+  // Mark as duplicate: record the relation and nothing else. The server's
+  // issueRelationCreate already moves an open issue to the team's canceled
+  // state (and leaves a completed/canceled one alone), then syncs the result
+  // back. A second client-side state write would cancel a completed issue and
+  // null its completedAt, and would leave it canceled if the relation failed.
   const markDuplicateOf = (original: { id: string; identifier: string }) => {
     txQueue.enqueue(
       CREATE_DUPLICATE_RELATION,
       { input: { issueId, relatedIssueId: original.id, type: 'duplicate' } },
-      { onError: () => toast.error(t('issueDetail.relations.failedToCreate')) },
+      {
+        onError: () => toast.error(t('issueDetail.relations.failedToCreate')),
+        onSuccess: () =>
+          toast.success(t('issues.markedDuplicateToast', { identifier: original.identifier })),
+      },
     );
-    const canceled = issueRow
-      ? workflowStateStore.findByTeamId(issueRow.teamId).find(st => st.type === 'canceled')
-      : undefined;
-    if (canceled) {
-      onUpdate?.({ stateId: canceled.id });
-    }
-    toast.success(t('issues.markedDuplicateToast', { identifier: original.identifier }));
   };
 
   const presetLabelKey: Record<(typeof snoozePresets)[number]['key'], string> = {

@@ -20,7 +20,7 @@ import type { DBProject } from '@/lib/db';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toIssueUsers } from '@/lib/issue-mappers';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /** One operation for every scalar property; the input carries the field. */
@@ -101,8 +101,8 @@ export const ProjectPropertiesPanel = observer(function ProjectPropertiesPanel({
       await gqlMutate(PROJECT_UPDATE_MUTATION, { id: project.id, input });
       toast.success(t('projects.projectUpdated'));
       return true;
-    } catch (err) {
-      toast.error(getErrorMessage(err, t('projects.failedToUpdate')));
+    } catch {
+      toast.error(t('projects.failedToUpdate'));
       return false;
     }
   }
@@ -127,8 +127,8 @@ export const ProjectPropertiesPanel = observer(function ProjectPropertiesPanel({
       await gqlMutate(mutation, { projectId: project.id, ...variables });
       toast.success(t('projects.projectUpdated'));
       await reloadMembership({ silent: true });
-    } catch (err) {
-      toast.error(getErrorMessage(err, t('projects.failedToUpdate')));
+    } catch {
+      toast.error(t('projects.failedToUpdate'));
     }
   }
 

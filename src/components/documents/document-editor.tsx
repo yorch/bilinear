@@ -22,7 +22,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { gqlMutate } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
-import { cn, getErrorMessage, TOUCH_TARGET_SQUARE } from '@/lib/utils';
+import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 interface DocumentEditorProps {
@@ -148,12 +148,9 @@ export const DocumentEditor = observer(function DocumentEditor({
         action === 'archive' ? t('documents.documentArchived') : t('documents.documentDeleted'),
       );
       router.push(docsHref);
-    } catch (err) {
+    } catch {
       toast.error(
-        getErrorMessage(
-          err,
-          action === 'archive' ? t('documents.archiveFailed') : t('documents.deleteFailed'),
-        ),
+        action === 'archive' ? t('documents.archiveFailed') : t('documents.deleteFailed'),
       );
     }
   };

@@ -30,7 +30,7 @@ import { createDocument, gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toIssueUsers } from '@/lib/issue-mappers';
 import { toast } from '@/lib/toast';
 import { TransactionQueue } from '@/lib/transaction-queue';
-import { cn, getErrorMessage, TOUCH_TARGET_SQUARE } from '@/lib/utils';
+import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 interface DocumentListProps {
@@ -127,7 +127,7 @@ export const DocumentList = observer(function DocumentList({
         ? documentStore.getByTeamId(teamId)
         : projectId
           ? documentStore.getByProjectId(projectId)
-          : documentStore.all.filter(d => !d.parentId)
+          : documentStore.getRoots()
       )
         .slice()
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -139,9 +139,9 @@ export const DocumentList = observer(function DocumentList({
     documentStore.optimisticUpdate(id, { archivedAt: null });
     try {
       await gqlMutate(DOCUMENT_UNARCHIVE_MUTATION, { id });
-    } catch (err) {
+    } catch {
       documentStore.optimisticUpdate(id, { archivedAt: new Date().toISOString() });
-      toast.error(getErrorMessage(err, t('documents.restoreFailed')));
+      toast.error(t('documents.restoreFailed'));
     }
   };
 
@@ -155,13 +155,8 @@ export const DocumentList = observer(function DocumentList({
       } else {
         toast.success(t('documents.documentDeleted'));
       }
-    } catch (err) {
-      toast.error(
-        getErrorMessage(
-          err,
-          kind === 'archive' ? t('documents.archiveFailed') : t('documents.deleteFailed'),
-        ),
-      );
+    } catch {
+      toast.error(kind === 'archive' ? t('documents.archiveFailed') : t('documents.deleteFailed'));
     }
   };
 

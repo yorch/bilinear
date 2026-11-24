@@ -3,9 +3,11 @@ import { createStubConfig } from '../../test/config-mock';
 import { TEST_ORG, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
+  InitiativeInvalidParentError,
   InitiativeInvalidStatusError,
   InitiativeProjectNotFoundError,
   InitiativeService,
+  InitiativeValidationError,
 } from './initiative.service';
 import type { ProjectService } from './project.service';
 
@@ -34,6 +36,10 @@ const TEST_INITIATIVE = {
   targetDateResolution: null,
   updatedAt: new Date('2026-04-01T00:00:00Z'),
 };
+
+const P1 = '00000000-0000-0000-0000-0000000000a1';
+const P0 = '00000000-0000-0000-0000-0000000000a0';
+const OTHER_ORG_USER = '00000000-0000-0000-0000-0000000000ee';
 
 describe('InitiativeService', () => {
   let prisma: MockPrismaClient;
@@ -141,11 +147,11 @@ describe('InitiativeService', () => {
         projectService,
         createStubConfig({ 'limits.maxInitiativeDepth': 2 }),
       );
-      // Parent 'p1' itself has a parent 'p0' → depth would become 2, at cap.
-      prisma.initiative.findFirst.mockResolvedValueOnce({ id: 'p1', parentId: 'p0' });
+      // Parent P1 itself has a parent P0 → depth would become 2, at cap.
+      prisma.initiative.findFirst.mockResolvedValueOnce({ id: P1, parentId: P0 });
 
       await expect(
-        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: 'p1' }),
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: P1 }),
       ).rejects.toThrow('Initiative nesting depth cannot exceed 2');
     });
 
@@ -153,10 +159,10 @@ describe('InitiativeService', () => {
       // Org fixture default (maxInitiativeDepth: 5) is used via beforeEach's
       // organization.findUnique mock — a single level of nesting is fine.
       prisma.initiative.create.mockResolvedValue(TEST_INITIATIVE);
-      prisma.initiative.findFirst.mockResolvedValueOnce({ id: 'p1', parentId: null });
+      prisma.initiative.findFirst.mockResolvedValueOnce({ id: P1, parentId: null });
 
       await expect(
-        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: 'p1' }),
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: P1 }),
       ).resolves.toEqual(TEST_INITIATIVE);
     });
 
@@ -170,11 +176,96 @@ describe('InitiativeService', () => {
         projectService,
         createStubConfig({ 'limits.maxInitiativeDepth': 1 }),
       );
-      prisma.initiative.findFirst.mockResolvedValueOnce({ id: 'p1', parentId: null });
+      prisma.initiative.findFirst.mockResolvedValueOnce({ id: P1, parentId: null });
 
       await expect(
-        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: 'p1' }),
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: P1 }),
       ).rejects.toThrow('Initiative nesting depth cannot exceed 1');
+    });
+  });
+
+  describe('owner and field validation', () => {
+    beforeEach(() => {
+      prisma.initiative.create.mockResolvedValue(TEST_INITIATIVE);
+      prisma.initiative.updateMany.mockResolvedValue({ count: 1 });
+      prisma.initiative.findUnique.mockResolvedValue(TEST_INITIATIVE);
+    });
+
+    it('rejects an owner who is not a member of this org (create and update)', async () => {
+      prisma.organizationMember.findFirst.mockResolvedValue(null);
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', ownerId: OTHER_ORG_USER }),
+      ).rejects.toThrow(InitiativeValidationError);
+      await expect(
+        service.update(TEST_ORG.id, TEST_INITIATIVE.id, { ownerId: OTHER_ORG_USER }),
+      ).rejects.toThrow('Owner must be a member');
+      expect(prisma.organizationMember.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { organizationId: TEST_ORG.id, userId: OTHER_ORG_USER } }),
+      );
+      expect(prisma.initiative.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-UUID owner as a validation error before touching the database', async () => {
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', ownerId: 'not-a-uuid' }),
+      ).rejects.toThrow(InitiativeValidationError);
+      expect(prisma.organizationMember.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('accepts an org member as owner', async () => {
+      prisma.organizationMember.findFirst.mockResolvedValue({ id: 'm1' });
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', ownerId: TEST_USER.id }),
+      ).resolves.toEqual(TEST_INITIATIVE);
+    });
+
+    it('rejects an over-long name as a validation error, not a 500', async () => {
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'x'.repeat(256) }),
+      ).rejects.toThrow(InitiativeValidationError);
+      await expect(
+        service.update(TEST_ORG.id, TEST_INITIATIVE.id, { name: 'x'.repeat(256) }),
+      ).rejects.toThrow(InitiativeValidationError);
+    });
+  });
+
+  describe('parent validation', () => {
+    beforeEach(() => {
+      prisma.initiative.updateMany.mockResolvedValue({ count: 1 });
+      prisma.initiative.create.mockResolvedValue(TEST_INITIATIVE);
+    });
+
+    it('rejects an archived parent on create and update', async () => {
+      prisma.initiative.findFirst.mockResolvedValue({
+        archivedAt: new Date(),
+        id: P1,
+        parentId: null,
+      });
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, { name: 'Q3', parentId: P1 }),
+      ).rejects.toThrow(InitiativeInvalidParentError);
+      await expect(
+        service.update(TEST_ORG.id, TEST_INITIATIVE.id, { parentId: P1 }),
+      ).rejects.toThrow(InitiativeInvalidParentError);
+      expect(prisma.initiative.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-UUID parent without querying', async () => {
+      await expect(
+        service.update(TEST_ORG.id, TEST_INITIATIVE.id, { parentId: 'nope' }),
+      ).rejects.toThrow(InitiativeInvalidParentError);
+      expect(prisma.initiative.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('takes the org-wide parent-write lock before checking a re-parent', async () => {
+      prisma.initiative.findFirst.mockResolvedValue({ archivedAt: null, id: P1, parentId: null });
+      prisma.initiative.findUnique.mockResolvedValue(TEST_INITIATIVE);
+      await service.update(TEST_ORG.id, TEST_INITIATIVE.id, { parentId: P1 });
+      const sql = (prisma.$queryRaw.mock.calls[0] as [string[]])[0].join('');
+      expect(sql).toContain('pg_advisory_xact_lock');
+      expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+        prisma.initiative.updateMany.mock.invocationCallOrder[0] as number,
+      );
     });
   });
 

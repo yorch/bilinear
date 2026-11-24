@@ -14,6 +14,76 @@ describe('documentResolvers', () => {
     ctx = createMockContext();
     // The shared mock context predates documents; wire the real service over mock Prisma.
     (ctx.services as Record<string, unknown>).document = new DocumentService(ctx.prisma as never);
+    // No private teams by default; individual tests make one hidden.
+    ctx.prisma.team.findMany.mockResolvedValue([]);
+    ctx.prisma.teamMemberRole.findMany.mockResolvedValue([]);
+  });
+
+  /** One private team the caller is not a member of. */
+  const hideTeam = (teamId: string) =>
+    ctx.prisma.team.findMany.mockResolvedValue([
+      { id: teamId, memberships: [], organizationId: TEST_ORG.id },
+    ]);
+  const PRIVATE_TEAM = '00000000-0000-0000-0000-0000000000f1';
+  const HIDDEN_DOC = { ...DOC, archivedAt: new Date(), teamId: PRIVATE_TEAM };
+  const call = (name: keyof typeof documentResolvers.Mutation, args: object) =>
+    (documentResolvers.Mutation[name] as (...a: unknown[]) => Promise<unknown>)(
+      null,
+      args,
+      ctx as never,
+    );
+
+  describe('private-team visibility', () => {
+    beforeEach(() => {
+      hideTeam(PRIVATE_TEAM);
+      ctx.prisma.document.findUnique.mockResolvedValue(HIDDEN_DOC);
+    });
+
+    it.each([
+      ['documentUnarchive', { id: DOC.id }],
+      ['documentArchive', { id: DOC.id }],
+      ['documentUpdate', { id: DOC.id, input: { title: 'x' } }],
+      ['documentDelete', { id: DOC.id }],
+    ] as const)('%s on a hidden-team document is NOT_FOUND and writes nothing', async (name, args) => {
+      await expect(call(name, args)).rejects.toMatchObject({
+        extensions: { code: 'NOT_FOUND' },
+      });
+      expect(ctx.prisma.document.update).not.toHaveBeenCalled();
+      expect(ctx.prisma.document.delete).not.toHaveBeenCalled();
+    });
+
+    it('Query.document returns null for a hidden-team document', async () => {
+      expect(
+        await documentResolvers.Query.document(null, { id: DOC.id }, ctx as never),
+      ).toBeNull();
+    });
+
+    it('Query.documents passes the hidden teams to the query, even with includeArchived', async () => {
+      ctx.prisma.document.findMany.mockResolvedValue([]);
+      await documentResolvers.Query.documents(null, { includeArchived: true }, ctx as never);
+      const where = (ctx.prisma.document.findMany.mock.calls[0] as [{ where: object }])[0].where;
+      expect(where).toMatchObject({
+        OR: [{ teamId: null }, { teamId: { notIn: [PRIVATE_TEAM] } }],
+      });
+    });
+
+    it('documentCreate into a hidden team is NOT_FOUND', async () => {
+      await expect(
+        call('documentCreate', { input: { teamId: PRIVATE_TEAM, title: 'x' } }),
+      ).rejects.toMatchObject({ extensions: { code: 'NOT_FOUND' } });
+    });
+  });
+
+  describe('error mapping', () => {
+    it('maps an invalid parent to BAD_USER_INPUT', async () => {
+      ctx.prisma.document.findUnique.mockImplementation(
+        async ({ where }: { where: { id: string } }) =>
+          where.id === DOC.id ? { ...DOC, teamId: null } : null,
+      );
+      await expect(
+        call('documentUpdate', { id: DOC.id, input: { parentId: 'missing' } }),
+      ).rejects.toMatchObject({ extensions: { code: 'BAD_USER_INPUT' } });
+    });
   });
 
   describe('Mutation.documentUnarchive', () => {

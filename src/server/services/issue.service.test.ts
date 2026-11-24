@@ -1591,10 +1591,12 @@ describe('IssueService', () => {
           { id: 'tgt-done', name: 'Done', type: stateType },
         ]);
         prisma.workflowState.findFirst.mockResolvedValue({ teamId: TARGET, type: stateType });
-        prisma.cycle.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => ({
-          organizationId: TEST_ORG.id,
-          teamId: where.id === OLD_CYCLE ? TEST_TEAM.id : TARGET,
-        }));
+        prisma.cycle.findUnique.mockImplementation(
+          async ({ where }: { where: { id: string } }) => ({
+            organizationId: TEST_ORG.id,
+            teamId: where.id === OLD_CYCLE ? TEST_TEAM.id : TARGET,
+          }),
+        );
         prisma.issue.update.mockResolvedValue(TEST_ISSUE);
       }
 
@@ -1641,9 +1643,7 @@ describe('IssueService', () => {
       it('refuses to move an issue that has sub-issues', async () => {
         arrangeMove();
         prisma.issue.count.mockResolvedValue(2);
-        await expect(service.update(A, { teamId: TARGET })).rejects.toThrow(
-          'has sub-issues',
-        );
+        await expect(service.update(A, { teamId: TARGET })).rejects.toThrow('has sub-issues');
         expect(prisma.issue.update).not.toHaveBeenCalled();
       });
 

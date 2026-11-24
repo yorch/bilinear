@@ -133,6 +133,24 @@ interface RawSyncActionRow {
   xactId: string;
 }
 
+/**
+ * Per-recipient rows (`Notification`) are never org-wide: the payload carries
+ * titles and @mention excerpts meant for exactly one user. Applies to every
+ * caller, restricted or not, so it runs ahead of the `isUnrestricted` fast
+ * path. A delete (`data: null`) carries only an id and passes through.
+ */
+export function dropForeignNotifications<T extends { data: unknown; modelName: string }>(
+  rows: T[],
+  userId: string,
+): T[] {
+  return rows.filter(row => {
+    if (row.modelName !== 'Notification' || !row.data || typeof row.data !== 'object') {
+      return true;
+    }
+    return (row.data as { userId?: unknown }).userId === userId;
+  });
+}
+
 /** The JSON payload of a row as a record, or null for delete rows / non-objects. */
 function payloadOf(row: SyncActionRow): Record<string, unknown> | null {
   return row.data && typeof row.data === 'object' && !Array.isArray(row.data)
@@ -752,7 +770,12 @@ export class SyncService {
       return { actions, hasMore, nextCursor, staleCursor: false };
     }
 
-    return { actions: page, hasMore, nextCursor, staleCursor: false };
+    return {
+      actions: visibility ? dropForeignNotifications(page, visibility.userId) : page,
+      hasMore,
+      nextCursor,
+      staleCursor: false,
+    };
   }
 
   /**
@@ -791,6 +814,7 @@ export class SyncService {
     rows: SyncActionRow[],
     visibility: SyncVisibility,
   ): Promise<SyncActionRow[]> {
+    rows = dropForeignNotifications(rows, visibility.userId);
     if (isUnrestricted(visibility)) {
       return rows;
     }

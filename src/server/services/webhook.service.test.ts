@@ -355,6 +355,20 @@ describe('WebhookService', () => {
       expect(prisma.webhookDelivery.create).not.toHaveBeenCalled();
     });
 
+    it('team-scoped dispatch includes org-wide hooks; teamScopedOnly excludes them', async () => {
+      prisma.webhook.findMany.mockResolvedValue([]);
+      await service.dispatchEvent(TEST_ORG.id, 'issue.updated', { id: 'x' }, 'team-1');
+      expect(prisma.webhook.findMany.mock.calls[0][0].where).toMatchObject({
+        OR: [{ teamId: null }, { teamId: 'team-1' }],
+      });
+      await service.dispatchEvent(TEST_ORG.id, 'issue.updated', { id: 'x' }, 'team-1', {
+        teamScopedOnly: true,
+      });
+      const where = prisma.webhook.findMany.mock.calls[1][0].where;
+      expect(where.teamId).toBe('team-1');
+      expect(where.OR).toBeUndefined();
+    });
+
     it('batches deliveries with createMany and fires processDelivery per row', async () => {
       const TEST_WEBHOOK_2 = { ...TEST_WEBHOOK, id: '00000000-0000-0000-0000-000000000a01' };
       prisma.webhook.findMany.mockResolvedValue([TEST_WEBHOOK, TEST_WEBHOOK_2]);

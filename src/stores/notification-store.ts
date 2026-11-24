@@ -1,4 +1,4 @@
-import { action, computed, makeObservable, observable } from 'mobx';
+import { action, computed, makeObservable, observable, reaction } from 'mobx';
 import type { DBNotification } from '@/lib/db';
 import { applyPoolSyncAction } from './apply-pool-sync-action';
 
@@ -21,9 +21,22 @@ export class NotificationStore {
   serverUnread: number | null = null;
   /** Pool-derived active-unread count at the moment `serverUnread` was read. */
   baselineUnread = 0;
+  /**
+   * "Now" as the computeds see it. Reading `Date.now()` inside a computed caches
+   * it, so a snooze elapsing changed nothing until some unrelated store write —
+   * the badge and the Unread list stayed one row short. This observable is
+   * bumped at the next snooze expiry (see the reaction below) and on every pool
+   * write, so those computeds re-run exactly when the answer can change.
+   */
+  clock = Date.now();
+  private wakeTimer: ReturnType<typeof setTimeout> | null = null;
+  private disposeWakeup: () => void;
 
   constructor() {
     makeObservable(this, {
+      clock: observable,
+      nextSnoozeExpiry: computed,
+      refreshClock: action,
       all: computed,
       appendPage: action,
       applySyncAction: action,
@@ -44,6 +57,50 @@ export class NotificationStore {
       unreadCount: computed,
       upsertMany: action,
     });
+    this.disposeWakeup = reaction(
+      () => this.nextSnoozeExpiry,
+      at => {
+        if (this.wakeTimer) {
+          clearTimeout(this.wakeTimer);
+          this.wakeTimer = null;
+        }
+        if (at === null || typeof window === 'undefined') {
+          return;
+        }
+        // setTimeout caps at ~24.8 days; a longer snooze re-arms when the clock bumps.
+        const delay = Math.min(Math.max(at - Date.now(), 0) + 50, 2 ** 31 - 1);
+        this.wakeTimer = setTimeout(() => this.refreshClock(), delay);
+      },
+      { fireImmediately: true },
+    );
+  }
+
+  /** Stop the wake-up timer (tests, store teardown). */
+  dispose() {
+    this.disposeWakeup();
+    if (this.wakeTimer) {
+      clearTimeout(this.wakeTimer);
+      this.wakeTimer = null;
+    }
+  }
+
+  refreshClock() {
+    this.clock = Date.now();
+  }
+
+  /** When the soonest still-running snooze ends (epoch ms), or null when none is running. */
+  get nextSnoozeExpiry(): number | null {
+    let next: number | null = null;
+    for (const n of this.pool.values()) {
+      if (!n.snoozedUntilAt) {
+        continue;
+      }
+      const at = new Date(n.snoozedUntilAt).getTime();
+      if (at > this.clock && (next === null || at < next)) {
+        next = at;
+      }
+    }
+    return next;
   }
 
   // Returns all notifications sorted newest-first.
@@ -58,7 +115,7 @@ export class NotificationStore {
 
   /** Unread rows that are not currently snoozed. */
   get unread(): DBNotification[] {
-    const now = Date.now();
+    const now = this.clock;
     return this.all.filter(n => !n.read && !isSnoozedAt(n, now));
   }
 
@@ -78,7 +135,7 @@ export class NotificationStore {
 
   /** Rows whose snooze has not elapsed, soonest-waking first. */
   get snoozed(): DBNotification[] {
-    const now = Date.now();
+    const now = this.clock;
     return this.all
       .filter(n => isSnoozedAt(n, now))
       .sort(
@@ -89,7 +146,7 @@ export class NotificationStore {
 
   /** The oldest unsnoozed row held — the `before` cursor for "Load more". */
   get oldestActiveCreatedAt(): string | null {
-    const now = Date.now();
+    const now = this.clock;
     let oldest: string | null = null;
     for (const n of this.pool.values()) {
       if (!isSnoozedAt(n, now) && (oldest === null || n.createdAt < oldest)) {
@@ -125,6 +182,13 @@ export class NotificationStore {
   // to the current user/org, so no userId filter is needed.
   markAllRead() {
     const now = new Date().toISOString();
+    // The server cleared every unread row, including ones beyond the pooled
+    // page. Leaving the old total/baseline made the badge keep the unpooled
+    // remainder (29 server - 7 pooled = 22) after "Mark all read".
+    if (this.serverUnread !== null) {
+      this.serverUnread = 0;
+      this.baselineUnread = 0;
+    }
     for (const [id, notification] of this.pool) {
       if (!notification.read) {
         this.pool.set(id, { ...notification, read: true, readAt: now });
@@ -133,6 +197,7 @@ export class NotificationStore {
   }
 
   upsertMany(notifications: DBNotification[]) {
+    this.clock = Date.now();
     for (const notification of notifications) {
       this.pool.set(notification.id, notification);
     }
@@ -153,6 +218,7 @@ export class NotificationStore {
   }
 
   reconcile(notifications: DBNotification[], limit: number, serverUnread?: number) {
+    this.clock = Date.now();
     this.hasMore = notifications.length >= limit;
     const returned = new Set(notifications.map(n => n.id));
     const oldest =
@@ -184,7 +250,8 @@ export class NotificationStore {
    */
   appendPage(notifications: DBNotification[], limit: number) {
     this.hasMore = notifications.length >= limit;
-    const now = Date.now();
+    this.clock = Date.now();
+    const now = this.clock;
     for (const n of notifications) {
       if (!this.pool.has(n.id) && !n.read && !isSnoozedAt(n, now)) {
         this.baselineUnread += 1;
@@ -194,6 +261,7 @@ export class NotificationStore {
   }
 
   optimisticUpdate(id: string, patch: Partial<DBNotification>) {
+    this.clock = Date.now();
     const existing = this.pool.get(id);
     if (existing) {
       this.pool.set(id, { ...existing, ...patch });
@@ -201,6 +269,7 @@ export class NotificationStore {
   }
 
   applySyncAction(actionType: string, id: string, data: DBNotification | null) {
+    this.clock = Date.now();
     applyPoolSyncAction(this.pool, actionType, id, data);
   }
 }

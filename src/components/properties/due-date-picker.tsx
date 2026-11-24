@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays } from 'lucide-react';
+import { CalendarClock, CalendarDays } from 'lucide-react';
 import { getDueDatePresets } from '@/components/properties/due-date-presets';
 import { PropertyPlaceholder } from '@/components/properties/property-placeholder';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
@@ -12,6 +12,12 @@ import { cn, TOUCH_TARGET } from '@/lib/utils';
 interface DueDatePickerProps {
   className?: string;
   forceOpen?: boolean;
+  /**
+   * Which date this picks. `start` gets its own icon, title and accessible
+   * name so it is never confused with the due-date chip beside it.
+   * @default 'due'
+   */
+  kind?: 'due' | 'start';
   /** Empty-state trigger text; defaults to "Due date". The start-date picker overrides it. */
   label?: string;
   onChange: (date: string | null) => void;
@@ -38,6 +44,7 @@ export function DueDatePicker({
   onChange,
   className,
   forceOpen,
+  kind = 'due',
   label,
   onClose,
   stateType,
@@ -48,6 +55,13 @@ export function DueDatePicker({
   const colorClass =
     tone === 'neutral' ? 'text-foreground-secondary' : getDueDateColor(value, stateType);
 
+  const isStart = kind === 'start';
+  const title = value
+    ? t(isStart ? 'properties.startDate.startsOn' : 'properties.dueDate.dueOn', {
+        date: formatDueDate(value),
+      })
+    : t(isStart ? 'properties.startDate.noStartDate' : 'properties.dueDate.noDueDate');
+
   return (
     <SelectPopover
       align="right"
@@ -55,8 +69,11 @@ export function DueDatePicker({
       forceOpen={forceOpen}
       onClose={onClose}
       panelClassName="min-w-[180px] p-1"
+      triggerAriaLabel={title}
       triggerChildren={
-        value ? formatDueDate(value) : (label ?? <PropertyPlaceholder icon={CalendarDays} />)
+        value
+          ? formatDueDate(value)
+          : (label ?? <PropertyPlaceholder icon={isStart ? CalendarClock : CalendarDays} />)
       }
       triggerClassName={cn(
         'px-1.5 py-1 text-xs',
@@ -64,11 +81,7 @@ export function DueDatePicker({
         'max-md:justify-start',
         value ? colorClass : 'text-muted-foreground',
       )}
-      triggerTitle={
-        value
-          ? t('properties.dueDate.dueOn', { date: formatDueDate(value) })
-          : t('properties.dueDate.noDueDate')
-      }
+      triggerTitle={title}
     >
       {close => (
         <>

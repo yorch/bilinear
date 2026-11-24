@@ -202,13 +202,21 @@ export class ProjectService {
     orgId: string,
     includeArchived = false,
     filter?: { statusType?: ProjectStatusType; health?: string; leadId?: string },
+    /** Only archived rows, most recently archived first — the Archived view's feed. */
+    archivedOnly = false,
   ): Promise<Project[]> {
     return this.prisma.project.findMany({
-      orderBy: [{ prioritySortOrder: 'desc' }, { createdAt: 'desc' }],
+      orderBy: archivedOnly
+        ? [{ archivedAt: 'desc' }, { id: 'asc' }]
+        : [{ prioritySortOrder: 'desc' }, { createdAt: 'desc' }],
       where: {
         organizationId: orgId,
         trashed: false,
-        ...(includeArchived ? {} : { archivedAt: null }),
+        ...(archivedOnly
+          ? { archivedAt: { not: null } }
+          : includeArchived
+            ? {}
+            : { archivedAt: null }),
         ...(filter?.statusType ? { statusType: filter.statusType } : {}),
         ...(filter?.health ? { health: filter.health } : {}),
         ...(filter?.leadId ? { leadId: filter.leadId } : {}),

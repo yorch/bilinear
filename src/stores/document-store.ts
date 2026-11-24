@@ -25,12 +25,45 @@ export class DocumentStore {
     return this.pool.get(id) ?? null;
   }
 
+  /**
+   * A live document is a list root when nothing visible would nest it: no
+   * parent, or a parent that is missing from the pool (not visible, deleted),
+   * archived, or part of a parent cycle. Filtering on `!parentId` alone made a
+   * restored or re-parented child vanish from every list — it was neither a
+   * root nor reachable under an absent parent.
+   */
+  isRoot(d: DBDocument): boolean {
+    if (!d.parentId) {
+      return true;
+    }
+    const parent = this.pool.get(d.parentId);
+    if (!parent || parent.archivedAt) {
+      return true;
+    }
+    // A cycle (legacy data) would hide every member; surface them instead.
+    const seen = new Set<string>([d.id]);
+    let cursor: DBDocument | undefined = parent;
+    while (cursor) {
+      if (seen.has(cursor.id)) {
+        return true;
+      }
+      seen.add(cursor.id);
+      cursor = cursor.parentId ? this.pool.get(cursor.parentId) : undefined;
+    }
+    return false;
+  }
+
+  /** Live roots across the whole workspace. */
+  getRoots(): DBDocument[] {
+    return this.all.filter(d => this.isRoot(d));
+  }
+
   getByTeamId(teamId: string): DBDocument[] {
-    return this.all.filter(d => d.teamId === teamId && !d.parentId);
+    return this.all.filter(d => d.teamId === teamId && this.isRoot(d));
   }
 
   getByProjectId(projectId: string): DBDocument[] {
-    return this.all.filter(d => d.projectId === projectId && !d.parentId);
+    return this.all.filter(d => d.projectId === projectId && this.isRoot(d));
   }
 
   getChildren(parentId: string): DBDocument[] {

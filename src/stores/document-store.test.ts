@@ -125,4 +125,73 @@ describe('DocumentStore', () => {
       expect(store.getByProjectId('p1').map(d => d.id)).toEqual(['live']);
     });
   });
+
+  describe('orphans are roots', () => {
+    it('lists a child whose parent is archived, missing or in a cycle', () => {
+      store.upsertMany([
+        makeDocument({ archivedAt: '2026-04-01T00:00:00Z', id: 'dead', teamId: 'team-a' }),
+        makeDocument({ id: 'under-archived', parentId: 'dead', teamId: 'team-a' }),
+        makeDocument({ id: 'under-missing', parentId: 'gone', teamId: 'team-a' }),
+        makeDocument({ id: 'c1', parentId: 'c2', teamId: 'team-a' }),
+        makeDocument({ id: 'c2', parentId: 'c1', teamId: 'team-a' }),
+        makeDocument({ id: 'top', teamId: 'team-a' }),
+        makeDocument({ id: 'nested', parentId: 'top', teamId: 'team-a' }),
+      ]);
+      const roots = store
+        .getByTeamId('team-a')
+        .map(d => d.id)
+        .sort();
+      expect(roots).toEqual(['c1', 'c2', 'top', 'under-archived', 'under-missing']);
+      expect(
+        store
+          .getRoots()
+          .map(d => d.id)
+          .sort(),
+      ).toEqual(roots);
+    });
+
+    it('scopes project roots the same way', () => {
+      store.upsertMany([makeDocument({ id: 'o', parentId: 'gone', projectId: 'p1' })]);
+      expect(store.getByProjectId('p1').map(d => d.id)).toEqual(['o']);
+    });
+
+    it('a restored child nests again once its parent is live', () => {
+      store.upsertMany([
+        makeDocument({ archivedAt: '2026-04-01T00:00:00Z', id: 'p', teamId: 't' }),
+        makeDocument({ id: 'k', parentId: 'p', teamId: 't' }),
+      ]);
+      expect(store.getByTeamId('t').map(d => d.id)).toEqual(['k']);
+      store.optimisticUpdate('p', { archivedAt: null });
+      expect(store.getByTeamId('t').map(d => d.id)).toEqual(['p']);
+    });
+  });
+
+  describe('getArchived ordering and scope', () => {
+    it('sorts most recently archived first', () => {
+      store.upsertMany([
+        makeDocument({ archivedAt: '2026-04-01T00:00:00Z', id: 'old' }),
+        makeDocument({ archivedAt: '2026-06-01T00:00:00Z', id: 'new' }),
+        makeDocument({ archivedAt: '2026-05-01T00:00:00Z', id: 'mid' }),
+      ]);
+      expect(store.getArchived({}).map(d => d.id)).toEqual(['new', 'mid', 'old']);
+    });
+
+    it('scopes by team', () => {
+      store.upsertMany([
+        makeDocument({ archivedAt: '2026-04-01T00:00:00Z', id: 'a', teamId: 'team-a' }),
+        makeDocument({ archivedAt: '2026-04-01T00:00:00Z', id: 'b', teamId: 'team-b' }),
+      ]);
+      expect(store.getArchived({ teamId: 'team-a' }).map(d => d.id)).toEqual(['a']);
+    });
+  });
+
+  describe('optimisticUpdate', () => {
+    it('patches the pooled row and ignores unknown ids', () => {
+      store.upsertMany([makeDocument({ id: 'd1', title: 'Before' })]);
+      store.optimisticUpdate('d1', { title: 'After' });
+      store.optimisticUpdate('ghost', { title: 'x' });
+      expect(store.findById('d1')?.title).toBe('After');
+      expect(store.pool.has('ghost')).toBe(false);
+    });
+  });
 });

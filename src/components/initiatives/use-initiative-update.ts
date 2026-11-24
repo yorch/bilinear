@@ -6,7 +6,6 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBInitiative } from '@/lib/db';
 import { gqlMutate } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /** The editable scalars; the store field name equals the GraphQL input name. */
@@ -38,9 +37,9 @@ export function useInitiativeUpdate() {
       try {
         await gqlMutate(INITIATIVE_UPDATE_MUTATION, { id, input: patch });
         return true;
-      } catch (err) {
+      } catch {
         initiativeStore.optimisticUpdate(id, previous as Partial<DBInitiative>);
-        toast.error(getErrorMessage(err, t('initiatives.detail.updateFailed')));
+        toast.error(t('initiatives.detail.updateFailed'));
         return false;
       }
     },

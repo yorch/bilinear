@@ -1941,6 +1941,8 @@ export const typeDefs = `
       first: Int
       after: String
       includeArchived: Boolean
+      "Only archived projects, most recently archived first (the Archived view's feed)."
+      archivedOnly: Boolean
     ): ProjectConnection!
     """
     The caller's notifications, newest first. 'before' pages older than a

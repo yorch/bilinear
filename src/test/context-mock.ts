@@ -57,7 +57,13 @@ class MockSyncService {
 // only needs `dispatchEvent` to resolve without throwing. Returning an empty
 // array mirrors the "no subscribers" path.
 class MockWebhookService {
-  async dispatchEvent(_orgId: string, _event: string, _data: object, _teamId?: string | null) {
+  async dispatchEvent(
+    _orgId: string,
+    _event: string,
+    _data: object,
+    _teamId?: string | null,
+    _opts?: { teamScopedOnly?: boolean },
+  ) {
     return [];
   }
 }

@@ -85,6 +85,39 @@ function isNativeActivationTarget(target: EventTarget | null): boolean {
   return (target as HTMLElement).isContentEditable || target.matches(NATIVE_ACTIVATION_SELECTOR);
 }
 
+/**
+ * Shared "a chord's first key was just pressed" flag. Every `useChord` writes
+ * it, every plain `useHotkeys` reads it: without it, `G` then `I` both ran the
+ * chord AND the single-key `i` (assign to me) because the two listeners see
+ * the same keydown. Cleared on a macrotask AFTER the second key's event so
+ * listener registration order cannot matter.
+ */
+let chordPending = false;
+let chordReleaseTimer: ReturnType<typeof setTimeout> | null = null;
+
+function setChordPending(): void {
+  if (chordReleaseTimer) {
+    clearTimeout(chordReleaseTimer);
+    chordReleaseTimer = null;
+  }
+  chordPending = true;
+}
+
+function releaseChordPending(delayMs = 0): void {
+  if (chordReleaseTimer) {
+    clearTimeout(chordReleaseTimer);
+  }
+  chordReleaseTimer = setTimeout(() => {
+    chordPending = false;
+    chordReleaseTimer = null;
+  }, delayMs);
+}
+
+/** Test seam: whether a chord is currently awaiting its second key. */
+export function isChordPending(): boolean {
+  return chordPending;
+}
+
 export interface HotkeyOptions {
   /**
    * When true, the shortcut fires even when focus is inside an input,
@@ -153,6 +186,12 @@ export function useHotkeys(
         return;
       }
 
+      // A chord (G then I, …) owns the next bare keypress; a standalone
+      // single-key binding must not also fire on its second key.
+      if (chordPending && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        return;
+      }
+
       // Bare Enter (and Space) is a plain activation key. When the focused
       // element is one the browser natively activates on that keypress (a
       // button, link, form control, or contenteditable region), defer to
@@ -190,11 +229,10 @@ export function useHotkeys(
  * be pressed. Both keys are single characters (no modifiers). The chord is
  * suppressed when focus is inside an input.
  *
- * Caveat: if a separate `useHotkeys` is registered for the same first key (e.g.
- * another `useHotkeys('g', ...)`) both handlers will fire when that key is
- * pressed alone. Currently no standalone 'g' shortcut exists in the codebase, so
- * this is safe. If one is added in future, give the chord priority by checking a
- * shared "awaiting chord" ref before running the standalone handler.
+ * While a chord is pending, plain `useHotkeys` bindings skip the next bare
+ * keypress (see `chordPending`), so `G` then `I` never also triggers a
+ * standalone `i`. A standalone binding on the chord's FIRST key still fires
+ * on that key itself — don't register one.
  */
 export function useChord(
   firstKey: string,
@@ -226,8 +264,10 @@ export function useChord(
       if (!awaitingSecond && key === firstKey.toLowerCase()) {
         e.preventDefault();
         awaitingSecond = true;
+        setChordPending();
         timer = setTimeout(() => {
           awaitingSecond = false;
+          releaseChordPending();
         }, 1000);
         return;
       }
@@ -237,6 +277,9 @@ export function useChord(
           clearTimeout(timer);
         }
         awaitingSecond = false;
+        // Keep the flag up for the rest of THIS event so a single-key
+        // listener that runs after us still sees the chord in flight.
+        releaseChordPending();
         if (key === secondKey.toLowerCase()) {
           e.preventDefault();
           handler(e);
@@ -249,6 +292,9 @@ export function useChord(
       window.removeEventListener('keydown', onKeyDown);
       if (timer) {
         clearTimeout(timer);
+      }
+      if (awaitingSecond) {
+        releaseChordPending();
       }
     };
   }, [firstKey, secondKey, handler, ...deps]);

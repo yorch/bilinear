@@ -11,7 +11,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { toIssueUsers } from '@/lib/issue-mappers';
 import { isValidProjectRange } from '@/lib/project-dates';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 interface CreateProjectModalProps {
@@ -100,8 +100,8 @@ export const CreateProjectModal = observer(function CreateProjectModal({
       });
       toast.success(t('projects.projectCreated'));
       onClose();
-    } catch (err) {
-      setSubmitError(getErrorMessage(err, t('projects.failedToCreate')));
+    } catch {
+      setSubmitError(t('projects.failedToCreate'));
     } finally {
       setSubmitting(false);
     }

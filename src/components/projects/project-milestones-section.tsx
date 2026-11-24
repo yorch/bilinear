@@ -11,7 +11,7 @@ import type { DBProjectMilestone } from '@/lib/db';
 import { gql } from '@/lib/graphql';
 import { formatDateOnly, toDateOnly } from '@/lib/project-dates';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
+import { cn, TOUCH_TARGET } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 const MILESTONE_FIELDS =
@@ -261,8 +261,8 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
         projectStore.applyMilestoneSyncAction('I', milestone.id, milestone);
       }
       setCreating(false);
-    } catch (err) {
-      toast.error(getErrorMessage(err, t('projects.failedToCreateMilestone')));
+    } catch {
+      toast.error(t('projects.failedToCreateMilestone'));
     }
   };
 
@@ -296,8 +296,8 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
         projectStore.applyMilestoneSyncAction('U', milestone.id, milestone);
       }
       setEditingId(null);
-    } catch (err) {
-      toast.error(getErrorMessage(err, t('projects.failedToUpdateMilestone')));
+    } catch {
+      toast.error(t('projects.failedToUpdateMilestone'));
     }
   };
 
@@ -315,8 +315,8 @@ export const ProjectMilestonesSection = observer(function ProjectMilestonesSecti
         );
       }
       projectStore.applyMilestoneSyncAction('D', id, null);
-    } catch (err) {
-      toast.error(getErrorMessage(err, t('projects.failedToDeleteMilestone')));
+    } catch {
+      toast.error(t('projects.failedToDeleteMilestone'));
     }
   };
 

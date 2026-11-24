@@ -1378,6 +1378,7 @@
     "layoutList": "Lista",
     "layoutTimeline": "Cronograma",
     "listViewShortcut": "Vista de lista (Alt+1)",
+    "markdownCopied": "Copiado como Markdown",
     "markedDuplicateToast": "Marcada como duplicada de {identifier}",
     "moreActions": "Más acciones",
     "moveIssue": "Mover {identifier}",
@@ -1718,6 +1719,8 @@
     "list": "Lista",
     "listView": "Vista de lista",
     "loadArchivedFailed": "No se pudieron cargar los proyectos archivados",
+    "loadMoreArchived": "Cargar más",
+    "loadMoreArchivedFailed": "No se pudieron cargar más proyectos archivados.",
     "members": "Miembros",
     "milestoneName": "Nombre del hito",
     "milestonesCount": "Hitos ({count})",
@@ -1839,6 +1842,10 @@
       "shareDescription": "Otros miembros pueden ver y usar esta vista",
       "shareWithTeam": "Compartir con el equipo",
       "title": "Guardar vista"
+    },
+    "startDate": {
+      "noStartDate": "Sin fecha de inicio",
+      "startsOn": "Empieza el {date}"
     },
     "status": {
       "noStatusesFound": "No se encontraron estados",

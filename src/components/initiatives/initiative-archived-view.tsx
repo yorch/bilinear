@@ -16,7 +16,6 @@ import { useTranslations } from '@/hooks/use-translations';
 import type { DBInitiative } from '@/lib/db';
 import { gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
-import { getErrorMessage } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /**
@@ -48,9 +47,9 @@ export const InitiativeArchivedView = observer(function InitiativeArchivedView()
     try {
       await gqlMutate(INITIATIVE_UNARCHIVE_MUTATION, { id: row.id });
       toast.success(t('initiatives.row.restored', { name: row.name }));
-    } catch (err) {
+    } catch {
       initiativeStore.optimisticUpdate(row.id, { archivedAt: row.archivedAt });
-      toast.error(getErrorMessage(err, t('initiatives.row.unarchiveFailed')));
+      toast.error(t('initiatives.row.unarchiveFailed'));
     } finally {
       setRestoringIds(prev => {
         const next = new Set(prev);

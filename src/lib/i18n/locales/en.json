@@ -1378,6 +1378,7 @@
     "layoutList": "List",
     "layoutTimeline": "Timeline",
     "listViewShortcut": "List view (Alt+1)",
+    "markdownCopied": "Copied as Markdown",
     "markedDuplicateToast": "Marked as a duplicate of {identifier}",
     "moreActions": "More actions",
     "moveIssue": "Move {identifier}",
@@ -1718,6 +1719,8 @@
     "list": "List",
     "listView": "List view",
     "loadArchivedFailed": "Couldn't load archived projects",
+    "loadMoreArchived": "Load more",
+    "loadMoreArchivedFailed": "Couldn't load more archived projects.",
     "members": "Members",
     "milestoneName": "Milestone name",
     "milestonesCount": "Milestones ({count})",
@@ -1839,6 +1842,10 @@
       "shareDescription": "Other members can see and use this view",
       "shareWithTeam": "Share with team",
       "title": "Save view"
+    },
+    "startDate": {
+      "noStartDate": "No start date",
+      "startsOn": "Starts {date}"
     },
     "status": {
       "noStatusesFound": "No statuses found",

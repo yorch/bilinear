@@ -217,3 +217,78 @@ describe('useChord', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 });
+
+describe('chord vs single-key hotkeys', () => {
+  afterEach(() => {
+    vi.runAllTimers();
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  // Both registration orders: the fix must not depend on which window
+  // listener runs first for the second key's event.
+  it.each([
+    ['hotkey registered first', true],
+    ['chord registered first', false],
+  ])('G then I runs the chord and NOT the single-key i (%s)', (_name, hotkeyFirst) => {
+    vi.useFakeTimers();
+    const single = vi.fn();
+    const chord = vi.fn();
+    const mountHotkey = () => renderHook(() => useHotkeys('i', single));
+    const mountChord = () => renderHook(() => useChord('g', 'i', chord));
+    if (hotkeyFirst) {
+      mountHotkey();
+      mountChord();
+    } else {
+      mountChord();
+      mountHotkey();
+    }
+
+    act(() => {
+      dispatchKeyDown({ key: 'g' });
+      dispatchKeyDown({ key: 'i' });
+    });
+
+    expect(chord).toHaveBeenCalledTimes(1);
+    expect(single).not.toHaveBeenCalled();
+  });
+
+  it('a plain i fires again once the chord has completed', () => {
+    vi.useFakeTimers();
+    const single = vi.fn();
+    renderHook(() => useHotkeys('i', single));
+    renderHook(() => useChord('g', 'i', vi.fn()));
+
+    act(() => {
+      dispatchKeyDown({ key: 'g' });
+      dispatchKeyDown({ key: 'i' });
+    });
+    act(() => {
+      vi.advanceTimersByTime(5);
+    });
+    act(() => {
+      dispatchKeyDown({ key: 'i' });
+    });
+
+    expect(single).toHaveBeenCalledTimes(1);
+  });
+
+  it('a plain i fires after an abandoned chord times out', () => {
+    vi.useFakeTimers();
+    const single = vi.fn();
+    renderHook(() => useHotkeys('i', single));
+    renderHook(() => useChord('g', 'i', vi.fn()));
+
+    act(() => {
+      dispatchKeyDown({ key: 'g' });
+    });
+    act(() => {
+      vi.advanceTimersByTime(1100);
+    });
+    act(() => {
+      dispatchKeyDown({ key: 'i' });
+    });
+
+    expect(single).toHaveBeenCalledTimes(1);
+  });
+});

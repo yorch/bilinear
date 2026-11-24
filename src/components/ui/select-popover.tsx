@@ -24,6 +24,8 @@ interface SelectPopoverProps {
   onClose?: () => void;
   panelClassName?: string;
   panelDataTestId?: string;
+  /** Accessible name for the trigger when its visible text (a bare date, an icon) names no field. */
+  triggerAriaLabel?: string;
   triggerChildren: ReactNode;
   triggerClassName?: string;
   triggerTitle?: string;
@@ -52,6 +54,7 @@ export function SelectPopover({
   onClose,
   panelClassName,
   panelDataTestId,
+  triggerAriaLabel,
   triggerChildren,
   triggerClassName,
   triggerTitle,
@@ -79,6 +82,7 @@ export function SelectPopover({
         aria-controls={open ? panelId : undefined}
         aria-expanded={open}
         aria-haspopup="listbox"
+        aria-label={triggerAriaLabel}
         className={cn(
           'flex items-center rounded hover:bg-accent',
           'disabled:cursor-not-allowed disabled:opacity-50',

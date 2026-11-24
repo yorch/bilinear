@@ -34,7 +34,7 @@ import { gql, gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toIssueUsers } from '@/lib/issue-mappers';
 import { formatDateOnly } from '@/lib/project-dates';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
+import { cn, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /**
@@ -173,9 +173,9 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
     try {
       await gqlMutate(INITIATIVE_ARCHIVE_MUTATION, { id: initiative.id });
       toast.undo(t('initiatives.row.archived'), t('common.undo'), () => void handleUnarchive());
-    } catch (err) {
+    } catch {
       initiativeStore.optimisticUpdate(initiative.id, { archivedAt: null });
-      toast.error(getErrorMessage(err, t('initiatives.row.archiveFailed')));
+      toast.error(t('initiatives.row.archiveFailed'));
     }
   };
 
@@ -190,9 +190,9 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
     initiativeStore.optimisticUpdate(initiative.id, { status });
     try {
       await gqlMutate(INITIATIVE_UPDATE_MUTATION, { id: initiative.id, input: { status } });
-    } catch (err) {
+    } catch {
       initiativeStore.optimisticUpdate(initiative.id, { status: previous });
-      toast.error(getErrorMessage(err, t('initiatives.row.statusUpdateFailed')));
+      toast.error(t('initiatives.row.statusUpdateFailed'));
     }
   };
 
@@ -200,11 +200,11 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
     initiativeStore.optimisticUpdate(initiative.id, { archivedAt: null });
     try {
       await gqlMutate(INITIATIVE_UNARCHIVE_MUTATION, { id: initiative.id });
-    } catch (err) {
+    } catch {
       initiativeStore.optimisticUpdate(initiative.id, {
         archivedAt: new Date().toISOString(),
       });
-      toast.error(getErrorMessage(err, t('initiatives.row.unarchiveFailed')));
+      toast.error(t('initiatives.row.unarchiveFailed'));
     }
   };
 
@@ -218,9 +218,9 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
     initiativeStore.optimisticUpdate(initiative.id, { name });
     try {
       await gqlMutate(INITIATIVE_UPDATE_MUTATION, { id: initiative.id, input: { name } });
-    } catch (err) {
+    } catch {
       initiativeStore.optimisticUpdate(initiative.id, { name: previous });
-      toast.error(getErrorMessage(err, t('initiatives.row.renameFailed')));
+      toast.error(t('initiatives.row.renameFailed'));
     }
   };
 
@@ -228,8 +228,8 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
     try {
       await gqlMutate(INITIATIVE_DELETE_MUTATION, { id: initiative.id });
       toast.success(t('initiatives.row.deleted'));
-    } catch (err) {
-      toast.error(getErrorMessage(err, t('initiatives.row.deleteFailed')));
+    } catch {
+      toast.error(t('initiatives.row.deleteFailed'));
     }
   };
 

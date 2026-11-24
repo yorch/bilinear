@@ -706,7 +706,10 @@ export const issueResolvers = {
           }
           continue;
         }
-        if (!implicit && (!(field in input) || (input as Record<string, unknown>)[field] === undefined)) {
+        if (
+          !implicit &&
+          (!(field in input) || (input as Record<string, unknown>)[field] === undefined)
+        ) {
           continue;
         }
         const oldStr = issueFieldToString(existing, field);

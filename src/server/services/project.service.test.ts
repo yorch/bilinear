@@ -206,6 +206,30 @@ describe('ProjectService', () => {
     });
   });
 
+  describe('findByOrgId archive scoping', () => {
+    beforeEach(() => {
+      prisma.project.findMany.mockResolvedValue([]);
+    });
+    const callArg = () =>
+      (prisma.project.findMany.mock.calls[0] as [{ orderBy: unknown; where: object }])[0];
+
+    it('hides archived rows by default', async () => {
+      await service.findByOrgId(TEST_ORG.id);
+      expect(callArg().where).toMatchObject({ archivedAt: null });
+    });
+
+    it('includeArchived returns live and archived together', async () => {
+      await service.findByOrgId(TEST_ORG.id, true);
+      expect(callArg().where).not.toHaveProperty('archivedAt');
+    });
+
+    it('archivedOnly returns only archived rows, newest-archived first', async () => {
+      await service.findByOrgId(TEST_ORG.id, false, undefined, true);
+      expect(callArg().where).toMatchObject({ archivedAt: { not: null } });
+      expect(callArg().orderBy).toEqual([{ archivedAt: 'desc' }, { id: 'asc' }]);
+    });
+  });
+
   describe('archive / delete', () => {
     it('archive sets archivedAt', async () => {
       prisma.project.update.mockResolvedValue(TEST_PROJECT);

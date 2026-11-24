@@ -708,6 +708,7 @@ export const projectResolvers = {
         first?: number;
         after?: string;
         includeArchived?: boolean;
+        archivedOnly?: boolean;
       },
       ctx: GraphQLContext,
     ) => {
@@ -717,6 +718,7 @@ export const projectResolvers = {
         ctx.orgId,
         args.includeArchived ?? false,
         args.filter,
+        args.archivedOnly ?? false,
       );
 
       // Cursor pagination

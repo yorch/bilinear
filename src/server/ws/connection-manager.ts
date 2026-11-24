@@ -1,5 +1,6 @@
 import type { WebSocket } from 'ws';
 import { isUnrestricted, type SyncVisibility } from '@/server/lib/sync-visibility';
+import { dropForeignNotifications } from '@/server/services/sync.service';
 
 export interface ClientInfo {
   orgId: string;
@@ -118,13 +119,24 @@ export class ConnectionManager {
     const filteredByUser = new Map<string, Promise<string | null>>();
     const pending: Promise<void>[] = [];
     for (const info of set) {
+      // A Notification row belongs to one recipient and must never reach any
+      // other socket, restricted or not — so the shared frame is only safe
+      // when this user's own view of the batch is identical to the whole batch.
+      const own = dropForeignNotifications(
+        actions as unknown as Array<{ data: unknown; modelName: string }>,
+        info.userId,
+      ) as unknown as T[];
       if (!info.visibility) {
-        this.sendTo(info, full);
+        if (own.length === actions.length) {
+          this.sendTo(info, full);
+        } else if (own.length > 0) {
+          this.sendTo(info, JSON.stringify({ cmd: 'sync', sync: own }));
+        }
         continue;
       }
       let frame = filteredByUser.get(info.userId);
       if (!frame) {
-        frame = filter(info.visibility, actions).then(visible =>
+        frame = filter(info.visibility, own).then(visible =>
           visible.length > 0 ? JSON.stringify({ cmd: 'sync', sync: visible }) : null,
         );
         filteredByUser.set(info.userId, frame);

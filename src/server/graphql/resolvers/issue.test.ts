@@ -269,6 +269,92 @@ describe('issueResolvers', () => {
       expect(result.issue?.title).toBe('Updated');
     });
 
+    describe('team move side effects', () => {
+      const OPS = '00000000-0000-0000-0000-0000000000d4';
+      const OLD_CYCLE = '00000000-0000-0000-0000-0000000000c1';
+      const OLD_STATE = TEST_ISSUE.stateId;
+
+      async function move() {
+        const before = { ...TEST_ISSUE, cycleId: OLD_CYCLE };
+        const after = {
+          ...TEST_ISSUE,
+          cycleId: null,
+          identifier: 'OPS-7',
+          stateId: 'ops-state',
+          teamId: OPS,
+        };
+        ctx.prisma.issue.findUnique.mockResolvedValue(before);
+        ctx.prisma.issue.count.mockResolvedValue(0);
+        ctx.prisma.issue.update.mockResolvedValue(after);
+        ctx.prisma.team.findFirst.mockResolvedValue({ id: OPS });
+        ctx.prisma.team.update.mockResolvedValue({
+          defaultIssueStateId: 'ops-state',
+          issueCount: 7,
+          key: 'OPS',
+        });
+        ctx.prisma.workflowState.findUnique.mockResolvedValue({ name: 'Todo', type: 'unstarted' });
+        ctx.prisma.workflowState.findMany.mockResolvedValue([
+          { id: 'ops-state', name: 'Todo', type: 'unstarted' },
+        ]);
+        ctx.prisma.workflowState.findFirst.mockResolvedValue({ teamId: OPS, type: 'unstarted' });
+        ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+          team: { organizationId: TEST_ORG.id },
+          teamId: TEST_TEAM.id,
+          userId: TEST_USER.id,
+        });
+        const activity = vi
+          .spyOn(ctx.services.issueActivity, 'createMany')
+          .mockResolvedValue(undefined as never);
+        const status = vi
+          .spyOn(ctx.services.notification, 'createForStatusChange')
+          .mockResolvedValue(undefined as never);
+        const webhook = vi.spyOn(ctx.services.webhook, 'dispatchEvent');
+        const result = await issueResolvers.Mutation.issueUpdate(
+          null,
+          { id: TEST_ISSUE.id, input: { teamId: OPS } },
+          ctx as never,
+        );
+        return { activity, result, status, webhook };
+      }
+
+      it('records team, status and cycle activity from the returned row', async () => {
+        const { activity } = await move();
+        const entries = activity.mock.calls[0][0] as unknown as Array<Record<string, unknown>>;
+        const byField = Object.fromEntries(entries.map(e => [e.field, e]));
+        expect(byField.teamId).toMatchObject({ newValue: 'OPS-7', oldValue: 'ENG-1' });
+        expect(byField.stateId).toMatchObject({ newValue: 'ops-state', oldValue: OLD_STATE });
+        expect(byField.cycleId).toMatchObject({ oldValue: OLD_CYCLE });
+        expect(byField.cycleId?.newValue).toBeUndefined();
+      });
+
+      it('notifies the implicit status change', async () => {
+        const { status } = await move();
+        expect(status).toHaveBeenCalledWith(
+          TEST_ORG.id,
+          TEST_ISSUE.id,
+          TEST_USER.id,
+          OLD_STATE,
+          'ops-state',
+        );
+      });
+
+      it('dispatches the webhook to the destination team AND the team it left', async () => {
+        const { webhook } = await move();
+        await vi.waitFor(() => expect(webhook).toHaveBeenCalledTimes(2));
+        const calls = webhook.mock.calls;
+        expect(calls.some(c => c[3] === OPS && !c[4])).toBe(true);
+        expect(calls.some(c => c[3] === TEST_TEAM.id && c[4]?.teamScopedOnly === true)).toBe(true);
+      });
+
+      it('reports the labels dropped by the move', async () => {
+        ctx.prisma.issueLabelAssignment.findMany.mockResolvedValue([
+          { label: { name: 'eng-only', teamId: TEST_TEAM.id }, labelId: 'l1' },
+        ]);
+        const { result } = await move();
+        expect(result.droppedLabelNames).toEqual(['eng-only']);
+      });
+    });
+
     it('auto-subscribes the actor on any update', async () => {
       const updated = { ...TEST_ISSUE, title: 'Updated' };
       ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);

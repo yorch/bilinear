@@ -729,7 +729,7 @@ export class IssueService {
           where: { issueId: id },
         });
         const staleLabels = (stale ?? []).filter(
-          a => a.label.teamId != null && a.label.teamId === effectiveTeamId,
+          a => a.label.teamId != null && a.label.teamId !== effectiveTeamId,
         );
         if (staleLabels.length > 0) {
           await tx.issueLabelAssignment.deleteMany({

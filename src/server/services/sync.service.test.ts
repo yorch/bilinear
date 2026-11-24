@@ -427,6 +427,29 @@ describe('SyncService — private-team visibility (hiddenTeamIds)', () => {
     });
   });
 
+  it('delta turns an issue that moved INTO a hidden team into a delete, so the stale copy goes', async () => {
+    prisma.$queryRaw.mockResolvedValue([
+      row(1, 'Issue', { id: 'i-moved', movedFromTeamId: OPEN_TEAM, teamId: HIDDEN_TEAM }),
+      row(2, 'Issue', { id: 'i-edit', teamId: HIDDEN_TEAM }),
+      row(3, 'Issue', { id: 'i-both', movedFromTeamId: HIDDEN_TEAM, teamId: HIDDEN_TEAM }),
+    ]);
+    prisma.issue.findMany.mockResolvedValue([]);
+
+    const result = await svc.getDeltaSyncActions(
+      TEST_ORG.id,
+      parseCursor('0'),
+      undefined,
+      50,
+      scope,
+    );
+
+    // Only the row that left a team the viewer COULD see becomes a delete;
+    // ordinary edits inside the hidden team stay invisible, and a move between
+    // two hidden teams never reveals anything.
+    expect(result.actions.map(a => `${a.action}:${a.modelId}`)).toEqual(['D:i-moved']);
+    expect(result.actions[0].data).toBeNull();
+  });
+
   it('bootstrap adds no team clauses for an unrestricted caller', async () => {
     mockEmptyBootstrap(prisma);
     prisma.$queryRaw.mockResolvedValue([{ id: BigInt(1), xactId: '10' }]);
@@ -685,5 +708,46 @@ describe('SyncService — atomic write helpers', () => {
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     expect(redis.publish).toHaveBeenCalledTimes(1);
     expect(result.xactId).toBe(BigInt(1100));
+  });
+});
+
+describe('SyncService — Notification rows are per-recipient', () => {
+  let prisma: MockPrismaClient;
+  let svc: SyncService;
+  const notif = (id: bigint, userId: string) =>
+    makeRawRow(id, '10', {
+      data: { id: `n${id}`, title: 'secret', userId },
+      modelId: `n${id}`,
+      modelName: 'Notification',
+    });
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    svc = new SyncService(prisma as never, mockRedis);
+    prisma.organization.findUnique.mockResolvedValue({ syncActionsPrunedThroughXactId: null });
+    prisma.$queryRaw.mockResolvedValue([
+      notif(BigInt(1), 'user-1'),
+      notif(BigInt(2), 'someone-else'),
+      makeRawRow(BigInt(3), '10'),
+    ]);
+  });
+
+  it('delta serves an unrestricted caller only their own Notification rows', async () => {
+    const result = await svc.getDeltaSyncActions(
+      TEST_ORG.id,
+      parseCursor('0'),
+      undefined,
+      50,
+      UNRESTRICTED,
+    );
+    expect(result.actions.map(a => a.id)).toEqual([BigInt(1), BigInt(3)]);
+  });
+
+  it('delta serves a restricted caller only their own Notification rows', async () => {
+    const result = await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'), undefined, 50, {
+      ...UNRESTRICTED,
+      hiddenTeamIds: ['t-hidden'],
+    });
+    expect(result.actions.map(a => a.id)).toEqual([BigInt(1), BigInt(3)]);
   });
 });

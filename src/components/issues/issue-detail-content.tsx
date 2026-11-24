@@ -390,6 +390,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
 
       <span className={labelClass}>{t('issueDetail.properties.startDate')}</span>
       <DueDatePicker
+        kind="start"
         onChange={startDate => handleUpdate(issue.id, { startDate })}
         tone="neutral"
         value={issue.startDate}

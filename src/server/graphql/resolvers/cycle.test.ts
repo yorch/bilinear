@@ -146,7 +146,7 @@ describe('cycleResolvers Mutation.cycleUnarchive', () => {
     ctx.orgRole = 'guest';
 
     await testAuthGuard(
-      (cycleResolvers.Mutation as Record<string, never>)[name],
+      (cycleResolvers.Mutation as unknown as Record<string, never>)[name],
       args,
       ctx,
       'FORBIDDEN',
