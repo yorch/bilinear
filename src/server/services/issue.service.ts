@@ -502,7 +502,7 @@ export class IssueService {
     id: string,
     input: IssueUpdateInput,
     txHook?: IssueUpdateTxHook,
-  ): Promise<{ issue: Issue; cascaded: Issue[] }> {
+  ): Promise<{ issue: Issue; cascaded: Issue[]; droppedLabelNames: string[] }> {
     assertValidTitle(input.title);
     assertValidDescription(input.description);
     assertValidPriority(input.priority);
@@ -595,13 +595,28 @@ export class IssueService {
       // state. A cycle belongs to one team, so it never travels with the issue.
       let effectiveTeamId = existing.teamId;
       let nextStateId = input.stateId;
+      let isTeamMove = false;
+      let existingStateType: string | null = null;
       if (input.teamId !== undefined && input.teamId !== existing.teamId) {
+        isTeamMove = true;
+        // An archived team is read-only history; nothing may be moved into it.
         const target = await tx.team.findFirst({
           select: { id: true },
-          where: { id: input.teamId, organizationId: existing.organizationId },
+          where: { archivedAt: null, id: input.teamId, organizationId: existing.organizationId },
         });
         if (!target) {
           throw new IssueInvalidReferenceError('teamId');
+        }
+        // Sub-issues would be stranded in the old team (their identifiers,
+        // states and cycle all belong to it). Moving a tree is not supported;
+        // refuse rather than leave a cross-team hierarchy half-moved.
+        const childCount = await tx.issue.count({
+          where: { archivedAt: null, parentId: id },
+        });
+        if (childCount > 0) {
+          throw new IssueValidationError(
+            'This issue has sub-issues. Move or detach them before moving the issue to another team.',
+          );
         }
         const moved = await tx.team.update({
           data: { issueCount: { increment: 1 } },
@@ -612,6 +627,11 @@ export class IssueService {
         data.number = moved.issueCount;
         data.identifier = `${moved.key}-${moved.issueCount}`;
         data.previousIdentifiers = { push: existing.identifier };
+        const currentState = await tx.workflowState.findUnique({
+          select: { type: true },
+          where: { id: existing.stateId },
+        });
+        existingStateType = currentState?.type ?? null;
         if (!('cycleId' in input)) {
           data.cycleId = null;
           data.addedToCycleAt = null;
@@ -646,7 +666,13 @@ export class IssueService {
           throw new IssueInvalidStateError();
         }
         newStateType = state.type;
-        if (nextStateId !== existing.stateId) {
+        // A team move remaps the state id even when the workflow position is
+        // unchanged (same TYPE in the new team). That is not a transition:
+        // keep startedAt/completedAt/canceledAt or cycle-time analytics are
+        // re-stamped to "now" by a mere re-home.
+        const isTransition =
+          nextStateId !== existing.stateId && !(isTeamMove && state.type === existingStateType);
+        if (isTransition) {
           const now = new Date();
           // First-set semantics for startedAt/completedAt/canceledAt:
           // stamp on transition into the matching category, clear when
@@ -670,7 +696,7 @@ export class IssueService {
       await this.validateReferences(
         tx,
         existing.organizationId,
-        [existing.teamId],
+        [effectiveTeamId],
         {
           assigneeId: input.assigneeId,
           cycleId: input.cycleId,
@@ -681,6 +707,10 @@ export class IssueService {
         existing.projectId,
       );
       if (input.parentId) {
+        // Serialise every parent write in the org: the cycle check below is a
+        // read-then-write that READ COMMITTED does not protect, so two
+        // concurrent opposite re-parents would each pass it and form a loop.
+        await this.lockParentWrites(tx, existing.organizationId);
         await this.assertNoParentCycle(tx, [id], input.parentId);
       }
 
@@ -688,6 +718,34 @@ export class IssueService {
 
       if (input.labelIds !== undefined) {
         await this.syncLabels(tx, id, existing.organizationId, input.labelIds);
+      }
+
+      // Related data that is scoped to the OLD team must not follow the issue.
+      const droppedLabelNames: string[] = [];
+      let customFieldValues: Awaited<ReturnType<typeof tx.customFieldValue.findMany>> | undefined;
+      if (isTeamMove) {
+        const stale = await tx.issueLabelAssignment.findMany({
+          select: { label: { select: { name: true, teamId: true } }, labelId: true },
+          where: { issueId: id },
+        });
+        const staleLabels = (stale ?? []).filter(
+          a => a.label.teamId != null && a.label.teamId !== effectiveTeamId,
+        );
+        if (staleLabels.length > 0) {
+          await tx.issueLabelAssignment.deleteMany({
+            where: { issueId: id, labelId: { in: staleLabels.map(a => a.labelId) } },
+          });
+          droppedLabelNames.push(...staleLabels.map(a => a.label.name));
+        }
+        const removed = await tx.customFieldValue.deleteMany({
+          where: {
+            definition: { AND: [{ teamId: { not: null } }, { teamId: { not: effectiveTeamId } }] },
+            issueId: id,
+          },
+        });
+        if (removed?.count > 0) {
+          customFieldValues = await tx.customFieldValue.findMany({ where: { issueId: id } });
+        }
       }
 
       const cascaded: Issue[] = [];
@@ -731,6 +789,7 @@ export class IssueService {
       // labels to [] on every connected client — and persists that to Dexie.
       const withLabels = {
         ...issue,
+        ...(customFieldValues ? { customFieldValues } : {}),
         labelAssignments: await tx.issueLabelAssignment.findMany({
           select: { labelId: true },
           where: { issueId: id },
@@ -741,7 +800,7 @@ export class IssueService {
       // transaction so the markers can't survive a rollback of the writes.
       await txHook?.(tx, { cascaded, issue: withLabels });
 
-      return { cascaded, issue: withLabels };
+      return { cascaded, droppedLabelNames, issue: withLabels };
     });
   }
 
@@ -934,6 +993,7 @@ export class IssueService {
         projectMilestoneId: input.projectMilestoneId,
       });
       if (input.parentId) {
+        await this.lockParentWrites(tx, orgId);
         await this.assertNoParentCycle(tx, ids, input.parentId);
       }
 
@@ -1259,6 +1319,16 @@ export class IssueService {
    * which means a milestone with no explicit project reference at all is
    * rejected outright — a milestone can't float free of a project.
    */
+  /**
+   * Transaction-scoped advisory lock serialising parent-link writes for one
+   * org. `assertNoParentCycle` is check-then-write; without this two
+   * concurrent opposite re-parents both pass the check and form a loop.
+   * Released automatically at commit/rollback.
+   */
+  private async lockParentWrites(tx: Pick<PrismaClient, '$queryRaw'>, orgId: string) {
+    await tx.$queryRaw`SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${`issue-parent:${orgId}`}, 0))) AS l`;
+  }
+
   /**
    * Reject a parent link that would make an issue its own ancestor: the new
    * parent must not be one of `ids`, nor sit below one of them. Walks up from

@@ -1088,6 +1088,7 @@
         "project": "project",
         "startDate": "start date",
         "status": "status",
+        "team": "team",
         "title": "title",
         "trashed": "trash"
       },

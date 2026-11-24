@@ -1088,6 +1088,7 @@
         "project": "proyecto",
         "startDate": "fecha de inicio",
         "status": "estado",
+        "team": "equipo",
         "title": "título",
         "trashed": "papelera"
       },
