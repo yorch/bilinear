@@ -8,7 +8,6 @@ describe('RootStore.clearEntityPools', () => {
     store.teamStore.upsertMany([{ id: 't-1' }] as never);
     store.issueStore.upsertMany([{ id: 'i-1', identifier: 'ENG-1' }] as never);
     store.projectStore.upsertMany([{ id: 'p-1' }] as never);
-    store.notificationStore.upsertMany([{ id: 'n-1' }] as never);
 
     expect(store.teamStore.pool.size).toBe(1);
     expect(store.issueStore.pool.size).toBe(1);
@@ -18,7 +17,23 @@ describe('RootStore.clearEntityPools', () => {
     expect(store.teamStore.pool.size).toBe(0);
     expect(store.issueStore.pool.size).toBe(0);
     expect(store.projectStore.pool.size).toBe(0);
-    expect(store.notificationStore.pool.size).toBe(0);
+  });
+
+  it('leaves the per-user fetch-owned stores alone', () => {
+    // Regression: the bootstrap stream carries no Notification or Favorite
+    // rows, so wiping them after `useNotificationSync` / the sidebar had filled
+    // them emptied the inbox (and zeroed its unread badge) and un-starred every
+    // favourite until the next poll.
+    const store = new RootStore();
+    store.notificationStore.upsertMany([{ id: 'n-1' }] as never);
+    store.favoriteStore.replaceAll([
+      { entityId: 'p-1', entityType: 'Project', id: 'f-1', sortOrder: 1 },
+    ] as never);
+
+    store.clearEntityPools();
+
+    expect(store.notificationStore.pool.size).toBe(1);
+    expect(store.favoriteStore.getByEntityId('p-1')).not.toBeNull();
   });
 
   it('reaches the secondary maps on stores that hold more than one', () => {

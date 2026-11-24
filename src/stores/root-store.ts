@@ -19,6 +19,14 @@ import { UIStore } from './ui-store';
 import { UserStore } from './user-store';
 import { WorkflowStateStore } from './workflow-state-store';
 
+/** Stores `clearEntityPools` must leave alone — see its doc comment. */
+const FETCH_OWNED_STORES: ReadonlySet<string> = new Set([
+  'favoriteStore',
+  'notificationStore',
+  'syncStore',
+  'uiStore',
+]);
+
 export class RootStore {
   customFieldStore: CustomFieldStore;
   customViewStore: CustomViewStore;
@@ -77,6 +85,12 @@ export class RootStore {
    * on CustomFieldStore), and a hand-maintained list is precisely the kind of
    * thing that silently misses the next map someone adds.
    *
+   * `notificationStore` and `favoriteStore` are excluded too: they are
+   * per-user models the bootstrap stream never carries, so they are owned by
+   * their own fetches (`useNotificationSync`, the sidebar's favourites query).
+   * Clearing them here left the inbox and the favourite stars empty, with
+   * nothing to refill them until the next poll.
+   *
    * `syncStore` and `uiStore` are excluded — they hold session and UI state,
    * not synced entities, and wiping them mid-bootstrap would drop the very
    * status the bootstrap is reporting through.
@@ -84,7 +98,7 @@ export class RootStore {
   clearEntityPools(): void {
     runInAction(() => {
       for (const [name, store] of Object.entries(this)) {
-        if (name === 'syncStore' || name === 'uiStore' || typeof store !== 'object' || !store) {
+        if (FETCH_OWNED_STORES.has(name) || typeof store !== 'object' || !store) {
           continue;
         }
         for (const value of Object.values(store)) {
