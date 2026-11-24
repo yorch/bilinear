@@ -1,13 +1,11 @@
 import { GraphQLError } from 'graphql';
 import type { IssueRelation } from '../../../generated/prisma';
+import { visibleEntityIds } from '../../lib/entity-visibility';
 import { logger } from '../../lib/logger';
-import {
-  requireAuth,
-  requireIssueAccessNotGuestOrOwn,
-  requireTeamMember,
-} from '../../middleware/auth';
+import { requireAuth, requireIssueAccessNotGuestOrOwn } from '../../middleware/auth';
 import type { IssueRelationCreateInput } from '../../services/issue-relation.service';
 import type { GraphQLContext } from '../context';
+import { getRequestVisibility } from '../request-visibility';
 
 export const issueRelationResolvers = {
   IssueRelation: {
@@ -151,8 +149,16 @@ export const issueRelationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
-      return ctx.services.issueRelation.findByIssueId(issueId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
+      const relations = await ctx.services.issueRelation.findByIssueId(issueId);
+      // A relation can point at an issue in a private team (or, for a guest,
+      // someone else's work) — `relatedIssue { title }` would leak it.
+      const otherIds = relations.map(r => (r.issueId === issueId ? r.relatedIssueId : r.issueId));
+      const vis = await getRequestVisibility(ctx);
+      const visible = await visibleEntityIds(ctx.prisma, vis, ctx.orgId, 'Issue', otherIds);
+      return relations.filter(r =>
+        visible.has(r.issueId === issueId ? r.relatedIssueId : r.issueId),
+      );
     },
   },
 };

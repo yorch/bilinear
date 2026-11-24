@@ -1,13 +1,15 @@
-import type { Notification, NotificationType, PrismaClient } from '../../generated/prisma';
+import type { Notification, NotificationType, Prisma, PrismaClient } from '../../generated/prisma';
 import {
   sendAssignmentNotificationEmail,
   sendCommentNotificationEmail,
   sendMentionNotificationEmail,
   sendStatusChangeNotificationEmail,
 } from '../lib/email';
+import { isIssueVisible } from '../lib/entity-visibility';
 import { env } from '../lib/env';
 import { DEFAULT_LIST_LIMIT } from '../lib/limits';
 import { childLogger } from '../lib/logger';
+import { getSyncVisibility, getSyncVisibilityBatch } from '../lib/sync-visibility';
 
 const log = childLogger({ module: 'notification' });
 
@@ -46,6 +48,76 @@ export class NotificationService {
     return this.prisma.notification.findUnique({ where: { id } });
   }
 
+  /**
+   * Narrow a user's notifications to issues they can still see. A notification
+   * outlives the access that produced it (the issue moved into a private team,
+   * the user was demoted to guest), and its row carries the issue id and an
+   * excerpt — so rows pointing at a hidden issue are left out of every read.
+   */
+  private async issueVisibilityWhere(
+    userId: string,
+    orgId: string,
+  ): Promise<Prisma.NotificationWhereInput> {
+    const vis = await getSyncVisibility(this.prisma, userId, orgId);
+    if (vis.hiddenTeamIds.length === 0 && vis.guestTeamIds.length === 0) {
+      return {};
+    }
+    return {
+      OR: [
+        { issueId: null },
+        {
+          issue: {
+            AND: [
+              ...(vis.hiddenTeamIds.length > 0 ? [{ teamId: { notIn: vis.hiddenTeamIds } }] : []),
+              ...(vis.guestTeamIds.length > 0
+                ? [
+                    {
+                      OR: [
+                        { teamId: { notIn: vis.guestTeamIds } },
+                        { creatorId: userId },
+                        { assigneeId: userId },
+                      ],
+                    },
+                  ]
+                : []),
+            ],
+          },
+        },
+      ],
+    };
+  }
+
+  /**
+   * Recipients (of `userIds`) who may still see `issueId`. Every fan-out path
+   * runs its candidate list through this — a subscriber or @mentioned user
+   * who lost access (issue moved to a private team, demoted to guest) must
+   * not receive a row or an email carrying the issue's title or excerpt.
+   */
+  async filterVisibleRecipients(
+    orgId: string,
+    issueId: string,
+    userIds: readonly string[],
+  ): Promise<string[]> {
+    if (userIds.length === 0) {
+      return [];
+    }
+    const issue = await this.prisma.issue.findUnique({
+      select: { assigneeId: true, creatorId: true, organizationId: true, teamId: true },
+      where: { id: issueId },
+    });
+    if (!issue || issue.organizationId !== orgId) {
+      return [];
+    }
+    const scopes = await getSyncVisibilityBatch(
+      this.prisma,
+      userIds.map(userId => ({ orgId, userId })),
+    );
+    return userIds.filter((_, i) => {
+      const scope = scopes[i];
+      return scope ? isIssueVisible(scope, issue) : false;
+    });
+  }
+
   async findByUserId(
     userId: string,
     orgId: string,
@@ -53,10 +125,12 @@ export class NotificationService {
     opts: { before?: Date; snoozed?: boolean } = {},
   ): Promise<Notification[]> {
     const now = new Date();
+    const visibility = await this.issueVisibilityWhere(userId, orgId);
     return this.prisma.notification.findMany({
       orderBy: { createdAt: 'desc' },
       take: limit,
       where: {
+        AND: [visibility],
         // `snoozed` flips the visibility rule: the default list hides rows
         // until they wake, the Snoozed view shows exactly those rows.
         ...(opts.snoozed
@@ -146,8 +220,10 @@ export class NotificationService {
 
   async getUnreadCount(userId: string, orgId: string): Promise<number> {
     const now = new Date();
+    const visibility = await this.issueVisibilityWhere(userId, orgId);
     return this.prisma.notification.count({
       where: {
+        AND: [visibility],
         OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: now } }],
         organizationId: orgId,
         read: false,
@@ -163,6 +239,9 @@ export class NotificationService {
     actorId: string,
   ): Promise<Notification | null> {
     if (assigneeId === actorId) {
+      return null;
+    }
+    if ((await this.filterVisibleRecipients(orgId, issueId, [assigneeId])).length === 0) {
       return null;
     }
     const notification = await this.create(orgId, {
@@ -190,7 +269,11 @@ export class NotificationService {
   ): Promise<{ count: number }> {
     const subscribers = await this.getSubscribers(issueId);
 
-    const recipientIds = subscribers.filter(id => id !== actorId);
+    const recipientIds = await this.filterVisibleRecipients(
+      orgId,
+      issueId,
+      subscribers.filter(id => id !== actorId),
+    );
     if (recipientIds.length === 0) {
       return { count: 0 };
     }
@@ -222,6 +305,9 @@ export class NotificationService {
     excerpt?: string,
   ): Promise<Notification | null> {
     if (mentionedUserId === actorId) {
+      return null;
+    }
+    if ((await this.filterVisibleRecipients(orgId, issueId, [mentionedUserId])).length === 0) {
       return null;
     }
     const notification = await this.create(orgId, {
@@ -414,13 +500,13 @@ export class NotificationService {
   ): Promise<{ count: number; replyToUserId?: string }> {
     const subscribers = await this.getSubscribers(issueId);
     const replyToUserId = await this.resolveReplyTarget(commentId, actorId);
-    const recipients = new Set(subscribers.filter(id => id !== actorId));
+    const candidates = new Set(subscribers.filter(id => id !== actorId));
     // The parent comment's author is told about a direct reply even if they
     // never subscribed (or have since been dropped from the subscriber set).
     if (replyToUserId) {
-      recipients.add(replyToUserId);
+      candidates.add(replyToUserId);
     }
-    const recipientIds = [...recipients];
+    const recipientIds = await this.filterVisibleRecipients(orgId, issueId, [...candidates]);
     if (recipientIds.length === 0) {
       return { count: 0 };
     }

@@ -28,6 +28,19 @@ describe('FavoriteService', () => {
   beforeEach(() => {
     prisma = createMockPrisma();
     service = new FavoriteService(prisma as never);
+    // Visibility scope: no private teams, no guest roles — unless a test says so.
+    prisma.team.findMany.mockResolvedValue([]);
+    prisma.teamMemberRole.findMany.mockResolvedValue([]);
+    const visibleRow = {
+      assigneeId: null,
+      creatorId: null,
+      id: TEST_FAVORITE.entityId,
+      organizationId: TEST_ORG.id,
+      shared: true,
+      teamId: 'team-open',
+    };
+    prisma.issue.findMany.mockResolvedValue([visibleRow]);
+    prisma.project.findMany.mockResolvedValue([visibleRow]);
   });
 
   describe('create', () => {
@@ -192,6 +205,120 @@ describe('FavoriteService', () => {
         data: { sortOrder: 7 },
         where: { id: TEST_FAVORITE.id },
       });
+    });
+  });
+
+  describe('create: per-entity visibility (private content must not be pinnable by id)', () => {
+    const HIDDEN_TEAM = 'team-private';
+    const ENTITY = TEST_FAVORITE.entityId;
+    const models = {
+      CustomView: 'customView',
+      Cycle: 'cycle',
+      Document: 'document',
+      Issue: 'issue',
+      Team: 'team',
+    } as const;
+
+    function rowFor(type: keyof typeof models, overrides: Record<string, unknown> = {}) {
+      return {
+        assigneeId: null,
+        creatorId: 'someone-else',
+        id: ENTITY,
+        organizationId: TEST_ORG.id,
+        shared: false,
+        teamId: type === 'Team' ? undefined : HIDDEN_TEAM,
+        ...overrides,
+      };
+    }
+
+    function hideTeam(teamId: string) {
+      // The caller is NOT a member of this private team.
+      prisma.team.findMany.mockResolvedValue([
+        { id: teamId, memberships: [], organizationId: TEST_ORG.id },
+      ]);
+    }
+
+    it.each(['Issue', 'Document', 'Cycle', 'Team'] as const)(
+      'refuses a %s that belongs to a private team the caller is outside of',
+      async type => {
+        hideTeam(type === 'Team' ? ENTITY : HIDDEN_TEAM);
+        const model = prisma[models[type]] as unknown as {
+          findMany: ReturnType<typeof vi.fn>;
+          findUnique: ReturnType<typeof vi.fn>;
+        };
+        model.findUnique.mockResolvedValue({ organizationId: TEST_ORG.id });
+        if (type === 'Team') {
+          // team.findMany serves BOTH the visibility scope (first) and the entity row.
+          model.findMany.mockResolvedValueOnce([
+            { id: ENTITY, memberships: [], organizationId: TEST_ORG.id },
+          ]);
+          model.findMany.mockResolvedValueOnce([rowFor(type, { id: ENTITY })]);
+        } else {
+          model.findMany.mockResolvedValue([rowFor(type)]);
+        }
+
+        await expect(
+          service.create(TEST_ORG.id, TEST_USER.id, { entityId: ENTITY, entityType: type }),
+        ).rejects.toThrow(FavoriteEntityNotInOrgError);
+        expect(prisma.favorite.create).not.toHaveBeenCalled();
+      },
+    );
+
+    it('refuses an unshared custom view created by someone else, even in a public team', async () => {
+      prisma.customView.findUnique.mockResolvedValue({ organizationId: TEST_ORG.id });
+      prisma.customView.findMany.mockResolvedValue([rowFor('CustomView', { teamId: null })]);
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, { entityId: ENTITY, entityType: 'CustomView' }),
+      ).rejects.toThrow(FavoriteEntityNotInOrgError);
+      expect(prisma.favorite.create).not.toHaveBeenCalled();
+    });
+
+    it('allows a shared view, and the caller\'s own unshared view', async () => {
+      prisma.customView.findUnique.mockResolvedValue({ organizationId: TEST_ORG.id });
+      prisma.favorite.findFirst.mockResolvedValue(null);
+      prisma.favorite.create.mockResolvedValue(TEST_FAVORITE);
+      for (const view of [
+        rowFor('CustomView', { shared: true, teamId: null }),
+        rowFor('CustomView', { creatorId: TEST_USER.id, teamId: null }),
+      ]) {
+        prisma.customView.findMany.mockResolvedValue([view]);
+        await expect(
+          service.create(TEST_ORG.id, TEST_USER.id, {
+            entityId: ENTITY,
+            entityType: 'CustomView',
+          }),
+        ).resolves.toEqual(TEST_FAVORITE);
+      }
+    });
+
+    it('refuses an issue a guest neither created nor is assigned to', async () => {
+      prisma.teamMemberRole.findMany.mockResolvedValue([
+        { team: { organizationId: TEST_ORG.id }, teamId: 'team-guest', userId: TEST_USER.id },
+      ]);
+      prisma.issue.findUnique.mockResolvedValue({ organizationId: TEST_ORG.id });
+      prisma.issue.findMany.mockResolvedValue([rowFor('Issue', { teamId: 'team-guest' })]);
+      await expect(
+        service.create(TEST_ORG.id, TEST_USER.id, { entityId: ENTITY, entityType: 'Issue' }),
+      ).rejects.toThrow(FavoriteEntityNotInOrgError);
+    });
+  });
+
+  describe('findByUser: stale favorites pointing at now-hidden entities', () => {
+    it('drops favorites whose target moved into a private team', async () => {
+      prisma.favorite.findMany.mockResolvedValue([TEST_FAVORITE]);
+      prisma.team.findMany.mockResolvedValue([
+        { id: 'team-private', memberships: [], organizationId: TEST_ORG.id },
+      ]);
+      prisma.issue.findMany.mockResolvedValue([
+        {
+          assigneeId: null,
+          creatorId: 'x',
+          id: TEST_FAVORITE.entityId,
+          organizationId: TEST_ORG.id,
+          teamId: 'team-private',
+        },
+      ]);
+      expect(await service.findByUser(TEST_ORG.id, TEST_USER.id)).toEqual([]);
     });
   });
 

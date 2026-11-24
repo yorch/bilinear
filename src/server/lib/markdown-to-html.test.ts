@@ -102,9 +102,15 @@ describe('markdownToHtml on pathological input', () => {
     for (const bytes of [64 * 1024, 256 * 1024]) {
       it(`${name} at ${bytes / 1024} KB converts in under 50 ms`, () => {
         const src = unit.repeat(Math.ceil(bytes / unit.length));
-        const started = performance.now();
-        markdownToHtml(src);
-        expect(performance.now() - started).toBeLessThan(50);
+        // Best of three: a loaded CI box can stall one run, but the quadratic
+        // regression is 5-100x over budget on every run.
+        let best = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < 3; i++) {
+          const started = performance.now();
+          markdownToHtml(src);
+          best = Math.min(best, performance.now() - started);
+        }
+        expect(best).toBeLessThan(50);
       });
     }
   }

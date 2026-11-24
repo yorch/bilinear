@@ -18,6 +18,13 @@ const TEST_NOTIFICATION = {
   userId: TEST_USER.id,
 };
 
+const VISIBLE_ISSUE = {
+  assigneeId: null,
+  creatorId: null,
+  organizationId: TEST_ORG.id,
+  teamId: 'team-open',
+};
+
 describe('NotificationService', () => {
   let prisma: MockPrismaClient;
   let service: NotificationService;
@@ -25,6 +32,11 @@ describe('NotificationService', () => {
   beforeEach(() => {
     prisma = createMockPrisma();
     service = new NotificationService(prisma as never);
+    // Visibility scope: no private teams, no guest roles; the issue is
+    // organization-visible. Individual tests override these.
+    prisma.team.findMany.mockResolvedValue([]);
+    prisma.teamMemberRole.findMany.mockResolvedValue([]);
+    prisma.issue.findUnique.mockResolvedValue(VISIBLE_ISSUE);
   });
 
   describe('listSubscribedIssueIds', () => {

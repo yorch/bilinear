@@ -44,6 +44,9 @@ const OPERATORS: ReadonlySet<string> = new Set<FilterOperator>([
   'overdue',
 ]);
 
+/** The only top-level keys a stored filter set may carry. */
+const FILTER_SET_KEYS: ReadonlySet<string> = new Set(['composition', 'conditions']);
+
 export type FilterValidation = { error: string; ok: false } | { ok: true; set: FilterSet };
 
 function validScalar(v: unknown): boolean {
@@ -65,6 +68,12 @@ export function validateFilterSet(value: unknown): FilterValidation {
   }
   if (typeof value !== 'object' || Array.isArray(value)) {
     return { error: 'filters must be an object', ok: false };
+  }
+  // Reject foreign top-level keys (`{s2:"x"}`): they would be persisted verbatim
+  // in a column every viewer of a shared view reads, and nothing consumes them.
+  const unknownKey = Object.keys(value).find(k => !FILTER_SET_KEYS.has(k));
+  if (unknownKey !== undefined) {
+    return { error: `unknown filter key: ${unknownKey.slice(0, 40)}`, ok: false };
   }
   const { composition, conditions } = value as { composition?: unknown; conditions?: unknown };
   if (conditions === undefined) {
@@ -113,4 +122,45 @@ export function validateFilterSet(value: unknown): FilterValidation {
     });
   }
   return { ok: true, set: { composition: composition === 'or' ? 'or' : 'and', conditions: clean } };
+}
+
+export interface SanitizedFilterSet {
+  /** Conditions discarded because they were malformed. */
+  dropped: number;
+  /** `null` when the stored value is not even an object: nothing to salvage. */
+  set: FilterSet | null;
+}
+
+/**
+ * Lenient read of a STORED filter set. A shared view is read by the whole org,
+ * so one bad row must neither crash the reader nor silently become "no filter"
+ * (which would widen what the view shows): keep every condition that validates,
+ * drop and count the ones that do not, and let the caller log the count.
+ * A value that is not even an object has nothing salvageable: `set` is null
+ * and the caller must refuse rather than guess.
+ */
+export function sanitizeStoredFilterSet(value: unknown): SanitizedFilterSet {
+  const whole = validateFilterSet(value);
+  if (whole.ok) {
+    return { dropped: 0, set: whole.set };
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { dropped: 1, set: null };
+  }
+  const { composition, conditions } = value as { composition?: unknown; conditions?: unknown };
+  const list = Array.isArray(conditions) ? conditions.slice(0, MAX_FILTER_CONDITIONS) : [];
+  const kept: FilterCondition[] = [];
+  let dropped = Array.isArray(conditions) ? conditions.length - list.length : 1;
+  for (const raw of list) {
+    const one = validateFilterSet({ conditions: [raw] });
+    if (one.ok && one.set.conditions[0]) {
+      kept.push(one.set.conditions[0]);
+    } else {
+      dropped += 1;
+    }
+  }
+  return {
+    dropped,
+    set: { composition: composition === 'or' ? 'or' : 'and', conditions: kept },
+  };
 }

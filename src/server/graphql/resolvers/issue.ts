@@ -650,21 +650,44 @@ export const issueResolvers = {
       const cascadedSyncs: RecordedSync[] = [];
       let updateResult: Awaited<ReturnType<typeof ctx.services.issue.update>>;
       try {
-        updateResult = await ctx.services.issue.update(id, input, async (tx, res) => {
-          issueSync = await ctx.services.sync.recordSyncAction(
-            tx,
-            ctx.orgId,
-            'U',
-            'Issue',
-            id,
-            res.issue,
-          );
-          for (const row of res.cascaded) {
-            cascadedSyncs.push(
-              await ctx.services.sync.recordSyncAction(tx, ctx.orgId, 'U', 'Issue', row.id, row),
+        updateResult = await ctx.services.issue.update(
+          id,
+          input,
+          async (tx, res) => {
+            issueSync = await ctx.services.sync.recordSyncAction(
+              tx,
+              ctx.orgId,
+              'U',
+              'Issue',
+              id,
+              res.issue,
             );
-          }
-        });
+            for (const row of res.cascaded) {
+              cascadedSyncs.push(
+                await ctx.services.sync.recordSyncAction(tx, ctx.orgId, 'U', 'Issue', row.id, row),
+              );
+            }
+          },
+          {
+            // Re-run the access checks against the row as locked inside the
+            // transaction: a concurrent team move may have changed `teamId`
+            // since the pre-read above, and the earlier verdict was about the
+            // OLD team.
+            authorize: async current => {
+              if (
+                current.teamId === existing.teamId &&
+                current.creatorId === existing.creatorId &&
+                current.assigneeId === existing.assigneeId
+              ) {
+                return;
+              }
+              await requireIssueAccessNotGuestOrOwn(ctx.prisma, current, ctx.userId, ctx.orgId);
+              if (input.teamId && input.teamId !== current.teamId) {
+                await requireTeamMemberNotGuest(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
+              }
+            },
+          },
+        );
       } catch (err) {
         const mapped = toIssueInputGraphQLError(err);
         if (mapped) {
@@ -818,10 +841,24 @@ export const issueResolvers = {
       if (isTeamMove) {
         // Subscribers scoped to the team the issue LEFT would otherwise never
         // learn it moved (org-wide hooks already got the delivery above).
+        //
+        // They get a redacted "moved out" event, never the post-move row: that
+        // carries the destination's identifier, teamId and stateId, and the
+        // destination may be a private team the old team's subscriber cannot see.
         void ctx.services.webhook
-          .dispatchEvent(ctx.orgId, 'issue.updated', issue, existing.teamId, {
-            teamScopedOnly: true,
-          })
+          .dispatchEvent(
+            ctx.orgId,
+            'issue.updated',
+            {
+              id: issue.id,
+              identifier: existing.identifier,
+              movedOut: true,
+              organizationId: existing.organizationId,
+              teamId: existing.teamId,
+            },
+            existing.teamId,
+            { teamScopedOnly: true },
+          )
           .catch(err => log.error({ err }, 'webhook dispatch failed: issue.updated (old team)'));
       }
 

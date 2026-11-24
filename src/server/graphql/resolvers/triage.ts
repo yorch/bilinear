@@ -1,6 +1,11 @@
 import { GraphQLError } from 'graphql';
 import { logger } from '../../lib/logger';
-import { getGuestTeamIds, requireAuth, requireTeamMember } from '../../middleware/auth';
+import {
+  getGuestTeamIds,
+  requireAuth,
+  requireIssueAccessNotGuestOrOwn,
+  requireTeamMemberNotGuest,
+} from '../../middleware/auth';
 import { checkFixedWindow } from '../../middleware/rate-limit';
 import {
   DuplicateSourceNotFoundError,
@@ -137,7 +142,7 @@ export const triageResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       try {
         const updated = await ctx.services.triage.accept(issueId, input);
@@ -170,7 +175,7 @@ export const triageResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       try {
         const updated = await ctx.services.triage.decline(issueId);
@@ -201,7 +206,7 @@ export const triageResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       // The canonical issue must also exist within the user's org and on a
       // team they're a member of — otherwise a member of team A could link
@@ -213,7 +218,7 @@ export const triageResolvers = {
         });
       }
       if (canonical.teamId !== issue.teamId) {
-        await requireTeamMember(ctx.prisma, canonical.teamId, ctx.userId, ctx.orgId);
+        await requireTeamMemberNotGuest(ctx.prisma, canonical.teamId, ctx.userId, ctx.orgId);
       }
 
       try {
@@ -262,7 +267,7 @@ export const triageResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       try {
         const { issue: updated, removedRelationIds } = await ctx.services.triage.revert(issueId);
@@ -302,7 +307,7 @@ export const triageResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       try {
         const updated = await ctx.services.triage.snooze(issueId, new Date(until), ctx.userId);
@@ -337,7 +342,7 @@ export const triageResolvers = {
       if (!issue || issue.organizationId !== ctx.orgId) {
         throw new GraphQLError('Issue not found', { extensions: { code: 'NOT_FOUND' } });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
 
       // The query runs on every focus change in the triage queue, so it carries
       // its own per-user budget on top of the global hourly limit.
@@ -379,7 +384,7 @@ export const triageResolvers = {
     },
     triageQueue: async (_parent: unknown, { teamId }: { teamId: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, teamId, ctx.userId, ctx.orgId);
 
       const team = await ctx.services.team.findById(teamId);
       if (!team || team.organizationId !== ctx.orgId) {
@@ -397,7 +402,7 @@ export const triageResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, teamId, ctx.userId, ctx.orgId);
       return ctx.services.triage.getQueueCount(teamId);
     },
   },

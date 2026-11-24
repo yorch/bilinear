@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
 import { getSyncVisibility } from '../../lib/sync-visibility';
-import { requireAuth } from '../../middleware/auth';
+import { requireAuth, requireTeamMemberNotGuest } from '../../middleware/auth';
 import type {
   DocumentCreateInput,
   DocumentScope,
@@ -48,12 +48,28 @@ async function requireVisibleDocument(ctx: AuthedContext, id: string) {
   return { existing, scope };
 }
 
+/**
+ * Write gate for team-scoped documents: the caller must be a NON-guest member
+ * of the owning team — the rule the collaborative-editing server already
+ * applies (a team doc is only openable by that team's members), and the one
+ * cycle mutations apply to guests. Workspace-level docs (no team) stay open
+ * to every org member. Reads keep the visibility-only rule.
+ */
+async function requireDocumentWriteAccess(ctx: AuthedContext, teamId: string | null | undefined) {
+  if (teamId) {
+    await requireTeamMemberNotGuest(ctx.prisma, teamId, ctx.userId, ctx.orgId);
+  }
+}
+
 export const documentResolvers = {
   Mutation: {
     documentArchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
-      await requireVisibleDocument(ctx, id);
+      {
+        const { existing } = await requireVisibleDocument(ctx, id);
+        await requireDocumentWriteAccess(ctx, existing.teamId);
+      }
 
       const document = await ctx.services.document.archive(id);
       const sync = await ctx.services.sync.createSyncAction(
@@ -74,6 +90,7 @@ export const documentResolvers = {
       requireAuth(ctx);
 
       const { hiddenTeamIds } = await documentScope(ctx);
+      await requireDocumentWriteAccess(ctx, input.teamId);
       let document: Awaited<ReturnType<typeof ctx.services.document.create>>;
       try {
         document = await ctx.services.document.create(ctx.orgId, ctx.userId, input, hiddenTeamIds);
@@ -93,7 +110,10 @@ export const documentResolvers = {
     documentDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
-      await requireVisibleDocument(ctx, id);
+      {
+        const { existing } = await requireVisibleDocument(ctx, id);
+        await requireDocumentWriteAccess(ctx, existing.teamId);
+      }
 
       try {
         await ctx.services.document.delete(id, ctx.userId);
@@ -108,7 +128,10 @@ export const documentResolvers = {
     documentUnarchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
-      await requireVisibleDocument(ctx, id);
+      {
+        const { existing } = await requireVisibleDocument(ctx, id);
+        await requireDocumentWriteAccess(ctx, existing.teamId);
+      }
 
       const document = await ctx.services.document.unarchive(id);
       const sync = await ctx.services.sync.createSyncAction(
@@ -128,7 +151,8 @@ export const documentResolvers = {
     ) => {
       requireAuth(ctx);
 
-      const { scope } = await requireVisibleDocument(ctx, id);
+      const { existing, scope } = await requireVisibleDocument(ctx, id);
+      await requireDocumentWriteAccess(ctx, existing.teamId);
 
       let document: Awaited<ReturnType<typeof ctx.services.document.update>>;
       try {

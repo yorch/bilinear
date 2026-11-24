@@ -109,13 +109,18 @@ export class TriageService {
       throw new TriageInvalidTargetStateError();
     }
 
+    const decidedAt = new Date();
     const data: Parameters<PrismaClient['issue']['update']>[0]['data'] = {
       // Clear stale lifecycle markers in case the issue cycled back into
       // triage (e.g. someone manually re-routed it). These are set fresh
       // when the issue actually enters started/completed/canceled later.
       canceledAt: null,
       stateId: input.stateId,
-      triagedAt: new Date(),
+      triagedAt: decidedAt,
+      // Pinned equal to `triagedAt` so `revert` can tell "untouched since the
+      // decision" (updatedAt === triagedAt) from "edited since" (any later
+      // write bumps updatedAt) without a table of its own.
+      updatedAt: decidedAt,
     };
     if ('assigneeId' in input) {
       // Validate the assignee is a member of the issue's team. Without
@@ -208,6 +213,8 @@ export class TriageService {
         canceledAt: now,
         stateId: canceledState.id,
         triagedAt: now,
+        // See accept(): updatedAt === triagedAt marks "untouched since decided".
+        updatedAt: now,
       },
       where: { id: issueId, stateId: triageState.id },
     });
@@ -266,6 +273,7 @@ export class TriageService {
       throw new TriageMissingTargetStateError('canceled');
     }
 
+    const now = new Date();
     return this.prisma.$transaction(async tx => {
       // Capture whether a new relation row was created so the resolver
       // can decide whether to emit an `'I' IssueRelation` SyncAction.
@@ -277,11 +285,17 @@ export class TriageService {
       });
       let relation: IssueRelation | null = null;
       if (!before) {
+        // Stamped with the decision's own timestamp: revert removes exactly the
+        // relations created at `triagedAt`, never an older/newer one.
         relation = await tx.issueRelation.create({
-          data: { issueId, relatedIssueId: canonicalIssueId, type: 'duplicate' },
+          data: {
+            createdAt: now,
+            issueId,
+            relatedIssueId: canonicalIssueId,
+            type: 'duplicate',
+          },
         });
       }
-      const now = new Date();
       // Atomic CAS — only cancel if still in triage. Prevents racing with
       // concurrent decline / accept calls.
       const result = await tx.issue.updateMany({
@@ -289,6 +303,7 @@ export class TriageService {
           canceledAt: now,
           stateId: canceledState.id,
           triagedAt: now,
+          updatedAt: now,
         },
         where: { id: issueId, stateId: triageState.id },
       });
@@ -309,7 +324,11 @@ export class TriageService {
    * TRIAGE_REVERT_WINDOW_MS after the decision, so it cannot be used to
    * rewrite old history. A `duplicate` relation created by the same decision
    * is removed (ids returned so the resolver can emit `D` SyncActions).
-   * The CAS on `triagedAt` means a second decision made in between wins.
+   * The CAS is on (stateId, triagedAt, updatedAt): every decision stamps
+   * `updatedAt === triagedAt`, so any later edit (moved to In Progress,
+   * retitled, reassigned...) bumps `updatedAt` and the revert is refused
+   * rather than clobbering that later work. Only relations created AT the
+   * decision's timestamp are removed.
    */
   async revert(issueId: string): Promise<{ issue: Issue; removedRelationIds: string[] }> {
     const issue = await this.prisma.issue.findUnique({ where: { id: issueId } });
@@ -331,7 +350,12 @@ export class TriageService {
     return this.prisma.$transaction(async tx => {
       const result = await tx.issue.updateMany({
         data: { canceledAt: null, stateId: triageState.id, triagedAt: null },
-        where: { id: issueId, stateId: issue.stateId, triagedAt: decidedAt },
+        where: {
+          id: issueId,
+          stateId: issue.stateId,
+          triagedAt: decidedAt,
+          updatedAt: decidedAt,
+        },
       });
       if (result.count === 0) {
         throw new TriageNotRevertableError();
@@ -339,7 +363,7 @@ export class TriageService {
       const relations = await tx.issueRelation.findMany({
         select: { id: true },
         where: {
-          createdAt: { gte: new Date(decidedAt.getTime() - 60_000) },
+          createdAt: decidedAt,
           issueId,
           type: 'duplicate',
         },

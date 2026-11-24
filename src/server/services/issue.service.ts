@@ -28,6 +28,20 @@ export type IssueUpdateTxHook = (
   result: { issue: Issue; cascaded: Issue[] },
 ) => Promise<void>;
 /**
+ * Optional per-call controls for `update`. `authorize` runs INSIDE the write
+ * transaction, after the issue row is locked and re-read, with the row's
+ * current owner/team — throw to abort. The resolver's own authz read happens
+ * before the transaction and can be stale by the time the lock is granted.
+ */
+export interface IssueUpdateOptions {
+  authorize?: (current: {
+    assigneeId: string | null;
+    creatorId: string | null;
+    organizationId: string;
+    teamId: string;
+  }) => Promise<void>;
+}
+/**
  * Hook for single-row issue mutations (archive/unarchive/snooze/unsnooze/
  * delete). Receives the post-write row (for delete, the row as it was just
  * before removal) so the resolver can record the SyncAction inside the same
@@ -502,6 +516,7 @@ export class IssueService {
     id: string,
     input: IssueUpdateInput,
     txHook?: IssueUpdateTxHook,
+    opts: IssueUpdateOptions = {},
   ): Promise<{ issue: Issue; cascaded: Issue[]; droppedLabelNames: string[] }> {
     assertValidTitle(input.title);
     assertValidDescription(input.description);
@@ -569,14 +584,38 @@ export class IssueService {
     }
 
     return this.prisma.$transaction(async tx => {
+      // Lock order, always: org parent advisory lock -> issue row -> team row.
+      // The advisory lock goes first (not after the team-row increment, as it
+      // used to) because a cascade later in this transaction updates OTHER
+      // issue rows: a transaction that already holds one of them and then
+      // waits for the advisory lock would otherwise deadlock with this one.
+      if (input.parentId) {
+        const owner = await tx.issue.findUnique({
+          select: { organizationId: true },
+          where: { id },
+        });
+        if (!owner) {
+          throw new IssueNotFoundError();
+        }
+        await this.lockParentWrites(tx, owner.organizationId);
+      }
+      // Row lock BEFORE the read below: without it two concurrent updates both
+      // read the same pre-image, so a team move and a stateId write validated
+      // against the old team interleave into an issue in team B carrying team
+      // A's workflow state — and authz computed from a stale `teamId` admits a
+      // writer who is not in the issue's (new) team. The loser blocks here and
+      // then reads the winner's committed row (READ COMMITTED).
+      await tx.$queryRaw`SELECT id FROM issues WHERE id = ${id}::uuid FOR UPDATE`;
       // Fetch the current row once, up front — needed both for the stateId/
       // team check below AND to validate every other cross-entity reference
       // (parentId/projectId/cycleId/projectMilestoneId/assigneeId) against
       // THIS issue's org/team, not the caller-supplied `id` alone.
       const existing = await tx.issue.findUnique({
         select: {
+          assigneeId: true,
           canceledAt: true,
           completedAt: true,
+          creatorId: true,
           identifier: true,
           organizationId: true,
           projectId: true,
@@ -589,6 +628,9 @@ export class IssueService {
       if (!existing) {
         throw new IssueNotFoundError();
       }
+      // Authorization against the row as it is NOW, under the lock — the
+      // resolver's pre-transaction read can be stale by the time we get here.
+      await opts.authorize?.(existing);
 
       // Team move: allocate the next number in the target team, remember the
       // old identifier (so old links keep resolving) and re-home the workflow
@@ -707,10 +749,9 @@ export class IssueService {
         existing.projectId,
       );
       if (input.parentId) {
-        // Serialise every parent write in the org: the cycle check below is a
-        // read-then-write that READ COMMITTED does not protect, so two
-        // concurrent opposite re-parents would each pass it and form a loop.
-        await this.lockParentWrites(tx, existing.organizationId);
+        // The org parent lock was taken at the top of the transaction: the
+        // cycle check below is a read-then-write that READ COMMITTED does not
+        // protect, so two concurrent opposite re-parents would each pass it.
         await this.assertNoParentCycle(tx, [id], input.parentId);
       }
 
@@ -1360,6 +1401,14 @@ export class IssueService {
         where: { id: cursor },
       });
       cursor = row?.parentId ?? null;
+    }
+    // Ran out of budget with the chain still climbing: we cannot prove the new
+    // parent is not below `ids`, so refuse instead of silently admitting a
+    // possible loop (a 203-deep chain used to pass this check).
+    if (cursor && !seen.has(cursor) && seen.size >= MAX_PARENT_DEPTH) {
+      throw new IssueValidationError(
+        `Issue hierarchy is deeper than ${MAX_PARENT_DEPTH} levels; cannot verify the new parent is safe`,
+      );
     }
   }
 

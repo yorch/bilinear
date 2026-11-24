@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { Favorite } from '../../../generated/prisma';
+import { isEntityVisible } from '../../lib/entity-visibility';
 import { requireAuth } from '../../middleware/auth';
 import {
   entityBelongsToOrg,
@@ -7,6 +8,7 @@ import {
   type FavoriteReorderEntry,
 } from '../../services/favorite.service';
 import type { GraphQLContext } from '../context';
+import { getRequestVisibility } from '../request-visibility';
 import { mapServiceError } from '../types/errors';
 
 const FAVORITE_ERRORS = {
@@ -34,6 +36,20 @@ const FAVORITE_ERRORS = {
  * against a batch-fetched row instead of a per-row query.
  */
 async function resolveEntity(
+  fav: Favorite,
+  ctx: GraphQLContext,
+): Promise<{ __typename: string; id: string } | null> {
+  const entity = await loadEntity(fav, ctx);
+  if (!entity) {
+    return null;
+  }
+  // Same-org is not visibility: re-check at read time so a favorite created
+  // before the target moved into a private team / was unshared resolves null.
+  const vis = await getRequestVisibility(ctx);
+  return isEntityVisible(vis, fav.entityType, entity) ? entity : null;
+}
+
+async function loadEntity(
   fav: Favorite,
   ctx: GraphQLContext,
 ): Promise<{ __typename: string; id: string } | null> {

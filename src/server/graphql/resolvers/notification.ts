@@ -1,9 +1,11 @@
 import { GraphQLError } from 'graphql';
 import type { Notification } from '../../../generated/prisma';
+import { isIssueVisible } from '../../lib/entity-visibility';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../../lib/limits';
 import { clampLimit } from '../../lib/pagination';
-import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import { requireAuth, requireIssueAccessNotGuestOrOwn } from '../../middleware/auth';
 import type { GraphQLContext } from '../context';
+import { getRequestVisibility } from '../request-visibility';
 
 /** Shared tail of the single-row notification mutations: SyncAction + NOT_FOUND remap. */
 async function runOwnedNotificationMutation(
@@ -136,7 +138,7 @@ export const notificationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
 
       await ctx.services.notification.subscribe(ctx.userId, issueId);
 
@@ -165,7 +167,7 @@ export const notificationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
 
       await ctx.services.notification.unsubscribe(ctx.userId, issueId);
 
@@ -186,7 +188,18 @@ export const notificationResolvers = {
       if (!notification.issueId) {
         return null;
       }
-      return ctx.services.issue.findById(notification.issueId);
+      // A notification outlives the access that produced it (the issue may
+      // have moved into a private team since), so the linked issue is gated
+      // by the viewer's CURRENT visibility rather than by the row's existence.
+      if (!ctx.userId || !ctx.orgId) {
+        return null;
+      }
+      const issue = await ctx.services.issue.findById(notification.issueId);
+      if (!issue || issue.organizationId !== ctx.orgId) {
+        return null;
+      }
+      const vis = await getRequestVisibility(ctx);
+      return isIssueVisible(vis, issue) ? issue : null;
     },
   },
 
@@ -204,7 +217,7 @@ export const notificationResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
 
       return ctx.services.notification.isSubscribed(ctx.userId, issueId);
     },

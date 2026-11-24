@@ -202,9 +202,32 @@ describe('AnalyticsService project/insights', () => {
       [{ conditions: [{ field: 'priority', operator: 'eq', value: { a: 1 } }] }],
       [{ conditions: Array.from({ length: 60 }, () => ({ field: 'priority', operator: 'eq' })) }],
       [{ conditions: [{ field: 'status', operator: 'nin', value: Array(500).fill(U1) }] }],
-      ['garbage'],
-    ])('a malformed stored view filter is an input error, never a crash (%#)', async filters => {
+    ])('a malformed stored view filter is dropped, never a crash (%#)', async filters => {
       prisma.customView.findFirst.mockResolvedValue({ filters, teamId: null });
+      prisma.issue.findMany.mockResolvedValue([]);
+      await expect(
+        service.insights(ORG, 'u1', 'count', 'status', scope, 'v1'),
+      ).resolves.toBeDefined();
+    });
+
+    it('keeps the sound conditions of a partly-malformed stored view filter', async () => {
+      prisma.customView.findFirst.mockResolvedValue({
+        filters: {
+          conditions: [
+            { field: 'priority', operator: 'in', value: [1] },
+            { field: 'nope', operator: 'eq', value: 1 },
+          ],
+        },
+        teamId: null,
+      });
+      prisma.issue.findMany.mockResolvedValue([]);
+      await service.insights(ORG, 'u1', 'count', 'status', scope, 'v1');
+      const where = prisma.issue.findMany.mock.calls[0][0].where;
+      expect(JSON.stringify(where)).toContain('{"priority":{"in":[1]}}');
+    });
+
+    it('a stored view filter that is not an object is an input error', async () => {
+      prisma.customView.findFirst.mockResolvedValue({ filters: 'garbage', teamId: null });
       await expect(
         service.insights(ORG, 'u1', 'count', 'status', scope, 'v1'),
       ).rejects.toBeInstanceOf(InsightsInputError);

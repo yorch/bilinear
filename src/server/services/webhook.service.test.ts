@@ -259,6 +259,51 @@ describe('WebhookService', () => {
     });
   });
 
+  describe('isBlockedHost special-purpose ranges', () => {
+    it.each([
+      ['100.64.0.1', 'CGNAT low'],
+      ['100.100.100.200', 'CGNAT cloud metadata'],
+      ['100.127.255.254', 'CGNAT high'],
+      ['198.18.0.1', 'benchmarking'],
+      ['198.19.255.255', 'benchmarking high'],
+      ['192.0.0.8', 'IETF protocol assignments'],
+      ['192.0.2.1', 'TEST-NET-1'],
+      ['198.51.100.1', 'TEST-NET-2'],
+      ['203.0.113.1', 'TEST-NET-3'],
+      ['240.0.0.1', 'reserved'],
+      ['255.255.255.255', 'broadcast'],
+      ['fe90::1', 'link-local beyond fe80:'],
+      ['febf::1', 'link-local top'],
+      ['fec0::1', 'site-local'],
+      ['::7f00:1', 'IPv4-compatible loopback'],
+      ['::ffff:0:7f00:1', 'IPv4-translated loopback'],
+      ['::ffff:7f00:1', 'IPv4-mapped loopback'],
+      ['::ffff:100.100.100.200', 'IPv4-mapped CGNAT'],
+      ['64:ff9b::7f00:1', 'NAT64'],
+      ['2002:7f00:1::', '6to4 embedding loopback'],
+      ['2001:db8::1', 'documentation'],
+      ['ff02::1', 'multicast'],
+    ])('blocks %s (%s)', host => {
+      expect(isBlockedHost(host)).toBe(true);
+      expect(isBlockedHost(`[${host}]`)).toBe(true);
+    });
+
+    it.each([
+      '8.8.8.8',
+      '100.63.255.255',
+      '100.128.0.1',
+      '198.17.255.255',
+      '198.20.0.1',
+      '172.32.0.1',
+      '1.1.1.1',
+      '2606:4700:4700::1111',
+      '2001:4860:4860::8888',
+      '::ffff:8.8.8.8',
+    ])('does not block the public address %s', host => {
+      expect(isBlockedHost(host)).toBe(false);
+    });
+  });
+
   describe('isBlockedHost (SSRF guard)', () => {
     it('blocks loopback and meta hostnames', () => {
       expect(isBlockedHost('localhost')).toBe(true);
@@ -409,6 +454,24 @@ describe('WebhookService', () => {
     afterEach(() => {
       vi.unstubAllGlobals();
       vi.useRealTimers();
+    });
+
+    it('re-screens a stored IP-literal URL on every delivery (stale rows are not grandfathered)', async () => {
+      prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
+      prisma.webhookDelivery.findUnique.mockResolvedValue({
+        ...TEST_DELIVERY,
+        webhook: { ...TEST_WEBHOOK_IP, url: 'http://100.100.100.200/latest/meta-data/' },
+      });
+      prisma.webhookDelivery.update.mockResolvedValue({});
+
+      await service.processDelivery(TEST_DELIVERY.id);
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(prisma.webhookDelivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ nextAttemptAt: null, status: 'failed' }),
+        }),
+      );
     });
 
     describe('atomic pending→in_flight claim', () => {

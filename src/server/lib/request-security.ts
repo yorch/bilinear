@@ -1,9 +1,7 @@
 import type { NextRequest, NextResponse } from 'next/server';
 import { env } from './env';
 import { REFRESH_TOKEN_DAYS } from './jwt';
-import { childLogger } from './logger';
-
-const log = childLogger({ module: 'request-security' });
+import { logger } from './logger';
 
 /**
  * Shared request-security helpers used by the GraphQL route and the
@@ -74,7 +72,8 @@ export function getClientIp(req: NextRequest): string | null {
   }
   if (!warnedProxyTrustUnset && process.env.NODE_ENV === 'production') {
     warnedProxyTrustUnset = true;
-    log.warn(
+    logger.warn(
+      { module: 'request-security' },
       'TRUST_PROXY_HEADERS is not set: client IPs are unavailable, so per-IP rate limits fall back to shared buckets and audit/impersonation records carry no IP. Set TRUST_PROXY_HEADERS=1 behind a proxy that overwrites X-Forwarded-For.',
     );
   }

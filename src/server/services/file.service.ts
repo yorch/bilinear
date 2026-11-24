@@ -1,4 +1,6 @@
 import type { PrismaClient, File as PrismaFile } from '../../generated/prisma';
+import { isIssueVisible } from '../lib/entity-visibility';
+import { getSyncVisibility } from '../lib/sync-visibility';
 
 export interface FileCreateInput {
   issueId?: string;
@@ -85,14 +87,31 @@ export class FileService {
     });
   }
 
-  async getIssueFiles(issueId: string, orgId: string): Promise<PrismaFile[]> {
-    // Scope to the caller's org before returning file metadata. Without this,
-    // any authenticated user could enumerate files from any issue in any org.
+  /**
+   * Whether `userId` may read the issue `issue` (already known to be in the
+   * caller's org): not in a private team they are outside of, and, as a guest,
+   * only their own work. Fails closed when there is no user.
+   */
+  private async canReadIssue(
+    issue: { assigneeId: string | null; creatorId: string | null; teamId: string },
+    orgId: string,
+    userId: string | undefined,
+  ): Promise<boolean> {
+    if (!userId) {
+      return false;
+    }
+    return isIssueVisible(await getSyncVisibility(this.prisma, userId, orgId), issue);
+  }
+
+  async getIssueFiles(issueId: string, orgId: string, userId?: string): Promise<PrismaFile[]> {
+    // Scope to the caller's org AND the caller's visibility before returning
+    // file metadata. Org membership alone let any member list (and then
+    // download) the attachments of a private team's issue.
     const issue = await this.prisma.issue.findFirst({
-      select: { id: true },
+      select: { assigneeId: true, creatorId: true, id: true, teamId: true },
       where: { id: issueId, organizationId: orgId },
     });
-    if (!issue) {
+    if (!issue || !(await this.canReadIssue(issue, orgId, userId))) {
       return [];
     }
     return this.prisma.file.findMany({
@@ -145,7 +164,7 @@ export class FileService {
    * prisma/schema.prisma). We therefore look up the file, then verify
    * ownership via whichever parent is set.
    */
-  async findByKeyInOrg(key: string, orgId: string): Promise<PrismaFile | null> {
+  async findByKeyInOrg(key: string, orgId: string, userId?: string): Promise<PrismaFile | null> {
     const file = await this.prisma.file.findFirst({
       where: { key },
     });
@@ -153,11 +172,11 @@ export class FileService {
       return null;
     }
     if (file.issueId) {
-      const ok = await this.prisma.issue.findFirst({
-        select: { id: true },
+      const issue = await this.prisma.issue.findFirst({
+        select: { assigneeId: true, creatorId: true, teamId: true },
         where: { id: file.issueId, organizationId: orgId },
       });
-      return ok ? file : null;
+      return issue && (await this.canReadIssue(issue, orgId, userId)) ? file : null;
     }
     if (file.projectId) {
       const ok = await this.prisma.project.findFirst({

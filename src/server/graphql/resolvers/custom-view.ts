@@ -1,5 +1,6 @@
 import { GraphQLError } from 'graphql';
 import type { CustomView } from '../../../generated/prisma';
+import { isCustomViewVisible } from '../../lib/entity-visibility';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
 import {
   type CustomViewCreateInput,
@@ -7,6 +8,7 @@ import {
   type CustomViewUpdateInput,
 } from '../../services/custom-view.service';
 import type { GraphQLContext } from '../context';
+import { getRequestVisibility } from '../request-visibility';
 
 /** A rejected `filters` payload is the caller's input error, not a 500. */
 function badInput(err: unknown): never {
@@ -173,7 +175,15 @@ export const customViewResolvers = {
         await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
       }
 
-      return ctx.services.customView.findByOrgId(ctx.orgId, ctx.userId, teamId ?? undefined);
+      const views = await ctx.services.customView.findByOrgId(
+        ctx.orgId,
+        ctx.userId,
+        teamId ?? undefined,
+      );
+      // An org-wide listing must not surface a shared view that lives in a
+      // private team the caller is outside of (its name and filters leak).
+      const vis = await getRequestVisibility(ctx);
+      return views.filter(v => isCustomViewVisible(vis, v));
     },
   },
 };

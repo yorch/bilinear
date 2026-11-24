@@ -1,5 +1,5 @@
 import { Prisma, type PrismaClient } from '../../generated/prisma';
-import { validateFilterSet } from '../../lib/filter-validate';
+import { sanitizeStoredFilterSet } from '../../lib/filter-validate';
 import { type DerivedHealthResult, deriveInitiativeHealth } from '../../lib/initiative-health';
 import {
   aggregateInsights,
@@ -21,6 +21,7 @@ import {
 import { toDateOnly } from '../lib/date-only';
 import { filterSetToWhere, UnsupportedFilterError } from '../lib/insights-filters';
 import { buildGuestVisibilityWhere } from '../lib/issue-visibility';
+import { logger } from '../lib/logger';
 
 /**
  * Which issues the caller may count: exactly what bootstrap/delta ship them
@@ -832,9 +833,18 @@ export class AnalyticsService {
         throw new InsightsInputError('View not found');
       }
       viewTeamId = view.teamId;
-      const checked = validateFilterSet(view.filters);
-      if (!checked.ok) {
-        throw new InsightsInputError(`This view's filters are invalid: ${checked.error}`);
+      // A stored view can predate the write-time validation. Keep the
+      // conditions that are sound and drop (and log) the rest instead of
+      // refusing the whole scan or treating the view as unfiltered.
+      const checked = sanitizeStoredFilterSet(view.filters);
+      if (!checked.set) {
+        throw new InsightsInputError("This view's filters are invalid");
+      }
+      if (checked.dropped > 0) {
+        logger.warn(
+          { dropped: checked.dropped, viewId },
+          'custom view has invalid stored filter conditions; dropped',
+        );
       }
       try {
         viewWhere = filterSetToWhere(checked.set);
