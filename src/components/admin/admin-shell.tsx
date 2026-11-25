@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createContext, useContext } from 'react';
 import { Button } from '@/components/ui/button';
+import { ScrollX } from '@/components/ui/scroll-x';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
 
@@ -69,26 +70,28 @@ export function AdminShell({
                   {t('admin.nav.adminTitle')}
                 </span>
               </div>
-              <nav
-                aria-label={t('admin.nav.adminTitle')}
-                className="order-last -mx-1 flex w-full min-w-0 items-center gap-1 overflow-x-auto pb-1 md:order-none md:mx-0 md:w-auto md:pb-0"
-              >
-                {NAV.map(item => (
-                  <Link
-                    aria-current={isActive(pathname, item.href) ? 'page' : undefined}
-                    className={cn(
-                      'flex shrink-0 items-center whitespace-nowrap rounded px-3 py-1.5 text-sm transition-colors max-md:min-h-11',
-                      isActive(pathname, item.href)
-                        ? 'bg-muted font-medium text-foreground'
-                        : 'text-muted-foreground hover:text-foreground',
-                    )}
-                    href={item.href}
-                    key={item.href}
-                  >
-                    {t(item.labelKey)}
-                  </Link>
-                ))}
-              </nav>
+              <ScrollX className="order-last w-full min-w-0 md:order-none md:w-auto">
+                <nav
+                  aria-label={t('admin.nav.adminTitle')}
+                  className="flex items-center gap-1 pb-1 md:pb-0"
+                >
+                  {NAV.map(item => (
+                    <Link
+                      aria-current={isActive(pathname, item.href) ? 'page' : undefined}
+                      className={cn(
+                        'flex shrink-0 items-center whitespace-nowrap rounded px-3 py-1.5 text-sm transition-colors max-md:min-h-11',
+                        isActive(pathname, item.href)
+                          ? 'bg-muted font-medium text-foreground'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                      href={item.href}
+                      key={item.href}
+                    >
+                      {t(item.labelKey)}
+                    </Link>
+                  ))}
+                </nav>
+              </ScrollX>
               <div className="ml-auto flex shrink-0 items-center gap-3">
                 <span className="hidden text-muted-foreground text-xs lg:inline">{adminEmail}</span>
                 <Button asChild className={cn(TOUCH_TARGET)} size="sm" variant="outline">

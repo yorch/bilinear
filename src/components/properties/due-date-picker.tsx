@@ -176,6 +176,9 @@ export function DueDatePicker({
           'px-1.5 py-1 text-xs',
           TOUCH_TARGET,
           'max-md:justify-start',
+          // Below `lg` a set chip is "<field> <date>": two flex items, so the
+          // space between them has to be a gap, not a text node.
+          value && labelBelowLg && 'gap-1.5',
           value ? colorClass : 'text-muted-foreground',
         )}
         triggerTitle={title}

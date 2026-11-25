@@ -135,7 +135,7 @@ export function EstimatePicker({
           />
         </>
       }
-      triggerClassName={cn('gap-1 px-1 py-0.5', TOUCH_TARGET, 'max-md:justify-start')}
+      triggerClassName={cn('gap-1.5 px-1 py-0.5', TOUCH_TARGET, 'max-md:justify-start')}
       triggerTitle={t('properties.estimate.setEstimate')}
     >
       {close => (

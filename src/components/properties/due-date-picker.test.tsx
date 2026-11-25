@@ -220,3 +220,13 @@ describe('DueDatePicker panel alignment', () => {
     expect(panelOf().className).toContain('right-0');
   });
 });
+
+describe('DueDatePicker mobile label', () => {
+  it('separates the field label from the value with a flex gap', () => {
+    render(<DueDatePicker labelBelowLg="Due date" onChange={vi.fn()} value="2026-11-26" />);
+    const trigger = screen.getByRole('button', { name: 'Due date fmt(2026-11-26)' });
+    expect(trigger.className).toContain('gap-1.5');
+    expect(trigger.firstElementChild?.textContent).toBe('Due date');
+    expect(trigger.textContent).toBe('Due datefmt(2026-11-26)');
+  });
+});
