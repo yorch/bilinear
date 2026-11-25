@@ -123,7 +123,7 @@ export function Calendar({ className, max, min, onChange, value }: CalendarProps
   const seed = selected ?? parseDateKey(today) ?? [2000, 0, 1];
   const [view, setView] = useState<[number, number]>([seed[0], seed[1]]);
   const [focusKey, setFocusKey] = useState<string | null>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLTableElement>(null);
   const pendingFocus = useRef(false);
   const [year, month] = view;
 
@@ -196,7 +196,7 @@ export function Calendar({ className, max, min, onChange, value }: CalendarProps
     }
   });
 
-  const onGridKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+  const onGridKeyDown = (e: KeyboardEvent<HTMLTableElement>) => {
     const from = (e.target as HTMLElement).getAttribute('data-date');
     if (!from) {
       return;

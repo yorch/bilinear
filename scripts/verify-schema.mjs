@@ -122,6 +122,24 @@ async function main() {
       problems.push('idx_issues_title_trgm is not GIN (title gin_trgm_ops)');
     }
 
+    // pg_trgm only extracts trigrams from characters the database's LC_CTYPE
+    // calls alphanumeric. Under LC_CTYPE=C, show_trgm('导出') is '{}', every
+    // CJK/Thai similarity() is 0, and duplicate suggestions for those titles
+    // return nothing without any error. The index exists either way, so only
+    // this assertion catches it.
+    const { rows: ctype } = await client.query(
+      `SELECT show_trgm('导出') <> '{}'::text[] AS ok,
+              (SELECT datctype FROM pg_database WHERE datname = current_database()) AS ctype`,
+    );
+    if (ctype[0].ok) {
+      console.log(`  ✓ pg_trgm extracts trigrams from non-Latin text (LC_CTYPE=${ctype[0].ctype})`);
+    } else {
+      console.log(`  ✗ pg_trgm extracts NO trigrams from non-Latin text (LC_CTYPE=${ctype[0].ctype})`);
+      problems.push(
+        `database LC_CTYPE is '${ctype[0].ctype}': show_trgm('导出') is empty, so trigram duplicate suggestions for Chinese/Japanese/Thai titles return nothing. Recreate the database with a UTF-8 ctype (C.UTF-8 or en_US.UTF-8); see docs/DATABASE_SCHEMA.md`,
+      );
+    }
+
     // Prisma 7 drops NOT NULL on String[] when the baseline is regenerated,
     // so the custom migration puts it back. Scoping to `public` is load-bearing.
     const { rows: arr } = await client.query(`
@@ -148,7 +166,7 @@ async function main() {
   }
 
   if (problems.length > 0) {
-    console.error(`\nFAIL — the custom migration did not fully apply:\n  ${problems.join('\n  ')}`);
+    console.error(`\nFAIL — the database is missing something the custom migration or the app requires:\n  ${problems.join('\n  ')}`);
     process.exit(1);
   }
   console.log('\nOK — every object the custom migration creates is present.');

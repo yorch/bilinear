@@ -195,6 +195,24 @@ const CASES = [
     table: 'issues',
   },
   {
+    // The typo fallback runs on most duplicate-suggestion requests, and the
+    // trigram index is not org-scoped, so this is the query to watch. The issue
+    // titles are 'Issue N', so 'Issue 4242' has many near neighbours — a
+    // realistic worst case for the % bitmap scan. Mirrors TrigramDuplicateScorer
+    // (threshold lowered per transaction, as the service does).
+    index: 'idx_issues_title_trgm',
+    name: 'duplicate-suggestion trigram fallback (TrigramDuplicateScorer)',
+    params: [ORG, [teamId(1), teamId(2)], 'Issue 4242'],
+    setup: ["SELECT set_config('pg_trgm.similarity_threshold', '0.4', true)"],
+    sql: `SELECT i.id, similarity(i.title, $3::text) AS score
+            FROM issues i JOIN workflow_states ws ON ws.id = i.state_id
+           WHERE i.organization_id = $1 AND i.archived_at IS NULL AND i.trashed = false
+             AND ws.type::text != 'canceled' AND i.team_id = ANY($2::uuid[])
+             AND i.title % $3::text AND similarity(i.title, $3::text) >= 0.4
+           ORDER BY score DESC LIMIT 5`,
+    table: 'issues',
+  },
+  {
     index: 'sync_actions_organization_id_model_name_model_id_idx',
     name: 'sync action lookup by model',
     params: [ORG, 'Issue', '00000000-0000-0000-0000-000000009999'],
@@ -224,7 +242,20 @@ async function main() {
     const notes = [];
     console.log('');
     for (const c of CASES) {
-      const explain = await pool.query(`EXPLAIN (ANALYZE, BUFFERS) ${c.sql}`, c.params);
+      // A case may need per-transaction settings (SET LOCAL semantics), so run
+      // it on one connection inside a transaction.
+      const conn = await pool.connect();
+      let explain;
+      try {
+        await conn.query('BEGIN');
+        for (const stmt of c.setup ?? []) {
+          await conn.query(stmt);
+        }
+        explain = await conn.query(`EXPLAIN (ANALYZE, BUFFERS) ${c.sql}`, c.params);
+      } finally {
+        await conn.query('ROLLBACK').catch(() => {});
+        conn.release();
+      }
       const plan = explain.rows.map(r => r['QUERY PLAN']).join('\n');
       const usedIndex = plan.includes(c.index);
       const seqScan = new RegExp(`Seq Scan on ${c.table}\\b`).test(plan);

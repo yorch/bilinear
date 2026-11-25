@@ -137,23 +137,39 @@ describe.skipIf(!DB_URL)('duplicate suggestions against real Postgres', () => {
     expect(ids).not.toContain(unrelated.id);
   });
 
+  // Titles here are unique to this test so earlier rows cannot crowd a negative
+  // out of the top-5; the negatives score 0.10-0.19, i.e. below the 0.22 floor
+  // but above a careless 0.05, so loosening the floor turns this red.
   it.each([
     [
       'Japanese',
-      'ログイン画面でエラーが発生する',
-      ['メール通知が届かない', 'ダークモードで文字が読めない'],
+      'カレンダーが今日にスクロールできない',
+      'カレンダーを今日にスクロールできません',
+      ['カレンダーの表示が重い', '設定画面にスクロールバーがない'],
     ],
-    ['Chinese', '导出报表时系统崩溃', ['用户头像上传失败', '搜索结果为空时崩溃']],
-    ['Thai', 'ไม่สามารถเข้าสู่ระบบได้', ['ทดสอบการแสดงผลหน้าจอมือถือ']],
+    [
+      'Chinese',
+      '日历视图无法滚动到今天',
+      '日历视图不能滚动到今天',
+      ['导出视图无法保存', '用户头像上传失败'],
+    ],
+    [
+      'Thai',
+      'ปฏิทินเลื่อนไปวันนี้ไม่ได้',
+      'ปฏิทินไม่สามารถเลื่อนไปวันนี้ได้',
+      ['ปฏิทินแสดงสีผิดพลาด', 'ทดสอบการแสดงผลหน้าจอมือถือ'],
+    ],
   ])(
-    'does not suggest unrelated %s titles (precision at the lowered floor)',
-    async (_n, query, negatives) => {
+    'keeps precision for %s: finds the rewording, not weakly similar titles',
+    async (_n, existing, query, negatives) => {
+      const target = await issue(existing);
       const ids: string[] = [];
       for (const title of negatives) {
         ids.push((await issue(title)).id);
       }
       const { out } = await suggestFor(query);
       const got = out.map(r => r.issue.id);
+      expect(got).toContain(target.id);
       for (const id of ids) {
         expect(got).not.toContain(id);
       }
@@ -184,8 +200,10 @@ describe.skipIf(!DB_URL)('duplicate suggestions against real Postgres', () => {
       'Checkout totals incorrect when paying with saved card on the second try today',
     );
     const long = 'Chekout totalz incorect wehn payng wth savd cardd on teh secnd tryy todya';
-    const { out } = await suggestFor(long);
+    const { out, source } = await suggestFor(long);
     expect(out.map(r => r.issue.id)).not.toContain(target.id);
+    // Keep these typos out of the later fallback test's FTS matches.
+    await prisma.issue.deleteMany({ where: { id: { in: [source.id, target.id] } } });
   });
 
   it('applies scoping and exclusions to trigram matches', async () => {
