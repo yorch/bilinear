@@ -859,6 +859,11 @@ export const typeDefs = `
     updatedAt: DateTime!
   }
 
+  type NotificationLaneCounts {
+    priority: Int!
+    other: Int!
+  }
+
   type NotificationPayload {
     success: Boolean!
     notification: Notification
@@ -1485,6 +1490,14 @@ export const typeDefs = `
     responseStatus: Int
     responseBody: String
     errorMessage: String
+    """
+    Machine-readable failure class (ENOTFOUND, TLS, HTTP_STATUS, ...); null for
+    unclassified failures and for rows that predate codes. errorMessage stays
+    as the English fallback.
+    """
+    errorCode: String
+    "Interpolation values for errorCode, e.g. { status: 502 }."
+    errorParams: JSON
     nextAttemptAt: DateTime
     deliveredAt: DateTime
     createdAt: DateTime!
@@ -1953,6 +1966,11 @@ export const typeDefs = `
     """
     notifications(limit: Int, before: DateTime, snoozed: Boolean): [Notification!]!
     notificationUnreadCount: Int!
+    """
+    Exact unread totals for the Priority and Other inbox lanes (unsnoozed,
+    visible issues only); they always sum to notificationUnreadCount.
+    """
+    notificationLaneUnreadCounts: NotificationLaneCounts!
     notificationIsSubscribed(issueId: ID!): Boolean!
     """
     Ids of the live issues the caller is subscribed to, newest subscription

@@ -377,6 +377,15 @@
     "yourName": "Your name",
     "yourNameHint": "Shown to teammates. You can change it later in settings."
   },
+  "calendar": {
+    "clear": "Clear date",
+    "dateInput": "Type a date",
+    "invalidDate": "Enter a date like {example}",
+    "nextMonth": "Next month",
+    "outOfRange": "That date is outside the allowed range",
+    "previousMonth": "Previous month",
+    "time": "Time"
+  },
   "commandPalette": {
     "actions": {
       "createIssue": "Create new issue",
@@ -1322,6 +1331,7 @@
     "bulkCycleNeedsSameTeam": "Select issues from a single team to set a cycle",
     "bulkDeleteConfirmBody": "{count} issues will be permanently deleted. This cannot be undone.",
     "bulkDeleteConfirmTitle": "Delete {count} issues?",
+    "bulkMore": "More",
     "bulkUpdateFailed": "Failed to update issues",
     "clear": "Clear",
     "clearAll": "Clear all",
@@ -1383,6 +1393,10 @@
     "issuesGroupName": "Issues",
     "label": "Label",
     "labels": "Labels",
+    "labelsDroppedOnBulkMove_one": "Moved. Label removed from {issues} because it doesn't exist in the new team: {labels}",
+    "labelsDroppedOnBulkMove_other": "Moved. Labels removed from {issues} because they don't exist in the new team: {labels}",
+    "labelsDroppedOnMove_one": "Moved. Label removed because it doesn't exist in the new team: {labels}",
+    "labelsDroppedOnMove_other": "Moved. Labels removed because they don't exist in the new team: {labels}",
     "lastUpdatedDaysAgo_one": "Last updated {count} day ago",
     "lastUpdatedDaysAgo_other": "Last updated {count} days ago",
     "layoutBoard": "Board",
@@ -2059,6 +2073,7 @@
       "exportTruncated": "Export limited to the newest {rows} entries.",
       "filterByUserId": "Filter by user ID",
       "forbidden": "You need admin access to view audit logs.",
+      "ipUnavailable": "IP unavailable: configure TRUST_PROXY_HEADERS behind a trusted proxy",
       "loadMore": "Load more",
       "noEntriesFound": "No audit log entries found.",
       "resourceTypes": {
@@ -2565,7 +2580,31 @@
         "colStatus": "Status",
         "colTime": "Time",
         "empty": "No deliveries yet",
+        "errors": {
+          "EAI_AGAIN": "Temporary DNS failure resolving {target}",
+          "EAI_AGAINNoDetail": "Temporary DNS failure resolving the host",
+          "ECONNREFUSED": "Connection refused by {target}",
+          "ECONNREFUSEDNoDetail": "Connection refused by the server",
+          "ECONNRESET": "The server reset the connection",
+          "ENOTFOUND": "Couldn't resolve host {target}",
+          "ENOTFOUNDNoDetail": "Couldn't resolve the host",
+          "HTTP_STATUS": "The endpoint responded with HTTP {status}",
+          "HTTP_STATUSNoDetail": "The endpoint responded with an error status",
+          "PRIVATE_ADDRESS": "The URL points to a private or internal address",
+          "TIMEOUT": "Timed out after {ms} ms",
+          "TIMEOUTNoDetail": "Timed out waiting for the server",
+          "TLS": "TLS certificate problem ({tlsCode})",
+          "TLSNoDetail": "TLS certificate problem",
+          "URL_NOT_ALLOWED": "The webhook URL is no longer allowed",
+          "WEBHOOK_DISABLED": "The webhook was disabled"
+        },
         "loadError": "Failed to load deliveries",
+        "status": {
+          "failed": "Failed",
+          "in_flight": "In flight",
+          "pending": "Pending",
+          "success": "Delivered"
+        },
         "title": "Recent deliveries"
       },
       "description": "Send events to external HTTP endpoints. Each delivery is signed with HMAC SHA-256 (X-Bilinear-Signature header).",
@@ -2603,6 +2642,7 @@
       "updateError": "Failed to update webhook",
       "url": "URL",
       "urlInvalid": "Enter a valid http(s) URL, e.g. https://example.com/hook.",
+      "urlPrivate": "URL cannot point to a private or internal address. Use a publicly reachable URL.",
       "urlRequired": "Enter the URL that should receive events.",
       "webhookCreated": "Webhook created",
       "webhookDeleted": "Webhook deleted",
@@ -2686,6 +2726,7 @@
       "membersLoadError": "Could not load members",
       "myPreferences": "My Preferences",
       "name": "Name",
+      "navLabel": "Workspace",
       "neverUsed": "Never used",
       "noApiTokensYet": "No API tokens yet.",
       "noMembersFound": "No members found.",

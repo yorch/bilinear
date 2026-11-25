@@ -15,7 +15,11 @@ import { randomUUID } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../../generated/prisma';
-import { DuplicateSuggestionService, FtsDuplicateScorer } from './duplicate-suggestion.service';
+import {
+  DuplicateSuggestionService,
+  FtsDuplicateScorer,
+  TrigramDuplicateScorer,
+} from './duplicate-suggestion.service';
 
 const DB_URL = process.env.DUPLICATE_SUGGESTION_TEST_DB;
 
@@ -100,10 +104,160 @@ describe.skipIf(!DB_URL)('duplicate suggestions against real Postgres', () => {
     expect(frHit.map(r => r.issue.id)).toContain(fr.id);
   });
 
-  it('matches a non-space-separated title only on an identical run (documented limit)', async () => {
+  it('matches an identical non-space-separated title', async () => {
     const cn = await issue('导出失败');
     const same = (await suggestFor('导出失败')).out;
     expect(same.map(r => r.issue.id)).toContain(cn.id);
+  });
+
+  // FTS sees each of these as one opaque token, so only trigram similarity can
+  // connect a reworded title to its neighbour.
+  it.each([
+    ['Japanese', 'ログイン画面でエラーが発生する', 'ログイン画面がエラーになる'],
+    ['Chinese', '导出报表时系统崩溃', '导出报表的时候崩溃'],
+    ['Thai', 'ไม่สามารถเข้าสู่ระบบได้', 'เข้าสู่ระบบไม่ได้'],
+  ])('finds a reworded %s title via the trigram fallback', async (_name, existing, query) => {
+    const target = await issue(existing);
+    const unrelated = await issue('完全に無関係なタイトルです');
+    const { out, source } = await suggestFor(query);
+    const ids = out.map(r => r.issue.id);
+    expect(ids).toContain(target.id);
+    expect(ids).not.toContain(unrelated.id);
+    expect(ids).not.toContain(source.id);
+  });
+
+  // The 0.22 floor exists for short rewordings like this (similarity 0.25),
+  // which the old 0.3 floor dropped; unrelated short titles must stay out.
+  it('finds a short CJK rewording but not unrelated short titles', async () => {
+    const target = await issue('导出失败');
+    const unrelated = await issue('用户头像上传');
+    const { out } = await suggestFor('导出成功');
+    const ids = out.map(r => r.issue.id);
+    expect(ids).toContain(target.id);
+    expect(ids).not.toContain(unrelated.id);
+  });
+
+  // Titles here are unique to this test so earlier rows cannot crowd a negative
+  // out of the top-5; the negatives score 0.10-0.19, i.e. below the 0.22 floor
+  // but above a careless 0.05, so loosening the floor turns this red.
+  it.each([
+    [
+      'Japanese',
+      'カレンダーが今日にスクロールできない',
+      'カレンダーを今日にスクロールできません',
+      ['カレンダーの表示が重い', '設定画面にスクロールバーがない'],
+    ],
+    [
+      'Chinese',
+      '日历视图无法滚动到今天',
+      '日历视图不能滚动到今天',
+      ['导出视图无法保存', '用户头像上传失败'],
+    ],
+    [
+      'Thai',
+      'ปฏิทินเลื่อนไปวันนี้ไม่ได้',
+      'ปฏิทินไม่สามารถเลื่อนไปวันนี้ได้',
+      ['ปฏิทินแสดงสีผิดพลาด', 'ทดสอบการแสดงผลหน้าจอมือถือ'],
+    ],
+  ])(
+    'keeps precision for %s: finds the rewording, not weakly similar titles',
+    async (_n, existing, query, negatives) => {
+      const target = await issue(existing);
+      const ids: string[] = [];
+      for (const title of negatives) {
+        ids.push((await issue(title)).id);
+      }
+      const { out } = await suggestFor(query);
+      const got = out.map(r => r.issue.id);
+      expect(got).toContain(target.id);
+      for (const id of ids) {
+        expect(got).not.toContain(id);
+      }
+    },
+  );
+
+  // One CJK character used to route the whole title to trigram-first, and any
+  // trigram hit then hid every FTS word match.
+  it('merges FTS and trigram results for a mixed-script title', async () => {
+    const ftsOnly = await issue(
+      'Safari users see a blank screen after every single export attempt in the dashboard',
+    );
+    const trigramOnly = await issue('Export 失败 on Safari today');
+    const { out } = await suggestFor('Export 失败 on Safari');
+    const ids = out.map(r => r.issue.id);
+    expect(ids).toContain(ftsOnly.id);
+    expect(ids).toContain(trigramOnly.id);
+  });
+
+  it('does not offer a same-prefix Latin title through the typo fallback', async () => {
+    const other = await issue('Checkout page loads slowly');
+    const { out } = await suggestFor('Checkout totals incorrect');
+    expect(out.map(r => r.issue.id)).not.toContain(other.id);
+  });
+
+  it('skips the typo fallback for long Latin titles', async () => {
+    const target = await issue(
+      'Checkout totals incorrect when paying with saved card on the second try today',
+    );
+    const long = 'Chekout totalz incorect wehn payng wth savd cardd on teh secnd tryy todya';
+    const { out, source } = await suggestFor(long);
+    expect(out.map(r => r.issue.id)).not.toContain(target.id);
+    // Keep these typos out of the later fallback test's FTS matches.
+    await prisma.issue.deleteMany({ where: { id: { in: [source.id, target.id] } } });
+  });
+
+  it('applies scoping and exclusions to trigram matches', async () => {
+    const archived = await issue('搜索结果为空时崩溃');
+    await prisma.issue.update({ data: { archivedAt: new Date() }, where: { id: archived.id } });
+    const declined = await issue('搜索结果为空时崩溃了', canceledId);
+    const otherTeam = await prisma.team.create({
+      data: { displayName: 'Hidden', key: 'HID', name: 'Hidden', organizationId: orgId },
+    });
+    const hiddenState = await prisma.workflowState.create({
+      data: { color: '#000', name: 'Backlog', teamId: otherTeam.id, type: 'backlog' },
+    });
+    n += 1;
+    const hidden = await prisma.issue.create({
+      data: {
+        identifier: `HID-${n}`,
+        number: n,
+        organizationId: orgId,
+        stateId: hiddenState.id,
+        teamId: otherTeam.id,
+        title: '搜索结果为空时崩溃',
+      },
+    });
+    const visible = await issue('搜索结果为空时崩溃');
+    try {
+      const { out, source } = await suggestFor('搜索结果为空时崩溃');
+      // The scorer's own SQL must exclude them; hydration is only the second line.
+      const raw = await new TrigramDuplicateScorer(prisma).score({
+        limit: 5,
+        orgId,
+        scope: scope(),
+        source,
+      });
+      const rawIds = raw.map(r => r.issueId);
+      expect(rawIds).toContain(visible.id);
+      expect(rawIds).not.toContain(archived.id);
+      expect(rawIds).not.toContain(declined.id);
+      expect(rawIds).not.toContain(hidden.id);
+      const ids = out.map(r => r.issue.id);
+      expect(ids).toContain(visible.id);
+      expect(ids).not.toContain(archived.id);
+      expect(ids).not.toContain(declined.id);
+      expect(ids).not.toContain(hidden.id);
+    } finally {
+      await prisma.issue.delete({ where: { id: hidden.id } });
+      await prisma.workflowState.delete({ where: { id: hiddenState.id } });
+      await prisma.team.delete({ where: { id: otherTeam.id } });
+    }
+  });
+
+  it('falls back to trigram for a misspelt Latin title FTS cannot match', async () => {
+    const target = await issue('Checkout totals incorrect');
+    const { out } = await suggestFor('Chekout totalz incorect');
+    expect(out.map(r => r.issue.id)).toContain(target.id);
   });
 
   it('ignores stop words when setting the match threshold', async () => {

@@ -66,3 +66,36 @@ describe('webhookTest rate limit', () => {
     await expect(test(other.ctx, 'hook-x')).resolves.toBeDefined();
   });
 });
+
+describe('webhook SSRF rejection is machine-readable', () => {
+  function create(err: Error) {
+    const { ctx } = ctxFor();
+    (ctx.services.webhook as unknown as Record<string, unknown>).create = vi
+      .fn()
+      .mockRejectedValue(err);
+    return webhookResolvers.Mutation.webhookCreate(
+      undefined,
+      { input: { events: ['issue.created'], name: 'n', url: 'http://10.0.0.1/' } },
+      ctx,
+    );
+  }
+  const named = (name: string, message: string) => Object.assign(new Error(message), { name });
+
+  it('tags a private-address URL with BAD_USER_INPUT + reason PRIVATE_URL', async () => {
+    await expect(create(named('WebhookPrivateUrlError', 'private'))).rejects.toMatchObject({
+      extensions: { code: 'BAD_USER_INPUT', reason: 'PRIVATE_URL' },
+    });
+  });
+
+  it('tags a malformed URL with reason INVALID_URL', async () => {
+    await expect(create(named('WebhookInvalidUrlError', 'bad'))).rejects.toMatchObject({
+      extensions: { code: 'BAD_USER_INPUT', reason: 'INVALID_URL' },
+    });
+  });
+
+  it('leaves other bad-input errors without a reason', async () => {
+    const err = await create(named('WebhookNoEventsError', 'none')).catch(e => e);
+    expect(err.extensions.code).toBe('BAD_USER_INPUT');
+    expect(err.extensions.reason).toBeUndefined();
+  });
+});

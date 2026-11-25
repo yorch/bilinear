@@ -1056,7 +1056,9 @@ CREATE TABLE webhook_deliveries (
     attempts        INTEGER NOT NULL DEFAULT 0,
     response_status INTEGER,
     response_body   TEXT,
-    error_message   TEXT,
+    error_message   TEXT,                       -- English fallback; old rows carry only this
+    error_code      VARCHAR(40),                -- ENOTFOUND, TLS, HTTP_STATUS, ... (UI localises from this)
+    error_params    JSONB,                      -- interpolation values for error_code
     next_attempt_at TIMESTAMPTZ,
     delivered_at    TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -1806,9 +1808,10 @@ yarn db:seed                                   # schema is actually usable
 ```
 
 > **Expected residual in the drift check.** The diff is no longer empty, and
-> `--exit-code` will not return 0. It emits exactly one statement:
+> `--exit-code` will not return 0. It emits exactly two statements:
 >
 > ```sql
+> DROP INDEX "idx_issues_title_trgm";
 > DROP INDEX "sync_actions_organization_id_xact_id_id_idx";
 > ```
 >
@@ -1817,7 +1820,10 @@ yarn db:seed                                   # schema is actually usable
 > index lives in the custom migration, and a schema-derived diff sees a
 > database object the datamodel doesn't know how to declare and proposes
 > dropping it. **Never apply that statement**: the index is what makes the
-> commit-order fence's `ORDER BY (xact_id, id)` read cheap.
+> commit-order fence's `ORDER BY (xact_id, id)` read cheap. The same goes for
+> the trigram index: it needs the `pg_trgm` extension and a `gin_trgm_ops`
+> opclass, neither of which the datamodel can declare, and it serves the
+> duplicate-suggestion fallback for Chinese/Japanese/Thai titles.
 >
 > The check still has teeth. Treat *any other* statement in the output as real
 > drift. Anything Prisma **can** express — a column, a type, a nullability
@@ -1836,19 +1842,26 @@ The queries it runs, for when you want to inspect by hand. Keep
 `scripts/verify-schema.mjs` in step if you change them:
 
 ```sql
--- The three partial indexes, plus the xid8 covering index and the FTS GIN.
+-- The three partial indexes, plus the xid8 covering index, the FTS GIN and
+-- the pg_trgm title index.
 SELECT indexname FROM pg_indexes
  WHERE schemaname = 'public'
    AND (indexdef ILIKE '%WHERE%' OR indexname IN (
-         'sync_actions_organization_id_xact_id_id_idx', 'idx_issues_fts'))
+         'sync_actions_organization_id_xact_id_id_idx', 'idx_issues_fts',
+         'idx_issues_title_trgm'))
  ORDER BY 1;
 -- Expect exactly:
 --   auth_tokens_token_hash_magic_link_idx
 --   auth_tokens_token_hash_refresh_key
 --   idx_issues_fts
+--   idx_issues_title_trgm
 --   issues_team_id_state_id_active_idx
 --   sync_actions_organization_id_xact_id_id_idx
 --   teams_organization_id_key_key
+
+-- The extension the trigram index depends on.
+SELECT extname FROM pg_extension WHERE extname = 'pg_trgm';
+-- Expect exactly: pg_trgm
 
 -- NOT NULL survived on the String[] columns (Prisma 7 drops it on regenerate).
 -- Must scope to `public`, or pg_catalog's own array columns swamp the result.
@@ -1857,6 +1870,18 @@ SELECT table_name, column_name FROM information_schema.columns
  ORDER BY 1, 2;
 -- Expect exactly: auth_tokens.scopes, webhooks.events
 ```
+
+> **The database's `LC_CTYPE` must be a UTF-8 ctype** (`C.UTF-8`, `en_US.UTF-8`, …),
+> not `C`/`POSIX`. `pg_trgm` only extracts trigrams from characters the ctype
+> treats as alphanumeric: under `LC_CTYPE=C`, `show_trgm('导出')` is `{}` and
+> every Chinese/Japanese/Thai `similarity()` is 0, so duplicate suggestions for
+> those titles silently return nothing (the index still builds, nothing errors).
+> `yarn db:verify:schema` asserts it and fails naming the ctype; the server
+> logs a one-time warning on the first trigram lookup. Fix by recreating the
+> database (`CREATE DATABASE … TEMPLATE template0 LC_CTYPE 'C.UTF-8'`) — the
+> ctype cannot be changed in place. The `postgres:18` image's default is fine.
+> `DUPLICATE_SUGGESTION_TEST_DB` points the real-Postgres duplicate tests at a
+> migrated scratch DB; CI sets it in the `e2e` job.
 
 > **There are no user triggers any more.** `SELECT tgname FROM pg_trigger WHERE
 > NOT tgisinternal` returns **zero rows**, and that is correct — the only one

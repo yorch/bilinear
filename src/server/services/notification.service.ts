@@ -232,6 +232,44 @@ export class NotificationService {
     });
   }
 
+  /**
+   * Exact unread totals per inbox lane, for the lane tabs. The lane rule
+   * mirrors the client's `classifyNotification` (notification-priority.ts):
+   * priority is assigned / mentioned / reminder, a reply to the caller's own
+   * comment, or a status change on an issue the caller is assigned; everything
+   * else is other. Same scoping as `getUnreadCount` — own rows, unsnoozed, and
+   * only issues the caller can still see — so `priority + other` always equals
+   * `getUnreadCount`.
+   */
+  async getLaneUnreadCounts(
+    userId: string,
+    orgId: string,
+  ): Promise<{ other: number; priority: number }> {
+    const now = new Date();
+    const visibility = await this.issueVisibilityWhere(userId, orgId);
+    const base: Prisma.NotificationWhereInput = {
+      OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: now } }],
+      organizationId: orgId,
+      read: false,
+      userId,
+    };
+    const priorityRule: Prisma.NotificationWhereInput = {
+      OR: [
+        { type: { in: ['ISSUE_ASSIGNED', 'ISSUE_MENTIONED', 'REMINDER'] } },
+        {
+          data: { equals: userId, path: ['replyToUserId'] },
+          type: 'ISSUE_COMMENTED',
+        },
+        { issue: { assigneeId: userId }, type: 'ISSUE_STATUS_CHANGED' },
+      ],
+    };
+    const [total, priority] = await Promise.all([
+      this.prisma.notification.count({ where: { ...base, AND: [visibility] } }),
+      this.prisma.notification.count({ where: { ...base, AND: [visibility, priorityRule] } }),
+    ]);
+    return { other: Math.max(0, total - priority), priority };
+  }
+
   async createForIssueAssignment(
     orgId: string,
     issueId: string,

@@ -14,6 +14,28 @@ import { useStore } from '@/providers/store-provider';
 const log = createClientLogger('use-issue-update');
 
 /**
+ * A team move silently removes labels scoped to the old team. The server names
+ * them in `issueUpdate.droppedLabelNames`; tell the user which ones went.
+ * Informational only (no Undo: the labels don't exist in the new team).
+ */
+export function droppedLabelNamesOf(data: unknown): string[] {
+  return (
+    (data as { issueUpdate?: { droppedLabelNames?: string[] | null } } | null)?.issueUpdate
+      ?.droppedLabelNames ?? []
+  );
+}
+
+export function notifyDroppedLabels(
+  data: unknown,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): void {
+  const names = droppedLabelNamesOf(data);
+  if (names.length > 0) {
+    toast.info(t('issues.labelsDroppedOnMove', { count: names.length, labels: names.join(', ') }));
+  }
+}
+
+/**
  * Injectable override for where optimistic issue state lives, so callers that
  * don't render from the shared `issueStore` can still get the offline-queue/
  * rollback/reconcile machinery below instead of hand-rolling their own copy.
@@ -123,6 +145,7 @@ export function useIssueUpdate(
             }
           },
           onSuccess: data => {
+            notifyDroppedLabels(data, t);
             const updated = (data as { issueUpdate?: { issue?: Record<string, unknown> } })
               ?.issueUpdate?.issue;
             if (updated) {

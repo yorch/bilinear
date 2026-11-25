@@ -8,14 +8,17 @@ import {
   auditActionLabel,
   auditResourceLabel,
   endOfDayIso,
+  resolveAuditResourceName,
   startOfDayIso,
 } from '@/components/settings/audit-action';
+import { AuditIpCell } from '@/components/settings/audit-ip-cell';
 import { LoadError } from '@/components/shared/load-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DateField } from '@/components/ui/date-field';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/page-header';
+import { ScrollX } from '@/components/ui/scroll-x';
 import { SimpleSelect } from '@/components/ui/select';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -89,8 +92,18 @@ const AUDIT_LOGS_QUERY = `
 const AuditLogPage = observer(function AuditLogPage() {
   const t = useTranslations();
   const { organizationMemberStore, teamStore, userStore } = useStore();
-  const resolveResourceName = (type: string, id: string): string | null =>
-    type === 'Team' ? (teamStore.findById(id)?.name ?? null) : null;
+  const resolveResourceName = (
+    type: string,
+    id: string,
+    metadata?: Record<string, unknown> | null,
+  ): string | null =>
+    resolveAuditResourceName(type, id, metadata, {
+      member: memberId => {
+        const u = userStore.findById(memberId);
+        return u ? u.displayName || u.email : null;
+      },
+      team: teamId => teamStore.findById(teamId)?.name ?? null,
+    });
   const memberRoles = organizationMemberStore.rolesByUserId as Record<string, unknown>;
   const memberOptions = userStore.all
     .filter(u => memberRoles[u.id] !== undefined)
@@ -296,20 +309,18 @@ const AuditLogPage = observer(function AuditLogPage() {
             options={[{ label: t('settings.auditLog.allUsers'), value: '' }, ...memberOptions]}
             value={userIdFilter}
           />
-          <Input
-            aria-label={t('settings.auditLog.dateFrom')}
-            className="w-full sm:w-40"
+          <DateField
+            ariaLabel={t('settings.auditLog.dateFrom')}
+            className="w-full sm:w-44"
             max={toDate || undefined}
-            onChange={e => setFromDate(e.target.value)}
-            type="date"
+            onChange={setFromDate}
             value={fromDate}
           />
-          <Input
-            aria-label={t('settings.auditLog.dateTo')}
-            className="w-full sm:w-40"
+          <DateField
+            ariaLabel={t('settings.auditLog.dateTo')}
+            className="w-full sm:w-44"
             min={fromDate || undefined}
-            onChange={e => setToDate(e.target.value)}
-            type="date"
+            onChange={setToDate}
             value={toDate}
           />
           <Button onClick={handleApplyFilters} size="sm" type="button">
@@ -337,7 +348,7 @@ const AuditLogPage = observer(function AuditLogPage() {
         ) : entries.length === 0 ? (
           <EmptyState size="compact" title={t('settings.auditLog.noEntriesFound')} />
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border">
+          <ScrollX className="rounded-lg border border-border">
             <table className="w-full min-w-[40rem] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted">
@@ -362,11 +373,8 @@ const AuditLogPage = observer(function AuditLogPage() {
                 {entries.map(entry => {
                   const open = expanded.has(entry.id);
                   const resource = entry.resourceType
-                    ? auditResourceLabel(
-                        t,
-                        entry.resourceType,
-                        entry.resourceId,
-                        resolveResourceName,
+                    ? auditResourceLabel(t, entry.resourceType, entry.resourceId, (type, id) =>
+                        resolveResourceName(type, id, entry.metadata),
                       )
                     : null;
                   const meta = entry.metadata && Object.keys(entry.metadata).length > 0;
@@ -439,13 +447,7 @@ const AuditLogPage = observer(function AuditLogPage() {
                           )}
                         </td>
                         <td className="px-4 py-2">
-                          {entry.ipAddress ? (
-                            <span className="font-mono text-xs text-muted-foreground">
-                              {entry.ipAddress}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-foreground-faint">—</span>
-                          )}
+                          <AuditIpCell ip={entry.ipAddress} />
                         </td>
                         <td className="whitespace-nowrap px-4 py-2">
                           <span className="text-xs text-muted-foreground">
@@ -473,7 +475,7 @@ const AuditLogPage = observer(function AuditLogPage() {
                 })}
               </tbody>
             </table>
-          </div>
+          </ScrollX>
         )}
 
         {hasMore && (

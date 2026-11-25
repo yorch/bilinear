@@ -59,6 +59,11 @@ function parseDocName(name: string): { type: 'issue' | 'document'; id: string } 
 }
 
 export interface RevalidateResult {
+  /**
+   * Valid but not allowed to edit (a guest on a team document). Callers must
+   * not persist this user's edits and must stop them writing on a live socket.
+   */
+  readOnly?: boolean;
   /** Present only when `valid` is `false` — for logging, not user-facing. */
   reason?: string;
   valid: boolean;
@@ -105,6 +110,13 @@ async function checkEntityAccessForUser(
     const role = await getTeamRole(prismaClient as PrismaClient, doc.teamId, userId, orgId);
     if (!role) {
       return { reason: 'no longer a member of this team', valid: false };
+    }
+    // A guest may read a team document but never edit it (GraphQL's
+    // requireTeamMemberNotGuest). onAuthenticate sets readOnly at connect, but
+    // a member demoted AFTER connecting is still on a writable socket, so every
+    // re-check must report it too.
+    if (role === 'guest') {
+      return { readOnly: true, valid: true };
     }
   }
   return { valid: true };
@@ -272,7 +284,66 @@ export async function revalidateRoomAccess(
   return results;
 }
 
+// ─── Per-update gating ──────────────────────────────────────────────────────
+// Hocuspocus applies and broadcasts an update before onStoreDocument runs, and
+// the store hook only sees the LAST writer. So access is also enforced where
+// updates come in (beforeHandleMessage, cached per connection) and the store
+// gate checks EVERY writer since the last successful store (tracked in
+// onChange), not just lastContext.
+const MESSAGE_REVALIDATE_TTL_MS = 10_000;
+const messageChecks = new WeakMap<object, { at: number; result: RevalidateResult }>();
+
+type WriterEntry = { orgId: string; seq: number; userId: string };
+const writersByDocument = new WeakMap<object, Map<string, WriterEntry>>();
+let writerSeq = 0;
+
+function noteWriter(document: object, ctx: Partial<HookContext> | undefined): void {
+  if (!ctx?.orgId || !ctx.userId) {
+    return;
+  }
+  let writers = writersByDocument.get(document);
+  if (!writers) {
+    writers = new Map();
+    writersByDocument.set(document, writers);
+  }
+  writers.set(`${ctx.orgId}:${ctx.userId}`, {
+    orgId: ctx.orgId,
+    seq: ++writerSeq,
+    userId: ctx.userId,
+  });
+}
+
 export const server = new Server<HookContext>({
+  // Gate every incoming message BEFORE it is applied/broadcast. The check is
+  // cached per connection for MESSAGE_REVALIDATE_TTL_MS so typing does not cost
+  // a DB round-trip per keystroke; the store-time check below is the fresh,
+  // uncached backstop. Throwing makes Hocuspocus close the connection.
+  async beforeHandleMessage({ connection, context, documentName }) {
+    const parsed = parseDocName(documentName);
+    const { orgId, userId } = (context ?? {}) as Partial<HookContext>;
+    if (!(parsed && orgId && userId)) {
+      return;
+    }
+    const now = Date.now();
+    let cached = messageChecks.get(connection);
+    if (!cached || now - cached.at >= MESSAGE_REVALIDATE_TTL_MS) {
+      cached = { at: now, result: await revalidateAccess(prisma, parsed, orgId, userId) };
+      messageChecks.set(connection, cached);
+    }
+    if (!cached.result.valid) {
+      log.warn(
+        { documentName, orgId, reason: cached.result.reason, userId },
+        'YJS message rejected: access revoked since connect — closing connection',
+      );
+      connection.close();
+      throw new Error('Access revoked');
+    }
+    if (cached.result.readOnly && !connection.readOnly) {
+      // Demoted to guest mid-session: Hocuspocus drops updates from a
+      // readOnly connection from here on.
+      connection.readOnly = true;
+    }
+  },
   // Debounce DB writes: flush at most once per 2s of inactivity, hard cap 20s.
   debounce: 2_000,
   maxDebounce: 20_000,
@@ -384,6 +455,11 @@ export const server = new Server<HookContext>({
     log.info({ documentName, userId: claims.userId }, 'YJS client authenticated');
   },
 
+  // Record who wrote since the last successful store.
+  async onChange({ document, context }) {
+    noteWriter(document, context as Partial<HookContext> | undefined);
+  },
+
   async onDisconnect({ documentName, context }) {
     log.info({ documentName, userId: (context as HookContext)?.userId }, 'YJS client disconnected');
   },
@@ -433,32 +509,42 @@ export const server = new Server<HookContext>({
       return;
     }
 
-    // Re-validate the writer whose transaction triggered this (debounced)
-    // flush — `lastContext` is the HookContext stamped by onAuthenticate for
-    // whichever connection made the most recent change. Tenant isolation is
-    // enforced at connect time, but a session can be revoked (deactivated,
-    // org suspended, removed from the team) any time after that while the
-    // room stays open — this is the layer that catches it on every write.
-    const { orgId, userId } = (lastContext ?? {}) as Partial<HookContext>;
-    if (orgId && userId) {
+    // Re-validate EVERY writer since the last successful store, not just
+    // `lastContext`: Hocuspocus has already applied each update to the shared
+    // in-memory doc, so a revoked user's edit followed by an entitled peer's
+    // edit inside the debounce would otherwise be persisted via the peer's
+    // check. `encodeStateAsUpdate` cannot separate authors, so if ANY writer
+    // is revoked or read-only (guest) the whole persist is skipped and that
+    // writer's connections are closed. Their entry stays recorded so later
+    // stores keep failing closed rather than persisting the tainted in-memory
+    // state once an entitled peer edits.
+    const writers = writersByDocument.get(document) ?? new Map<string, WriterEntry>();
+    const last = (lastContext ?? {}) as Partial<HookContext>;
+    if (last.orgId && last.userId) {
+      noteWriter(document, last);
+    }
+    const snapshot = [...writers.entries()];
+    let blocked = false;
+    for (const [, writer] of snapshot) {
+      const { orgId, userId } = writer;
       const result = await revalidateAccess(prisma, parsed, orgId, userId);
-      if (!result.valid) {
-        log.warn(
-          { documentName, orgId, reason: result.reason, userId },
-          'YJS store skipped: writer access revoked since connect — closing their connection',
-        );
-        // Don't persist an edit from a session that should no longer have
-        // access, and close that specific connection so it stops being able
-        // to make further edits. Other still-valid connections on the same
-        // room are left alone.
-        for (const connection of document.getConnections()) {
-          const ctx = connection.context as Partial<HookContext> | undefined;
-          if (ctx?.orgId === orgId && ctx?.userId === userId) {
-            connection.close();
-          }
-        }
-        return;
+      if (result.valid && !result.readOnly) {
+        continue;
       }
+      blocked = true;
+      log.warn(
+        { documentName, orgId, reason: result.reason ?? 'read-only (guest)', userId },
+        'YJS store skipped: writer access revoked since connect — closing their connection',
+      );
+      for (const connection of document.getConnections()) {
+        const ctx = connection.context as Partial<HookContext> | undefined;
+        if (ctx?.orgId === orgId && ctx?.userId === userId) {
+          connection.close();
+        }
+      }
+    }
+    if (blocked) {
+      return;
     }
 
     // Tenant isolation is enforced at connection time in onAuthenticate. The
@@ -478,6 +564,12 @@ export const server = new Server<HookContext>({
         });
       }
       log.debug({ bytes: state.length, documentName }, 'Persisted YJS state to DB');
+      // Forget writers covered by this store (unless they wrote again since).
+      for (const [key, writer] of snapshot) {
+        if (writers.get(key)?.seq === writer.seq) {
+          writers.delete(key);
+        }
+      }
     } catch (err) {
       log.error({ documentName, err }, 'Failed to persist YJS state');
     }
@@ -551,7 +643,19 @@ async function runYjsSweep(): Promise<void> {
         const results = await revalidateRoomAccess(prisma, parsed, orgId, [...byUser.keys()]);
         for (const [userId, connections] of byUser) {
           const result = results.get(userId);
-          if (!result?.valid) {
+          if (result?.valid && result.readOnly) {
+            // Demoted to guest: close any still-writable socket so the
+            // reconnect (onAuthenticate) comes back read-only.
+            for (const connection of connections) {
+              if (!connection.readOnly) {
+                log.info(
+                  { documentName, orgId, userId },
+                  'YJS re-auth sweep: closing writable connection of a guest',
+                );
+                connection.close();
+              }
+            }
+          } else if (!result?.valid) {
             for (const connection of connections) {
               log.info(
                 { documentName, orgId, reason: result?.reason, userId },

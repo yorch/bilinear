@@ -221,6 +221,10 @@ export const notificationResolvers = {
 
       return ctx.services.notification.isSubscribed(ctx.userId, issueId);
     },
+    notificationLaneUnreadCounts: async (_parent: unknown, _args: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      return ctx.services.notification.getLaneUnreadCounts(ctx.userId, ctx.orgId);
+    },
 
     notificationSubscribedIssueIds: async (
       _parent: unknown,

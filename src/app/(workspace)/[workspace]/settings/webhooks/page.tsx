@@ -6,6 +6,7 @@ import {
   changedWebhookFields,
   WebhookForm,
   type WebhookFormValues,
+  webhookUrlErrorKey,
 } from '@/components/settings/webhook-form';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { LoadError } from '@/components/shared/load-error';
@@ -22,7 +23,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { gql, gqlQuery, isPermissionError } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
-import { deliveryTone } from '@/lib/webhook-delivery';
+import { deliveryErrorText, deliveryStatusLabel, deliveryTone } from '@/lib/webhook-delivery';
 
 /**
  * Webhook management page (admins only).
@@ -50,7 +51,9 @@ interface Webhook {
 interface WebhookDelivery {
   attempts: number;
   createdAt: string;
+  errorCode: string | null;
   errorMessage: string | null;
+  errorParams: Record<string, number | string> | null;
   event: string;
   id: string;
   responseStatus: number | null;
@@ -67,7 +70,7 @@ const WEBHOOKS_QUERY = `
 const WEBHOOK_DELIVERIES_QUERY = `
   query WebhookDeliveries($webhookId: ID!, $limit: Int) {
     webhookDeliveries(webhookId: $webhookId, limit: $limit) {
-      id event status attempts responseStatus errorMessage createdAt
+      id event status attempts responseStatus errorCode errorParams errorMessage createdAt
     }
   }
 `;
@@ -100,14 +103,16 @@ const WEBHOOK_TEST_MUTATION = `
   mutation WebhookTest($id: ID!) {
     webhookTest(id: $id) {
       success
-      delivery { id status responseStatus errorMessage attempts }
+      delivery { id status responseStatus errorCode errorParams errorMessage attempts }
     }
   }
 `;
 
 interface WebhookTestResult {
   attempts: number;
+  errorCode: string | null;
   errorMessage: string | null;
+  errorParams: Record<string, number | string> | null;
   id: string;
   responseStatus: number | null;
   status: string;
@@ -123,6 +128,32 @@ const WEBHOOK_ROTATE_SECRET_MUTATION = `
 `;
 
 const DELIVERIES_LIMIT = 20;
+
+/**
+ * Failure reason, clamped to two lines. Tapping/clicking expands it in place so
+ * a long resolver or TLS message is readable without leaving the page; the full
+ * server text stays in `title` for hover.
+ */
+function DeliveryError({ text, title }: { text: string | null; title?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!text) {
+    return <span>—</span>;
+  }
+  return (
+    <button
+      aria-expanded={expanded}
+      className={cn(
+        'block w-full break-words text-left text-muted-foreground hover:text-foreground',
+        !expanded && 'line-clamp-2',
+      )}
+      onClick={() => setExpanded(e => !e)}
+      title={title}
+      type="button"
+    >
+      {text}
+    </button>
+  );
+}
 
 /**
  * The last few deliveries for one webhook. Mounted only while expanded, so
@@ -165,52 +196,76 @@ function WebhookDeliveries({ webhookId }: { webhookId: string }) {
     return <EmptyState size="compact" title={t('settings.webhooks.deliveries.empty')} />;
   }
 
+  const formatTime = (iso: string) =>
+    formatDateTime(iso, { day: 'numeric', hour: '2-digit', minute: '2-digit', month: 'short' });
+
   return (
-    <div className="overflow-x-auto rounded border border-border">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="border-b border-border bg-muted text-left font-medium text-muted-foreground">
-            <th className="px-3 py-1.5">{t('settings.webhooks.deliveries.colStatus')}</th>
-            <th className="px-3 py-1.5">{t('settings.webhooks.deliveries.colEvent')}</th>
-            <th className="px-3 py-1.5 text-right">
-              {t('settings.webhooks.deliveries.colAttempts')}
-            </th>
-            <th className="px-3 py-1.5">{t('settings.webhooks.deliveries.colError')}</th>
-            <th className="px-3 py-1.5">{t('settings.webhooks.deliveries.colTime')}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {deliveries.map(d => (
-            <tr className="bg-background" key={d.id}>
-              <td className="px-3 py-1.5">
-                <Badge className="font-mono" tone={deliveryTone(d.status)} variant="square">
-                  {d.status}
-                  {d.responseStatus !== null ? ` · ${d.responseStatus}` : ''}
-                </Badge>
-              </td>
-              <td className="px-3 py-1.5 font-mono text-foreground-secondary">{d.event}</td>
-              <td className="px-3 py-1.5 text-right font-mono tabular-nums text-muted-foreground">
-                {d.attempts}
-              </td>
-              <td
-                className="max-w-xs truncate px-3 py-1.5 text-muted-foreground"
-                title={d.errorMessage ?? undefined}
-              >
-                {d.errorMessage ?? '—'}
-              </td>
-              <td className="whitespace-nowrap px-3 py-1.5 font-mono tabular-nums text-muted-foreground">
-                {formatDateTime(d.createdAt, {
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  month: 'short',
-                })}
-              </td>
+    <>
+      {/* Below md a 5-column table forces a horizontal scroll that clips the Error
+          and Time columns, so each delivery becomes a stacked card instead. */}
+      <ul className="space-y-2 md:hidden">
+        {deliveries.map(d => (
+          <li className="rounded border border-border bg-background p-3 text-xs" key={d.id}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Badge className="font-mono" tone={deliveryTone(d.status)} variant="square">
+                {deliveryStatusLabel(t, d.status)}
+                {d.responseStatus !== null ? ` · ${d.responseStatus}` : ''}
+              </Badge>
+              <span className="font-mono tabular-nums text-muted-foreground">
+                {formatTime(d.createdAt)}
+              </span>
+            </div>
+            <div className="mt-2 break-all font-mono text-foreground-secondary">{d.event}</div>
+            <div className="mt-1 font-mono tabular-nums text-muted-foreground">
+              {t('settings.webhooks.deliveries.colAttempts')}: {d.attempts}
+            </div>
+            <div className="mt-1">
+              <DeliveryError text={deliveryErrorText(t, d)} title={d.errorMessage ?? undefined} />
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto rounded border border-border md:block">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-border bg-muted text-left font-medium text-muted-foreground">
+              <th className="px-3 py-1.5">{t('settings.webhooks.deliveries.colStatus')}</th>
+              <th className="px-3 py-1.5">{t('settings.webhooks.deliveries.colEvent')}</th>
+              <th className="px-3 py-1.5 text-right">
+                {t('settings.webhooks.deliveries.colAttempts')}
+              </th>
+              <th className="px-3 py-1.5">{t('settings.webhooks.deliveries.colError')}</th>
+              <th className="px-3 py-1.5">{t('settings.webhooks.deliveries.colTime')}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {deliveries.map(d => (
+              <tr className="bg-background" key={d.id}>
+                <td className="px-3 py-1.5">
+                  <Badge className="font-mono" tone={deliveryTone(d.status)} variant="square">
+                    {deliveryStatusLabel(t, d.status)}
+                    {d.responseStatus !== null ? ` · ${d.responseStatus}` : ''}
+                  </Badge>
+                </td>
+                <td className="px-3 py-1.5 font-mono text-foreground-secondary">{d.event}</td>
+                <td className="px-3 py-1.5 text-right font-mono tabular-nums text-muted-foreground">
+                  {d.attempts}
+                </td>
+                <td className="w-full min-w-48 max-w-xs px-3 py-1.5">
+                  <DeliveryError
+                    text={deliveryErrorText(t, d)}
+                    title={d.errorMessage ?? undefined}
+                  />
+                </td>
+                <td className="min-w-36 whitespace-nowrap px-3 py-1.5 font-mono tabular-nums text-muted-foreground">
+                  {formatTime(d.createdAt)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -284,7 +339,7 @@ export default function WebhooksSettingsPage() {
       const res = await gql(WEBHOOK_CREATE_MUTATION, { input: values });
       if (res.errors?.length) {
         // Localized fallback, never the server's raw text (see the frontend rules).
-        toast.error(t('settings.webhooks.createError'));
+        toast.error(t(webhookUrlErrorKey(res.errors) ?? 'settings.webhooks.createError'));
         return;
       }
       const created = (res.data as { webhookCreate?: { webhook?: Webhook } } | undefined)
@@ -313,7 +368,7 @@ export default function WebhooksSettingsPage() {
     try {
       const res = await gql(WEBHOOK_UPDATE_MUTATION, { id: hook.id, input: changed });
       if (res.errors?.length) {
-        toast.error(t('settings.webhooks.updateError'));
+        toast.error(t(webhookUrlErrorKey(res.errors) ?? 'settings.webhooks.updateError'));
         return;
       }
       const updated = (res.data as { webhookUpdate?: { webhook?: Webhook | null } } | undefined)
@@ -339,7 +394,7 @@ export default function WebhooksSettingsPage() {
         toast.error(
           code === 'RATELIMITED'
             ? t('settings.webhooks.testRateLimited')
-            : t('settings.webhooks.testError'),
+            : t(webhookUrlErrorKey(res.errors) ?? 'settings.webhooks.testError'),
         );
         return;
       }
@@ -493,10 +548,12 @@ export default function WebhooksSettingsPage() {
               const showDeliveries = expandedDeliveries.has(hook.id);
               return (
                 <div className="rounded-lg border border-border bg-card p-4" key={hook.id}>
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium text-foreground">{hook.name}</span>
+                        <span className="break-words text-sm font-medium text-foreground">
+                          {hook.name}
+                        </span>
                         <Badge tone={hook.enabled ? 'success' : 'muted'} variant="square">
                           {hook.enabled
                             ? t('settings.webhooks.enabled')
@@ -510,7 +567,7 @@ export default function WebhooksSettingsPage() {
                           </Badge>
                         ) : null}
                       </div>
-                      <div className="mt-1 truncate font-mono text-xs text-muted-foreground">
+                      <div className="mt-1 break-all font-mono text-xs text-muted-foreground md:truncate">
                         {hook.url}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1">
@@ -525,8 +582,8 @@ export default function WebhooksSettingsPage() {
                           </Badge>
                         ))}
                       </div>
-                      <div className="mt-2 flex items-center gap-2 text-xs">
-                        <span className="text-muted-foreground">
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="shrink-0 text-muted-foreground">
                           {t('settings.webhooks.signingSecret')}
                         </span>
                         {revealedSecrets.has(hook.id) ? (
@@ -581,13 +638,13 @@ export default function WebhooksSettingsPage() {
                               })
                             : t('settings.webhooks.testFailedDetail', {
                                 detail:
-                                  testResults[hook.id]?.errorMessage ??
+                                  deliveryErrorText(t, testResults[hook.id] ?? {}) ??
                                   `HTTP ${testResults[hook.id]?.responseStatus ?? '—'}`,
                               })}
                         </p>
                       )}
                     </div>
-                    <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                    <div className="flex flex-wrap gap-1 md:shrink-0 md:justify-end">
                       <Button
                         onClick={() => handleToggle(hook)}
                         size="xs"

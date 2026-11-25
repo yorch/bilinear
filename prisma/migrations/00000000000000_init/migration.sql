@@ -725,6 +725,8 @@ CREATE TABLE "webhook_deliveries" (
     "response_status" INTEGER,
     "response_body" TEXT,
     "error_message" TEXT,
+    "error_code" VARCHAR(40),
+    "error_params" JSONB,
     "next_attempt_at" TIMESTAMPTZ,
     "delivered_at" TIMESTAMPTZ,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,

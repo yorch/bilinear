@@ -1,5 +1,8 @@
+import { makeExecutableSchema } from '@graphql-tools/schema';
+import { parse } from 'graphql';
 import { describe, expect, it } from 'vitest';
 import {
+  computeOperationComplexity,
   listArgumentEstimator,
   MAX_LIST_COMPLEXITY_MULTIPLIER,
   MAX_QUERY_COMPLEXITY,
@@ -61,5 +64,36 @@ describe('MAX_QUERY_COMPLEXITY calibration', () => {
     const nodeWithNestedList = RICH_NODE_CHILD_COMPLEXITY + innerList;
     const outer = cost(nodeWithNestedList, { first: MAX_LIST_COMPLEXITY_MULTIPLIER });
     expect(outer).toBeGreaterThan(MAX_QUERY_COMPLEXITY);
+  });
+});
+
+describe('computeOperationComplexity', () => {
+  const schema = makeExecutableSchema({
+    typeDefs: `
+      enum Kind { Issue Project }
+      input FavInput { kind: Kind! }
+      type Query { ok: Boolean }
+      type Mutation { fav(input: FavInput!): Boolean }
+    `,
+  });
+  const document = parse('mutation($i: FavInput!) { fav(input: $i) }');
+
+  it('computes a cost for valid variables', () => {
+    expect(
+      computeOperationComplexity({ document, schema, variables: { i: { kind: 'Issue' } } }),
+    ).toBe(1);
+  });
+
+  it('reports a wrongly-cased enum variable as BAD_USER_INPUT, naming the value', () => {
+    let thrown: unknown;
+    try {
+      computeOperationComplexity({ document, schema, variables: { i: { kind: 'ISSUE' } } });
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toMatchObject({
+      extensions: { code: 'BAD_USER_INPUT' },
+      message: expect.stringContaining('"ISSUE"'),
+    });
   });
 });

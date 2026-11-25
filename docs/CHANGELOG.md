@@ -17,6 +17,37 @@ Conventions elsewhere live in [`PATTERNS.md`](PATTERNS.md); open findings live i
 
 ---
 
+## Recently shipped (2026-11-25, follow-up to the platform review — the flagged gaps, closed, plus what the adversarial pass found)
+
+Closed every gap listed after #167, each stream reviewed by an adversarial Opus pass.
+
+- **Collaborative editing (the two Highs the review found).** A member demoted to
+  guest after connecting kept write access to team docs, and the store gate only
+  checked the *last* writer, so a revoked user's edit was persisted whenever an
+  entitled user edited inside the debounce. Fix: guests are read-only at store
+  time and in the sweep; every message is re-validated (10 s cache per
+  connection); every writer since the last store is re-checked. Trade-off: a
+  room tainted by a revoked writer stops persisting until it unloads (fail closed).
+- **Webhook errors** are stored as `errorCode` + `errorParams` (folded into init)
+  and localised client-side; old rows fall back to the stored text. Non-2xx
+  deliveries now record `HTTP_STATUS` (previously a null `errorMessage`).
+- **Duplicate suggestions** gained a `pg_trgm` scorer for scripts without spaces
+  and a Latin typo fallback. It needs a UTF-8 `LC_CTYPE` database (on `C` the
+  trigram set is empty and similarity is silently 0), so `db:verify:schema` now
+  asserts it. `migrate diff` now shows **two** expected `DROP INDEX` lines (xid8
+  and `idx_issues_title_trgm`), since Prisma cannot declare an opclass.
+- **Inbox lane counts** are exact (server grouped counts + a snapshot of unread
+  rows reconciled with the *current* classifier, so a late-loading issue store
+  doesn't skew lanes).
+- **Themed calendar / date field** replaces native date inputs (grid keyboard
+  navigation, full-date labels, typed entry). Bulk team move shows one aggregated
+  dropped-labels toast.
+- Known limits: no composite `(organization_id, title gin_trgm_ops)` index (the
+  benchmark shows the planner choosing another index on the 100k seed); a
+  10-second window where a revoked user's edit can be applied in memory (never
+  persisted); the Yjs sweep change is untested; the reminder time field is still
+  browser-drawn.
+
 ## Recently shipped (2026-11-24, full platform review — ~50 UX/functionality fixes, five features, and a security sweep that found what green tests missed)
 
 Reports, findings, research and before/after screenshots live in

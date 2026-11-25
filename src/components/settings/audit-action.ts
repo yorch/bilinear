@@ -84,6 +84,36 @@ export function auditResourceLabel(
   return { id: resolveName?.(resourceType, resourceId) ?? resourceId.slice(0, 8), type };
 }
 
+export interface AuditNameLookups {
+  member: (id: string) => string | null;
+  team: (id: string) => string | null;
+}
+
+/**
+ * Best human name for an audit row's resource. Members and teams come from the
+ * client stores; a webhook has no store, but every webhook audit row records
+ * its `name` in metadata (which also survives the webhook being deleted).
+ * Null when nothing resolves, so the caller falls back to the short id.
+ */
+export function resolveAuditResourceName(
+  type: string,
+  id: string,
+  metadata: Record<string, unknown> | null | undefined,
+  lookups: AuditNameLookups,
+): string | null {
+  if (type === 'Team') {
+    return lookups.team(id);
+  }
+  if (type === 'OrganizationMember') {
+    return lookups.member(id);
+  }
+  if (type === 'Webhook') {
+    const name = metadata?.name;
+    return typeof name === 'string' && name.trim() ? name : null;
+  }
+  return null;
+}
+
 /** `YYYY-MM-DD` (a date input value) -> ISO instant at the start of that local day. */
 export function startOfDayIso(date: string): string | null {
   const d = new Date(`${date}T00:00:00`);

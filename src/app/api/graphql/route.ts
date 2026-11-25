@@ -5,14 +5,13 @@ import { startServerAndCreateNextHandler } from '@as-integrations/next';
 import type { GraphQLFormattedError } from 'graphql';
 import { GraphQLError } from 'graphql';
 import depthLimit from 'graphql-depth-limit';
-import { fieldExtensionsEstimator, getComplexity, simpleEstimator } from 'graphql-query-complexity';
 import { NextRequest } from 'next/server';
 import type { GraphQLContext } from '@/server/graphql/context';
 import { createContext } from '@/server/graphql/context';
 import { resolvers } from '@/server/graphql/resolvers';
 import { typeDefs } from '@/server/graphql/schema';
 import { env } from '@/server/lib/env';
-import { listArgumentEstimator, MAX_QUERY_COMPLEXITY } from '@/server/lib/graphql-complexity';
+import { computeOperationComplexity, MAX_QUERY_COMPLEXITY } from '@/server/lib/graphql-complexity';
 import { logger, runWithRequestContext } from '@/server/lib/logger';
 import { isOriginStringAllowed } from '@/server/lib/request-security';
 import {
@@ -217,23 +216,11 @@ const server = new ApolloServer<GraphQLContext>({
       async requestDidStart() {
         return {
           async didResolveOperation({ request, document, schema }) {
-            const complexity = getComplexity({
-              // Order matters — the first estimator to return a defined
-              // number for a field wins. fieldExtensionsEstimator is a
-              // no-op today (no field in the schema declares a `complexity`
-              // extension) but costs nothing to keep first, in case one is
-              // added later. listArgumentEstimator applies the
-              // first/limit/last multiplier described above. simpleEstimator
-              // is the final fallback, unchanged from before.
-              estimators: [
-                fieldExtensionsEstimator(),
-                listArgumentEstimator(),
-                simpleEstimator({ defaultComplexity: 1 }),
-              ],
-              operationName: request.operationName ?? undefined,
-              query: document,
+            const complexity = computeOperationComplexity({
+              document,
+              operationName: request.operationName,
               schema,
-              variables: request.variables ?? {},
+              variables: request.variables,
             });
             if (complexity > MAX_QUERY_COMPLEXITY / 2) {
               logger.warn({ complexity }, 'High GraphQL query complexity');

@@ -52,8 +52,10 @@ each service; resolvers catch and remap to `GraphQLError` with
   triggers, `String[] NOT NULL`) lives in
   `00000000000001_custom_constraints_and_triggers`. Verify with the real-Postgres
   recipe in DATABASE_SCHEMA.md before deploying — `prisma migrate diff` is
-  expected to emit exactly one `DROP INDEX` for the xid8 covering index, because
-  Prisma cannot declare `@@index` on an `Unsupported` field.
+  expected to emit exactly two `DROP INDEX` statements: the xid8 covering index
+  (Prisma cannot declare `@@index` on an `Unsupported` field) and
+  `idx_issues_title_trgm` (the `pg_trgm` extension and `gin_trgm_ops` opclass).
+  Never apply either.
 
 ## Configuration
 

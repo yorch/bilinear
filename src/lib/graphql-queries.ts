@@ -343,6 +343,7 @@ export const ISSUE_UPDATE_MUTATION = `
     issueUpdate(id: $id, input: $input) {
       success
       lastSyncId
+      droppedLabelNames
       issue { ${ISSUE_FIELDS} }
     }
   }

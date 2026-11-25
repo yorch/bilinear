@@ -170,6 +170,100 @@ describe('NotificationStore', () => {
     });
   });
 
+  describe('exact lane counts', () => {
+    const laneOf = (n: DBNotification) => (n.type === 'ISSUE_ASSIGNED' ? 'priority' : 'other');
+
+    it('reports the server lane totals, not the loaded page', () => {
+      store.setLaneClassifier(laneOf);
+      store.reconcile([makeNotification({ id: 'a' })], 1, 30, { other: 20, priority: 10 });
+      expect(store.laneUnreadCount('priority')).toBe(10);
+      expect(store.laneUnreadCount('other')).toBe(20);
+    });
+
+    it('is null before the server counts arrive', () => {
+      expect(store.laneUnreadCount('priority')).toBeNull();
+    });
+
+    it('moves only the affected lane on optimistic mark-read and snooze', () => {
+      store.setLaneClassifier(laneOf);
+      store.reconcile(
+        [
+          makeNotification({ id: 'p', type: 'ISSUE_ASSIGNED' }),
+          makeNotification({ id: 'o', type: 'ISSUE_COMMENTED' }),
+        ],
+        2,
+        30,
+        { other: 20, priority: 10 },
+      );
+      store.markRead('p');
+      expect(store.laneUnreadCount('priority')).toBe(9);
+      expect(store.laneUnreadCount('other')).toBe(20);
+      store.optimisticUpdate('o', { snoozedUntilAt: '2999-01-01T00:00:00Z' });
+      expect(store.laneUnreadCount('other')).toBe(19);
+    });
+
+    it('does not double count rows from Load more, and zeroes on mark all read', () => {
+      store.setLaneClassifier(laneOf);
+      store.reconcile([makeNotification({ id: 'a', type: 'ISSUE_ASSIGNED' })], 1, 5, {
+        other: 0,
+        priority: 5,
+      });
+      store.appendPage(
+        [
+          makeNotification({
+            createdAt: '2025-01-01T00:00:00Z',
+            id: 'old',
+            type: 'ISSUE_ASSIGNED',
+          }),
+        ],
+        1,
+      );
+      expect(store.laneUnreadCount('priority')).toBe(5);
+      store.markAllRead();
+      expect(store.laneUnreadCount('priority')).toBe(0);
+    });
+  });
+
+  describe('lane counts when the classifier inputs change after reconcile', () => {
+    const rows = () => [
+      makeNotification({ id: 'a', type: 'ISSUE_STATUS_CHANGED' }),
+      makeNotification({ id: 'b', type: 'ISSUE_STATUS_CHANGED' }),
+      makeNotification({ id: 'c', type: 'ISSUE_COMMENTED' }),
+    ];
+
+    it('does not move the counts when an unread row re-classifies (cold-load race)', () => {
+      // The server counted a and b as priority; the issue store was empty at
+      // reconcile so the client first saw them as "other".
+      store.setLaneClassifier(() => 'other');
+      store.reconcile(rows(), 3, 10, { other: 4, priority: 6 });
+      expect(store.laneUnreadCount('priority')).toBe(6);
+      // The issues arrive: the same rows now classify as priority.
+      store.setLaneClassifier(n => (n.type === 'ISSUE_STATUS_CHANGED' ? 'priority' : 'other'));
+      expect(store.laneUnreadCount('priority')).toBe(6);
+      expect(store.laneUnreadCount('other')).toBe(4);
+    });
+
+    it('classifies a row read after the swap with the current classifier', () => {
+      store.setLaneClassifier(() => 'other');
+      store.reconcile(rows(), 3, 10, { other: 4, priority: 6 });
+      store.setLaneClassifier(n => (n.type === 'ISSUE_STATUS_CHANGED' ? 'priority' : 'other'));
+      store.markRead('a');
+      expect(store.laneUnreadCount('priority')).toBe(5);
+      expect(store.laneUnreadCount('other')).toBe(4);
+    });
+
+    it('adds a newly unread row to the lane it classifies into now', () => {
+      store.setLaneClassifier(() => 'other');
+      store.reconcile(rows(), 3, 10, { other: 4, priority: 6 });
+      store.applySyncAction('I', 'd', makeNotification({ id: 'd', type: 'ISSUE_ASSIGNED' }));
+      store.setLaneClassifier(n =>
+        n.type === 'ISSUE_ASSIGNED' || n.type === 'ISSUE_STATUS_CHANGED' ? 'priority' : 'other',
+      );
+      expect(store.laneUnreadCount('priority')).toBe(7);
+      expect(store.laneUnreadCount('other')).toBe(4);
+    });
+  });
+
   describe('reconcile and snoozed rows', () => {
     it('keeps a snoozed row that the default list omits', () => {
       store.upsertMany([

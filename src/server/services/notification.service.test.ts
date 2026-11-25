@@ -282,6 +282,52 @@ describe('NotificationService', () => {
     });
   });
 
+  describe('getLaneUnreadCounts', () => {
+    it('counts the priority rule and derives other from the visible total', async () => {
+      prisma.notification.count.mockResolvedValueOnce(12).mockResolvedValueOnce(5);
+
+      const result = await service.getLaneUnreadCounts(TEST_USER.id, TEST_ORG.id);
+
+      expect(result).toEqual({ other: 7, priority: 5 });
+      const [total, priority] = prisma.notification.count.mock.calls.map(c => c[0].where);
+      const snooze = [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: expect.any(Date) } }];
+      const scoped = {
+        OR: snooze,
+        organizationId: TEST_ORG.id,
+        read: false,
+        userId: TEST_USER.id,
+      };
+      // Full objects, not toMatchObject: a dropped snooze filter or visibility
+      // AND on EITHER query breaks "priority + other === getUnreadCount".
+      expect(total).toEqual({ ...scoped, AND: [{}] });
+      expect(priority).toEqual({
+        ...scoped,
+        AND: [
+          {},
+          {
+            OR: [
+              { type: { in: ['ISSUE_ASSIGNED', 'ISSUE_MENTIONED', 'REMINDER'] } },
+              {
+                data: { equals: TEST_USER.id, path: ['replyToUserId'] },
+                type: 'ISSUE_COMMENTED',
+              },
+              { issue: { assigneeId: TEST_USER.id }, type: 'ISSUE_STATUS_CHANGED' },
+            ],
+          },
+        ],
+      });
+    });
+
+    it('scopes both counts exactly like getUnreadCount', async () => {
+      prisma.notification.count.mockResolvedValue(0);
+      await service.getUnreadCount(TEST_USER.id, TEST_ORG.id);
+      await service.getLaneUnreadCounts(TEST_USER.id, TEST_ORG.id);
+      const [unread, total, priority] = prisma.notification.count.mock.calls.map(c => c[0].where);
+      expect(total).toEqual(unread);
+      expect(priority).toEqual({ ...unread, AND: [...unread.AND, expect.anything()] });
+    });
+  });
+
   describe('createForIssueAssignment', () => {
     it('creates ISSUE_ASSIGNED notification', async () => {
       prisma.notification.create.mockResolvedValue(TEST_NOTIFICATION);

@@ -48,6 +48,26 @@ export function isHttpUrl(value: string): boolean {
   }
 }
 
+/**
+ * i18n key for a server rejection of the webhook URL, read from the GraphQL
+ * error's `extensions.reason` (BAD_USER_INPUT). Null for anything else, so the
+ * caller falls back to its generic message.
+ */
+export function webhookUrlErrorKey(errors: unknown[] | undefined): string | null {
+  const ext = (errors?.[0] as { extensions?: { code?: string; reason?: string } } | undefined)
+    ?.extensions;
+  if (ext?.code !== 'BAD_USER_INPUT') {
+    return null;
+  }
+  if (ext.reason === 'PRIVATE_URL') {
+    return 'settings.webhooks.urlPrivate';
+  }
+  if (ext.reason === 'INVALID_URL') {
+    return 'settings.webhooks.urlInvalid';
+  }
+  return null;
+}
+
 interface WebhookFormProps {
   availableEvents: string[];
   busy: boolean;

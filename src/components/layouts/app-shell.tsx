@@ -22,6 +22,12 @@ export const AppShell = observer(function AppShell({ children }: AppShellProps) 
   // function per render re-ran that effect (stealing focus) on every re-render.
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
 
+  // The persisted collapsed-rail preference is applied after hydration: the
+  // store starts expanded so the first client render matches the server HTML.
+  useEffect(() => {
+    uiStore.restoreSidebarCollapsed();
+  }, [uiStore]);
+
   // Close the off-canvas drawer whenever the route changes (a Link click
   // inside it, browser back/forward, etc.) so it never sits open covering
   // the page the user just navigated to.

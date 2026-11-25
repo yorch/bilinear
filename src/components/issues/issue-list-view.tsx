@@ -312,8 +312,9 @@ export function IssueListView({
   return (
     // `pb-24` while rows are checked: the fixed bulk bar would otherwise cover
     // the last rows with nothing to scroll them clear of it (ISS-10).
+    // Phone: the bar is full-width and wraps up to `max-h-[40vh]`, so pad by that.
     <div
-      className={cn('flex flex-col', checkedIds.size > 0 && 'pb-24')}
+      className={cn('flex flex-col', checkedIds.size > 0 && 'pb-24 max-md:pb-[40vh]')}
       data-testid="issue-list-view"
     >
       {/* j/k moves a visual cursor only; announce it, or a screen-reader user

@@ -38,60 +38,96 @@ const WEBHOOK = {
   url: 'http://vm:3000/hook',
 };
 
+function fetchFailed(cause: unknown) {
+  return Object.assign(new TypeError('fetch failed'), { cause });
+}
+
 describe('describeDeliveryError', () => {
   it('surfaces the SSRF block hidden in the cause of undici\'s "fetch failed"', () => {
-    const err = Object.assign(new TypeError('fetch failed'), {
-      cause: new WebhookPrivateUrlError(),
+    const out = describeDeliveryError(fetchFailed(new WebhookPrivateUrlError()));
+    expect(out).toEqual({
+      code: 'PRIVATE_ADDRESS',
+      message: 'fetch failed (Webhook URL cannot point to a private/internal address)',
+      params: null,
     });
-    expect(describeDeliveryError(err)).toBe(
-      'fetch failed (Webhook URL cannot point to a private/internal address)',
-    );
   });
 
   it('distinguishes DNS and TLS failures by code', () => {
-    const dns = Object.assign(new TypeError('fetch failed'), {
-      cause: Object.assign(new Error('getaddrinfo ENOTFOUND nope.test'), { code: 'ENOTFOUND' }),
-    });
-    const tls = Object.assign(new TypeError('fetch failed'), {
-      cause: Object.assign(new Error('certificate has expired'), { code: 'CERT_HAS_EXPIRED' }),
-    });
-    expect(describeDeliveryError(dns)).toContain('ENOTFOUND');
-    expect(describeDeliveryError(tls)).toContain('CERT_HAS_EXPIRED');
-    expect(describeDeliveryError(dns)).not.toBe(describeDeliveryError(tls));
-  });
-
-  it('maps known network codes to plain language', () => {
-    const dns = Object.assign(new TypeError('fetch failed'), {
-      cause: Object.assign(new Error('getaddrinfo ENOTFOUND hooks.example.com'), {
-        code: 'ENOTFOUND',
-      }),
-    });
-    const refused = Object.assign(new TypeError('fetch failed'), {
-      cause: Object.assign(new Error('connect ECONNREFUSED 10.0.0.1:443'), {
-        code: 'ECONNREFUSED',
-      }),
-    });
-    expect(describeDeliveryError(dns)).toBe("Couldn't resolve host hooks.example.com (ENOTFOUND)");
-    expect(describeDeliveryError(refused)).toBe(
-      'Connection refused by 10.0.0.1:443 (ECONNREFUSED)',
+    const dns = fetchFailed(
+      Object.assign(new Error('getaddrinfo ENOTFOUND nope.test'), { code: 'ENOTFOUND' }),
     );
-  });
-
-  it('strips URL credentials and bounds the length', () => {
-    const err = Object.assign(new TypeError('fetch failed'), {
-      cause: new Error(
-        `connect to https://user:hunter2@internal.test/x failed ${'x'.repeat(2000)}`,
-      ),
+    const tls = fetchFailed(
+      Object.assign(new Error('certificate has expired'), { code: 'CERT_HAS_EXPIRED' }),
+    );
+    expect(describeDeliveryError(dns).message).toContain('ENOTFOUND');
+    expect(describeDeliveryError(tls).message).toContain('CERT_HAS_EXPIRED');
+    expect(describeDeliveryError(dns).code).toBe('ENOTFOUND');
+    expect(describeDeliveryError(tls)).toMatchObject({
+      code: 'TLS',
+      params: { tlsCode: 'CERT_HAS_EXPIRED' },
     });
-    const out = describeDeliveryError(err);
-    expect(out).not.toContain('hunter2');
-    expect(out).toContain('https://***@internal.test');
-    expect(out.length).toBeLessThanOrEqual(500);
   });
 
-  it('reports a timeout plainly', () => {
+  it('maps known network codes to plain language, a code and params', () => {
+    const dns = fetchFailed(
+      Object.assign(new Error('getaddrinfo ENOTFOUND hooks.example.com'), { code: 'ENOTFOUND' }),
+    );
+    const refused = fetchFailed(
+      Object.assign(new Error('connect ECONNREFUSED 10.0.0.1:443'), { code: 'ECONNREFUSED' }),
+    );
+    expect(describeDeliveryError(dns)).toEqual({
+      code: 'ENOTFOUND',
+      message: "Couldn't resolve host hooks.example.com (ENOTFOUND)",
+      params: { target: 'hooks.example.com' },
+    });
+    expect(describeDeliveryError(refused)).toEqual({
+      code: 'ECONNREFUSED',
+      message: 'Connection refused by 10.0.0.1:443 (ECONNREFUSED)',
+      params: { target: '10.0.0.1:443' },
+    });
+  });
+
+  it('classifies EAI_AGAIN, ECONNRESET and connect timeouts', () => {
+    const codeOf = (code: string) =>
+      describeDeliveryError(fetchFailed(Object.assign(new Error(`x ${code} y`), { code }))).code;
+    expect(codeOf('EAI_AGAIN')).toBe('EAI_AGAIN');
+    expect(codeOf('ECONNRESET')).toBe('ECONNRESET');
+    expect(codeOf('UND_ERR_CONNECT_TIMEOUT')).toBe('TIMEOUT');
+    expect(codeOf('ETIMEDOUT')).toBe('TIMEOUT');
+  });
+
+  it('leaves an unclassifiable failure uncoded with the raw description', () => {
+    const out = describeDeliveryError(new Error('boom'));
+    expect(out).toEqual({ code: null, message: 'boom', params: null });
+  });
+
+  it('strips URL credentials from the message and from params, and bounds the length', () => {
+    const err = fetchFailed(
+      new Error(`connect to https://user:hunter2@internal.test/x failed ${'x'.repeat(2000)}`),
+    );
+    const out = describeDeliveryError(err);
+    expect(out.message).not.toContain('hunter2');
+    expect(out.message).toContain('https://***@internal.test');
+    expect(out.message.length).toBeLessThanOrEqual(500);
+
+    const leaky = describeDeliveryError(
+      fetchFailed(
+        Object.assign(new Error('getaddrinfo ENOTFOUND https://u:hunter2@h.test/'), {
+          code: 'ENOTFOUND',
+        }),
+      ),
+    );
+    expect(JSON.stringify(leaky)).not.toContain('hunter2');
+  });
+
+  it('reports a timeout plainly, with the limit as a param', () => {
     const abort = Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
-    expect(describeDeliveryError(abort, 10_000)).toBe('Request timed out after 10000 ms');
+    expect(describeDeliveryError(abort, 10_000)).toEqual({
+      code: 'TIMEOUT',
+      message: 'Request timed out after 10000 ms',
+      params: { ms: 10_000 },
+    });
+    expect(describeDeliveryError(abort)).toMatchObject({ code: 'TIMEOUT', params: null });
   });
 });
 
@@ -179,6 +215,7 @@ describe('private hostnames that resolve to loopback', () => {
     expect(data.responseStatus).toBeNull();
     // the reason is visible, not a bare "fetch failed"
     expect(data.errorMessage).toContain('private/internal address');
+    expect(data.errorCode).toBe('PRIVATE_ADDRESS');
     expect(lookupMock).toHaveBeenCalledWith('vm');
   });
 });

@@ -135,6 +135,14 @@ jobs:
           yarn db:verify:fence
           yarn db:verify:config
 
+      # The real-Postgres duplicate-suggestion tests skip themselves unless
+      # this variable is set, and only this job has a database. They create and
+      # delete their own throwaway organization, so they are safe before seeding.
+      - name: Duplicate-suggestion tests against real Postgres
+        env:
+          DUPLICATE_SUGGESTION_TEST_DB: ${{ env.DATABASE_URL }}
+        run: yarn vitest run src/server/services/duplicate-suggestion.db.test.ts
+
       - name: Seed test database
         run: yarn db:seed
 

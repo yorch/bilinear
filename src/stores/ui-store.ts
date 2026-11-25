@@ -3,14 +3,19 @@ import { action, makeObservable, observable } from 'mobx';
 const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
 
 function readSidebarCollapsed(): boolean {
-  if (typeof window === 'undefined') {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+  } catch {
     return false;
   }
-  return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
 }
 
 export class UIStore {
-  sidebarCollapsed = readSidebarCollapsed();
+  // Always starts expanded so the first client render matches the server HTML;
+  // the stored preference is applied after hydration by `restoreSidebarCollapsed`.
+  // Reading localStorage here made the sidebar render differently from the SSR
+  // markup (React error #418) for anyone who had collapsed it.
+  sidebarCollapsed = false;
   activeTeamId: string | null = null;
   selectedIssueId: string | null = null;
   detailIssueId: string | null = null;
@@ -38,6 +43,7 @@ export class UIStore {
       openCreateProjectModal: action,
       openCreateTeamModal: action,
       openShortcutHelp: action,
+      restoreSidebarCollapsed: action,
       selectedIssueId: observable,
       setActiveTeamId: action,
       setDetailIssueId: action,
@@ -51,9 +57,18 @@ export class UIStore {
     });
   }
 
+  /** Apply the persisted sidebar preference. Call from an effect, never during render. */
+  restoreSidebarCollapsed() {
+    this.sidebarCollapsed = readSidebarCollapsed();
+  }
+
   setSidebarCollapsed(collapsed: boolean) {
     this.sidebarCollapsed = collapsed;
-    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
+    } catch {
+      // Storage blocked: the preference just lasts for this session.
+    }
   }
 
   toggleSidebarCollapsed() {

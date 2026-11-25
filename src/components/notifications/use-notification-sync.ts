@@ -4,7 +4,8 @@ import { useEffect } from 'react';
 import type { DBNotification } from '@/lib/db';
 import { gqlMutate } from '@/lib/graphql';
 import { useStore } from '@/providers/store-provider';
-import type { NotificationStore } from '@/stores/notification-store';
+import type { LaneUnread, NotificationStore } from '@/stores/notification-store';
+import { classifyNotification } from './notification-priority';
 import { NOTIFICATIONS_PAGE_QUERY, NOTIFICATIONS_WITH_COUNT_QUERY } from './notification-queries';
 
 /**
@@ -22,6 +23,13 @@ const PAGE_LIMIT = 50;
 /** Background refresh while the tab stays visible (notifications aren't pushed). */
 const REFRESH_INTERVAL_MS = 60_000;
 
+function parseLaneCounts(raw: unknown): LaneUnread | undefined {
+  const c = raw as Partial<LaneUnread> | null | undefined;
+  return typeof c?.priority === 'number' && typeof c.other === 'number'
+    ? { other: c.other, priority: c.priority }
+    : undefined;
+}
+
 /**
  * Fetch one page and reconcile it into the store. Also the Inbox's retry path.
  * A failure after a successful load keeps the rows already shown; only a
@@ -38,6 +46,7 @@ export async function fetchNotifications(
         (data.notifications as DBNotification[] | null) ?? [],
         PAGE_LIMIT,
         typeof data.notificationUnreadCount === 'number' ? data.notificationUnreadCount : undefined,
+        parseLaneCounts(data.notificationLaneUnreadCounts),
       );
       notificationStore.setLoadState('loaded');
     }
@@ -64,9 +73,18 @@ export async function fetchSnoozedNotifications(
 }
 
 export function useNotificationSync(): void {
-  const { notificationStore } = useStore();
+  const store = useStore();
+  const { notificationStore } = store;
+  const viewerId = store.userStore.currentUserId;
 
   useEffect(() => {
+    // The store counts per-lane unread locally between fetches, so it needs
+    // the same lane rule the Inbox renders with.
+    notificationStore.setLaneClassifier(n =>
+      classifyNotification(n, viewerId, {
+        issueAssigneeId: id => store.issueStore.findById(id)?.assigneeId ?? null,
+      }),
+    );
     let cancelled = false;
     const load = () => {
       void fetchNotifications(notificationStore, () => cancelled);
@@ -84,5 +102,5 @@ export function useNotificationSync(): void {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [notificationStore]);
+  }, [notificationStore, store, viewerId]);
 }

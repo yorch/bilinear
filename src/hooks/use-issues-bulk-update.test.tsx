@@ -3,16 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const enqueue = vi.fn();
 const toastError = vi.fn();
+const toastInfo = vi.fn();
+const translate = vi.fn((key: string, _params?: unknown) => key);
 const optimisticUpdate = vi.fn();
 const applySyncAction = vi.fn();
 
-vi.mock('@/lib/toast', () => ({ toast: { error: toastError } }));
+vi.mock('@/lib/toast', () => ({ toast: { error: toastError, info: toastInfo } }));
 vi.mock('@/lib/transaction-queue', () => ({
   TransactionQueue: class {
     enqueue = enqueue;
   },
 }));
-vi.mock('@/hooks/use-translations', () => ({ useTranslations: () => (k: string) => k }));
+vi.mock('@/hooks/use-translations', () => ({ useTranslations: () => translate }));
 
 const rows: Record<string, Record<string, unknown>> = {
   a: { cycleId: 'old-cycle', id: 'a', stateId: 'eng-done', teamId: 'eng' },
@@ -42,6 +44,7 @@ describe('useIssuesBulkUpdate team move', () => {
   beforeEach(() => {
     enqueue.mockReset();
     toastError.mockReset();
+    toastInfo.mockReset();
     optimisticUpdate.mockReset();
   });
 
@@ -81,5 +84,34 @@ describe('useIssuesBulkUpdate team move', () => {
     expect(optimisticUpdate).toHaveBeenLastCalledWith('a', rows.a);
     second.onSuccess({});
     expect(toastError).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows ONE de-duplicated labels-dropped toast for the batch, after the last row settles', () => {
+    const { result } = renderHook(() => useIssuesBulkUpdate());
+    result.current(['a', 'b'], { teamId: 'ops' });
+    const [first, second] = enqueue.mock.calls.map(
+      c => c[2] as { onSuccess: (d: unknown) => void },
+    );
+    first.onSuccess({ issueUpdate: { droppedLabelNames: ['eng-only', 'infra'] } });
+    expect(toastInfo).not.toHaveBeenCalled();
+    second.onSuccess({ issueUpdate: { droppedLabelNames: ['eng-only'] } });
+    expect(toastInfo).toHaveBeenCalledTimes(1);
+    expect(toastInfo).toHaveBeenCalledWith('issues.labelsDroppedOnBulkMove');
+    expect(translate).toHaveBeenCalledWith('issues.labelsDroppedOnBulkMove', {
+      count: 2,
+      issues: 'issues.issuesCount',
+      labels: 'eng-only, infra',
+    });
+  });
+
+  it('stays silent about labels when none were dropped', () => {
+    const { result } = renderHook(() => useIssuesBulkUpdate());
+    result.current(['a', 'b'], { teamId: 'ops' });
+    for (const c of enqueue.mock.calls) {
+      (c[2] as { onSuccess: (d: unknown) => void }).onSuccess({
+        issueUpdate: { droppedLabelNames: [] },
+      });
+    }
+    expect(toastInfo).not.toHaveBeenCalled();
   });
 });
