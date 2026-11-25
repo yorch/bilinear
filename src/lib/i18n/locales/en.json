@@ -2582,7 +2582,7 @@
           "ECONNRESET": "The server reset the connection",
           "ENOTFOUND": "Couldn't resolve host {target}",
           "ENOTFOUNDNoDetail": "Couldn't resolve the host",
-        "HTTP_STATUS": "The endpoint responded with HTTP {status}",
+          "HTTP_STATUS": "The endpoint responded with HTTP {status}",
           "HTTP_STATUSNoDetail": "The endpoint responded with an error status",
           "PRIVATE_ADDRESS": "The URL points to a private or internal address",
           "TIMEOUT": "Timed out after {ms} ms",

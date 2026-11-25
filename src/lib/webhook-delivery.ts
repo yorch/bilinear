@@ -40,9 +40,9 @@ export const DELIVERY_ERROR_CODES = [
 /** The param whose absence selects a `…NoDetail` variant of the copy. */
 const DETAIL_PARAM: Partial<Record<(typeof DELIVERY_ERROR_CODES)[number], string>> = {
   EAI_AGAIN: 'target',
-  HTTP_STATUS: 'status',
   ECONNREFUSED: 'target',
   ENOTFOUND: 'target',
+  HTTP_STATUS: 'status',
   TIMEOUT: 'ms',
   TLS: 'tlsCode',
 };

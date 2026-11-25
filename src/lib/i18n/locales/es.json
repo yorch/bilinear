@@ -2582,7 +2582,7 @@
           "ECONNRESET": "El servidor restableció la conexión",
           "ENOTFOUND": "No se pudo resolver el host {target}",
           "ENOTFOUNDNoDetail": "No se pudo resolver el host",
-        "HTTP_STATUS": "El endpoint respondió con HTTP {status}",
+          "HTTP_STATUS": "El endpoint respondió con HTTP {status}",
           "HTTP_STATUSNoDetail": "El endpoint respondió con un estado de error",
           "PRIVATE_ADDRESS": "La URL apunta a una dirección privada o interna",
           "TIMEOUT": "Tiempo de espera agotado tras {ms} ms",
