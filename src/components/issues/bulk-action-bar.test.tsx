@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { runInAction } from 'mobx';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DBCycle, DBProject, DBTeam } from '@/lib/db';
+import { TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { RootStore } from '@/stores/root-store';
 import { BulkActionBar } from './bulk-action-bar';
 
@@ -159,5 +160,50 @@ describe('BulkActionBar', () => {
     expect(archive.parentElement).toBe(del.parentElement);
     const more = screen.getByRole('button', { name: 'issues.bulkMore' });
     expect(more.compareDocumentPosition(archive) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('phone Due date drill-in (via More) lifts the height cap, has no body scroll region of its own, and a 44px Close', () => {
+    render(<BulkActionBar {...base} />);
+    fireEvent.click(screen.getByRole('button', { name: 'issues.bulkMore' }));
+    const moreEntry = screen
+      .getAllByRole('button', { name: 'issues.dueDate' })
+      .at(-1) as HTMLElement;
+    const sheet = moreEntry.closest('.max-md\\:fixed');
+    // The cap and the bottom offset both derive from the measured bar height.
+    expect(sheet?.className).toContain('max-md:max-h-[calc(100dvh-var(--bulk-bar-height');
+    expect(sheet?.className).toContain('max-md:bottom-[calc(var(--bulk-bar-height');
+    expect(sheet?.className).not.toContain('6.5rem+env');
+    fireEvent.click(moreEntry);
+    const body = screen.getByTestId('bulk-more-body');
+    expect(body.className).not.toContain('overflow-y-auto');
+    expect(body.className).not.toContain('max-h-');
+    expect(document.querySelector('[data-date]')).not.toBeNull();
+    const closeBtn = screen.getByRole('button', { name: 'common.close' });
+    for (const cls of TOUCH_TARGET_SQUARE.split(' ')) {
+      expect(closeBtn.className).toContain(cls);
+    }
+    fireEvent.click(closeBtn);
+    expect(screen.queryByTestId('bulk-more-body')).toBeNull();
+  });
+
+  it('lays the due-date presets out as a compact two-column grid', () => {
+    render(<BulkActionBar {...base} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'issues.dueDate' })[0]);
+    const today = screen.getByRole('button', { name: /properties\.dueDate\.today/ });
+    const grid = today.parentElement as HTMLElement;
+    expect(grid.className).toContain('grid-cols-2');
+    expect(grid.children).toHaveLength(4);
+  });
+
+  it('publishes its measured height as --bulk-bar-height and removes it on unmount', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(116);
+    try {
+      const { unmount } = render(<BulkActionBar {...base} />);
+      expect(document.documentElement.style.getPropertyValue('--bulk-bar-height')).toBe('116px');
+      unmount();
+      expect(document.documentElement.style.getPropertyValue('--bulk-bar-height')).toBe('');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

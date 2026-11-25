@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { usePopoverFlip } from './use-popover-flip';
+import { usePopoverFlip, usePopoverPlacement } from './use-popover-flip';
 
 function rect(partial: Partial<DOMRect>): DOMRect {
   return {
@@ -139,5 +139,65 @@ describe('usePopoverFlip', () => {
 
       expect(result.current).toBe(false);
     });
+  });
+});
+
+describe('usePopoverFlip with a measured panel', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function setup(panelHeight: number, triggerBottom: number) {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    const trigger = document.createElement('div');
+    const panel = document.createElement('div');
+    document.body.append(trigger, panel);
+    trigger.getBoundingClientRect = () => rect({ bottom: triggerBottom, top: triggerBottom - 30 });
+    panel.getBoundingClientRect = () => rect({ height: panelHeight });
+    return renderHook(() => usePopoverFlip(true, { current: trigger }, { current: panel }));
+  }
+
+  it('flips up when ~350px remain below but the 380px panel would overflow the viewport', () => {
+    // 350px below clears the legacy 160px floor, so only the measured height flips it.
+    expect(setup(380, 450).result.current).toBe(true);
+  });
+
+  it('stays down when the panel fits below', () => {
+    expect(setup(380, 300).result.current).toBe(false);
+  });
+
+  it('stays down when there is less room above than below', () => {
+    expect(setup(380, 100).result.current).toBe(false);
+  });
+});
+
+describe('usePopoverPlacement neither side fits', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function setup(triggerTop: number, triggerBottom: number, panelHeight = 450) {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    const trigger = document.createElement('div');
+    const panel = document.createElement('div');
+    document.body.append(trigger, panel);
+    trigger.getBoundingClientRect = () => rect({ bottom: triggerBottom, top: triggerTop });
+    panel.getBoundingClientRect = () => rect({ height: panelHeight });
+    return renderHook(() => usePopoverPlacement(true, { current: trigger }, { current: panel }));
+  }
+
+  it('stays down and clamps to the room below minus gap and margin', () => {
+    // 420 below, 350 above, 450 panel: fits neither.
+    expect(setup(320, 380).result.current).toEqual({ maxHeight: 408, openUpward: false });
+  });
+
+  it('flips up and clamps when above is the roomier side', () => {
+    // 350 below, 420 above.
+    expect(setup(420, 450).result.current).toEqual({ maxHeight: 408, openUpward: true });
+  });
+
+  it('does not clamp when the panel fits', () => {
+    expect(setup(100, 130, 300).result.current.maxHeight).toBeNull();
   });
 });

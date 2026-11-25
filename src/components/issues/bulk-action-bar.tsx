@@ -4,7 +4,7 @@ import { Archive, ArrowLeft, RefreshCw, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getDueDatePresets } from '@/components/properties/due-date-presets';
 import { SCALE_OPTIONS } from '@/components/properties/estimate-picker';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
@@ -16,7 +16,7 @@ import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popove
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useTranslations } from '@/hooks/use-translations';
 import { getCycleDisplayName } from '@/lib/cycle-utils';
-import { cn, TOUCH_TARGET } from '@/lib/utils';
+import { cn, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
@@ -35,7 +35,21 @@ const DUE_PRESET_LABEL = {
  * sheet floating above the bar instead.
  */
 const MOBILE_SHEET =
-  'max-md:fixed max-md:inset-x-2 max-md:bottom-[calc(6.5rem+env(safe-area-inset-bottom))] max-md:top-auto max-md:mb-0 max-md:mt-0 max-md:max-h-[min(24rem,calc(100dvh-14rem))] max-md:w-auto max-md:overflow-y-auto';
+  'max-md:fixed max-md:inset-x-2 max-md:bottom-[calc(var(--bulk-bar-height,6.5rem)+0.5rem)] max-md:top-auto max-md:mb-0 max-md:mt-0 max-md:max-h-[min(24rem,calc(100dvh-var(--bulk-bar-height,6.5rem)-1rem))] max-md:w-auto max-md:overflow-y-auto';
+
+/**
+ * CSS variable the bar publishes on <html> with its measured height. The phone
+ * sheets and the toast lift (`src/lib/toast.ts`) both stack above it, so the bar
+ * wrapping to a second or third row moves them instead of letting them overlap.
+ */
+const BAR_HEIGHT_VAR = '--bulk-bar-height';
+
+/**
+ * A drill-in that needs its whole body visible (the due-date month grid) lifts
+ * the sheet's height cap to what the viewport allows, above the bar, so nothing
+ * inside it has to scroll.
+ */
+const MOBILE_SHEET_TALL = 'max-md:max-h-[calc(100dvh-var(--bulk-bar-height,6.5rem)-1rem)]';
 
 const ACTION_BUTTON =
   'flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground-secondary';
@@ -74,17 +88,20 @@ function BulkPopover({
   children,
   className,
   label,
+  sheetClassName,
   widthClass = 'w-48',
 }: {
   children: (close: () => void) => ReactNode;
   className?: string;
   label: string;
+  /** Replaces the phone sheet's default height cap (see `MOBILE_SHEET_TALL`). */
+  sheetClassName?: string;
   widthClass?: string;
 }) {
   return (
     <SelectPopover
       className={cn('shrink-0', className)}
-      panelClassName={cn(widthClass, MOBILE_SHEET)}
+      panelClassName={cn(widthClass, MOBILE_SHEET, sheetClassName)}
       triggerChildren={
         <span className="whitespace-nowrap px-2 py-1 text-xs font-medium text-muted-foreground">
           {label}
@@ -104,25 +121,45 @@ interface MoreEntry {
   /** Shown only below `md`, where the matching desktop trigger is hidden. */
   mobileOnly?: boolean;
   render: (close: () => void) => ReactNode;
+  /** Phone: render the drill-in at full height, with no inner scroll region. */
+  tall?: boolean;
   title?: string;
 }
 
 /** "More" panel body: a list of actions, each drilling into its own option list. */
 function BulkMoreMenu({ close, entries }: { close: () => void; entries: MoreEntry[] }) {
+  const t = useTranslations();
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const active = entries.find(e => e.key === activeKey);
   if (active) {
     return (
       <>
-        <button
-          className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent"
-          onClick={() => setActiveKey(null)}
-          type="button"
+        <div className="flex items-center">
+          <button
+            className="flex min-w-0 flex-1 items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent"
+            onClick={() => setActiveKey(null)}
+            type="button"
+          >
+            <ArrowLeft className="h-3 w-3 shrink-0" />
+            {active.label}
+          </button>
+          {/* Phone sheet: an explicit close, since the sheet has no backdrop to tap. */}
+          <button
+            aria-label={t('common.close')}
+            className={cn(
+              TOUCH_TARGET_SQUARE,
+              'mr-1 flex shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent md:hidden',
+            )}
+            onClick={close}
+            type="button"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div
+          className={cn('border-t border-border', !active.tall && 'max-h-64 overflow-y-auto')}
+          data-testid="bulk-more-body"
         >
-          <ArrowLeft className="h-3 w-3" />
-          {active.label}
-        </button>
-        <div className="max-h-64 overflow-y-auto border-t border-border">
           {active.render(close)}
         </div>
       </>
@@ -169,6 +206,23 @@ export const BulkActionBar = observer(function BulkActionBar({
   const { cycleStore, projectStore, teamStore } = useStore();
   const params = useParams<{ key?: string }>();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar) {
+      return;
+    }
+    const root = document.documentElement;
+    const publish = () => root.style.setProperty(BAR_HEIGHT_VAR, `${bar.offsetHeight}px`);
+    publish();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(publish);
+    observer?.observe(bar);
+    return () => {
+      observer?.disconnect();
+      root.style.removeProperty(BAR_HEIGHT_VAR);
+    };
+  }, []);
 
   const routeTeam = params?.key ? teamStore.findByKey(params.key) : null;
   const cycleTeamId = teamId ?? routeTeam?.id;
@@ -254,20 +308,23 @@ export const BulkActionBar = observer(function BulkActionBar({
 
   const renderDue = (close: () => void) => (
     <>
-      {getDueDatePresets().map(preset => (
-        <button
-          className={POPOVER_ITEM_CLASS}
-          key={preset.key}
-          onClick={() => {
-            onUpdate({ dueDate: preset.date });
-            close();
-          }}
-          type="button"
-        >
-          <span className="flex-1 text-left">{t(DUE_PRESET_LABEL[preset.key])}</span>
-          <span className="font-mono text-xs text-muted-foreground">{preset.date}</span>
-        </button>
-      ))}
+      {/* A 2x2 grid, not four full rows: the phone drill-in must fit a 667px screen. */}
+      <div className="grid grid-cols-2 gap-1 px-1 pb-1">
+        {getDueDatePresets().map(preset => (
+          <button
+            className="flex flex-col items-start rounded px-2 py-1 text-left text-xs text-foreground-secondary hover:bg-accent"
+            key={preset.key}
+            onClick={() => {
+              onUpdate({ dueDate: preset.date });
+              close();
+            }}
+            type="button"
+          >
+            <span>{t(DUE_PRESET_LABEL[preset.key])}</span>
+            <span className="font-mono text-xs text-muted-foreground">{preset.date}</span>
+          </button>
+        ))}
+      </div>
       <p className="border-t border-border px-3 pt-2 text-xs text-muted-foreground">
         {t('properties.dueDate.orPickDate')}
       </p>
@@ -341,7 +398,13 @@ export const BulkActionBar = observer(function BulkActionBar({
     ...(labels.length > 0
       ? [{ key: 'label', label: t('issues.label'), mobileOnly: true, render: renderLabel }]
       : []),
-    { key: 'dueDate', label: t('issues.dueDate'), mobileOnly: true, render: renderDue },
+    {
+      key: 'dueDate',
+      label: t('issues.dueDate'),
+      mobileOnly: true,
+      render: renderDue,
+      tall: true,
+    },
     ...(projects.length > 0
       ? [{ key: 'project', label: t('issues.project'), render: renderProject }]
       : []),
@@ -376,6 +439,7 @@ export const BulkActionBar = observer(function BulkActionBar({
         'md:inset-x-auto md:bottom-6 md:left-1/2 md:max-w-[calc(100vw-2rem)] md:-translate-x-1/2 md:max-h-none md:overflow-visible md:rounded-lg md:border md:border-border',
       )}
       data-testid="bulk-action-bar"
+      ref={barRef}
     >
       <div className="max-md:flex max-md:w-full max-md:items-center max-md:gap-1 max-md:pr-11 md:contents">
         <span className="mr-2 shrink-0 whitespace-nowrap text-sm font-medium text-foreground-secondary">
@@ -477,7 +541,11 @@ export const BulkActionBar = observer(function BulkActionBar({
         </BulkPopover>
 
         {moreEntries.length > 0 && (
-          <BulkPopover label={t('issues.bulkMore')} widthClass="w-64">
+          <BulkPopover
+            label={t('issues.bulkMore')}
+            sheetClassName={MOBILE_SHEET_TALL}
+            widthClass="w-64"
+          >
             {close => <BulkMoreMenu close={close} entries={moreEntries} />}
           </BulkPopover>
         )}

@@ -11,6 +11,8 @@ import { useStore } from '@/providers/store-provider';
 interface ProjectSelectProps {
   /** Text shown beside the icon while no project is set. */
   label?: string;
+  /** Show `label` only below `lg`, where the detail view hides its row labels. */
+  labelBelowLg?: boolean;
   onChange: (projectId: string | null) => void;
   onClose?: () => void;
   open?: boolean;
@@ -20,6 +22,7 @@ interface ProjectSelectProps {
 export const ProjectSelect = observer(function ProjectSelect({
   value,
   label,
+  labelBelowLg,
   onChange,
   open,
   onClose,
@@ -68,7 +71,7 @@ export const ProjectSelect = observer(function ProjectSelect({
             <span className="max-w-[100px] truncate">{current.name}</span>
           </>
         ) : (
-          <PropertyPlaceholder icon={Target} label={label} />
+          <PropertyPlaceholder icon={Target} label={label} labelBelowLg={labelBelowLg} />
         )
       }
       triggerClassName={cn(TOUCH_TARGET, 'max-md:justify-start')}

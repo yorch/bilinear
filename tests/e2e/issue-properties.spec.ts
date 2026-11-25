@@ -93,8 +93,9 @@ test.describe('Issue Properties via Keyboard', () => {
 
   test('D opens the due date picker and dismisses on outside click', async ({ page }) => {
     await page.keyboard.press('d');
-    // The due date popover is the only `input[type="date"]` on the page.
-    const dateInput = page.locator('input[type="date"]');
+    // The themed picker's typed-entry field is the only YYYY-MM-DD input on the page
+    // (the native `input[type="date"]` was replaced by the shared calendar panel).
+    const dateInput = page.getByPlaceholder('YYYY-MM-DD');
     await expect(dateInput).toBeVisible({ timeout: 5_000 });
     await dismissPopover(page);
     await expect(dateInput).not.toBeVisible({ timeout: 5_000 });

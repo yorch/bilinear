@@ -25,10 +25,7 @@ interface DateFieldProps {
  * `Calendar` popover. Replaces `<input type="date">` in toolbars and filters.
  */
 export function DateField({ ariaLabel, className, max, min, onChange, value }: DateFieldProps) {
-  const t = useTranslations();
-  const { formatDate, intlLocale } = useFormatters();
-  const [typed, setTyped] = useState('');
-  const [typedError, setTypedError] = useState<string | null>(null);
+  const { formatDate } = useFormatters();
   const parts = parseDateKey(value);
   const label = parts
     ? formatDate(new Date(parts[0], parts[1], parts[2]), {
@@ -53,69 +50,108 @@ export function DateField({ ariaLabel, className, max, min, onChange, value }: D
         label ? 'text-foreground' : 'text-muted-foreground',
       )}
     >
-      {close => (
-        <>
-          <div className="border-b border-border p-2">
-            <Input
-              aria-invalid={typedError ? true : undefined}
-              aria-label={t('calendar.dateInput')}
-              className="px-2 py-1 text-xs"
-              data-autofocus
-              inputMode="numeric"
-              onChange={e => {
-                setTyped(e.target.value);
-                setTypedError(null);
-              }}
-              onKeyDown={e => {
-                if (e.key !== 'Enter') {
-                  return;
-                }
-                // Enter commits the typed date; it must not submit a surrounding form.
-                e.preventDefault();
-                e.stopPropagation();
-                const key = parseTypedDate(typed, intlLocale);
-                if (!key) {
-                  setTypedError(t('calendar.invalidDate', { example: 'YYYY-MM-DD' }));
-                } else if (isDateDisabled(key, min, max)) {
-                  setTypedError(t('calendar.outOfRange'));
-                } else {
-                  setTyped('');
-                  onChange(key);
-                  close();
-                }
-              }}
-              placeholder="YYYY-MM-DD"
-              value={typed}
-            />
-            {typedError && (
-              <p className="mt-1 text-xs text-danger-subtle-foreground" role="alert">
-                {typedError}
-              </p>
-            )}
-          </div>
-          <Calendar
-            max={max}
-            min={min}
-            onChange={d => {
-              onChange(d);
-              close();
-            }}
-            value={value}
-          />
-          {value && (
-            <button
-              className="block w-full border-t border-border px-2 py-1.5 text-center text-xs text-muted-foreground hover:bg-accent"
-              onClick={() => {
-                onChange('');
-                close();
-              }}
-              type="button"
-            >
-              {t('calendar.clear')}
-            </button>
-          )}
-        </>
-      )}
+      {close => <DatePanel max={max} min={min} onChange={onChange} onClose={close} value={value} />}
     </SelectPopover>
+  );
+}
+
+interface DatePanelProps {
+  /**
+   * Whether the typed-entry input claims initial focus (`data-autofocus`).
+   * A caller with a selected day passes false so the selected day (which the
+   * Calendar marks itself) is focused instead.
+   * @default true
+   */
+  autoFocusInput?: boolean;
+  /** Label for the clear action; defaults to "Clear date". */
+  clearLabel?: string;
+  max?: string;
+  min?: string;
+  /** Called with `YYYY-MM-DD`, or `''` when cleared. */
+  onChange: (date: string) => void;
+  onClose: () => void;
+  value: string;
+}
+
+/**
+ * The inside of a date popover: typed-entry input, themed `Calendar`, clear
+ * action. Shared by `DateField` and the due-date picker so the typed-date
+ * parsing, range checks and keyboard flow live in one place.
+ */
+export function DatePanel({
+  autoFocusInput = true,
+  clearLabel,
+  max,
+  min,
+  onChange,
+  onClose,
+  value,
+}: DatePanelProps) {
+  const t = useTranslations();
+  const { intlLocale } = useFormatters();
+  const [typed, setTyped] = useState('');
+  const [typedError, setTypedError] = useState<string | null>(null);
+  return (
+    <>
+      <div className="border-b border-border p-2">
+        <Input
+          aria-invalid={typedError ? true : undefined}
+          aria-label={t('calendar.dateInput')}
+          className="px-2 py-1 text-xs"
+          data-autofocus={autoFocusInput ? '' : undefined}
+          inputMode="numeric"
+          onChange={e => {
+            setTyped(e.target.value);
+            setTypedError(null);
+          }}
+          onKeyDown={e => {
+            if (e.key !== 'Enter') {
+              return;
+            }
+            // Enter commits the typed date; it must not submit a surrounding form.
+            e.preventDefault();
+            e.stopPropagation();
+            const key = parseTypedDate(typed, intlLocale);
+            if (!key) {
+              setTypedError(t('calendar.invalidDate', { example: 'YYYY-MM-DD' }));
+            } else if (isDateDisabled(key, min, max)) {
+              setTypedError(t('calendar.outOfRange'));
+            } else {
+              setTyped('');
+              onChange(key);
+              onClose();
+            }
+          }}
+          placeholder="YYYY-MM-DD"
+          value={typed}
+        />
+        {typedError && (
+          <p className="mt-1 text-xs text-danger-subtle-foreground" role="alert">
+            {typedError}
+          </p>
+        )}
+      </div>
+      <Calendar
+        max={max}
+        min={min}
+        onChange={d => {
+          onChange(d);
+          onClose();
+        }}
+        value={value}
+      />
+      {value && (
+        <button
+          className="block w-full border-t border-border px-2 py-1.5 text-center text-xs text-muted-foreground hover:bg-accent"
+          onClick={() => {
+            onChange('');
+            onClose();
+          }}
+          type="button"
+        >
+          {clearLabel ?? t('calendar.clear')}
+        </button>
+      )}
+    </>
   );
 }

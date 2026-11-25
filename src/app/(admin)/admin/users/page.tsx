@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { ModalDialog } from '@/components/ui/modal-dialog';
+import { ScrollX } from '@/components/ui/scroll-x';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useLoadMore } from '@/hooks/use-load-more';
@@ -176,9 +177,9 @@ export default function AdminUsersPage() {
       ) : users.length === 0 ? (
         <EmptyState size="compact" title={t('admin.users.empty')} />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-[44rem] text-sm">
-            <thead>
+        <ScrollX className="rounded-lg border border-border">
+          <table className="w-full text-sm max-md:block md:min-w-[44rem]">
+            <thead className="max-md:hidden">
               <tr className="border-b border-border bg-muted text-left text-xs font-medium text-muted-foreground">
                 <th className="px-4 py-2">{t('admin.users.colUser')}</th>
                 <th className="px-4 py-2">{t('admin.users.colOrganizations')}</th>
@@ -186,10 +187,10 @@ export default function AdminUsersPage() {
                 <th className="px-4 py-2 text-right">{t('admin.users.colActions')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-border max-md:block">
               {users.map(u => (
-                <tr className="bg-background" key={u.id}>
-                  <td className="px-4 py-2">
+                <tr className="bg-background max-md:block max-md:py-2" key={u.id}>
+                  <td className="px-4 py-2 max-md:block max-md:py-1">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-foreground">{u.displayName}</p>
                       {u.isPlatformAdmin && (
@@ -204,7 +205,7 @@ export default function AdminUsersPage() {
                     </div>
                     <p className="text-xs text-muted-foreground">{u.email}</p>
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-2 max-md:block max-md:py-1">
                     {u.organizations.length === 0 ? (
                       <span className="text-xs text-muted-foreground">—</span>
                     ) : (
@@ -222,13 +223,13 @@ export default function AdminUsersPage() {
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-2 max-md:block max-md:py-1">
                     <Badge tone={u.active ? 'success' : 'danger'} variant="square">
                       {u.active ? t('admin.users.statusActive') : t('admin.users.statusSuspended')}
                     </Badge>
                   </td>
-                  <td className="px-4 py-2">
-                    <div className="flex flex-nowrap justify-end gap-1.5 whitespace-nowrap">
+                  <td className="px-4 py-2 max-md:block max-md:py-1">
+                    <div className="flex flex-wrap justify-end gap-1.5 whitespace-nowrap max-md:justify-start">
                       <Button
                         disabled={
                           busyId === u.id || u.organizations.length === 0 || !u.active || isSelf(u)
@@ -295,7 +296,7 @@ export default function AdminUsersPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollX>
       )}
       {!loading && !error && users.length > 0 && (
         <AdminListFooter

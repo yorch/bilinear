@@ -41,6 +41,9 @@ export const toast = {
  *
  * Tinted fills are mixed into `--popover` rather than using the translucent
  * `-subtle` tokens directly: a toast floats over list rows and must be opaque.
+ * Every surface (fill AND border) is therefore either `--popover` itself or a
+ * mix whose base is `--popover`; `--border` is a translucent hairline, so the
+ * neutral border is mixed too. Nothing here may be `transparent` or an alpha token.
  */
 const tint = (role: 'danger' | 'info' | 'success' | 'warning') =>
   `color-mix(in oklab, var(--${role}) 14%, var(--popover))`;
@@ -51,11 +54,19 @@ const TOAST_THEME = {
   '--error-bg': tint('danger'),
   '--error-border': edge('danger'),
   '--error-text': 'var(--danger-subtle-foreground)',
+  // Sonner's own greys. `--gray2`/`--gray5` paint the close button on hover
+  // (a rule that outranks the per-type colours) and sonner runs in its light
+  // theme, so unmapped they are near-white discs in `.dark`. `--gray11` is the
+  // loading spinner bar.
+  '--gray2': 'color-mix(in oklab, var(--foreground) 8%, var(--popover))',
+  '--gray4': 'color-mix(in oklab, var(--foreground) 12%, var(--popover))',
+  '--gray5': 'color-mix(in oklab, var(--foreground) 20%, var(--popover))',
+  '--gray11': 'var(--muted-foreground)',
   '--info-bg': tint('info'),
   '--info-border': edge('info'),
   '--info-text': 'var(--info-subtle-foreground)',
   '--normal-bg': 'var(--popover)',
-  '--normal-border': 'var(--border)',
+  '--normal-border': `color-mix(in oklab, var(--foreground) 12%, var(--popover))`,
   '--normal-text': 'var(--popover-foreground)',
   '--success-bg': tint('success'),
   '--success-border': edge('success'),
@@ -66,12 +77,15 @@ const TOAST_THEME = {
 } as CSSProperties;
 
 /**
- * On a phone the bulk-action bar is docked to the bottom edge (two rows tall),
- * so toasts sit above it instead of covering the rows it just acted on. Sonner
- * sets its mobile offset inline, hence the important modifier.
+ * Below `md` (768px) the bulk-action bar is docked to the bottom edge, so
+ * toasts sit above it instead of covering the rows it just acted on. The bar
+ * publishes its measured height as `--bulk-bar-height` on <html> (it wraps to a
+ * varying number of rows); the fallback only covers the frame before it
+ * measures. Sonner sets its offset inline at both of its breakpoints, hence the
+ * important modifier.
  */
 const ABOVE_BULK_BAR =
-  '[body:has([data-testid=bulk-action-bar])_&]:max-[600px]:bottom-[calc(7.5rem+env(safe-area-inset-bottom))]!';
+  '[body:has([data-testid=bulk-action-bar])_&]:max-md:bottom-[calc(var(--bulk-bar-height,6.5rem)+0.5rem)]!';
 
 /** Mounts sonner with the app's theming; accepts the same props. */
 export function Toaster(props: ToasterProps) {

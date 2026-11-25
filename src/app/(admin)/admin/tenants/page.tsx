@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { ScrollX } from '@/components/ui/scroll-x';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
@@ -176,9 +177,9 @@ function TenantsInner() {
       ) : tenants.length === 0 ? (
         <EmptyState size="compact" title={t('admin.tenants.empty')} />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-[44rem] text-sm">
-            <thead>
+        <ScrollX className="rounded-lg border border-border">
+          <table className="w-full text-sm max-md:block md:min-w-[44rem]">
+            <thead className="max-md:hidden">
               <tr className="border-b border-border bg-muted text-left text-xs font-medium text-muted-foreground">
                 <th className="px-4 py-2">{t('admin.tenants.colOrganization')}</th>
                 <th className="px-4 py-2">{t('admin.tenants.colStatus')}</th>
@@ -188,12 +189,12 @@ function TenantsInner() {
                 <th className="px-4 py-2 text-right">{t('admin.tenants.colActions')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-border max-md:block">
               {tenants.map(tenant => {
                 const status = statusOf(tenant);
                 return (
-                  <tr className="bg-background" key={tenant.id}>
-                    <td className="px-4 py-2">
+                  <tr className="bg-background max-md:block max-md:py-2" key={tenant.id}>
+                    <td className="px-4 py-2 max-md:block max-md:py-1">
                       <Link
                         className="font-medium text-brand hover:underline"
                         href={`/admin/tenants/${tenant.id}`}
@@ -209,7 +210,7 @@ function TenantsInner() {
                         </p>
                       ) : null}
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="px-4 py-2 max-md:block max-md:py-1">
                       <span
                         className={cn(
                           'rounded px-1.5 py-0.5 text-xs font-medium capitalize',
@@ -219,17 +220,26 @@ function TenantsInner() {
                         {t(`admin.tenants.status.${status}`)}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                    <td
+                      className="px-4 py-2 text-right tabular-nums text-muted-foreground max-md:block max-md:py-1 max-md:text-left max-md:before:mr-2 max-md:before:content-[attr(data-label)]"
+                      data-label={t('admin.tenants.colMembers')}
+                    >
                       {tenant.memberCount}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                    <td
+                      className="px-4 py-2 text-right tabular-nums text-muted-foreground max-md:block max-md:py-1 max-md:text-left max-md:before:mr-2 max-md:before:content-[attr(data-label)]"
+                      data-label={t('admin.tenants.colIssues')}
+                    >
                       {tenant.issueCount}
                     </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">
+                    <td
+                      className="px-4 py-2 text-xs text-muted-foreground max-md:block max-md:py-1 max-md:text-left max-md:before:mr-2 max-md:before:content-[attr(data-label)]"
+                      data-label={t('admin.tenants.colCreated')}
+                    >
                       {formatDate(tenant.createdAt)}
                     </td>
-                    <td className="px-4 py-2">
-                      <div className="flex flex-nowrap justify-end gap-1.5 whitespace-nowrap">
+                    <td className="px-4 py-2 max-md:block max-md:py-1">
+                      <div className="flex flex-wrap justify-end gap-1.5 whitespace-nowrap max-md:justify-start">
                         {status === 'suspended' ? (
                           <Button
                             disabled={busyId === tenant.id}
@@ -271,7 +281,7 @@ function TenantsInner() {
               })}
             </tbody>
           </table>
-        </div>
+        </ScrollX>
       )}
       {!loading && !error && tenants.length > 0 && (
         <AdminListFooter
