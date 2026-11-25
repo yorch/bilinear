@@ -318,6 +318,11 @@ export const typeDefs = `
     success: Boolean!
     issue: Issue
     lastSyncId: String!
+    """
+    Names of team-scoped labels removed because they do not exist in the
+    destination team after a team move.
+    """
+    droppedLabelNames: [String!]
   }
 
   type IssueLabelPayload {
@@ -362,6 +367,8 @@ export const typeDefs = `
     projectId: ID
     projectMilestoneId: ID
     cycleId: ID
+    "Move the issue to another team (assigns a new identifier)."
+    teamId: ID
   }
 
   input IssueFilter {
@@ -1127,6 +1134,7 @@ export const typeDefs = `
     ISSUE_STATUS_CHANGED
     ISSUE_MENTIONED
     ISSUE_COMMENTED
+    REMINDER
   }
 
   type CustomFieldDefinition {
@@ -1178,6 +1186,25 @@ export const typeDefs = `
     color: String
   }
 
+  enum CustomFieldNumberFormatKind {
+    plain
+    currency
+    percent
+    duration
+    compact
+  }
+
+  """
+  Display format of a number field, stored with the definition so it is the
+  same for every viewer. Number fields only; currency is a 3-letter upper-case
+  ISO 4217 code (required for the currency kind), decimals an integer 0-6.
+  """
+  input CustomFieldNumberFormatInput {
+    kind: CustomFieldNumberFormatKind!
+    currency: String
+    decimals: Int
+  }
+
   input CustomFieldDefinitionCreateInput {
     """
     Team to attach the definition to. Pass null to create a workspace-scoped
@@ -1189,6 +1216,7 @@ export const typeDefs = `
     description: String
     required: Boolean
     options: [CustomFieldOptionInput!]
+    numberFormat: CustomFieldNumberFormatInput
     sortOrder: Float
   }
 
@@ -1197,6 +1225,8 @@ export const typeDefs = `
     description: String
     required: Boolean
     options: [CustomFieldOptionInput!]
+    """Omit to keep; null clears back to plain. Number fields only."""
+    numberFormat: CustomFieldNumberFormatInput
     sortOrder: Float
   }
 
@@ -1437,6 +1467,11 @@ export const typeDefs = `
     webhook: Webhook
   }
 
+  type WebhookTestPayload {
+    success: Boolean!
+    delivery: WebhookDelivery!
+  }
+
   type WebhookDeletePayload {
     success: Boolean!
   }
@@ -1495,6 +1530,13 @@ export const typeDefs = `
     nextCursor: String
   }
 
+  type AuditLogExport {
+    csv: String!
+    rows: Int!
+    "True when more rows matched than the export cap allows."
+    truncated: Boolean!
+  }
+
   input AuditLogFilter {
     action: String
     cursor: String
@@ -1503,6 +1545,15 @@ export const typeDefs = `
     resourceType: String
     to: DateTime
     userId: ID
+  }
+
+  type TriageDuplicateSuggestion {
+    issue: Issue!
+    score: Float!
+    "Title terms shared with the triage issue — the reason shown to the user."
+    matchedTerms: [String!]!
+    "The suggested issue is itself still in triage, so the pair can be resolved against each other."
+    inTriage: Boolean!
   }
 
   input IssueTriageAcceptInput {
@@ -1523,6 +1574,66 @@ export const typeDefs = `
     teamId: ID!
     from: Date
     to: Date
+  }
+
+  type ProjectBurnupPoint {
+    "UTC day, YYYY-MM-DD."
+    date: String!
+    scope: Int!
+    completed: Int!
+  }
+
+  type ProjectBurnupForecast {
+    "projected | complete | insufficient"
+    status: String!
+    "YYYY-MM-DD; set when status is projected or complete."
+    projectedFinish: String
+    "Why a forecast is unavailable: noIssues | noCompletions | tooShort | tooFar."
+    reason: String
+    remaining: Int!
+    velocityPerDay: Float!
+    windowDays: Int!
+  }
+
+  type ProjectBurnup {
+    projectId: ID!
+    targetDate: String
+    points: [ProjectBurnupPoint!]!
+    forecast: ProjectBurnupForecast!
+  }
+
+  type InsightsRow {
+    key: String!
+    label: String!
+    value: Float!
+    issueCount: Int!
+    sampleSize: Int!
+  }
+
+  type InsightsResult {
+    measure: String!
+    slice: String!
+    rows: [InsightsRow!]!
+    issueCount: Int!
+    totalGroups: Int!
+    "True when groups beyond the cap were dropped."
+    truncated: Boolean!
+    "True when more issues matched than the scan limit; numbers cover the newest ones."
+    scanCapped: Boolean!
+  }
+
+  type InitiativeHealthReason {
+    code: String!
+    projectId: ID
+  }
+
+  type InitiativeHealthRollup {
+    initiativeId: ID!
+    "Derived: onTrack | atRisk | offTrack | noData. Never overrides manualHealth."
+    health: String!
+    reasons: [InitiativeHealthReason!]!
+    "Health of the newest posted initiative update, if any."
+    manualHealth: String
   }
 
   type AnalyticsHistogramBucket {
@@ -1710,6 +1821,54 @@ export const typeDefs = `
     lastSyncId: String!
   }
 
+  input GithubImportInput {
+    teamId: ID!
+    """GitHub repository as owner/name (a github.com URL is accepted)."""
+    repo: String!
+    """
+    Personal access token used for this request only — never stored or logged.
+    Omit to use the workspace's connected GitHub account, else anonymous access.
+    """
+    token: String
+    includeClosed: Boolean
+    includeComments: Boolean
+    """1-based GitHub page; the client advances it with nextPage."""
+    page: Int
+    """
+    The page this run began at. limits.maxImportRows caps how far one run walks
+    from here; when a chunk reports limitReached, start a new run at nextPage.
+    """
+    startPage: Int
+  }
+
+  type GithubImportPreview {
+    repo: String!
+    "integration | personal | none"
+    tokenSource: String!
+    totalIssues: Int
+  }
+
+  type GithubImportChunk {
+    success: Boolean!
+    processed: Int!
+    created: Int!
+    "Issues skipped because they were imported earlier."
+    existing: Int!
+    commentsCreated: Int!
+    labelsCreated: Int!
+    errors: [String!]!
+    "Closed GitHub issues imported as open: the team has no Done/Canceled state."
+    closedAsOpen: Int!
+    "Issues whose comments were cut at the per-issue ceiling."
+    commentsTruncated: Int!
+    "The run hit limits.maxImportRows; start a new run at nextPage to continue."
+    limitReached: Boolean!
+    "Next page to request, or null when the repository is fully read."
+    nextPage: Int
+    tokenSource: String!
+    lastSyncId: String!
+  }
+
   type SlackIntegration {
     id: ID!
     slackTeamName: String!
@@ -1738,6 +1897,7 @@ export const typeDefs = `
     aiAvailable: Boolean!
     """Parse CSV (no writes) to drive the import mapping UI."""
     csvImportPreview(csv: String!): CsvImportPreview!
+    githubImportPreview(teamId: ID!, repo: String!, token: String): GithubImportPreview!
     """JSON export of issues for a team (or the whole org when teamId omitted)."""
     organizationExport(teamId: ID): String!
     """The connected Slack workspace for this org, or null."""
@@ -1775,7 +1935,7 @@ export const typeDefs = `
     cycleBurndown(cycleId: ID!): [CycleBurndownPoint!]!
     customView(id: ID!): CustomView!
     customViews(teamId: ID): [CustomView!]!
-    documents(teamId: ID, projectId: ID): [Document!]!
+    documents(teamId: ID, projectId: ID, includeArchived: Boolean): [Document!]!
     document(id: ID!): Document
     project(id: ID!): Project!
     projects(
@@ -1783,10 +1943,23 @@ export const typeDefs = `
       first: Int
       after: String
       includeArchived: Boolean
+      "Only archived projects, most recently archived first (the Archived view's feed)."
+      archivedOnly: Boolean
     ): ProjectConnection!
-    notifications(limit: Int): [Notification!]!
+    """
+    The caller's notifications, newest first. 'before' pages older than a
+    createdAt cursor; 'snoozed: true' returns only the still-snoozed rows
+    (the default hides them until they wake).
+    """
+    notifications(limit: Int, before: DateTime, snoozed: Boolean): [Notification!]!
     notificationUnreadCount: Int!
     notificationIsSubscribed(issueId: ID!): Boolean!
+    """
+    Ids of the live issues the caller is subscribed to, newest subscription
+    first. Subscriptions are user-local and never synced, so the My Issues
+    Subscribed tab reads this set and renders the rows from its local pool.
+    """
+    notificationSubscribedIssueIds: [ID!]!
     issueActivities(issueId: ID!, limit: Int): [IssueActivity!]!
     issueRelations(issueId: ID!): [IssueRelation!]!
     issueTemplates(teamId: ID!, includeArchived: Boolean): [IssueTemplate!]!
@@ -1804,6 +1977,8 @@ export const typeDefs = `
 
     triageQueue(teamId: ID!): [Issue!]!
     triageQueueCount(teamId: ID!): Int!
+    "Up to 5 similar issues the caller can see (ranked, best first); duplicates resolve to their canonical issue, declined issues are never offered."
+    triageDuplicateSuggestions(issueId: ID!, first: Int): [TriageDuplicateSuggestion!]!
 
     initiative(id: ID!): Initiative!
     initiatives(includeArchived: Boolean): [Initiative!]!
@@ -1828,15 +2003,22 @@ export const typeDefs = `
     analyticsCycleVelocityTrend(input: AnalyticsInput): CycleVelocityTrendResult!
     analyticsCycleScopeMetrics(cycleId: ID!): CycleScopeMetrics!
     analyticsWorkspaceOverview: WorkspaceOverviewResult!
+    projectBurnup(projectId: ID!): ProjectBurnup!
+    initiativeHealthRollups: [InitiativeHealthRollup!]!
+    insights(measure: String!, slice: String!, viewId: ID): InsightsResult!
 
     # Audit log — org admin only
     auditLogs(filter: AuditLogFilter): AuditLogPage!
+    """CSV of the filtered audit log (cursor/limit ignored; capped server-side)."""
+    auditLogExport(filter: AuditLogFilter): AuditLogExport!
 
     # Favorites — sidebar pinning, per user
     favorites: [Favorite!]!
 
     # GitHub Integration
     githubIntegration: GitHubIntegration
+    """Which OAuth integrations this server has credentials for (env-derived)."""
+    integrationAvailability: IntegrationAvailability!
 
     """
     Begin a Google OAuth flow. Returns the consent URL (with
@@ -1868,8 +2050,10 @@ export const typeDefs = `
     # ------------------------------------------------------------------
     platformMetrics: PlatformMetrics!
     platformTenants(query: String, includeArchived: Boolean, limit: Int): [PlatformTenant!]!
+    platformTenantsPage(query: String, includeArchived: Boolean, limit: Int, cursor: String): PlatformTenantPage!
     platformTenant(id: ID!): PlatformTenantDetail
     platformUsers(query: String, limit: Int): [PlatformUser!]!
+    platformUsersPage(query: String, limit: Int, cursor: String): PlatformUserPage!
     platformUser(id: ID!): PlatformUser
     platformAuditLog(limit: Int, cursor: String): PlatformAuditLogPage!
     """Impersonation state for the current session — drives the banner. Any authenticated user."""
@@ -1911,6 +2095,8 @@ export const typeDefs = `
     settingClear(key: String!, scope: SettingScope!, scopeId: ID): SettingPayload!
     """Import issues from CSV into a team (up to 500 rows)."""
     csvImportIssues(input: CsvImportInput!): CsvImportResult!
+    """Import one GitHub page of issues (idempotent; call again with nextPage until null)."""
+    githubImportRun(input: GithubImportInput!): GithubImportChunk!
     """Disconnect the Slack workspace (owner/admin)."""
     slackDisconnect: BasicPayload!
     """Set the team that Slack slash-command issues are filed into (owner/admin)."""
@@ -1984,11 +2170,13 @@ export const typeDefs = `
     documentCreate(input: DocumentCreateInput!): DocumentMutationResult!
     documentUpdate(id: ID!, input: DocumentUpdateInput!): DocumentMutationResult!
     documentArchive(id: ID!): DocumentMutationResult!
+    documentUnarchive(id: ID!): DocumentMutationResult!
     documentDelete(id: ID!): DeletePayload!
 
     cycleCreate(input: CycleCreateInput!): CyclePayload!
     cycleUpdate(id: ID!, input: CycleUpdateInput!): CyclePayload!
     cycleArchive(id: ID!): CyclePayload!
+    cycleUnarchive(id: ID!): CyclePayload!
     cycleDelete(id: ID!): DeletePayload!
     cycleAddIssue(cycleId: ID!, issueId: ID!): IssuePayload!
     cycleRemoveIssue(issueId: ID!): IssuePayload!
@@ -2016,6 +2204,8 @@ export const typeDefs = `
     notificationMarkRead(id: ID!): NotificationPayload!
     notificationMarkAllRead: DeletePayload!
     notificationSnooze(id: ID!, until: DateTime!): NotificationPayload!
+    notificationUnsnooze(id: ID!): NotificationPayload!
+    notificationMarkUnread(id: ID!): NotificationPayload!
     notificationSubscribe(issueId: ID!): DeletePayload!
     notificationUnsubscribe(issueId: ID!): DeletePayload!
 
@@ -2065,6 +2255,8 @@ export const typeDefs = `
     issueTriageDecline(issueId: ID!): IssuePayload!
     issueTriageMarkDuplicate(issueId: ID!, canonicalIssueId: ID!): IssuePayload!
     issueTriageSnooze(issueId: ID!, until: DateTime!): IssuePayload!
+    "Undo an accept / decline / mark-duplicate: returns the issue to the triage queue. Only valid for a few minutes after the decision."
+    issueTriageRevert(issueId: ID!): IssuePayload!
 
     initiativeCreate(input: InitiativeCreateInput!): InitiativePayload!
     initiativeUpdate(id: ID!, input: InitiativeUpdateInput!): InitiativePayload!
@@ -2082,6 +2274,8 @@ export const typeDefs = `
     webhookArchive(id: ID!): WebhookPayload!
     webhookDelete(id: ID!): WebhookDeletePayload!
     webhookRotateSecret(id: ID!): WebhookPayload!
+    """Send a signed ping to the webhook and report the first delivery attempt."""
+    webhookTest(id: ID!): WebhookTestPayload!
 
     # Automation rules
     automationRuleCreate(input: AutomationRuleCreateInput!): AutomationRulePayload!
@@ -2093,9 +2287,16 @@ export const typeDefs = `
     favoriteDelete(id: ID!): DeletePayload!
     favoriteReorder(entries: [FavoriteReorderEntryInput!]!): FavoriteListPayload!
 
+    # Issue reminders (private to the caller; replicated as per-user SyncActions)
+    issueReminderSet(issueId: ID!, remindAt: DateTime!): IssueReminderPayload!
+    issueReminderClear(issueId: ID!): IssueReminderClearPayload!
+
     # GitHub Integration
     githubDisconnect: BasicPayload!
-    githubRotateWebhookSecret(newSecret: String!): GitHubIntegrationPayload!
+    """Omit newSecret to have the server generate one (returned once in the payload)."""
+    githubRotateWebhookSecret(newSecret: String): GitHubIntegrationPayload!
+    """Return the stored webhook secret to an org admin so it can be pasted into GitHub."""
+    githubRevealWebhookSecret: GitHubWebhookSecretPayload!
 
     # User notification preferences
     userUpdateNotificationPreferences(emailNotificationsEnabled: Boolean!): UserPayload!
@@ -2108,6 +2309,10 @@ export const typeDefs = `
     # accent cookie; this is stored so the choice follows the account to a new
     # browser or device (the session route seeds the cookie from it at login).
     userUpdateAccent(accent: String!): UserPayload!
+
+    # Edit the viewer's own name / avatar. Recomputes initials and announces a
+    # User SyncAction in every workspace the viewer belongs to.
+    userUpdateProfile(input: UserUpdateProfileInput!): UserPayload!
 
     # Rotate the per-user iCal feed token. Returns the updated user so the
     # caller can immediately display the new feed URL.
@@ -2179,11 +2384,63 @@ export const typeDefs = `
   type GitHubIntegrationPayload {
     success: Boolean!
     integration: GitHubIntegration
+    """Only set when the server generated the secret; shown once to the admin."""
+    webhookSecret: String
+  }
+
+  type GitHubWebhookSecretPayload {
+    success: Boolean!
+    webhookSecret: String!
+  }
+
+  type IntegrationAvailability {
+    githubConfigured: Boolean!
+    slackConfigured: Boolean!
   }
 
   type UserPayload {
     success: Boolean!
     user: User
+    "Sync fence for mutations that emit a User SyncAction (profile edits)."
+    lastSyncId: String
+  }
+
+  input UserUpdateProfileInput {
+    "Display name, 1-255 characters after trimming; null is rejected."
+    name: String
+    "URL of an avatar uploaded via /api/upload (purpose=avatar); null clears it."
+    avatarUrl: String
+  }
+
+  # ---------------------------------------------------------------------------
+  # Issue reminders
+  # ---------------------------------------------------------------------------
+
+  """
+  A private "remind me about this issue" reminder. Only ever returned to its
+  owner (per-user SyncActions). When it fires the sweep emits a REMINDER
+  notification and deletes the row, which clients see as a delete.
+  """
+  type IssueReminder {
+    id: ID!
+    organizationId: ID!
+    userId: ID!
+    issueId: ID!
+    remindAt: DateTime!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+    issue: Issue
+  }
+
+  type IssueReminderPayload {
+    success: Boolean!
+    reminder: IssueReminder
+    lastSyncId: String!
+  }
+
+  type IssueReminderClearPayload {
+    success: Boolean!
+    lastSyncId: String!
   }
 
   # ---------------------------------------------------------------------------
@@ -2395,6 +2652,21 @@ export const typeDefs = `
     name: String!
     urlKey: String!
     role: OrganizationRole!
+  }
+
+  type PlatformUserPage {
+    items: [PlatformUser!]!
+    "Rows matching the filter across all pages."
+    total: Int!
+    hasMore: Boolean!
+    nextCursor: String
+  }
+
+  type PlatformTenantPage {
+    items: [PlatformTenant!]!
+    total: Int!
+    hasMore: Boolean!
+    nextCursor: String
   }
 
   type PlatformUser {

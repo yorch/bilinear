@@ -5,7 +5,9 @@ import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useMemo, useState } from 'react';
+import { ProjectBurnupSection } from '@/components/analytics/project-burnup-section';
 import { ProgressSparkline } from '@/components/projects/progress-sparkline';
+import { ProjectDocumentsSection } from '@/components/projects/project-documents-section';
 import { ProjectMilestonesSection } from '@/components/projects/project-milestones-section';
 import { ProjectPropertiesPanel } from '@/components/projects/project-properties-panel';
 import { ProjectUpdatesSection } from '@/components/projects/project-updates-section';
@@ -34,7 +36,7 @@ import {
   PROJECT_STATUS_LABEL_KEYS,
 } from '@/lib/project-constants';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage, TOUCH_TARGET_SQUARE } from '@/lib/utils';
+import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /** Shared by the status and health selects — one operation, one selection set. */
@@ -160,13 +162,13 @@ export const ProjectDetailView = observer(function ProjectDetailView({
       // The row is already gone from the pool once the sync action lands, so
       // undo restores it server-side and the project reappears in the list.
       toast.undo(t('projects.projectArchived'), t('common.undo'), () => {
-        gqlMutate(PROJECT_UNARCHIVE_MUTATION, { id: project.id }).catch(err =>
-          toast.error(getErrorMessage(err, t('projects.failedToUnarchive'))),
+        gqlMutate(PROJECT_UNARCHIVE_MUTATION, { id: project.id }).catch(() =>
+          toast.error(t('projects.failedToUnarchive')),
         );
       });
       router.push(projectsHref);
-    } catch (err) {
-      toast.error(getErrorMessage(err, t('projects.failedToArchive')));
+    } catch {
+      toast.error(t('projects.failedToArchive'));
     }
   };
 
@@ -175,8 +177,8 @@ export const ProjectDetailView = observer(function ProjectDetailView({
       await gqlMutate(PROJECT_DELETE_MUTATION, { id: project.id });
       toast.success(t('projects.projectDeleted'));
       router.push(projectsHref);
-    } catch (err) {
-      toast.error(getErrorMessage(err, t('projects.failedToDelete')));
+    } catch {
+      toast.error(t('projects.failedToDelete'));
     }
   };
 
@@ -313,10 +315,12 @@ export const ProjectDetailView = observer(function ProjectDetailView({
               <ProgressSparkline projectId={project.id} />
             </div>
           </SectionCard>
+          <ProjectBurnupSection projectId={project.id} />
           <SectionCard className="mt-6" title={t('projects.properties')}>
             <ProjectPropertiesPanel project={project} />
           </SectionCard>
           <ProjectMilestonesSection projectId={project.id} />
+          <ProjectDocumentsSection projectId={project.id} />
           <div className="mt-6">
             <SectionHeader title={t('projects.issuesCount', { count: projectIssues.length })} />
             <div className="mt-2 flex flex-col gap-0.5">

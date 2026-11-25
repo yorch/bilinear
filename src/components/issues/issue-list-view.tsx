@@ -10,6 +10,7 @@ import { useHotkeys } from '@/hooks/use-hotkeys';
 import { useTranslations } from '@/hooks/use-translations';
 import type { ColumnKey } from '@/hooks/use-visible-columns';
 import type { DBCustomFieldDefinition } from '@/lib/db';
+import { cn } from '@/lib/utils';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 import { BulkActionBar } from './bulk-action-bar';
 import { GroupSection } from './group-section';
@@ -19,10 +20,19 @@ import { IssueRow } from './issue-row';
 import { drawnIdsOf, getVisualOrder, setVisualOrder } from './visual-order';
 
 /** How the list is sectioned. `none` renders one flat, headerless list. */
-export type ListGroupBy = 'status' | 'assignee' | 'priority' | 'none';
+export type ListGroupBy =
+  | 'status'
+  | 'assignee'
+  | 'priority'
+  | 'project'
+  | 'cycle'
+  | 'label'
+  | 'none';
 
 interface IssueListViewProps {
   customFields?: DBCustomFieldDefinition[];
+  /** Cycle names for `groupBy='cycle'`. */
+  cycles?: { id: string; label: string; number?: number }[];
   /** The team's estimation scale; supplying it adds an Estimate action to the bulk bar. */
   estimationType?: string;
   getCustomFieldValue?: (issueId: string, definitionId: string) => unknown;
@@ -39,12 +49,16 @@ interface IssueListViewProps {
   onBulkUpdate?: (ids: string[], patch: Record<string, unknown>) => void;
   onClearFilters?: () => void;
   onDelete?: (id: string) => void;
+  /** Bulk delete for the checked set (the bar confirms first). Without it the bar offers no Delete. */
+  onDeleteMany?: (ids: string[]) => void;
   onOpen: (id: string) => void;
   onPropertyClosed?: () => void;
   onSelect: (id: string) => void;
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
   /** Which property popover to force-open on the selected issue (keyboard shortcut). */
   openProperty?: OpenProperty;
+  /** Project names for `groupBy='project'`. */
+  projects?: { id: string; name: string }[];
   selectedId: string | null;
   states: WorkflowState[];
   teamId?: string;
@@ -68,6 +82,8 @@ interface ContextMenuState {
 }
 
 export function IssueListView({
+  cycles,
+  projects,
   estimationType,
   groupBy = 'status',
   hasActiveFilters,
@@ -84,6 +100,7 @@ export function IssueListView({
   onArchive,
   onArchiveMany,
   onDelete,
+  onDeleteMany,
   onBulkUpdate,
   openProperty,
   onPropertyClosed,
@@ -103,6 +120,20 @@ export function IssueListView({
     setCheckedIds(new Set());
     lastCheckedIdRef.current = null;
   }, [issueIds]);
+
+  // The Cycle action needs one team's cycle list. A page scoped to a team
+  // supplies it; a multi-team page (My Issues) only qualifies while every
+  // checked issue shares a team.
+  const checkedTeamIds = new Set<string | undefined>();
+  if (!teamId) {
+    for (const issue of issues) {
+      if (checkedIds.has(issue.id)) {
+        checkedTeamIds.add(issue.teamId);
+      }
+    }
+  }
+  const sharedTeamId = teamId ?? (checkedTeamIds.size === 1 ? [...checkedTeamIds][0] : undefined);
+  const mixedTeams = !teamId && checkedTeamIds.size > 1;
 
   const selectAll = () => setCheckedIds(new Set(issues.map(i => i.id)));
 
@@ -228,7 +259,7 @@ export function IssueListView({
     lastCheckedIdRef.current = issueId;
   }
 
-  const groups = buildGroups(issues, groupBy, { states, t, users });
+  const groups = buildGroups(issues, groupBy, { cycles, projects, states, t, users });
   const drawnIds = drawnIdsOf(groups, collapsedGroups, groupBy === 'none');
   const drawnKey = drawnIds.join(',');
   // biome-ignore lint/correctness/useExhaustiveDependencies: drawnKey is the change signal for drawnIds
@@ -236,6 +267,9 @@ export function IssueListView({
     setVisualOrder(drawnIds);
     return () => setVisualOrder(null);
   }, [drawnKey]);
+
+  const cursorIssue = selectedId ? issues.find(i => i.id === selectedId) : undefined;
+  const cursorPosition = selectedId ? drawnIds.indexOf(selectedId) + 1 : 0;
 
   if (issues.length === 0) {
     if (hasActiveFilters) {
@@ -276,7 +310,24 @@ export function IssueListView({
   }
 
   return (
-    <div className="flex flex-col" data-testid="issue-list-view">
+    // `pb-24` while rows are checked: the fixed bulk bar would otherwise cover
+    // the last rows with nothing to scroll them clear of it (ISS-10).
+    <div
+      className={cn('flex flex-col', checkedIds.size > 0 && 'pb-24')}
+      data-testid="issue-list-view"
+    >
+      {/* j/k moves a visual cursor only; announce it, or a screen-reader user
+          hears nothing when the highlighted row changes. */}
+      <span aria-atomic="true" aria-live="polite" className="sr-only" role="status">
+        {cursorIssue
+          ? t('issues.cursorAnnouncement', {
+              identifier: cursorIssue.identifier,
+              position: cursorPosition,
+              title: cursorIssue.title,
+              total: drawnIds.length,
+            })
+          : ''}
+      </span>
       {groups.map(({ color, key, leading, name, issues: groupIssues }) => (
         <GroupSection
           collapsed={collapsedGroups.has(key)}
@@ -306,6 +357,7 @@ export function IssueListView({
                 allLabels={labels}
                 checked={checkedIds.has(issue.id)}
                 customFields={customFields}
+                cycle={issue.cycleId ? cycles?.find(c => c.id === issue.cycleId) : undefined}
                 getCustomFieldValue={
                   getCustomFieldValue ? defId => getCustomFieldValue(issue.id, defId) : undefined
                 }
@@ -376,6 +428,7 @@ export function IssueListView({
           count={checkedIds.size}
           estimationType={estimationType}
           labels={labels}
+          mixedTeams={mixedTeams}
           onArchive={
             onArchiveMany || onArchive
               ? () => {
@@ -392,12 +445,21 @@ export function IssueListView({
               : undefined
           }
           onClear={() => setCheckedIds(new Set())}
+          onDelete={
+            onDeleteMany
+              ? () => {
+                  onDeleteMany([...checkedIds]);
+                  setCheckedIds(new Set());
+                }
+              : undefined
+          }
           onSelectAll={selectAll}
           onUpdate={patch => {
             onBulkUpdate([...checkedIds], patch);
             setCheckedIds(new Set());
           }}
           states={states}
+          teamId={sharedTeamId}
           totalCount={issues.length}
           users={users}
         />
@@ -414,9 +476,15 @@ export function IssueListView({
 function buildGroups(
   issues: IssueRowData[],
   groupBy: ListGroupBy,
-  ctx: { states: WorkflowState[]; t: (key: string) => string; users: IssueUser[] },
+  ctx: {
+    cycles?: { id: string; label: string }[];
+    projects?: { id: string; name: string }[];
+    states: WorkflowState[];
+    t: (key: string) => string;
+    users: IssueUser[];
+  },
 ): Group[] {
-  const { states, t, users } = ctx;
+  const { cycles, projects, states, t, users } = ctx;
   const mutedColor = 'var(--muted-foreground)';
 
   if (groupBy === 'none') {
@@ -441,6 +509,66 @@ function buildGroups(
       name: t('issues.unassigned'),
     };
     return [...named, unassigned].filter(g => g.issues.length > 0);
+  }
+
+  if (groupBy === 'project' || groupBy === 'cycle') {
+    const field = groupBy === 'project' ? 'projectId' : 'cycleId';
+    const named = (
+      groupBy === 'project'
+        ? (projects ?? []).map(p => ({ id: p.id, name: p.name }))
+        : (cycles ?? []).map(c => ({ id: c.id, name: c.label }))
+    ).map<Group>(entity => ({
+      color: mutedColor,
+      issues: issues.filter(i => i[field] === entity.id),
+      key: `${groupBy}-${entity.id}`,
+      name: entity.name,
+    }));
+    const known = new Set(named.map(g => g.key));
+    const none: Group = {
+      color: mutedColor,
+      // Also catches an id whose entity is archived or not loaded, so no row vanishes.
+      issues: issues.filter(i => !i[field] || !known.has(`${groupBy}-${i[field]}`)),
+      key: `__no-${groupBy}__`,
+      name: t(groupBy === 'project' ? 'issues.noProject' : 'issues.noCycle'),
+    };
+    return [...named, none].filter(g => g.issues.length > 0);
+  }
+
+  if (groupBy === 'label') {
+    // An issue sits under its FIRST label only. Repeating a multi-label issue
+    // under every label would draw the same id several times, which breaks the
+    // shift-range selection order and double-counts the header totals.
+    const byLabel = new Map<string, Group>();
+    const unlabelled: IssueRowData[] = [];
+    for (const issue of issues) {
+      const first = issue.labels[0];
+      if (!first) {
+        unlabelled.push(issue);
+        continue;
+      }
+      const group = byLabel.get(first.id) ?? {
+        color: first.color,
+        issues: [],
+        key: `label-${first.id}`,
+        name: first.name,
+      };
+      group.issues.push(issue);
+      byLabel.set(first.id, group);
+    }
+    const named = [...byLabel.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [
+      ...named,
+      ...(unlabelled.length > 0
+        ? [
+            {
+              color: mutedColor,
+              issues: unlabelled,
+              key: '__no-label__',
+              name: t('issues.noLabel'),
+            },
+          ]
+        : []),
+    ];
   }
 
   if (groupBy === 'priority') {

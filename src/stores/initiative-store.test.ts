@@ -140,4 +140,71 @@ describe('InitiativeStore', () => {
       expect(store.findById('missing')).toBeNull();
     });
   });
+
+  describe('parent candidates', () => {
+    it('excludes the initiative itself and everything beneath it', () => {
+      const store = new InitiativeStore();
+      store.upsertMany([
+        makeInitiative({ id: 'root' }),
+        makeInitiative({ id: 'child', parentId: 'root' }),
+        makeInitiative({ id: 'grandchild', parentId: 'child' }),
+        makeInitiative({ id: 'other' }),
+      ]);
+      expect([...store.getDescendantIds('root')].sort()).toEqual(['child', 'grandchild']);
+      expect(
+        store
+          .getParentCandidates('root')
+          .map(i => i.id)
+          .sort(),
+      ).toEqual(['other']);
+      expect(
+        store
+          .getParentCandidates('child')
+          .map(i => i.id)
+          .sort(),
+      ).toEqual(['other', 'root']);
+    });
+
+    it('lists archived initiatives separately from all', () => {
+      const store = new InitiativeStore();
+      store.upsertMany([
+        makeInitiative({ archivedAt: '2026-02-01T00:00:00Z', id: 'old' }),
+        makeInitiative({ id: 'live' }),
+      ]);
+      expect(store.archived.map(i => i.id)).toEqual(['old']);
+      expect(store.all.map(i => i.id)).toEqual(['live']);
+    });
+  });
+
+  describe('roots with orphaned children', () => {
+    it('lists a child whose parent is archived, missing or in a cycle, but not a nested live child', () => {
+      store.upsertMany([
+        makeInitiative({ archivedAt: '2026-02-01T00:00:00Z', id: 'dead' }),
+        makeInitiative({ id: 'under-archived', parentId: 'dead' }),
+        makeInitiative({ id: 'under-missing', parentId: 'gone' }),
+        makeInitiative({ id: 'c1', parentId: 'c2' }),
+        makeInitiative({ id: 'c2', parentId: 'c1' }),
+        makeInitiative({ id: 'top' }),
+        makeInitiative({ id: 'nested', parentId: 'top' }),
+      ]);
+      expect(store.roots.map(i => i.id).sort()).toEqual([
+        'c1',
+        'c2',
+        'top',
+        'under-archived',
+        'under-missing',
+      ]);
+    });
+
+    it('a restored parent takes its child back under it', () => {
+      store.upsertMany([
+        makeInitiative({ archivedAt: '2026-02-01T00:00:00Z', id: 'p' }),
+        makeInitiative({ id: 'k', parentId: 'p' }),
+      ]);
+      expect(store.roots.map(i => i.id)).toEqual(['k']);
+      store.optimisticUpdate('p', { archivedAt: null });
+      expect(store.roots.map(i => i.id)).toEqual(['p']);
+      expect(store.getChildren('p').map(i => i.id)).toEqual(['k']);
+    });
+  });
 });

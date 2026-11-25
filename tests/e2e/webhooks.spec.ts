@@ -127,9 +127,10 @@ test.describe('Webhooks Settings', () => {
     await page.getByRole('checkbox', { name: 'issue.created' }).check();
     await page.getByRole('button', { name: /^create webhook$/i }).click();
 
-    // Server message comes from WebhookPrivateUrlError —
-    // "Webhook URL cannot point to a private/internal address".
-    await expect(page.getByText(/private\/internal address/i)).toBeVisible();
+    // The server refuses it (WebhookPrivateUrlError); the UI shows its own
+    // localized failure toast, never the raw server text, and keeps the form open.
+    await expect(page.getByText('Failed to create webhook')).toBeVisible();
+    await expect(page.getByPlaceholder('Production CI')).toBeVisible();
 
     // Webhook should NOT appear in the list.
     await expect(page.getByText(name)).not.toBeVisible();
@@ -145,8 +146,9 @@ test.describe('Webhooks Settings', () => {
     await page.getByRole('checkbox', { name: 'issue.created' }).check();
     await page.getByRole('button', { name: /^create webhook$/i }).click();
 
-    // WebhookInvalidUrlError → "Webhook URL must be a valid http(s) URL".
-    await expect(page.getByText(/valid http\(s\) url/i)).toBeVisible();
+    // Caught client-side now: an inline, localized error on the URL field.
+    await expect(page.getByRole('alert').filter({ hasText: /valid http\(s\) url/i })).toBeVisible();
+    await expect(page.getByPlaceholder('Production CI')).toBeVisible();
 
     await expect(page.getByText(name)).not.toBeVisible();
   });

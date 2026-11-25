@@ -1,11 +1,22 @@
 import { GraphQLError } from 'graphql';
 import type { CustomView } from '../../../generated/prisma';
+import { isCustomViewVisible } from '../../lib/entity-visibility';
 import { requireAuth, requireTeamMember } from '../../middleware/auth';
-import type {
-  CustomViewCreateInput,
-  CustomViewUpdateInput,
+import {
+  type CustomViewCreateInput,
+  CustomViewInputError,
+  type CustomViewUpdateInput,
 } from '../../services/custom-view.service';
 import type { GraphQLContext } from '../context';
+import { getRequestVisibility } from '../request-visibility';
+
+/** A rejected `filters` payload is the caller's input error, not a 500. */
+function badInput(err: unknown): never {
+  if (err instanceof CustomViewInputError) {
+    throw new GraphQLError(err.message, { extensions: { code: 'BAD_USER_INPUT' } });
+  }
+  throw err;
+}
 
 export const customViewResolvers = {
   CustomView: {
@@ -65,7 +76,9 @@ export const customViewResolvers = {
         await requireTeamMember(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
       }
 
-      const customView = await ctx.services.customView.create(ctx.orgId, ctx.userId, input);
+      const customView = await ctx.services.customView
+        .create(ctx.orgId, ctx.userId, input)
+        .catch(badInput);
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'I',
@@ -117,10 +130,15 @@ export const customViewResolvers = {
         });
       }
 
-      const customView = await ctx.services.customView.update(id, input);
+      const customView = await ctx.services.customView.update(id, input).catch(badInput);
+      // Sharing an unshared view is an INSERT for everyone else: the sync filter
+      // never sent them the private copy, so they have nothing to update. The
+      // opposite transition stays a `U` — the filter turns it into a delete for
+      // everyone but the creator, which evicts the copy they held while shared.
+      const becameShared = !existing.shared && customView.shared;
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
-        'U',
+        becameShared ? 'I' : 'U',
         'CustomView',
         id,
         customView,
@@ -162,7 +180,15 @@ export const customViewResolvers = {
         await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
       }
 
-      return ctx.services.customView.findByOrgId(ctx.orgId, ctx.userId, teamId ?? undefined);
+      const views = await ctx.services.customView.findByOrgId(
+        ctx.orgId,
+        ctx.userId,
+        teamId ?? undefined,
+      );
+      // An org-wide listing must not surface a shared view that lives in a
+      // private team the caller is outside of (its name and filters leak).
+      const vis = await getRequestVisibility(ctx);
+      return views.filter(v => isCustomViewVisible(vis, v));
     },
   },
 };

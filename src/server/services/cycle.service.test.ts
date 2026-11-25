@@ -121,6 +121,54 @@ describe('CycleService', () => {
     });
   });
 
+  describe('unarchive', () => {
+    const ARCHIVED = { ...TEST_CYCLE, archivedAt: new Date('2026-03-20T00:00:00Z') };
+
+    it('clears archivedAt when the range is free', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(ARCHIVED);
+      prisma.cycle.findFirst.mockResolvedValue(null);
+      prisma.cycle.update.mockResolvedValue({ ...TEST_CYCLE, archivedAt: null });
+
+      const result = await service.unarchive(TEST_CYCLE.id);
+      expect(result.archivedAt).toBeNull();
+      expect(prisma.cycle.update).toHaveBeenCalledWith({
+        data: { archivedAt: null },
+        where: { id: TEST_CYCLE.id },
+      });
+    });
+
+    it('runs the same overlap query as create/update (active, not self, same team, range)', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(ARCHIVED);
+      prisma.cycle.findFirst.mockResolvedValue(null);
+      prisma.cycle.update.mockResolvedValue(TEST_CYCLE);
+
+      await service.unarchive(TEST_CYCLE.id);
+
+      expect(prisma.cycle.findFirst).toHaveBeenCalledWith({
+        where: {
+          archivedAt: null,
+          endsAt: { gt: ARCHIVED.startsAt },
+          id: { not: TEST_CYCLE.id },
+          startsAt: { lt: ARCHIVED.endsAt },
+          teamId: ARCHIVED.teamId,
+        },
+      });
+    });
+
+    it('refuses with CycleOverlapError when an active cycle took the dates', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(ARCHIVED);
+      prisma.cycle.findFirst.mockResolvedValue({ ...TEST_CYCLE, id: 'other' });
+
+      await expect(service.unarchive(TEST_CYCLE.id)).rejects.toThrow(CycleOverlapError);
+      expect(prisma.cycle.update).not.toHaveBeenCalled();
+    });
+
+    it('throws CycleNotFoundError for an unknown id', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(null);
+      await expect(service.unarchive('nope')).rejects.toThrow(CycleNotFoundError);
+    });
+  });
+
   describe('archive', () => {
     it('sets archivedAt', async () => {
       const now = new Date();
@@ -583,6 +631,54 @@ describe('CycleService', () => {
     });
   });
 
+  describe('getBurndown scope creep', () => {
+    const start = new Date('2026-03-01T00:00:00Z');
+    const cycle = { ...TEST_CYCLE, endsAt: new Date('2026-03-04T00:00:00Z'), startsAt: start };
+
+    it('counts a planning-time addedToCycleAt stamp as day-one scope, not an addition', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(cycle);
+      prisma.issue.findMany.mockResolvedValue([
+        // Assigned while the cycle was still upcoming (before startsAt).
+        { addedToCycleAt: new Date('2026-02-25T10:00:00Z'), completedAt: null, id: 'i1' },
+        { addedToCycleAt: new Date('2026-02-26T10:00:00Z'), completedAt: null, id: 'i2' },
+        { addedToCycleAt: null, completedAt: null, id: 'i3' },
+      ]);
+
+      const result = await service.getBurndown(TEST_CYCLE.id);
+
+      expect(result.map(p => p.scope)).toEqual([3, 3, 3, 3]);
+      expect(result[0].remaining).toBe(3);
+    });
+
+    it('steps scope up only on the day a mid-cycle addition arrived', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(cycle);
+      prisma.issue.findMany.mockResolvedValue([
+        { addedToCycleAt: new Date('2026-02-25T10:00:00Z'), completedAt: null, id: 'i1' },
+        { addedToCycleAt: new Date('2026-03-02T09:00:00Z'), completedAt: null, id: 'i2' },
+      ]);
+
+      const result = await service.getBurndown(TEST_CYCLE.id);
+
+      expect(result.map(p => [p.date, p.scope])).toEqual([
+        ['2026-03-01', 1],
+        ['2026-03-02', 2],
+        ['2026-03-03', 2],
+        ['2026-03-04', 2],
+      ]);
+    });
+
+    it('treats a stamp exactly at startsAt as planned (creep is strictly after)', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(cycle);
+      prisma.issue.findMany.mockResolvedValue([
+        { addedToCycleAt: new Date(start), completedAt: null, id: 'i1' },
+      ]);
+
+      const result = await service.getBurndown(TEST_CYCLE.id);
+
+      expect(result[0].scope).toBe(1);
+    });
+  });
+
   describe('autoCreateUpcomingCycles', () => {
     // `upcomingCycleCount` is no longer a Team column — it is the
     // `cycles.upcomingCount` registry knob, resolved at team scope.
@@ -660,12 +756,89 @@ describe('CycleService', () => {
       }
     });
 
+    it('starts after the latest cycle even when it is archived (so restore cannot be blocked)', async () => {
+      prisma.team.findUnique.mockResolvedValue(CYCLES_TEAM);
+      prisma.cycle.findFirst
+        .mockResolvedValueOnce({
+          ...TEST_CYCLE,
+          archivedAt: new Date(),
+          endsAt: new Date('2031-01-15T00:00:00Z'),
+        })
+        .mockResolvedValue(null); // no concurrent overlap under the lock
+      prisma.cycle.findMany.mockResolvedValue([]);
+      prisma.cycle.create.mockImplementation(({ data }) =>
+        Promise.resolve({ ...TEST_CYCLE, ...data }),
+      );
+
+      const [first] = await service.autoCreateUpcomingCycles(TEST_ORG.id, TEST_TEAM.id, 1);
+
+      expect(first.startsAt.toISOString()).toBe('2031-01-15T00:00:00.000Z');
+      expect(prisma.cycle.findFirst).toHaveBeenCalledWith({
+        orderBy: { endsAt: 'desc' },
+        where: { teamId: TEST_TEAM.id },
+      });
+    });
+
+    it('yields (creates nothing) when a concurrent writer filled the span before the lock was won', async () => {
+      prisma.team.findUnique.mockResolvedValue(CYCLES_TEAM);
+      prisma.cycle.findFirst
+        .mockResolvedValueOnce(null) // latest cycle
+        .mockResolvedValueOnce({ id: 'someone-elses' }); // overlap found under the lock
+      prisma.cycle.findMany.mockResolvedValue([]);
+
+      const result = await service.autoCreateUpcomingCycles(TEST_ORG.id, TEST_TEAM.id, 2);
+
+      expect(result).toEqual([]);
+      expect(prisma.cycle.create).not.toHaveBeenCalled();
+    });
+
     it('returns no cycles when the team does not have cycles enabled', async () => {
       prisma.team.findUnique.mockResolvedValue({ ...CYCLES_TEAM, cyclesEnabled: false });
 
       const result = await service.autoCreateUpcomingCycles(TEST_ORG.id, TEST_TEAM.id);
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('per-team advisory lock (overlap check-then-write must be serialised)', () => {
+    const lockCalls = () =>
+      prisma.$queryRaw.mock.calls.map(c => String((c[0] as string[]).join('?')));
+
+    it('create takes the team lock before its overlap read', async () => {
+      prisma.cycle.findFirst.mockResolvedValue(null);
+      prisma.cycle.create.mockResolvedValue(TEST_CYCLE);
+      await service.create(TEST_ORG.id, {
+        endsAt: '2031-01-15T00:00:00Z',
+        startsAt: '2031-01-01T00:00:00Z',
+        teamId: TEST_TEAM.id,
+      });
+      expect(lockCalls()[0]).toContain('pg_advisory_xact_lock');
+      expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+        prisma.cycle.findFirst.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('unarchive takes the team lock before its overlap read', async () => {
+      prisma.cycle.findUnique.mockResolvedValue({ ...TEST_CYCLE, archivedAt: new Date() });
+      prisma.cycle.findFirst.mockResolvedValue(null);
+      prisma.cycle.update.mockResolvedValue(TEST_CYCLE);
+      await service.unarchive(TEST_CYCLE.id);
+      expect(lockCalls()[0]).toContain('pg_advisory_xact_lock');
+      expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+        prisma.cycle.findFirst.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('a date-changing update takes the team lock before its overlap read', async () => {
+      prisma.cycle.findUnique.mockResolvedValue(TEST_CYCLE);
+      prisma.cycle.findFirst.mockResolvedValue(null);
+      prisma.cycle.update.mockResolvedValue(TEST_CYCLE);
+      await service.update(TEST_CYCLE.id, { endsAt: '2031-06-01T00:00:00Z' });
+      expect(lockCalls()[0]).toContain('pg_advisory_xact_lock');
+      expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+        prisma.cycle.findFirst.mock.invocationCallOrder[0],
+      );
     });
   });
 });

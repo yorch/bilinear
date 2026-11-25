@@ -1,7 +1,37 @@
 import { GraphQLError } from 'graphql';
 import { requireAuth, requireOrgRole, requireTeamMemberNotGuest } from '../../middleware/auth';
+import { checkFixedWindow } from '../../middleware/rate-limit';
+import { GithubImportService } from '../../services/github-import.service';
 import type { ImportMapping } from '../../services/import.service';
 import type { GraphQLContext } from '../context';
+import { mapServiceError } from '../types/errors';
+
+const GITHUB_IMPORT_ERRORS = {
+  BAD_USER_INPUT: [
+    'GithubInvalidRepoError',
+    'GithubImportFieldUnavailableError',
+    'GithubTokenInvalidError',
+  ],
+  NOT_FOUND: ['GithubRepoNotFoundError'],
+  RATELIMITED: ['GithubRateLimitedError', 'GithubImportBusyError'],
+} as const;
+
+export const GITHUB_IMPORT_LIMIT_PER_TEAM = 60;
+export const GITHUB_IMPORT_LIMIT_PER_USER = 60;
+export const GITHUB_IMPORT_WINDOW_SECONDS = 60;
+
+function githubImporter(ctx: GraphQLContext): GithubImportService {
+  return new GithubImportService(
+    ctx.prisma,
+    {
+      comment: ctx.services.comment,
+      customField: ctx.services.customField,
+      issue: ctx.services.issue,
+      label: ctx.services.label,
+    },
+    ctx.config,
+  );
+}
 
 export const importResolvers = {
   Mutation: {
@@ -51,12 +81,119 @@ export const importResolvers = {
         success: true,
       };
     },
+    githubImportRun: async (
+      _parent: unknown,
+      {
+        input,
+      }: {
+        input: {
+          includeClosed?: boolean | null;
+          includeComments?: boolean | null;
+          page?: number | null;
+          repo: string;
+          startPage?: number | null;
+          teamId: string;
+          token?: string | null;
+        };
+      },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      await requireTeamMemberNotGuest(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
+
+      // One call is one GitHub page; a legitimate client walks pages
+      // sequentially, so these are generous but finite.
+      const [byTeam, byUser] = await Promise.all([
+        checkFixedWindow(
+          `rl:github-import:team:${input.teamId}`,
+          GITHUB_IMPORT_LIMIT_PER_TEAM,
+          GITHUB_IMPORT_WINDOW_SECONDS,
+        ),
+        checkFixedWindow(
+          `rl:github-import:user:${ctx.userId}`,
+          GITHUB_IMPORT_LIMIT_PER_USER,
+          GITHUB_IMPORT_WINDOW_SECONDS,
+        ),
+      ]);
+      if (byTeam.exceeded || byUser.exceeded) {
+        throw new GraphQLError('Too many import requests. Wait a minute and try again.', {
+          extensions: { code: 'RATELIMITED' },
+        });
+      }
+
+      let chunk: Awaited<ReturnType<GithubImportService['importPage']>>;
+      try {
+        chunk = await githubImporter(ctx).importPage(ctx.orgId, ctx.userId, input.teamId, input);
+      } catch (err) {
+        mapServiceError(err, GITHUB_IMPORT_ERRORS);
+      }
+
+      // Every row the chunk wrote gets a SyncAction, parents first, so other
+      // clients see the whole import without a reload. Sequential keeps the
+      // commit order stable.
+      const sync = ctx.services.sync;
+      let lastSyncId = await sync.getLastSyncId(ctx.orgId);
+      const emit = async (action: 'I' | 'U', model: string, id: string, data: object | null) => {
+        const row = await sync.createSyncAction(ctx.orgId, action, model, id, data);
+        lastSyncId = row.id.toString();
+      };
+      if (chunk.createdFieldDefinition) {
+        await emit(
+          'I',
+          'CustomFieldDefinition',
+          chunk.createdFieldDefinition.id,
+          chunk.createdFieldDefinition,
+        );
+      }
+      for (const label of chunk.createdLabels) {
+        await emit('I', 'IssueLabel', label.id, label);
+      }
+      for (const issue of chunk.createdIssues) {
+        await emit('I', 'Issue', issue.id, issue);
+        const values = chunk.fieldValues.filter(v => v.issueId === issue.id);
+        if (values.length > 0) {
+          await emit('U', 'Issue', issue.id, { customFieldValues: values });
+        }
+      }
+      for (const comment of chunk.createdComments) {
+        await emit('I', 'Comment', comment.id, comment);
+      }
+
+      return {
+        closedAsOpen: chunk.closedAsOpen,
+        commentsCreated: chunk.createdComments.length,
+        commentsTruncated: chunk.commentsTruncated,
+        created: chunk.createdIssues.length,
+        errors: chunk.errors,
+        existing: chunk.existing,
+        labelsCreated: chunk.createdLabels.length,
+        lastSyncId,
+        limitReached: chunk.limitReached,
+        nextPage: chunk.nextPage,
+        processed: chunk.processed,
+        success: true,
+        tokenSource: chunk.tokenSource,
+      };
+    },
   },
 
   Query: {
     csvImportPreview: async (_parent: unknown, { csv }: { csv: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
       return ctx.services.import.preview(csv);
+    },
+    githubImportPreview: async (
+      _parent: unknown,
+      { repo, teamId, token }: { repo: string; teamId: string; token?: string | null },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      await requireTeamMemberNotGuest(ctx.prisma, teamId, ctx.userId, ctx.orgId);
+      try {
+        return await githubImporter(ctx).preview(ctx.orgId, ctx.userId, { repo, token });
+      } catch (err) {
+        mapServiceError(err, GITHUB_IMPORT_ERRORS);
+      }
     },
 
     organizationExport: async (

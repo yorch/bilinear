@@ -1,19 +1,74 @@
 import { GraphQLError } from 'graphql';
-import { requireAuth } from '../../middleware/auth';
-import type { DocumentCreateInput, DocumentUpdateInput } from '../../services/document.service';
-import { DocumentForbiddenError, DocumentNotFoundError } from '../../services/document.service';
+import { getSyncVisibility } from '../../lib/sync-visibility';
+import { requireAuth, requireTeamMemberNotGuest } from '../../middleware/auth';
+import type {
+  DocumentCreateInput,
+  DocumentScope,
+  DocumentUpdateInput,
+} from '../../services/document.service';
+import {
+  DocumentForbiddenError,
+  DocumentInvalidParentError,
+  DocumentNotFoundError,
+  DocumentValidationError,
+} from '../../services/document.service';
 import type { GraphQLContext } from '../context';
+
+type AuthedContext = GraphQLContext & { orgId: string; userId: string };
+
+/** The caller's document visibility: their org plus the private teams they cannot see. */
+async function documentScope(ctx: AuthedContext): Promise<DocumentScope> {
+  const { hiddenTeamIds } = await getSyncVisibility(ctx.prisma, ctx.userId, ctx.orgId);
+  return { hiddenTeamIds, orgId: ctx.orgId };
+}
+
+/** Service errors -> GraphQLError with `extensions.code`; anything else rethrows. */
+function mapDocumentError(err: unknown): never {
+  if (err instanceof DocumentNotFoundError) {
+    throw new GraphQLError('Document not found', { extensions: { code: 'NOT_FOUND' } });
+  }
+  if (err instanceof DocumentInvalidParentError || err instanceof DocumentValidationError) {
+    throw new GraphQLError(err.message, { extensions: { code: 'BAD_USER_INPUT' } });
+  }
+  if (err instanceof DocumentForbiddenError) {
+    throw new GraphQLError('Only the creator can delete this document', {
+      extensions: { code: 'FORBIDDEN' },
+    });
+  }
+  throw err;
+}
+
+/** The visible document, or NOT_FOUND — hidden-team and cross-org ids look identical. */
+async function requireVisibleDocument(ctx: AuthedContext, id: string) {
+  const scope = await documentScope(ctx);
+  const existing = await ctx.services.document.findVisibleById(id, scope);
+  if (!existing) {
+    throw new GraphQLError('Document not found', { extensions: { code: 'NOT_FOUND' } });
+  }
+  return { existing, scope };
+}
+
+/**
+ * Write gate for team-scoped documents: the caller must be a NON-guest member
+ * of the owning team — the rule the collaborative-editing server already
+ * applies (a team doc is only openable by that team's members), and the one
+ * cycle mutations apply to guests. Workspace-level docs (no team) stay open
+ * to every org member. Reads keep the visibility-only rule.
+ */
+async function requireDocumentWriteAccess(ctx: AuthedContext, teamId: string | null | undefined) {
+  if (teamId) {
+    await requireTeamMemberNotGuest(ctx.prisma, teamId, ctx.userId, ctx.orgId);
+  }
+}
 
 export const documentResolvers = {
   Mutation: {
     documentArchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
-      const existing = await ctx.services.document.findById(id);
-      if (!existing || existing.organizationId !== ctx.orgId) {
-        throw new GraphQLError('Document not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
+      {
+        const { existing } = await requireVisibleDocument(ctx, id);
+        await requireDocumentWriteAccess(ctx, existing.teamId);
       }
 
       const document = await ctx.services.document.archive(id);
@@ -34,7 +89,18 @@ export const documentResolvers = {
     ) => {
       requireAuth(ctx);
 
-      const document = await ctx.services.document.create(ctx.orgId, ctx.userId, input);
+      const { hiddenTeamIds } = await documentScope(ctx);
+      // A hidden team falls through to the service's NOT_FOUND so the gate
+      // never confirms that a private team exists.
+      if (!input.teamId || !hiddenTeamIds.includes(input.teamId)) {
+        await requireDocumentWriteAccess(ctx, input.teamId);
+      }
+      let document: Awaited<ReturnType<typeof ctx.services.document.create>>;
+      try {
+        document = await ctx.services.document.create(ctx.orgId, ctx.userId, input, hiddenTeamIds);
+      } catch (err) {
+        mapDocumentError(err);
+      }
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'I',
@@ -48,31 +114,38 @@ export const documentResolvers = {
     documentDelete: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
 
-      const existing = await ctx.services.document.findById(id);
-      if (!existing || existing.organizationId !== ctx.orgId) {
-        throw new GraphQLError('Document not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
+      {
+        const { existing } = await requireVisibleDocument(ctx, id);
+        await requireDocumentWriteAccess(ctx, existing.teamId);
       }
 
       try {
         await ctx.services.document.delete(id, ctx.userId);
       } catch (err) {
-        if (err instanceof DocumentNotFoundError) {
-          throw new GraphQLError('Document not found', {
-            extensions: { code: 'NOT_FOUND' },
-          });
-        }
-        if (err instanceof DocumentForbiddenError) {
-          throw new GraphQLError('Only the creator can delete this document', {
-            extensions: { code: 'FORBIDDEN' },
-          });
-        }
-        throw err;
+        mapDocumentError(err);
       }
 
       const sync = await ctx.services.sync.createSyncAction(ctx.orgId, 'D', 'Document', id, null);
       return { lastSyncId: sync.id.toString(), success: true };
+    },
+
+    documentUnarchive: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+
+      {
+        const { existing } = await requireVisibleDocument(ctx, id);
+        await requireDocumentWriteAccess(ctx, existing.teamId);
+      }
+
+      const document = await ctx.services.document.unarchive(id);
+      const sync = await ctx.services.sync.createSyncAction(
+        ctx.orgId,
+        'U',
+        'Document',
+        id,
+        document,
+      );
+      return { document, lastSyncId: sync.id.toString(), success: true };
     },
 
     documentUpdate: async (
@@ -82,14 +155,15 @@ export const documentResolvers = {
     ) => {
       requireAuth(ctx);
 
-      const existing = await ctx.services.document.findById(id);
-      if (!existing || existing.organizationId !== ctx.orgId) {
-        throw new GraphQLError('Document not found', {
-          extensions: { code: 'NOT_FOUND' },
-        });
-      }
+      const { existing, scope } = await requireVisibleDocument(ctx, id);
+      await requireDocumentWriteAccess(ctx, existing.teamId);
 
-      const document = await ctx.services.document.update(id, input);
+      let document: Awaited<ReturnType<typeof ctx.services.document.update>>;
+      try {
+        document = await ctx.services.document.update(id, input, scope);
+      } catch (err) {
+        mapDocumentError(err);
+      }
       const sync = await ctx.services.sync.createSyncAction(
         ctx.orgId,
         'U',
@@ -104,24 +178,30 @@ export const documentResolvers = {
   Query: {
     document: async (_parent: unknown, { id }: { id: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      const document = await ctx.services.document.findById(id);
-      if (!document || document.organizationId !== ctx.orgId) {
-        return null;
-      }
-      return document;
+      return ctx.services.document.findVisibleById(id, await documentScope(ctx));
     },
 
     documents: async (
       _parent: unknown,
-      { teamId, projectId }: { teamId?: string; projectId?: string },
+      {
+        teamId,
+        projectId,
+        includeArchived,
+      }: { teamId?: string; projectId?: string; includeArchived?: boolean },
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
 
-      return ctx.services.document.findByOrg(ctx.orgId, {
-        projectId: projectId ?? undefined,
-        teamId: teamId ?? undefined,
-      });
+      const { hiddenTeamIds } = await documentScope(ctx);
+      return ctx.services.document.findByOrg(
+        ctx.orgId,
+        {
+          includeArchived: includeArchived ?? false,
+          projectId: projectId ?? undefined,
+          teamId: teamId ?? undefined,
+        },
+        hiddenTeamIds,
+      );
     },
   },
 };

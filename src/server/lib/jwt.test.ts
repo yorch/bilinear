@@ -65,10 +65,9 @@ describe('signGithubOAuthState / verifyGithubOAuthState', () => {
   const PAYLOAD = {
     orgId: '00000000-0000-0000-0000-000000000001',
     userId: '00000000-0000-0000-0000-000000000010',
-    webhookSecret: 'a-sufficiently-long-secret',
   };
 
-  it('round-trips the org/user/webhookSecret payload', async () => {
+  it('round-trips the org/user payload', async () => {
     const state = await signGithubOAuthState(PAYLOAD);
     await expect(verifyGithubOAuthState(state)).resolves.toEqual(PAYLOAD);
   });

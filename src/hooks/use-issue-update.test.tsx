@@ -24,6 +24,14 @@ vi.mock('@/lib/toast', () => ({
 const findByIdMock = vi.fn();
 const optimisticUpdateMock = vi.fn();
 const applySyncActionMock = vi.fn();
+const stateTypes: Record<string, string> = {
+  st_cancel: 'canceled',
+  st_done: 'completed',
+  st_todo: 'unstarted',
+};
+const stateFindByIdMock = vi.fn((id: string) =>
+  stateTypes[id] ? { id, type: stateTypes[id] } : null,
+);
 
 vi.mock('@/providers/store-provider', () => ({
   useStore: () => ({
@@ -32,6 +40,7 @@ vi.mock('@/providers/store-provider', () => ({
       findById: findByIdMock,
       optimisticUpdate: optimisticUpdateMock,
     },
+    workflowStateStore: { findById: stateFindByIdMock },
   }),
 }));
 
@@ -98,6 +107,36 @@ describe('useIssueUpdate', () => {
       expect(enqueueMock).toHaveBeenCalledTimes(1);
       const [, variables] = enqueueMock.mock.calls[0];
       expect(variables).toEqual({ id: '1', input: { title: 'New' } });
+    });
+
+    it('stamps completedAt optimistically when moved to a completed state, and clears it on reopen', () => {
+      findByIdMock.mockReturnValue({ id: '1', stateId: 'st_todo' });
+      const { result } = renderHook(() => useIssueUpdate());
+
+      act(() => result.current('1', { stateId: 'st_done' }));
+      const done = optimisticUpdateMock.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(typeof done.completedAt).toBe('string');
+      expect(done.canceledAt).toBeNull();
+      // The mutation itself still sends only what the user changed.
+      expect(enqueueMock.mock.calls[0]?.[1]).toEqual({ id: '1', input: { stateId: 'st_done' } });
+
+      act(() => result.current('1', { stateId: 'st_todo' }));
+      expect(optimisticUpdateMock.mock.calls[1]?.[1]).toMatchObject({
+        canceledAt: null,
+        completedAt: null,
+      });
+
+      act(() => result.current('1', { stateId: 'st_cancel' }));
+      const canceled = optimisticUpdateMock.mock.calls[2]?.[1] as Record<string, unknown>;
+      expect(typeof canceled.canceledAt).toBe('string');
+      expect(canceled.completedAt).toBeNull();
+    });
+
+    it('does not touch close timestamps for patches without a state change', () => {
+      findByIdMock.mockReturnValue({ id: '1' });
+      const { result } = renderHook(() => useIssueUpdate());
+      act(() => result.current('1', { title: 'x' }));
+      expect(optimisticUpdateMock).toHaveBeenCalledWith('1', { title: 'x' });
     });
 
     it('reconciles via issueStore.applySyncAction on mutation success', () => {

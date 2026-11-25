@@ -39,6 +39,7 @@ const TRACKED_ACTIVITY_FIELDS = [
   'trashed',
   'cycleId',
   'parentId',
+  'teamId',
 ] as const;
 
 function issueFieldToString(issue: Issue, field: string): string | null {
@@ -632,6 +633,11 @@ export const issueResolvers = {
         });
       }
       await requireIssueAccessNotGuestOrOwn(ctx.prisma, existing, ctx.userId, ctx.orgId);
+      // Moving to another team writes into that team, so the caller needs the
+      // same standing there that issueCreate demands.
+      if (input.teamId && input.teamId !== existing.teamId) {
+        await requireTeamMemberNotGuest(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
+      }
 
       // Snapshot old label set before mutation for diff
       const oldLabels = input.labelIds !== undefined ? await ctx.services.issue.getLabels(id) : [];
@@ -644,21 +650,44 @@ export const issueResolvers = {
       const cascadedSyncs: RecordedSync[] = [];
       let updateResult: Awaited<ReturnType<typeof ctx.services.issue.update>>;
       try {
-        updateResult = await ctx.services.issue.update(id, input, async (tx, res) => {
-          issueSync = await ctx.services.sync.recordSyncAction(
-            tx,
-            ctx.orgId,
-            'U',
-            'Issue',
-            id,
-            res.issue,
-          );
-          for (const row of res.cascaded) {
-            cascadedSyncs.push(
-              await ctx.services.sync.recordSyncAction(tx, ctx.orgId, 'U', 'Issue', row.id, row),
+        updateResult = await ctx.services.issue.update(
+          id,
+          input,
+          async (tx, res) => {
+            issueSync = await ctx.services.sync.recordSyncAction(
+              tx,
+              ctx.orgId,
+              'U',
+              'Issue',
+              id,
+              res.issue,
             );
-          }
-        });
+            for (const row of res.cascaded) {
+              cascadedSyncs.push(
+                await ctx.services.sync.recordSyncAction(tx, ctx.orgId, 'U', 'Issue', row.id, row),
+              );
+            }
+          },
+          {
+            // Re-run the access checks against the row as locked inside the
+            // transaction: a concurrent team move may have changed `teamId`
+            // since the pre-read above, and the earlier verdict was about the
+            // OLD team.
+            authorize: async current => {
+              if (
+                current.teamId === existing.teamId &&
+                current.creatorId === existing.creatorId &&
+                current.assigneeId === existing.assigneeId
+              ) {
+                return;
+              }
+              await requireIssueAccessNotGuestOrOwn(ctx.prisma, current, ctx.userId, ctx.orgId);
+              if (input.teamId && input.teamId !== current.teamId) {
+                await requireTeamMemberNotGuest(ctx.prisma, input.teamId, ctx.userId, ctx.orgId);
+              }
+            },
+          },
+        );
       } catch (err) {
         const mapped = toIssueInputGraphQLError(err);
         if (mapped) {
@@ -679,15 +708,35 @@ export const issueResolvers = {
         ctx.services.sync.publish(s);
       }
 
-      // Record an activity entry for each changed tracked field
+      // Record an activity entry for each changed tracked field. The NEW value
+      // is read from the returned row, not from `input`: a team move rewrites
+      // stateId/cycleId implicitly, and those changes never appear in input.
+      const isTeamMove = existing.teamId !== issue.teamId;
       const activities: IssueActivityCreateInput[] = [];
       for (const field of TRACKED_ACTIVITY_FIELDS) {
-        if (!(field in input) || (input as Record<string, unknown>)[field] === undefined) {
+        const implicit = isTeamMove && (field === 'stateId' || field === 'cycleId');
+        if (field === 'teamId') {
+          if (isTeamMove) {
+            // Identifiers (ENG-12 -> OPS-3) are what a reader recognises; the
+            // raw team ids would render as UUIDs in the timeline.
+            activities.push({
+              actorId: ctx.userId,
+              field,
+              issueId: id,
+              newValue: issue.identifier,
+              oldValue: existing.identifier,
+            });
+          }
+          continue;
+        }
+        if (
+          !implicit &&
+          (!(field in input) || (input as Record<string, unknown>)[field] === undefined)
+        ) {
           continue;
         }
         const oldStr = issueFieldToString(existing, field);
-        const newRaw = (input as Record<string, unknown>)[field];
-        const newStr = newRaw != null ? String(newRaw) : null;
+        const newStr = issueFieldToString(issue, field);
         if (oldStr !== newStr) {
           activities.push({
             actorId: ctx.userId,
@@ -756,9 +805,9 @@ export const issueResolvers = {
 
       // Notifications: status change — oldStatus/newStatus are workflow-state UUIDs;
       // human-readable names are resolved in the notification UI via the state store.
-      if ('stateId' in input && input.stateId && input.stateId !== existing.stateId) {
+      if (issue.stateId !== existing.stateId) {
         void ctx.services.notification
-          .createForStatusChange(ctx.orgId, issue.id, ctx.userId, existing.stateId, input.stateId)
+          .createForStatusChange(ctx.orgId, issue.id, ctx.userId, existing.stateId, issue.stateId)
           .catch(err => log.error({ err }, 'Failed to create status change notification'));
       }
 
@@ -789,6 +838,34 @@ export const issueResolvers = {
       void ctx.services.webhook
         .dispatchEvent(ctx.orgId, 'issue.updated', issue, issue.teamId)
         .catch(err => log.error({ err }, 'webhook dispatch failed: issue.updated'));
+      if (isTeamMove) {
+        // Subscribers scoped to the team the issue LEFT would otherwise never
+        // learn it moved (org-wide hooks already got the delivery above).
+        //
+        // They get a redacted "moved out" event, never the post-move row: that
+        // carries the destination's identifier, teamId and stateId, and the
+        // destination may be a private team the old team's subscriber cannot see.
+        //
+        // Org-wide hooks already got the full row above UNLESS the destination
+        // is private (dispatchEvent withholds private-team events from them), so
+        // in that case they receive the redacted event too.
+        const destPrivate = await ctx.services.webhook.isTeamPrivate(ctx.orgId, issue.teamId);
+        void ctx.services.webhook
+          .dispatchEvent(
+            ctx.orgId,
+            'issue.updated',
+            {
+              id: issue.id,
+              identifier: existing.identifier,
+              movedOut: true,
+              organizationId: existing.organizationId,
+              teamId: existing.teamId,
+            },
+            existing.teamId,
+            { teamScopedOnly: !destPrivate },
+          )
+          .catch(err => log.error({ err }, 'webhook dispatch failed: issue.updated (old team)'));
+      }
 
       // Automation triggers — fire one per kind of change. The service
       // de-dupes by trigger_type so a single field change can only match
@@ -801,9 +878,9 @@ export const issueResolvers = {
           .evaluateForIssue(ctx.orgId, { changes, issue, type }, ctx.userId)
           .catch(err => log.error({ err, type }, 'automation evaluate failed'));
       };
-      if (input.stateId && input.stateId !== existing.stateId) {
+      if (issue.stateId !== existing.stateId) {
         fireAutomation('issue_state_changed', {
-          stateId: { newValue: input.stateId, oldValue: existing.stateId },
+          stateId: { newValue: issue.stateId, oldValue: existing.stateId },
         });
       }
       if (input.priority !== undefined && input.priority !== existing.priority) {
@@ -825,7 +902,12 @@ export const issueResolvers = {
         });
       }
 
-      return { issue, lastSyncId: issueSync?.id.toString() ?? '0', success: true };
+      return {
+        droppedLabelNames: updateResult.droppedLabelNames,
+        issue,
+        lastSyncId: issueSync?.id.toString() ?? '0',
+        success: true,
+      };
     },
   },
 

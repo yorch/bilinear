@@ -16,7 +16,7 @@ import type { GraphQLContext } from '../context';
 async function requireCommentAccess(
   ctx: GraphQLContext & { userId: string; orgId: string },
   commentId: string,
-): Promise<void> {
+): Promise<{ issueId: string }> {
   const target = await ctx.services.comment.findAccessTarget(commentId, ctx.orgId);
   if (!target) {
     throw new GraphQLError('Comment not found', {
@@ -24,6 +24,7 @@ async function requireCommentAccess(
     });
   }
   await requireTeamMember(ctx.prisma, target.teamId, ctx.userId, ctx.orgId);
+  return { issueId: target.issueId };
 }
 
 function handleCommentError(err: unknown): never {
@@ -107,9 +108,9 @@ export const commentResolvers = {
       );
 
       // Notify subscribers
-      await ctx.services.notification
+      const subscriberResult = await ctx.services.notification
         .notifyCommentSubscribers(ctx.orgId, comment.issueId, ctx.userId, comment.id)
-        .catch(() => {}); // non-fatal
+        .catch(() => undefined); // non-fatal
 
       // Mention notifications: parse @user mentions out of the comment's
       // TipTap doc (bodyData) and notify anyone mentioned who isn't already
@@ -125,6 +126,8 @@ export const commentResolvers = {
           issueId: issue.id,
           mentionedUserIds: extractMentionedUserIds(input.bodyData),
           orgId: ctx.orgId,
+          // The reply target already got an ISSUE_COMMENTED row above.
+          skipUserIds: subscriberResult?.replyToUserId ? [subscriberResult.replyToUserId] : [],
           teamId: issue.teamId,
         })
         .catch(err => logger.error({ err }, 'Failed to create mention notifications'));
@@ -153,15 +156,18 @@ export const commentResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireCommentAccess(ctx, commentId);
+      const { issueId } = await requireCommentAccess(ctx, commentId);
       try {
         const reaction = await ctx.services.comment.addReaction(commentId, ctx.userId, emoji);
+        // A reaction row only names its comment; `issueId` is what lets the sync
+        // filter tie it to the issue's visibility (it would otherwise reach every
+        // member, whatever team the comment is in).
         const sync = await ctx.services.sync.createSyncAction(
           ctx.orgId,
           'I',
           'CommentReaction',
           reaction.id,
-          reaction,
+          { ...reaction, issueId },
         );
         return { lastSyncId: sync.id.toString(), reaction, success: true };
       } catch (err) {

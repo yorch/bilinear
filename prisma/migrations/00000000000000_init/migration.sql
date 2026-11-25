@@ -14,7 +14,7 @@ CREATE TYPE "workflow_state_type" AS ENUM ('triage', 'backlog', 'unstarted', 'st
 CREATE TYPE "project_status_type" AS ENUM ('backlog', 'planned', 'inProgress', 'paused', 'completed', 'canceled');
 
 -- CreateEnum
-CREATE TYPE "notification_type" AS ENUM ('ISSUE_ASSIGNED', 'ISSUE_STATUS_CHANGED', 'ISSUE_MENTIONED', 'ISSUE_COMMENTED');
+CREATE TYPE "notification_type" AS ENUM ('ISSUE_ASSIGNED', 'ISSUE_STATUS_CHANGED', 'ISSUE_MENTIONED', 'ISSUE_COMMENTED', 'REMINDER');
 
 -- CreateEnum
 CREATE TYPE "issue_relation_type" AS ENUM ('related', 'blocks', 'blocked_by', 'duplicate');
@@ -67,6 +67,16 @@ CREATE TABLE "users" (
     "updated_at" TIMESTAMPTZ NOT NULL,
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "organization_url_key_aliases" (
+    "id" UUID NOT NULL,
+    "organization_id" UUID NOT NULL,
+    "url_key" VARCHAR(63) NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "organization_url_key_aliases_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -737,6 +747,19 @@ CREATE TABLE "favorites" (
 );
 
 -- CreateTable
+CREATE TABLE "issue_reminders" (
+    "id" UUID NOT NULL,
+    "organization_id" UUID NOT NULL,
+    "issue_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "remind_at" TIMESTAMPTZ NOT NULL,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "issue_reminders_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "github_integrations" (
     "id" UUID NOT NULL,
     "organization_id" UUID NOT NULL,
@@ -895,6 +918,12 @@ CREATE UNIQUE INDEX "users_github_id_key" ON "users"("github_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_calendar_feed_token_key" ON "users"("calendar_feed_token");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "organization_url_key_aliases_url_key_key" ON "organization_url_key_aliases"("url_key");
+
+-- CreateIndex
+CREATE INDEX "organization_url_key_aliases_organization_id_idx" ON "organization_url_key_aliases"("organization_id");
 
 -- CreateIndex
 CREATE INDEX "organization_members_organization_id_idx" ON "organization_members"("organization_id");
@@ -1245,6 +1274,18 @@ CREATE INDEX "favorites_organization_id_idx" ON "favorites"("organization_id");
 CREATE UNIQUE INDEX "favorites_user_entity_uniq" ON "favorites"("user_id", "entity_type", "entity_id");
 
 -- CreateIndex
+CREATE INDEX "issue_reminders_remind_at_idx" ON "issue_reminders"("remind_at");
+
+-- CreateIndex
+CREATE INDEX "issue_reminders_user_id_idx" ON "issue_reminders"("user_id");
+
+-- CreateIndex
+CREATE INDEX "issue_reminders_organization_id_idx" ON "issue_reminders"("organization_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "issue_reminders_issue_user_uniq" ON "issue_reminders"("issue_id", "user_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "github_integrations_organization_id_key" ON "github_integrations"("organization_id");
 
 -- CreateIndex
@@ -1294,6 +1335,9 @@ CREATE UNIQUE INDEX "organization_invites_token_hash_key" ON "organization_invit
 
 -- CreateIndex
 CREATE INDEX "organization_invites_organization_id_email_idx" ON "organization_invites"("organization_id", "email");
+
+-- AddForeignKey
+ALTER TABLE "organization_url_key_aliases" ADD CONSTRAINT "organization_url_key_aliases_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "organization_members" ADD CONSTRAINT "organization_members_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1570,6 +1614,15 @@ ALTER TABLE "favorites" ADD CONSTRAINT "favorites_user_id_fkey" FOREIGN KEY ("us
 
 -- AddForeignKey
 ALTER TABLE "favorites" ADD CONSTRAINT "favorites_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "issue_reminders" ADD CONSTRAINT "issue_reminders_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "issue_reminders" ADD CONSTRAINT "issue_reminders_issue_id_fkey" FOREIGN KEY ("issue_id") REFERENCES "issues"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "issue_reminders" ADD CONSTRAINT "issue_reminders_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "github_integrations" ADD CONSTRAINT "github_integrations_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE CASCADE ON UPDATE CASCADE;

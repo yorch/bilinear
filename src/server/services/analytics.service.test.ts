@@ -310,6 +310,11 @@ describe('AnalyticsService', () => {
 
       const result = await service.workspaceOverview(ORG_ID);
 
+      // Zero/negative durations (started and completed together) must not drag
+      // the average to 0.0d; the client formatter filters them the same way.
+      const sql = (prisma.$queryRaw.mock.calls[0][0] as readonly string[]).join('?');
+      expect(sql).toContain('completed_at > started_at');
+
       expect(result.totalIssues).toBe(15);
       expect(result.totalOpen).toBe(9);
       expect(result.totalCompleted).toBe(6);

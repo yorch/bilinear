@@ -83,7 +83,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
   if ('response' in authResult) {
     return authResult.response;
   }
-  const { orgId } = authResult.ctx;
+  const { orgId, userId } = authResult.ctx;
 
   const { path } = await params;
 
@@ -99,7 +99,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
 
   // Verify the file record exists and belongs to the caller's org.
   const fileService = new FileService(prisma);
-  const record = await fileService.findByKeyInOrg(filename, orgId);
+  const record = await fileService.findByKeyInOrg(filename, orgId, userId ?? undefined);
   if (!record) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }

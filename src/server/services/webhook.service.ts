@@ -1,7 +1,12 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
-import { Agent, type Dispatcher } from 'undici';
+import { BlockList, isIP } from 'node:net';
+import {
+  Agent,
+  type Dispatcher,
+  type RequestInit as UndiciRequestInit,
+  fetch as undiciFetch,
+} from 'undici';
 import type { PrismaClient, Webhook, WebhookDelivery } from '../../generated/prisma';
 import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { env } from '../lib/env';
@@ -32,6 +37,9 @@ export const WEBHOOK_EVENTS = [
   'initiative.created',
   'initiative.updated',
 ] as const;
+
+/** Synthetic event used by `sendTest`; not subscribable, never fan-out dispatched. */
+export const WEBHOOK_PING_EVENT = 'ping';
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
@@ -78,16 +86,34 @@ const REQUEST_TIMEOUT_MS_KEY = 'webhook.requestTimeoutMs';
  * row's (status, nextAttemptAt) tuple drives the retry scheduler — see
  * `processDuePending`.
  */
+export type HostResolver = (host: string) => Promise<Array<{ address: string }>>;
+
+const defaultResolveHost: HostResolver = host => lookup(host, { all: true });
+
+/** How long create/update waits for DNS before leaving the verdict to delivery time. */
+const CREATE_TIME_DNS_TIMEOUT_MS = 2000;
+
+/** Bytes of a response body read for diagnostics; the rest is never downloaded. */
+const RESPONSE_BODY_READ_BYTES = 4096;
+const RESPONSE_BODY_STORED_CHARS = 1000;
+
 export class WebhookService {
   constructor(
     private prisma: PrismaClient,
     private config: ConfigReader = DEFAULTS_ONLY_CONFIG,
+    private resolveHost: HostResolver = defaultResolveHost,
+    // The pinned dispatcher is an npm-`undici` Agent. It must be driven by that
+    // same package's fetch: Node's bundled fetch speaks an older handler
+    // protocol and fails every request with "invalid onRequestStart method"
+    // when handed a newer Agent (verified on Node 22 + undici 8).
+    private fetchImpl: typeof undiciFetch = undiciFetch,
   ) {}
 
   // ─── CRUD ─────────────────────────────────────────────────────────────────
 
   async create(orgId: string, creatorId: string, input: WebhookCreateInput): Promise<Webhook> {
     this.validateUrl(input.url);
+    await this.assertResolvesPublic(input.url);
     this.validateEvents(input.events);
     this.validateName(input.name);
 
@@ -109,6 +135,7 @@ export class WebhookService {
   async update(orgId: string, id: string, input: WebhookUpdateInput): Promise<Webhook> {
     if (input.url !== undefined) {
       this.validateUrl(input.url);
+      await this.assertResolvesPublic(input.url);
     }
     if (input.events !== undefined) {
       this.validateEvents(input.events);
@@ -202,6 +229,52 @@ export class WebhookService {
     return updated;
   }
 
+  /**
+   * Send a signed `ping` event to one webhook and wait for the first attempt,
+   * so the admin sees the HTTP status (or the failure) immediately. The ping
+   * goes through the normal signing/SSRF-pinned delivery path, but a failed
+   * test is closed out as `failed` rather than left on the retry schedule —
+   * nobody wants a "test" that keeps firing in the background.
+   */
+  async sendTest(orgId: string, id: string): Promise<WebhookDelivery> {
+    const webhook = await this.findById(orgId, id);
+    if (!webhook) {
+      throw new WebhookNotFoundError();
+    }
+    if (webhook.archivedAt || !webhook.enabled) {
+      throw new WebhookTestUnavailableError();
+    }
+    this.validateUrl(webhook.url);
+
+    const deliveryId = randomUUID();
+    await this.prisma.webhookDelivery.create({
+      data: {
+        event: WEBHOOK_PING_EVENT,
+        id: deliveryId,
+        nextAttemptAt: new Date(),
+        payload: this.buildPayload(deliveryId, orgId, WEBHOOK_PING_EVENT, {
+          message: 'Test event from Bilinear',
+          webhookId: webhook.id,
+        }),
+        status: 'pending',
+        webhookId: webhook.id,
+      },
+    });
+    await this.processDelivery(deliveryId);
+
+    const delivery = await this.prisma.webhookDelivery.findUnique({ where: { id: deliveryId } });
+    if (!delivery) {
+      throw new WebhookNotFoundError();
+    }
+    if (delivery.status === 'pending' || delivery.status === 'in_flight') {
+      return this.prisma.webhookDelivery.update({
+        data: { nextAttemptAt: null, status: 'failed' },
+        where: { id: deliveryId },
+      });
+    }
+    return delivery;
+  }
+
   async findById(orgId: string, id: string): Promise<Webhook | null> {
     return this.prisma.webhook.findFirst({
       where: { id, organizationId: orgId },
@@ -228,6 +301,15 @@ export class WebhookService {
 
   // ─── Dispatch ─────────────────────────────────────────────────────────────
 
+  /** Whether `teamId` (in `orgId`) is a private team. Unknown teams count as public. */
+  async isTeamPrivate(orgId: string, teamId: string): Promise<boolean> {
+    const team = await this.prisma.team.findFirst({
+      select: { private: true },
+      where: { id: teamId, organizationId: orgId },
+    });
+    return team?.private === true;
+  }
+
   /**
    * Enqueue a webhook event for every matching subscriber in `orgId`.
    * `teamId`, when supplied, additionally filters out webhooks scoped to a
@@ -240,7 +322,16 @@ export class WebhookService {
     event: WebhookEvent | string,
     data: object,
     teamId?: string | null,
+    opts: { teamScopedOnly?: boolean } = {},
   ): Promise<WebhookDelivery[]> {
+    // Private-team rule: an event from a PRIVATE team goes only to hooks scoped
+    // to that team. An org-wide hook has no per-team membership, so delivering
+    // a private team's rows to it would hand them to whoever owns the endpoint
+    // regardless of team membership (the same leak the sync filter closes).
+    // Deliberately conservative: a hook created by a team member is still
+    // org-wide unless it was scoped to the team.
+    const teamScopedOnly =
+      opts.teamScopedOnly === true || (teamId != null && (await this.isTeamPrivate(orgId, teamId)));
     // Team-scoped filter:
     //  - Team-level event (teamId passed): include org-wide hooks AND
     //    hooks scoped to that specific team.
@@ -253,7 +344,11 @@ export class WebhookService {
         enabled: true,
         events: { has: event },
         organizationId: orgId,
-        ...(teamId == null ? { teamId: null } : { OR: [{ teamId: null }, { teamId }] }),
+        ...(teamId == null
+          ? { teamId: null }
+          : teamScopedOnly
+            ? { teamId }
+            : { OR: [{ teamId: null }, { teamId }] }),
       },
     });
     if (subscribers.length === 0) {
@@ -387,6 +482,24 @@ export class WebhookService {
       return;
     }
 
+    // Rows created before a range was blocked (or before the check existed) are
+    // never grandfathered: every delivery re-runs the create-time URL screen, so
+    // a stale IP-literal row cannot reach a now-forbidden address. (Hostnames
+    // are additionally pinned at connect time.)
+    try {
+      this.validateUrl(delivery.webhook.url);
+    } catch {
+      await this.prisma.webhookDelivery.update({
+        data: {
+          errorMessage: 'Webhook URL is no longer allowed',
+          nextAttemptAt: null,
+          status: 'failed',
+        },
+        where: { id: deliveryId },
+      });
+      return;
+    }
+
     const rawBody = JSON.stringify(delivery.payload);
     const signature = signPayload(rawBody, delivery.webhook.signingSecret);
 
@@ -408,7 +521,7 @@ export class WebhookService {
         // could answer differently; the pinned dispatcher resolves once,
         // inside the connect step, and only the addresses it validated are
         // ever connected to.
-        const init: RequestInit & { dispatcher: Dispatcher } = {
+        const init: UndiciRequestInit & { dispatcher: Dispatcher } = {
           body: rawBody,
           dispatcher: pinnedDispatcher,
           headers: {
@@ -427,16 +540,16 @@ export class WebhookService {
           redirect: 'manual',
           signal: controller.signal,
         };
-        const res = await fetch(delivery.webhook.url, init);
+        const res = await this.fetchImpl(delivery.webhook.url, init);
         responseStatus = res.status;
         // Cap response body capture; we only need diagnostic context, not full payloads.
-        responseBody = (await res.text().catch(() => '')).slice(0, 1000);
+        responseBody = await readBodyCapped(res);
         success = res.status >= 200 && res.status < 300;
       } finally {
         clearTimeout(timeout);
       }
     } catch (err) {
-      errorMessage = err instanceof Error ? err.message : String(err);
+      errorMessage = describeDeliveryError(err, requestTimeoutMs);
     }
 
     const now = new Date();
@@ -610,6 +723,45 @@ export class WebhookService {
     }
   }
 
+  /**
+   * Create/update-time DNS screen: a hostname that already resolves to a
+   * private address (`http://vm:3000/` via /etc/hosts, an internal zone) is
+   * refused up front instead of being accepted and then failing every delivery.
+   * It is a courtesy, not the guard: a lookup that fails or is slow is waved
+   * through, and a name can change answers later, so the pinned dispatcher's
+   * connect-time check (which resolves once and connects only to what it
+   * validated) remains the actual SSRF defence.
+   */
+  private async assertResolvesPublic(url: string): Promise<void> {
+    if (env.ALLOW_PRIVATE_WEBHOOK_URLS) {
+      return;
+    }
+    const raw = new URL(url).hostname;
+    const host = raw.startsWith('[') && raw.endsWith(']') ? raw.slice(1, -1) : raw;
+    if (isIP(host) || parseIpLiteral(host)) {
+      return; // literals were screened synchronously by validateUrl
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const addresses = await Promise.race([
+        this.resolveHost(host),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('dns timeout')), CREATE_TIME_DNS_TIMEOUT_MS);
+        }),
+      ]);
+      if (addresses.some(a => isPrivateIp(a.address))) {
+        throw new WebhookPrivateUrlError();
+      }
+    } catch (err) {
+      if (err instanceof WebhookPrivateUrlError) {
+        throw err;
+      }
+      // unresolvable right now: not evidence of anything; delivery re-checks.
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   private validateName(name: string): void {
     if (name.length > MAX_WEBHOOK_NAME_LENGTH) {
       throw new WebhookInvalidNameError();
@@ -757,60 +909,65 @@ function parseIpLiteral(s: string): string | null {
   return null;
 }
 
-/** Whether a normalized IP literal points to a private/loopback range. */
+/**
+ * IANA special-purpose / non-global ranges a webhook must never reach. Built on
+ * `node:net` BlockList (CIDR-aware, handles IPv4-mapped IPv6 natively) rather
+ * than hand-rolled prefix tests, which previously missed CGNAT (100.64/10 —
+ * 100.100.100.200 is a cloud metadata address), benchmarking (198.18/15),
+ * fe80::/10 beyond the literal `fe80:` prefix, site-local fec0::/10, the
+ * IPv4-compatible/translated forms (::7f00:1, ::ffff:0:7f00:1), NAT64 and 6to4.
+ */
+const PRIVATE_V4_CIDRS: Array<[string, number]> = [
+  ['0.0.0.0', 8], // "this network"
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10], // CGNAT / shared address space
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16], // link-local + cloud metadata
+  ['172.16.0.0', 12],
+  ['192.0.0.0', 24], // IETF protocol assignments
+  ['192.0.2.0', 24], // TEST-NET-1
+  ['192.88.99.0', 24], // 6to4 relay anycast
+  ['192.168.0.0', 16],
+  ['198.18.0.0', 15], // benchmarking
+  ['198.51.100.0', 24], // TEST-NET-2
+  ['203.0.113.0', 24], // TEST-NET-3
+  ['224.0.0.0', 3], // multicast + reserved + broadcast (224/4 and 240/4)
+];
+const PRIVATE_V6_CIDRS: Array<[string, number]> = [
+  ['::', 96], // unspecified, loopback, IPv4-compatible (::7f00:1)
+  ['::ffff:0:0:0', 96], // IPv4-translated (::ffff:0:7f00:1)
+  ['64:ff9b::', 96], // NAT64
+  ['64:ff9b:1::', 48], // local-use NAT64
+  ['100::', 64], // discard-only
+  ['2001::', 23], // IETF protocol assignments (Teredo etc.)
+  ['2001:db8::', 32], // documentation
+  ['2002::', 16], // 6to4
+  ['fc00::', 7], // unique-local
+  ['fe80::', 10], // link-local
+  ['fec0::', 10], // site-local (deprecated)
+  ['ff00::', 8], // multicast
+];
+const privateRanges = new BlockList();
+for (const [net, prefix] of PRIVATE_V4_CIDRS) {
+  privateRanges.addSubnet(net, prefix, 'ipv4');
+}
+for (const [net, prefix] of PRIVATE_V6_CIDRS) {
+  privateRanges.addSubnet(net, prefix, 'ipv6');
+}
+
+/** Whether a normalized IP literal points to a private/loopback/special-purpose range. */
 function isPrivateIp(ip: string): boolean {
-  // IPv6 forms — strip zone id and zero-pad shorthand for matching.
-  // Node's URL parser keeps brackets in `hostname`, but isPrivateIp is
-  // also called recursively on already-stripped values, so accept both.
-  let v6 = ip.split('%')[0];
-  if (v6.startsWith('[') && v6.endsWith(']')) {
-    v6 = v6.slice(1, -1);
+  // Node's URL parser keeps brackets in `hostname`, but this is also called on
+  // already-stripped values, so accept both; drop any IPv6 zone id.
+  let addr = ip.split('%')[0] ?? '';
+  if (addr.startsWith('[') && addr.endsWith(']')) {
+    addr = addr.slice(1, -1);
   }
-  if (v6.includes(':')) {
-    if (
-      v6 === '::1' ||
-      v6 === '::' ||
-      v6.startsWith('fe80:') ||
-      // unique-local fc00::/7
-      /^fc[0-9a-f]{2}:/i.test(v6) ||
-      /^fd[0-9a-f]{2}:/i.test(v6)
-    ) {
-      return true;
-    }
-    // IPv4-mapped IPv6 — dotted form (::ffff:127.0.0.1).
-    const mappedDotted = v6.match(/^::ffff:(?:0:)?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
-    if (mappedDotted) {
-      return isPrivateIp(mappedDotted[1]);
-    }
-    // IPv4-mapped IPv6 — compressed numeric form (::ffff:7f00:1). Node's
-    // URL parser canonicalizes `[::ffff:127.0.0.1]` to this shape, so the
-    // SSRF guard MUST handle it or the loopback bypass slips through.
-    const mappedHex = v6.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
-    if (mappedHex) {
-      const hi = Number.parseInt(mappedHex[1], 16);
-      const lo = Number.parseInt(mappedHex[2], 16);
-      if (Number.isFinite(hi) && Number.isFinite(lo)) {
-        const dotted = [(hi >>> 8) & 0xff, hi & 0xff, (lo >>> 8) & 0xff, lo & 0xff].join('.');
-        return isPrivateIp(dotted);
-      }
-    }
+  const family = isIP(addr);
+  if (family === 0) {
     return false;
   }
-  // IPv4
-  const m = ip.split('.').map(Number);
-  if (m.length !== 4 || m.some(n => !Number.isFinite(n) || n < 0 || n > 255)) {
-    return false;
-  }
-  const [a, b] = m;
-  return (
-    a === 0 || // 0.0.0.0/8
-    a === 10 || // private
-    a === 127 || // loopback
-    (a === 169 && b === 254) || // link-local + cloud metadata
-    (a === 172 && b >= 16 && b <= 31) || // private
-    (a === 192 && b === 168) || // private
-    a >= 224 // multicast / reserved
-  );
+  return privateRanges.check(addr, family === 4 ? 'ipv4' : 'ipv6');
 }
 
 type LookupCallback = (
@@ -867,6 +1024,114 @@ const pinnedDispatcher: Dispatcher = new Agent({
   },
 });
 
+/**
+ * Read at most RESPONSE_BODY_READ_BYTES of a response and keep the first
+ * RESPONSE_BODY_STORED_CHARS characters. `res.text()` would download the whole
+ * body (a hostile endpoint can stream gigabytes) before the slice; this stops
+ * pulling and cancels the stream once the cap is reached.
+ */
+export async function readBodyCapped(res: {
+  body: { getReader(): ReadableStreamDefaultReader<Uint8Array> } | null;
+  text(): Promise<string>;
+}): Promise<string> {
+  const body = res.body;
+  if (!body || typeof body.getReader !== 'function') {
+    const text = await res.text().catch(() => '');
+    return text.slice(0, RESPONSE_BODY_STORED_CHARS);
+  }
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < RESPONSE_BODY_READ_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      chunks.push(value);
+      total += value.byteLength;
+    }
+  } catch {
+    // a broken stream still leaves whatever was read
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  return new TextDecoder()
+    .decode(Buffer.concat(chunks).subarray(0, RESPONSE_BODY_READ_BYTES))
+    .slice(0, RESPONSE_BODY_STORED_CHARS);
+}
+
+/**
+ * Plain-language text for the network failures people actually hit, so the UI
+ * does not show undici's `fetch failed (ENOTFOUND: getaddrinfo ENOTFOUND host)`.
+ * The error code stays in parentheses for anyone debugging. Unknown codes
+ * return null and fall back to the raw description.
+ */
+function friendlyNetworkError(cause: unknown): string | null {
+  if (!cause || typeof cause !== 'object') {
+    return null;
+  }
+  const { code, message } = cause as { code?: unknown; message?: unknown };
+  if (typeof code !== 'string') {
+    return null;
+  }
+  const text = typeof message === 'string' ? message : '';
+  // `getaddrinfo ENOTFOUND host` / `connect ECONNREFUSED 1.2.3.4:443`: the
+  // target is whatever follows the code.
+  const target = text.split(code)[1]?.trim().split(/\s+/)[0] ?? '';
+  switch (code) {
+    case 'ENOTFOUND':
+    case 'EAI_AGAIN':
+      return `Couldn't resolve host${target ? ` ${target}` : ''} (${code})`;
+    case 'ECONNREFUSED':
+      return `Connection refused${target ? ` by ${target}` : ''} (${code})`;
+    case 'ECONNRESET':
+      return `Connection was reset by the server (${code})`;
+    case 'ETIMEDOUT':
+    case 'UND_ERR_CONNECT_TIMEOUT':
+    case 'UND_ERR_HEADERS_TIMEOUT':
+      return `Timed out connecting to the server (${code})`;
+    case 'CERT_HAS_EXPIRED':
+    case 'DEPTH_ZERO_SELF_SIGNED_CERT':
+    case 'SELF_SIGNED_CERT_IN_CHAIN':
+    case 'UNABLE_TO_VERIFY_LEAF_SIGNATURE':
+    case 'ERR_TLS_CERT_ALTNAME_INVALID':
+      return `TLS certificate problem (${code})`;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Human-readable reason for a failed attempt. undici reports nearly every
+ * network failure as `TypeError: fetch failed` with the real reason in
+ * `cause`, so the bare message hides whether the SSRF guard refused the
+ * address, DNS failed, TLS failed or the socket was refused. Credentials in
+ * URLs and anything long are stripped before it is stored.
+ */
+export function describeDeliveryError(err: unknown, timeoutMs?: number): string {
+  if (err instanceof Error && err.name === 'AbortError') {
+    return timeoutMs ? `Request timed out after ${timeoutMs} ms` : 'Request timed out';
+  }
+  const base = err instanceof Error ? err.message : String(err);
+  const cause = err instanceof Error ? (err as { cause?: unknown }).cause : undefined;
+  let detail = '';
+  if (cause instanceof WebhookPrivateUrlError) {
+    detail = cause.message;
+  } else if (cause && typeof cause === 'object') {
+    const { code, message } = cause as { code?: unknown; message?: unknown };
+    detail = [typeof code === 'string' ? code : '', typeof message === 'string' ? message : '']
+      .filter(Boolean)
+      .join(': ');
+  }
+  const friendly = friendlyNetworkError(cause);
+  const full = friendly ?? (detail && !base.includes(detail) ? `${base} (${detail})` : base);
+  return full
+    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, '$1***@')
+    .replace(/\s+/g, ' ')
+    .slice(0, 500);
+}
+
 // ─── Errors ─────────────────────────────────────────────────────────────────
 
 export class WebhookNotFoundError extends Error {
@@ -894,6 +1159,13 @@ export class WebhookInvalidEventError extends Error {
   constructor(eventName: string) {
     super(`Unknown webhook event: ${eventName}`);
     this.name = 'WebhookInvalidEventError';
+  }
+}
+
+export class WebhookTestUnavailableError extends Error {
+  constructor() {
+    super('Enable the webhook before sending a test event');
+    this.name = 'WebhookTestUnavailableError';
   }
 }
 

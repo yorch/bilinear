@@ -247,17 +247,63 @@ describe('applyFilters', () => {
       expect(ids(applyFilters(ISSUES, lte))).toEqual(['1', '3']);
     });
 
-    // Documents existing behavior: when a field value is null the engine falls
-    // back to lexical string comparison ('null' > '2' is true), so null
-    // estimates are NOT excluded from a numeric `gt`. Pinned to catch
-    // regressions if this is ever tightened.
-    it('falls back to string comparison when a value is null', () => {
+    // An unset value used to compare as the string "null", so `estimate > 2`
+    // matched every unestimated issue ('null' > '2' lexically).
+    it('never matches an unset value', () => {
       const onlyNull = [issue({ estimate: null, id: 'n' })];
-      const set: FilterSet = {
+      for (const operator of ['gt', 'gte', 'lt', 'lte'] as const) {
+        const set: FilterSet = {
+          composition: 'and',
+          conditions: [{ field: 'estimate', operator, value: 2 }],
+        };
+        expect(ids(applyFilters(onlyNull, set))).toEqual([]);
+      }
+    });
+  });
+
+  describe('date operators', () => {
+    const NOW = new Date(2026, 4, 15, 12, 0, 0); // 15 May 2026, local
+    const cond = (operator: FilterCondition['operator'], value?: string): FilterSet => ({
+      composition: 'and',
+      conditions: [{ field: 'dueDate', operator, ...(value ? { value } : {}) }],
+    });
+
+    it('before / after compare calendar days and skip unset dates', () => {
+      expect(ids(applyFilters(ISSUES, cond('before', '2026-05-15')))).toEqual(['3']);
+      expect(ids(applyFilters(ISSUES, cond('after', '2026-05-15')))).toEqual(['1']);
+      // equal day is neither before nor after
+      expect(ids(applyFilters(ISSUES, cond('before', '2026-05-01')))).toEqual([]);
+    });
+
+    it('before / after tolerate a due date that carries a time', () => {
+      const timed = [issue({ dueDate: '2026-05-15T23:30:00.000Z', id: 't' })];
+      expect(ids(applyFilters(timed, cond('after', '2026-05-15')))).toEqual([]);
+      expect(ids(applyFilters(timed, cond('before', '2026-05-16')))).toEqual(['t']);
+    });
+
+    it('eq / neq / in / nin compare the calendar day when the due date carries a time', () => {
+      const timed = [
+        issue({ dueDate: '2026-12-06T00:00:00.000Z', id: 'a' }),
+        issue({ dueDate: '2026-12-07T00:00:00.000Z', id: 'b' }),
+      ];
+      expect(ids(applyFilters(timed, cond('eq', '2026-12-06')))).toEqual(['a']);
+      expect(ids(applyFilters(timed, cond('neq', '2026-12-06')))).toEqual(['b']);
+      const list = (operator: 'in' | 'nin'): FilterSet => ({
         composition: 'and',
-        conditions: [{ field: 'estimate', operator: 'gt', value: 2 }],
-      };
-      expect(ids(applyFilters(onlyNull, set))).toEqual(['n']);
+        conditions: [{ field: 'dueDate', operator, value: ['2026-12-06', '2026-12-09'] }],
+      });
+      expect(ids(applyFilters(timed, list('in')))).toEqual(['a']);
+      expect(ids(applyFilters(timed, list('nin')))).toEqual(['b']);
+    });
+
+    it('overdue matches past due dates only, excluding closed states', () => {
+      // 3 is due 2026-05-01 (overdue); 1 is due in June; 2 has no date.
+      expect(ids(applyFilters(ISSUES, cond('overdue'), undefined, { now: NOW }))).toEqual(['3']);
+      const closed = applyFilters(ISSUES, cond('overdue'), undefined, {
+        isClosedState: id => id === 'state-todo',
+        now: NOW,
+      });
+      expect(ids(closed)).toEqual([]);
     });
   });
 

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { AdminShell } from '@/components/admin/admin-shell';
+import { loginRedirectPath, REQUEST_PATH_HEADER } from '@/lib/deep-link';
 import { getServerTranslations } from '@/lib/i18n/server';
 import { prisma } from '@/server/lib/prisma';
 import { readSessionClaim } from '@/server/lib/session-claim';
@@ -20,7 +22,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const payload = await readSessionClaim();
   if (!payload) {
-    redirect(`/login?next=${encodeURIComponent('/admin')}`);
+    redirect(loginRedirectPath((await headers()).get(REQUEST_PATH_HEADER), '/admin', '/admin'));
   }
   // Impersonated sessions are locked out of the console entirely.
   if (payload.impersonatorId) {

@@ -102,6 +102,7 @@ type DexieCacheTable =
   | 'initiatives'
   | 'issueLabels'
   | 'issueRelations'
+  | 'issueReminders'
   | 'issueTemplates'
   | 'organizationMembers'
   | 'projectMilestones'
@@ -205,6 +206,10 @@ export const CACHED_MODELS = new Map<string, CachedModel>(
     IssueRelation: cache(
       s => s.issueRelationStore.applySyncAction.bind(s.issueRelationStore),
       'issueRelations',
+    ),
+    IssueReminder: cache(
+      s => s.issueReminderStore.applySyncAction.bind(s.issueReminderStore),
+      'issueReminders',
     ),
     IssueTemplate: cache(
       s => s.issueTemplateStore.applySyncAction.bind(s.issueTemplateStore),
@@ -391,6 +396,7 @@ export class SyncManager {
       initiatives,
       initiativeProjects,
       favorites,
+      issueReminders,
       organizationMembers,
       meta,
       collectionsStamp,
@@ -415,6 +421,7 @@ export class SyncManager {
       db.initiatives.toArray(),
       db.initiativeProjects.toArray(),
       db.favorites.toArray(),
+      db.issueReminders.toArray(),
       db.organizationMembers.toArray(),
       db.syncMetadata.get('lastSyncId'),
       db.syncMetadata.get(COLLECTIONS_STAMP_KEY),
@@ -455,6 +462,7 @@ export class SyncManager {
       customFieldStore,
       notificationStore,
       issueRelationStore,
+      issueReminderStore,
       issueTemplateStore,
       organizationMemberStore,
       syncStore,
@@ -481,6 +489,9 @@ export class SyncManager {
       customViewStore.upsertMany(customViews);
       notificationStore.upsertMany(notifications);
       issueRelationStore.upsertMany(issueRelations);
+      issueReminderStore.upsertMany(
+        issueReminders as Parameters<typeof issueReminderStore.upsertMany>[0],
+      );
       issueTemplateStore.upsertMany(issueTemplates);
       customFieldStore.upsertDefinitions(customFieldDefinitions);
       customFieldStore.upsertValues(customFieldValues);
@@ -511,6 +522,7 @@ export class SyncManager {
       customFieldStore,
       notificationStore,
       issueRelationStore,
+      issueReminderStore,
       issueTemplateStore,
       organizationMemberStore,
     } = this.stores;
@@ -540,6 +552,7 @@ export class SyncManager {
         initiatives: [] as object[],
         issueLabels: [] as object[],
         issueRelations: [] as object[],
+        issueReminders: [] as object[],
         issues: [] as object[],
         issueTemplates: [] as object[],
         notifications: [] as object[],
@@ -599,6 +612,7 @@ export class SyncManager {
             db.customViews,
             db.notifications,
             db.issueRelations,
+            db.issueReminders,
             db.issueTemplates,
             db.customFieldDefinitions,
             db.customFieldValues,
@@ -623,6 +637,7 @@ export class SyncManager {
               db.customViews.clear(),
               db.notifications.clear(),
               db.issueRelations.clear(),
+              db.issueReminders.clear(),
               db.issueTemplates.clear(),
               db.customFieldDefinitions.clear(),
               db.customFieldValues.clear(),
@@ -660,6 +675,9 @@ export class SyncManager {
               ),
               db.issueRelations.bulkPut(
                 batches.issueRelations as Parameters<typeof db.issueRelations.bulkPut>[0],
+              ),
+              db.issueReminders.bulkPut(
+                batches.issueReminders as Parameters<typeof db.issueReminders.bulkPut>[0],
               ),
               db.issueTemplates.bulkPut(
                 batches.issueTemplates as Parameters<typeof db.issueTemplates.bulkPut>[0],
@@ -738,6 +756,11 @@ export class SyncManager {
         );
         issueRelationStore.upsertMany(
           batches.issueRelations as Parameters<typeof issueRelationStore.upsertMany>[0],
+        );
+        // Authoritative load: replace, so a reminder fired or cleared while this
+        // client was offline does not linger.
+        issueReminderStore.replaceAll(
+          batches.issueReminders as Parameters<typeof issueReminderStore.replaceAll>[0],
         );
         issueTemplateStore.upsertMany(
           batches.issueTemplates as Parameters<typeof issueTemplateStore.upsertMany>[0],
@@ -954,6 +977,7 @@ export class SyncManager {
       customFieldDefinitions: object[];
       customFieldValues: object[];
       favorites: object[];
+      issueReminders: object[];
       organizationMembers: object[];
     } = {
       customFieldDefinitions: [],
@@ -966,6 +990,7 @@ export class SyncManager {
       initiatives: [],
       issueLabels: [],
       issueRelations: [],
+      issueReminders: [],
       issues: [],
       issueTemplates: [],
       notifications: [],
@@ -999,6 +1024,7 @@ export class SyncManager {
         | 'issueTemplates'
         | 'customFieldDefinitions'
         | 'favorites'
+        | 'issueReminders'
         | 'organizationMembers';
       id: string;
     }[] = [];
@@ -1133,11 +1159,12 @@ export class SyncManager {
             }
             break;
           }
-          // Favorites broadcast org-wide but belong to one user, exactly like
-          // notifications: a colleague starring a project must not land in
-          // this user's sidebar. Deletes carry no payload and are keyed by
-          // id, so a foreign delete matches nothing here.
-          if (modelName === 'Favorite' && act !== 'D') {
+          // Favorites and reminders belong to one user, exactly like
+          // notifications. The server already drops other members' rows
+          // (`dropForeignUserRows`); this re-checks so a colleague starring a
+          // project or setting a reminder can never land in this user's pools.
+          // Deletes keyed by id match nothing foreign here.
+          if ((modelName === 'Favorite' || modelName === 'IssueReminder') && act !== 'D') {
             const owner = (data as { userId?: string } | null)?.userId;
             if (owner && owner !== userStore.currentUserId) {
               break;
@@ -1186,6 +1213,7 @@ export class SyncManager {
         db.customFieldDefinitions,
         db.customFieldValues,
         db.favorites,
+        db.issueReminders,
         db.organizations,
         db.organizationMembers,
         db.syncMetadata,
@@ -1263,6 +1291,10 @@ export class SyncManager {
               dexieUpserts.initiativeProjects as Parameters<
                 typeof db.initiativeProjects.bulkPut
               >[0],
+            ),
+          dexieUpserts.issueReminders.length > 0 &&
+            db.issueReminders.bulkPut(
+              dexieUpserts.issueReminders as Parameters<typeof db.issueReminders.bulkPut>[0],
             ),
           dexieUpserts.favorites.length > 0 &&
             db.favorites.bulkPut(

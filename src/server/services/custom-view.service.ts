@@ -1,4 +1,32 @@
 import type { CustomView, PrismaClient } from '../../generated/prisma';
+import { validateFilterSet } from '../../lib/filter-validate';
+
+export class CustomViewInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CustomViewInputError';
+  }
+}
+
+/**
+ * `filters` is bare JSON read by every viewer of a shared view — reject junk
+ * on write, and persist the CLEANED set (not the raw input) so unknown keys
+ * can never ride along. An omitted/empty value keeps the column default `{}`.
+ */
+function cleanFilters(filters: unknown): object {
+  const checked = validateFilterSet(filters);
+  if (!checked.ok) {
+    throw new CustomViewInputError(`Invalid view filters: ${checked.error}`);
+  }
+  if (
+    filters === undefined ||
+    filters === null ||
+    (typeof filters === 'object' && Object.keys(filters).length === 0)
+  ) {
+    return {};
+  }
+  return checked.set;
+}
 
 export interface CustomViewCreateInput {
   color?: string;
@@ -36,12 +64,13 @@ export class CustomViewService {
     creatorId: string,
     input: CustomViewCreateInput,
   ): Promise<CustomView> {
+    const filters = cleanFilters(input.filters);
     return this.prisma.customView.create({
       data: {
         color: input.color,
         creatorId,
         description: input.description,
-        filters: (input.filters as object) ?? {},
+        filters,
         groupBy: input.groupBy,
         icon: input.icon,
         id: input.id ?? undefined,
@@ -88,7 +117,7 @@ export class CustomViewService {
       data.color = input.color;
     }
     if (input.filters !== undefined) {
-      data.filters = input.filters;
+      data.filters = cleanFilters(input.filters);
     }
     if (input.sort !== undefined) {
       data.sort = input.sort;

@@ -61,6 +61,7 @@ const FIELD_LABEL_KEYS: Record<string, string> = {
   projectId: 'issueDetail.activity.fields.project',
   startDate: 'issueDetail.activity.fields.startDate',
   stateId: 'issueDetail.activity.fields.status',
+  teamId: 'issueDetail.activity.fields.team',
   title: 'issueDetail.activity.fields.title',
   trashed: 'issueDetail.activity.fields.trashed',
 };

@@ -13,7 +13,10 @@ export type FilterOperator =
   | 'lt'
   | 'lte'
   | 'is_set'
-  | 'is_not_set';
+  | 'is_not_set'
+  | 'before'
+  | 'after'
+  | 'overdue';
 
 export type FilterField =
   | 'status'
@@ -72,6 +75,21 @@ export interface FilterableIssue {
   updatedAt?: string;
 }
 
+/** Extra, optional inputs the engine cannot derive from an issue alone. */
+export interface FilterContext {
+  /** Whether a workflow state is completed/canceled (such an issue is never overdue). */
+  isClosedState?: (stateId: string) => boolean;
+  /** "Today" for `overdue`; injectable so tests do not depend on the wall clock. */
+  now?: Date;
+}
+
+/** Local calendar day as `YYYY-MM-DD` — what a due date is compared against. */
+export function toLocalDay(date: Date): string {
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${mm}-${dd}`;
+}
+
 /** Resolves an issue's value for a given custom-field definition id. */
 export type CustomFieldValueResolver = (issueId: string, definitionId: string) => unknown;
 
@@ -116,13 +134,18 @@ function matchesAny(
     // An unset value matches an explicit null target and nothing else.
     return wanted.some(w => w === null || w === undefined);
   }
-  return wanted.some(w => w !== null && w !== undefined && String(w) === String(fieldValue));
+  // A due date is a calendar day: the store keeps an ISO timestamp
+  // (`2026-12-06T00:00:00.000Z`) while the picker emits `2026-12-06`, so
+  // compare days like before/after do.
+  const norm = (v: unknown) => (field === 'dueDate' ? String(v).slice(0, 10) : String(v));
+  return wanted.some(w => w !== null && w !== undefined && norm(w) === norm(fieldValue));
 }
 
 function matchCondition(
   issue: FilterableIssue,
   condition: FilterCondition,
   customFieldResolver?: CustomFieldValueResolver,
+  context?: FilterContext,
 ): boolean {
   const { field, operator, value } = condition;
 
@@ -141,21 +164,60 @@ function matchCondition(
     case 'nin':
       return !matchesAny(issue, field, fieldValue, toValueList(value));
     case 'gt':
+      if (fieldValue === null || fieldValue === undefined) {
+        // An unset value is neither greater nor less than anything (it used to
+        // compare as the string "null").
+        return false;
+      }
       return typeof fieldValue === 'number' && typeof value === 'number'
         ? fieldValue > value
         : String(fieldValue) > String(value);
     case 'gte':
+      if (fieldValue === null || fieldValue === undefined) {
+        // An unset value is neither greater nor less than anything (it used to
+        // compare as the string "null").
+        return false;
+      }
       return typeof fieldValue === 'number' && typeof value === 'number'
         ? fieldValue >= value
         : String(fieldValue) >= String(value);
     case 'lt':
+      if (fieldValue === null || fieldValue === undefined) {
+        // An unset value is neither greater nor less than anything (it used to
+        // compare as the string "null").
+        return false;
+      }
       return typeof fieldValue === 'number' && typeof value === 'number'
         ? fieldValue < value
         : String(fieldValue) < String(value);
     case 'lte':
+      if (fieldValue === null || fieldValue === undefined) {
+        // An unset value is neither greater nor less than anything (it used to
+        // compare as the string "null").
+        return false;
+      }
       return typeof fieldValue === 'number' && typeof value === 'number'
         ? fieldValue <= value
         : String(fieldValue) <= String(value);
+    case 'before':
+    case 'after': {
+      if (fieldValue === null || fieldValue === undefined || typeof value !== 'string' || !value) {
+        return false;
+      }
+      // Compare calendar days: a due date may carry a time, the picker never does.
+      const day = String(fieldValue).slice(0, 10);
+      const target = value.slice(0, 10);
+      return operator === 'before' ? day < target : day > target;
+    }
+    case 'overdue': {
+      if (typeof fieldValue !== 'string' || !fieldValue) {
+        return false;
+      }
+      if (context?.isClosedState?.(issue.stateId)) {
+        return false;
+      }
+      return fieldValue.slice(0, 10) < toLocalDay(context?.now ?? new Date());
+    }
     case 'is_set':
       return fieldValue !== null && fieldValue !== undefined;
     case 'is_not_set':
@@ -202,6 +264,7 @@ export function applyFilters<T extends FilterableIssue>(
   issues: T[],
   filterSet: FilterSet,
   customFieldResolver?: CustomFieldValueResolver,
+  context?: FilterContext,
 ): T[] {
   // Defensive: persisted CustomView.filters is unvalidated JSON, so a stored
   // `{}` (the server default) must not crash the engine.
@@ -211,9 +274,11 @@ export function applyFilters<T extends FilterableIssue>(
 
   return issues.filter(issue => {
     if (filterSet.composition === 'and') {
-      return filterSet.conditions.every(c => matchCondition(issue, c, customFieldResolver));
+      return filterSet.conditions.every(c =>
+        matchCondition(issue, c, customFieldResolver, context),
+      );
     }
-    return filterSet.conditions.some(c => matchCondition(issue, c, customFieldResolver));
+    return filterSet.conditions.some(c => matchCondition(issue, c, customFieldResolver, context));
   });
 }
 

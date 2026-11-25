@@ -3,9 +3,16 @@
 import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
+import { NumberFormatPicker } from '@/components/custom-fields/number-format-picker';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { SimpleSelect } from '@/components/ui/select';
 import { useTranslations } from '@/hooks/use-translations';
+import {
+  DEFAULT_NUMBER_FORMAT,
+  type NumberFieldFormat,
+  readNumberFormat,
+  toNumberFormatInput,
+} from '@/lib/custom-field-format';
 import { gqlMutate } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn, getErrorMessage, TOUCH_TARGET } from '@/lib/utils';
@@ -96,6 +103,8 @@ const MAX_FIELDS = 20;
 
 interface FieldFormInput {
   description: string;
+  /** Number display format; stored with the definition (number fields only). */
+  format: NumberFieldFormat;
   name: string;
   options: Option[];
   required: boolean;
@@ -136,6 +145,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
         input: {
           description: input.description || null,
           name: input.name,
+          ...(input.type === 'number' ? { numberFormat: toNumberFormatInput(input.format) } : {}),
           options: input.type === 'select' || input.type === 'multi_select' ? input.options : null,
           required: input.required,
           teamId,
@@ -156,6 +166,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
         input: {
           description: input.description || null,
           name: input.name,
+          ...(input.type === 'number' ? { numberFormat: toNumberFormatInput(input.format) } : {}),
           options: input.type === 'select' || input.type === 'multi_select' ? input.options : null,
           required: input.required,
         },
@@ -223,6 +234,7 @@ export const CustomFieldsSection = observer(({ teamId }: { teamId: string }) => 
                 <CustomFieldForm
                   initial={{
                     description: def.description ?? '',
+                    format: readNumberFormat(def.options),
                     name: def.name,
                     options: readStoredOptions(def.options),
                     required: def.required,
@@ -328,6 +340,7 @@ function CustomFieldForm({
   const [options, setOptions] = useState<DraftOption[]>(() =>
     (initial?.options ?? []).map(o => ({ ...o, key: crypto.randomUUID() })),
   );
+  const [format, setFormat] = useState<NumberFieldFormat>(initial?.format ?? DEFAULT_NUMBER_FORMAT);
   const [submitting, setSubmitting] = useState(false);
 
   const needsOptions = type === 'select' || type === 'multi_select';
@@ -352,6 +365,7 @@ function CustomFieldForm({
     try {
       await onSubmit({
         description: description.trim(),
+        format,
         name: name.trim(),
         options: needsOptions
           ? options.map(({ color, label, value }) => ({ color, label, value }))
@@ -444,6 +458,8 @@ function CustomFieldForm({
           </button>
         </div>
       )}
+
+      {type === 'number' && <NumberFormatPicker onChange={setFormat} value={format} />}
 
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
         <input checked={required} onChange={e => setRequired(e.target.checked)} type="checkbox" />

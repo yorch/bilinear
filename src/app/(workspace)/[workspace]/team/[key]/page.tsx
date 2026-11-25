@@ -12,7 +12,7 @@ import { CsvExportButton } from '@/components/issues/csv-export-button';
 import { FilterBuilder } from '@/components/issues/filter-builder';
 import { IssueListView, type ListGroupBy } from '@/components/issues/issue-list-view';
 import { LazyIssueDetailPanel } from '@/components/issues/lazy-issue-detail-panel';
-import { ListDisplayControls } from '@/components/issues/list-display-controls';
+import { ALL_GROUP_OPTIONS, ListDisplayControls } from '@/components/issues/list-display-controls';
 import { ViewToggle } from '@/components/issues/view-toggle';
 import { type GanttItem, GanttView } from '@/components/roadmap/gantt-view';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -23,12 +23,14 @@ import { IssueListSkeleton } from '@/components/ui/skeleton';
 import { type SaveViewInput, SaveViewModal } from '@/components/views/save-view-modal';
 import { type ListOrderBy, orderByToSort } from '@/components/views/view-layout';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { buildFilterContext, useFilterLookups } from '@/hooks/use-filter-lookups';
 import { useIssueListPage } from '@/hooks/use-issue-list-page';
 import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useIssuesBulkUpdate } from '@/hooks/use-issues-bulk-update';
 import { useListDisplayPrefs } from '@/hooks/use-list-display-prefs';
 import { useRecentItems } from '@/hooks/use-recent-items';
 import { useTranslations } from '@/hooks/use-translations';
+import { useTriageCount } from '@/hooks/use-triage-count';
 import { useVisibleColumns } from '@/hooks/use-visible-columns';
 import {
   applyFilters,
@@ -38,10 +40,17 @@ import {
   type FilterSet,
 } from '@/lib/filter-engine';
 import { gql } from '@/lib/graphql';
+import {
+  type CompletedIssuesMode,
+  effectiveCompletedMode,
+  excludeTriageIssues,
+  filterCompletedIssues,
+  stateIdsOfType,
+} from '@/lib/issue-list-visibility';
 import { toIssueDetail, toIssueLabels, toIssueUsers } from '@/lib/issue-mappers';
 import { buildIssueHref } from '@/lib/issue-nav';
 import { toast } from '@/lib/toast';
-import { cn, TOUCH_TARGET_SQUARE } from '@/lib/utils';
+import { cn, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueDetail, IssueLabel, IssueUser } from '@/types/issues';
 
@@ -88,6 +97,7 @@ const TeamIssues = observer(function TeamIssues() {
   const { initial: displayPrefs, save: saveDisplayPrefs } = useListDisplayPrefs(teamKey);
   const [listGroupBy, setListGroupBy] = useState<ListGroupBy>(displayPrefs.listGroupBy);
   const [orderBy, setOrderBy] = useState<ListOrderBy>(displayPrefs.orderBy);
+  const [completed, setCompleted] = useState<CompletedIssuesMode>(displayPrefs.completed);
   // Filters. Kept per team in sessionStorage so a reload or a trip into an
   // issue and back doesn't silently drop them (storage can be unavailable, so
   // every access is guarded and the page works without it).
@@ -126,13 +136,27 @@ const TeamIssues = observer(function TeamIssues() {
   const rawStates = teamId ? workflowStateStore.findByTeamId(teamId) : [];
   const states = rawStates;
 
-  const allIssues: IssueDetail[] = (() => {
+  // Triage-enabled teams keep un-triaged issues out of the working list and
+  // board — they belong to the triage queue, linked from the toolbar below. The
+  // Triage state is then dropped from the filter and board columns too, so they
+  // don't offer a status nothing here can be in.
+  const triageStateIds = stateIdsOfType(rawStates, ['triage']);
+  const triageOn = Boolean(team?.triageEnabled);
+  const visibleStates = triageOn ? rawStates.filter(s => s.type !== 'triage') : rawStates;
+  const teamIssues = teamId ? issueStore.findByTeamId(teamId) : [];
+  const triageCount = useTriageCount(teamIssues, triageStateIds, triageOn);
+
+  const closedStateIds = stateIdsOfType(rawStates, ['completed', 'canceled']);
+  const visibleIssues = (completedMode: CompletedIssuesMode): IssueDetail[] => {
     if (!teamId) {
       return [];
     }
     const statePositionMap = new Map(rawStates.map(s => [s.id, s.position]));
-    return issueStore
-      .findByTeamId(teamId)
+    return filterCompletedIssues(
+      excludeTriageIssues(teamIssues, triageOn, triageStateIds),
+      completedMode,
+      closedStateIds,
+    )
       .map(i => toIssueDetail(i, labelStore))
       .sort((a, b) => {
         const posA = statePositionMap.get(a.stateId) ?? 0;
@@ -142,7 +166,7 @@ const TeamIssues = observer(function TeamIssues() {
         }
         return a.sortOrder - b.sortOrder;
       });
-  })();
+  };
 
   // Plain selector rather than useMemo. The previous `[..., definitions.size]`
   // dep ignored in-place mutations (rename, options change) — size is
@@ -158,16 +182,22 @@ const TeamIssues = observer(function TeamIssues() {
   );
 
   // Same rationale as `customFieldDefs`: stop memoizing on `.size`. Filters
-  // depend on the actual field values, not their cardinality.
-  const filtered = applyFilters(
-    allIssues,
-    filterSet,
-    (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
-  );
-  // "Manual" keeps the team's own order (workflow position, then drag order);
-  // any other choice orders across the whole list before it is grouped.
-  const issues = applySorting(filtered, orderByToSort(orderBy));
+  // depend on the actual field values, not their cardinality. "Manual" keeps
+  // the team's own order (workflow position, then drag order); any other choice
+  // orders across the whole list before it is grouped. A function of the view
+  // mode because the "Completed issues" option only applies in list mode.
+  const issuesFor = (mode: string): IssueDetail[] =>
+    applySorting(
+      applyFilters(
+        visibleIssues(effectiveCompletedMode(mode, completed)),
+        filterSet,
+        (issueId, definitionId) => customFieldStore.findValue(issueId, definitionId)?.value ?? null,
+        buildFilterContext(rawStates),
+      ),
+      orderByToSort(orderBy),
+    );
 
+  const lookups = useFilterLookups(teamId);
   const users: IssueUser[] = toIssueUsers(userStore.all);
 
   const labels: IssueLabel[] = toIssueLabels(labelStore.all);
@@ -184,7 +214,9 @@ const TeamIssues = observer(function TeamIssues() {
     detailIssue,
     handleArchive,
     handleArchiveMany,
+    handleDeleteMany,
     handleOpen,
+    issues,
     openProperty,
     requestDelete,
     selectedId,
@@ -205,7 +237,7 @@ const TeamIssues = observer(function TeamIssues() {
     initialBoardGroupBy: displayPrefs.boardGroupBy,
     initialSwimlaneBy: displayPrefs.swimlaneBy,
     initialViewMode: displayPrefs.viewMode,
-    issues,
+    issues: issuesFor,
     onOpen: id => {
       const issue = issueStore.findById(id);
       const issueTeam = issue ? teamStore.findById(issue.teamId) : null;
@@ -221,8 +253,8 @@ const TeamIssues = observer(function TeamIssues() {
   });
 
   useEffect(() => {
-    saveDisplayPrefs({ boardGroupBy, listGroupBy, orderBy, swimlaneBy, viewMode });
-  }, [boardGroupBy, listGroupBy, orderBy, saveDisplayPrefs, swimlaneBy, viewMode]);
+    saveDisplayPrefs({ boardGroupBy, completed, listGroupBy, orderBy, swimlaneBy, viewMode });
+  }, [boardGroupBy, completed, listGroupBy, orderBy, saveDisplayPrefs, swimlaneBy, viewMode]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
@@ -264,6 +296,30 @@ const TeamIssues = observer(function TeamIssues() {
     );
   }
 
+  const csvExport = (
+    <CsvExportButton
+      customFields={customFieldDefs}
+      cyclesById={
+        new Map(
+          Array.from(cycleStore.pool.values()).map(c => [
+            c.id,
+            { name: c.name ?? null, number: c.number },
+          ]),
+        )
+      }
+      getCustomFieldValue={(issueId, definitionId) =>
+        customFieldStore.findValue(issueId, definitionId)?.value ?? null
+      }
+      issues={issues}
+      projectsById={
+        new Map(Array.from(projectStore.pool.values()).map(p => [p.id, { name: p.name }]))
+      }
+      states={states}
+      stem={`team-${team?.key ?? 'issues'}-issues`}
+      users={users}
+    />
+  );
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Page header */}
@@ -272,7 +328,11 @@ const TeamIssues = observer(function TeamIssues() {
           <>
             {viewMode === 'list' && (
               <ListDisplayControls
+                completed={completed}
                 groupBy={listGroupBy}
+                groupOptions={ALL_GROUP_OPTIONS}
+                mobileExtra={csvExport}
+                onCompleted={setCompleted}
                 onGroupBy={setListGroupBy}
                 onOrderBy={setOrderBy}
                 orderBy={orderBy}
@@ -311,42 +371,40 @@ const TeamIssues = observer(function TeamIssues() {
       <Toolbar className="justify-between">
         <FilterBuilder
           customFields={customFieldDefs}
+          cycles={lookups.cycles}
+          estimationType={team.issueEstimationType}
           filterSet={filterSet}
           labels={labels}
           onChange={setFilterSet}
-          states={states}
+          projects={lookups.projects}
+          states={visibleStates}
           users={users}
         />
         <div className="flex items-center gap-1">
+          {triageOn && triageCount > 0 && (
+            <Link
+              className={cn(
+                'rounded-md px-2 py-1 text-xs text-brand-subtle-foreground hover:bg-brand-subtle',
+                TOUCH_TARGET,
+              )}
+              data-testid="triage-queue-link"
+              href={`/${workspace}/team/${teamKey}/triage`}
+            >
+              {t('issues.inTriageLink', { count: triageCount })}
+            </Link>
+          )}
           {viewMode === 'list' && (
             <>
-              <CsvExportButton
-                customFields={customFieldDefs}
-                cyclesById={
-                  new Map(
-                    Array.from(cycleStore.pool.values()).map(c => [
-                      c.id,
-                      { name: c.name ?? null, number: c.number },
-                    ]),
-                  )
-                }
-                getCustomFieldValue={(issueId, definitionId) =>
-                  customFieldStore.findValue(issueId, definitionId)?.value ?? null
-                }
-                issues={issues}
-                projectsById={
-                  new Map(Array.from(projectStore.pool.values()).map(p => [p.id, { name: p.name }]))
-                }
-                states={states}
-                stem={`team-${team?.key ?? 'issues'}-issues`}
-                users={users}
-              />
-              <ColumnPicker
-                customFields={customFieldDefs}
-                estimationType={team.issueEstimationType}
-                isVisible={isColumnVisible}
-                onToggle={toggleColumn}
-              />
+              <div className="max-md:hidden">{csvExport}</div>
+              {/* Columns only exist from `lg` up, so the picker has nothing to do below it. */}
+              <div className="max-lg:hidden">
+                <ColumnPicker
+                  customFields={customFieldDefs}
+                  estimationType={team.issueEstimationType}
+                  isVisible={isColumnVisible}
+                  onToggle={toggleColumn}
+                />
+              </div>
             </>
           )}
           {/* Saving captures the filters + layout, so it is offered in every layout. */}
@@ -370,6 +428,7 @@ const TeamIssues = observer(function TeamIssues() {
         {viewMode === 'list' ? (
           <IssueListView
             customFields={customFieldDefs}
+            cycles={lookups.cycles}
             estimationType={team.issueEstimationType}
             getCustomFieldValue={(issueId, definitionId) =>
               customFieldStore.findValue(issueId, definitionId)?.value ?? null
@@ -384,13 +443,15 @@ const TeamIssues = observer(function TeamIssues() {
             onBulkUpdate={handleBulkUpdate}
             onClearFilters={() => setFilterSet(createEmptyFilterSet())}
             onDelete={requestDelete}
+            onDeleteMany={handleDeleteMany}
             onOpen={handleOpen}
             onPropertyClosed={() => setOpenProperty(null)}
             onSelect={setSelectedId}
             onUpdate={handleUpdate}
             openProperty={openProperty}
+            projects={lookups.projects}
             selectedId={selectedId}
-            states={states}
+            states={visibleStates}
             teamId={teamId ?? undefined}
             users={users}
           />
@@ -419,7 +480,7 @@ const TeamIssues = observer(function TeamIssues() {
             onSelect={setSelectedId}
             onUpdate={handleUpdate}
             selectedId={selectedId}
-            states={states}
+            states={visibleStates}
             swimlaneBy={swimlaneBy}
             users={users}
           />

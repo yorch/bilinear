@@ -218,6 +218,9 @@ export const FAVORITES_QUERY = `
   query SidebarFavorites {
     favorites {
       id
+      userId
+      organizationId
+      createdAt
       entityType
       entityId
       sortOrder
@@ -516,6 +519,19 @@ export const CYCLE_ARCHIVE_MUTATION = `
   }
 `;
 
+export const CYCLE_UNARCHIVE_MUTATION = `
+  mutation CycleUnarchive($id: ID!) {
+    cycleUnarchive(id: $id) { success lastSyncId cycle { ${CYCLE_FIELDS} } }
+  }
+`;
+
+/** Archived rows are not in the bootstrap; `includeArchived` returns live + archived. */
+export const ARCHIVED_CYCLES_QUERY = `
+  query ArchivedCycles($teamId: ID!) {
+    cycles(teamId: $teamId, includeArchived: true) { ${CYCLE_FIELDS} }
+  }
+`;
+
 export const CYCLE_DELETE_MUTATION = `
   mutation CycleDelete($id: ID!) {
     cycleDelete(id: $id) { success lastSyncId }
@@ -761,6 +777,16 @@ export const USER_UPDATE_LOCALE_MUTATION = `
     userUpdateLocale(locale: $locale) {
       success
       user { id locale }
+    }
+  }
+`;
+
+export const USER_UPDATE_PROFILE_MUTATION = `
+  mutation UserUpdateProfile($input: UserUpdateProfileInput!) {
+    userUpdateProfile(input: $input) {
+      success
+      lastSyncId
+      user { id name displayName initials avatarUrl }
     }
   }
 `;

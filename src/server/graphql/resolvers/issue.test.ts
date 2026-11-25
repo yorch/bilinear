@@ -16,6 +16,10 @@ describe('issueResolvers', () => {
 
   beforeEach(() => {
     ctx = createMockContext();
+    // Notification fan-out filters recipients by visibility: no private teams,
+    // no guest roles.
+    ctx.prisma.team.findMany.mockResolvedValue([]);
+    ctx.prisma.teamMemberRole.findMany.mockResolvedValue([]);
   });
 
   // ── Mutation.issueCreate ──────────────────────────────────────────────────
@@ -124,6 +128,7 @@ describe('issueResolvers', () => {
     });
 
     it('notifies and subscribes the assignee when different from creator', async () => {
+      ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
       ctx.prisma.team.update.mockResolvedValue({ ...TEST_TEAM, issueCount: 1 });
       ctx.prisma.issue.create.mockResolvedValue({
         ...TEST_ISSUE,
@@ -267,6 +272,145 @@ describe('issueResolvers', () => {
 
       expect(result.success).toBe(true);
       expect(result.issue?.title).toBe('Updated');
+    });
+
+    describe('team move side effects', () => {
+      const OPS = '00000000-0000-0000-0000-0000000000d4';
+      const OLD_CYCLE = '00000000-0000-0000-0000-0000000000c1';
+      const OLD_STATE = TEST_ISSUE.stateId;
+
+      async function move() {
+        const before = { ...TEST_ISSUE, cycleId: OLD_CYCLE };
+        const after = {
+          ...TEST_ISSUE,
+          cycleId: null,
+          identifier: 'OPS-7',
+          stateId: 'ops-state',
+          teamId: OPS,
+        };
+        ctx.prisma.issue.findUnique.mockResolvedValue(before);
+        ctx.prisma.issue.count.mockResolvedValue(0);
+        ctx.prisma.issue.update.mockResolvedValue(after);
+        ctx.prisma.team.findFirst.mockResolvedValue({ id: OPS });
+        ctx.prisma.team.update.mockResolvedValue({
+          defaultIssueStateId: 'ops-state',
+          issueCount: 7,
+          key: 'OPS',
+        });
+        ctx.prisma.workflowState.findUnique.mockResolvedValue({ name: 'Todo', type: 'unstarted' });
+        ctx.prisma.workflowState.findMany.mockResolvedValue([
+          { id: 'ops-state', name: 'Todo', type: 'unstarted' },
+        ]);
+        ctx.prisma.workflowState.findFirst.mockResolvedValue({ teamId: OPS, type: 'unstarted' });
+        ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+          team: { organizationId: TEST_ORG.id },
+          teamId: TEST_TEAM.id,
+          userId: TEST_USER.id,
+        });
+        const activity = vi
+          .spyOn(ctx.services.issueActivity, 'createMany')
+          .mockResolvedValue(undefined as never);
+        const status = vi
+          .spyOn(ctx.services.notification, 'createForStatusChange')
+          .mockResolvedValue(undefined as never);
+        const webhook = vi.spyOn(ctx.services.webhook, 'dispatchEvent');
+        const result = await issueResolvers.Mutation.issueUpdate(
+          null,
+          { id: TEST_ISSUE.id, input: { teamId: OPS } },
+          ctx as never,
+        );
+        return { activity, result, status, webhook };
+      }
+
+      it('records team, status and cycle activity from the returned row', async () => {
+        const { activity } = await move();
+        const entries = activity.mock.calls[0][0] as unknown as Array<Record<string, unknown>>;
+        const byField = Object.fromEntries(entries.map(e => [e.field, e]));
+        expect(byField.teamId).toMatchObject({ newValue: 'OPS-7', oldValue: 'ENG-1' });
+        expect(byField.stateId).toMatchObject({ newValue: 'ops-state', oldValue: OLD_STATE });
+        expect(byField.cycleId).toMatchObject({ oldValue: OLD_CYCLE });
+        expect(byField.cycleId?.newValue).toBeUndefined();
+      });
+
+      it('notifies the implicit status change', async () => {
+        const { status } = await move();
+        expect(status).toHaveBeenCalledWith(
+          TEST_ORG.id,
+          TEST_ISSUE.id,
+          TEST_USER.id,
+          OLD_STATE,
+          'ops-state',
+        );
+      });
+
+      it('dispatches the webhook to the destination team AND the team it left', async () => {
+        const { webhook } = await move();
+        await vi.waitFor(() => expect(webhook).toHaveBeenCalledTimes(2));
+        const calls = webhook.mock.calls;
+        expect(calls.some(c => c[3] === OPS && !c[4])).toBe(true);
+        expect(calls.some(c => c[3] === TEST_TEAM.id && c[4]?.teamScopedOnly === true)).toBe(true);
+      });
+
+      it('sends the team the issue LEFT only a redacted "moved out" event, never the post-move row', async () => {
+        const { webhook } = await move();
+        await vi.waitFor(() => expect(webhook).toHaveBeenCalledTimes(2));
+        const oldTeamCall = webhook.mock.calls.find(c => c[4]?.teamScopedOnly === true);
+        const payload = oldTeamCall?.[2] as Record<string, unknown>;
+        expect(payload).toEqual({
+          id: TEST_ISSUE.id,
+          identifier: TEST_ISSUE.identifier,
+          movedOut: true,
+          organizationId: TEST_ORG.id,
+          teamId: TEST_TEAM.id,
+        });
+        // Nothing of the destination may leak to the old team's subscriber.
+        expect(JSON.stringify(payload)).not.toContain('OPS-7');
+        expect(payload).not.toHaveProperty('stateId');
+        // The destination (and org-wide) hook still gets the full row.
+        const newTeamCall = webhook.mock.calls.find(c => c[3] === OPS && !c[4]);
+        expect(newTeamCall?.[2]).toMatchObject({ identifier: 'OPS-7', teamId: OPS });
+      });
+
+      it('a move into a PRIVATE team sends org-wide hooks the redacted event, not the row', async () => {
+        vi.spyOn(ctx.services.webhook, 'isTeamPrivate').mockResolvedValue(true);
+        const { webhook } = await move();
+        await vi.waitFor(() => expect(webhook).toHaveBeenCalledTimes(2));
+        const oldTeamCall = webhook.mock.calls.find(c => c[3] === TEST_TEAM.id);
+        // Not scoped-only: org-wide hooks must still learn the issue left.
+        expect(oldTeamCall?.[4]?.teamScopedOnly).toBe(false);
+        expect(oldTeamCall?.[2]).toMatchObject({ movedOut: true });
+      });
+
+      it('reports the labels dropped by the move', async () => {
+        ctx.prisma.issueLabelAssignment.findMany.mockResolvedValue([
+          { label: { name: 'eng-only', teamId: TEST_TEAM.id }, labelId: 'l1' },
+        ]);
+        const { result } = await move();
+        expect(result.droppedLabelNames).toEqual(['eng-only']);
+      });
+    });
+
+    it('re-checks access inside the write transaction against the locked row', async () => {
+      // Pre-read says the issue is in TEST_TEAM (caller is a member); by the
+      // time the row lock is granted a concurrent move put it in another team
+      // the caller is NOT a member of. The authorize hook must see that and abort.
+      ctx.prisma.issue.findUnique
+        .mockResolvedValueOnce(TEST_ISSUE) // resolver pre-read
+        .mockResolvedValue({ ...TEST_ISSUE, teamId: 'moved-away-team' }); // under the lock
+      ctx.prisma.teamMembership.findUnique.mockImplementation(
+        async ({ where }: { where: { teamId_userId: { teamId: string } } }) =>
+          where.teamId_userId.teamId === TEST_ISSUE.teamId
+            ? { team: { organizationId: TEST_ORG.id } }
+            : null,
+      );
+      await expect(
+        issueResolvers.Mutation.issueUpdate(
+          null,
+          { id: TEST_ISSUE.id, input: { title: 'x' } },
+          ctx as never,
+        ),
+      ).rejects.toMatchObject({ extensions: { code: 'FORBIDDEN' } });
+      expect(ctx.prisma.issue.update).not.toHaveBeenCalled();
     });
 
     it('auto-subscribes the actor on any update', async () => {

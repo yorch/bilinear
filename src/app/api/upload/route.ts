@@ -11,7 +11,12 @@ import { getUploadDir } from '@/server/lib/upload-dir';
 import { requireAuthContext } from '@/server/middleware/auth';
 import { checkFixedWindow } from '@/server/middleware/rate-limit';
 import { apiScopesAllowWrite } from '@/server/services/auth.service';
-import { FileService } from '@/server/services/file.service';
+import {
+  AVATAR_EXTENSIONS,
+  AVATAR_KEY_PREFIX,
+  FileService,
+  MAX_AVATAR_SIZE,
+} from '@/server/services/file.service';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 // Multipart boundaries, part headers and the optional issueId/projectId
@@ -42,6 +47,8 @@ function getAppUrl(): string {
  *   file     - the file blob (required)
  *   issueId  - UUID of the issue to attach to (optional)
  *   projectId - UUID of the project to attach to (optional)
+ *   purpose  - "avatar" for a profile picture: image types only, 2 MB cap,
+ *              no parent; readable by co-members of the uploader's orgs
  *
  * Returns: { id, name, url, size, mimeType }
  */
@@ -103,19 +110,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const issueId = formData.get('issueId');
-  const projectId = formData.get('projectId');
+  const isAvatar = formData.get('purpose') === 'avatar';
+  if (isAvatar && file.size > MAX_AVATAR_SIZE) {
+    return NextResponse.json(
+      { error: `Avatar exceeds ${MAX_AVATAR_SIZE / 1024 / 1024} MB limit` },
+      { status: 413 },
+    );
+  }
+
+  const issueId = isAvatar ? null : formData.get('issueId');
+  const projectId = isAvatar ? null : formData.get('projectId');
 
   // Verify the caller can attach to the given issue/project (parallel lookups).
+  // The issue check is the same visibility rule reads apply (private team,
+  // guest narrowing) — org membership alone let any member attach a file to a
+  // private team's issue. Projects are org-wide entities, so org is the gate.
+  const fileService = new FileService(prisma);
   const [issueOk, projectOk] = await Promise.all([
-    typeof issueId === 'string'
-      ? prisma.issue
-          .findUnique({
-            select: { organizationId: true },
-            where: { id: issueId },
-          })
-          .then(r => r?.organizationId === orgId)
-      : true,
+    typeof issueId === 'string' ? fileService.canAttachToIssue(issueId, orgId, userId) : true,
     typeof projectId === 'string'
       ? prisma.project
           .findUnique({
@@ -144,8 +156,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (isAvatar && !(AVATAR_EXTENSIONS as readonly string[]).includes(rawExt)) {
+    return NextResponse.json({ error: 'Avatar must be a PNG, JPEG, GIF or WebP' }, { status: 400 });
+  }
+  if (isAvatar && !file.type.startsWith('image/')) {
+    return NextResponse.json({ error: 'Avatar must be an image' }, { status: 400 });
+  }
+
   const id = randomUUID();
-  const key = `${id}.${rawExt}`;
+  const key = `${isAvatar ? AVATAR_KEY_PREFIX : ''}${id}.${rawExt}`;
   const filePath = join(uploadDir, key);
 
   try {
@@ -182,7 +201,6 @@ export async function POST(req: NextRequest) {
 
   const url = `${getAppUrl()}/api/uploads/${key}`;
 
-  const fileService = new FileService(prisma);
   const record = await fileService.createFile(userId, {
     issueId: typeof issueId === 'string' ? issueId : undefined,
     key,

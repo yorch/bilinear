@@ -52,6 +52,7 @@ model Organization {
   archivedAt DateTime? @map("archived_at") @db.Timestamptz
 
   members        OrganizationMember[]
+  urlKeyAliases  OrganizationUrlKeyAlias[]
   teams          Team[]
   issues         Issue[]
   labels         IssueLabel[]
@@ -68,6 +69,7 @@ model Organization {
   githubPullRequests     GitHubPullRequest[]
   slackIntegration       SlackIntegration?
   favorites              Favorite[]
+  issueReminders         IssueReminder[]
   customFieldDefinitions CustomFieldDefinition[]
   automationRules        AutomationRule[]
   auditLogEntries        AuditLogEntry[]
@@ -161,6 +163,7 @@ model User {
   githubIntegrations        GitHubIntegration[]        @relation("GitHubIntegrationCreator")
   createdAutomationRules    AutomationRule[]           @relation("AutomationRuleCreator")
   favorites                 Favorite[]
+  issueReminders            IssueReminder[]
   auditLogEntries           AuditLogEntry[]            @relation("AuditLogUser")
   createdSamlConfigurations SamlConfiguration[]        @relation("SamlConfigCreator")
   createdScimTokens         ScimToken[]                @relation("ScimTokenCreator")
@@ -170,6 +173,22 @@ model User {
   uploadedFiles             File[]                     @relation("UploadedFiles")
 
   @@map("users")
+}
+
+/// A workspace URL key an organization used to have. Kept reserved for that
+/// organization (nobody else can register it) and resolved to the current key
+/// by the workspace layout, so shared links survive a rename instead of
+/// landing in a stranger's workspace.
+model OrganizationUrlKeyAlias {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  urlKey         String   @unique @map("url_key") @db.VarChar(63)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("organization_url_key_aliases")
 }
 
 model OrganizationMember {
@@ -529,6 +548,7 @@ model Issue {
   activities        IssueActivity[]
   cycle             Cycle?                     @relation(fields: [cycleId], references: [id], onDelete: SetNull)
   notifications     Notification[]
+  reminders         IssueReminder[]
   project           Project?                   @relation(fields: [projectId], references: [id], onDelete: SetNull)
   projectMilestone  ProjectMilestone?          @relation(fields: [projectMilestoneId], references: [id], onDelete: SetNull)
   subscriptions     NotificationSubscription[]
@@ -1006,6 +1026,7 @@ enum NotificationType {
   ISSUE_STATUS_CHANGED
   ISSUE_MENTIONED
   ISSUE_COMMENTED
+  REMINDER
 
   @@map("notification_type")
 }
@@ -1428,6 +1449,40 @@ model Favorite {
   @@index([userId])
   @@index([organizationId])
   @@map("favorites")
+}
+
+// ---------------------------------------------------------------------------
+// Issue reminders ("remind me about this issue at <time>")
+// ---------------------------------------------------------------------------
+
+/// A private, per-user reminder on one issue. One row per (issue, user): setting
+/// a reminder again moves it. The background sweep claims due rows with an atomic
+/// `DELETE ... FOR UPDATE SKIP LOCKED ... RETURNING`, so concurrent workers fire
+/// a reminder exactly once and a fired reminder leaves no row behind (the table
+/// only ever holds PENDING reminders, which keeps the sweep's index scan tiny).
+/// Replicated like any entity (`I`/`U`/`D` SyncActions) but, like `Favorite` and
+/// `Notification`, it is per-user: the payload carries `userId` and every sync
+/// path drops rows whose `userId` is not the recipient (`dropForeignUserRows`).
+model IssueReminder {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  issueId        String    @map("issue_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  remindAt       DateTime  @map("remind_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  issue        Issue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, userId], map: "issue_reminders_issue_user_uniq")
+  // The sweep scans "due" rows in remind_at order; the viewer's own list
+  // filters by user. Fired rows are deleted, so neither index carries history.
+  @@index([remindAt])
+  @@index([userId])
+  @@index([organizationId])
+  @@map("issue_reminders")
 }
 
 // ---------------------------------------------------------------------------

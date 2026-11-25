@@ -60,6 +60,17 @@ export interface InitiativeUpdateInput {
 const MAX_INITIATIVE_DEPTH_KEY = 'limits.maxInitiativeDepth';
 const MAX_INITIATIVE_DEPTH = numericSettingDefault(MAX_INITIATIVE_DEPTH_KEY);
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** `initiatives.name` / `icon` are VarChar(255); an over-long value is a client error, not a 500. */
+const MAX_INITIATIVE_NAME_LENGTH = 255;
+
+function assertValidFields(input: { icon?: string | null; name?: string }): void {
+  const err = (m: string) => new InitiativeValidationError(m);
+  assertMaxLength(input.name, MAX_INITIATIVE_NAME_LENGTH, err, 'name');
+  assertMaxLength(input.icon, MAX_INITIATIVE_NAME_LENGTH, err, 'icon');
+}
+
 export type InitiativeStatus = 'planned' | 'active' | 'completed' | 'canceled';
 
 const VALID_STATUSES = new Set<InitiativeStatus>(['planned', 'active', 'completed', 'canceled']);
@@ -121,15 +132,19 @@ export class InitiativeService {
       throw new InitiativeInvalidStatusError();
     }
     assertValidDescription(input.description);
-
-    // Verify parent exists in this org and that the resulting depth is
-    // within the cap. Both checks run before the create so we never end up
-    // with a parented row that violates the depth invariant.
-    if (input.parentId) {
-      await this.assertParentAcceptsChild(orgId, input.parentId, null);
+    assertValidFields(input);
+    if (input.ownerId) {
+      await this.assertOwnerInOrg(orgId, input.ownerId);
     }
 
     return this.prisma.$transaction(async tx => {
+      // Verify parent exists in this org (and is live) and that the resulting
+      // depth is within the cap, under the org-wide parent-write lock so a
+      // concurrent re-parent cannot slip a cycle past the check.
+      if (input.parentId) {
+        await this.lockParentWrites(tx, orgId);
+        await this.assertParentAcceptsChild(orgId, input.parentId, null, tx);
+      }
       const initiative = await tx.initiative.create({
         data: {
           color: input.color ?? '#6366f1',
@@ -202,6 +217,10 @@ export class InitiativeService {
       throw new InitiativeInvalidStatusError();
     }
     assertValidDescription(input.description);
+    assertValidFields(input);
+    if (input.ownerId) {
+      await this.assertOwnerInOrg(orgId, input.ownerId);
+    }
 
     const data: Parameters<PrismaClient['initiative']['update']>[0]['data'] = {};
     if (input.name !== undefined) {
@@ -220,12 +239,7 @@ export class InitiativeService {
       data.ownerId = input.ownerId;
     }
     if ('parentId' in input) {
-      // Re-parenting: verify the new parent exists in this org, isn't the
-      // initiative itself, isn't a descendant of it (would create a
-      // cycle), and that the resulting depth is still within the cap.
-      if (input.parentId) {
-        await this.assertParentAcceptsChild(orgId, input.parentId, id);
-      }
+      // Re-parenting is validated below, inside the write transaction.
       data.parentId = input.parentId;
     }
     if (input.priority !== undefined) {
@@ -286,18 +300,32 @@ export class InitiativeService {
     // updateMany scoped by orgId is the tenant guard — an admin who guesses
     // an initiative id in another org gets a zero-row update, which we
     // surface as NotFound rather than letting it leak through as a 200.
-    const claim = await this.prisma.initiative.updateMany({
-      data,
-      where: { id, organizationId: orgId },
+    const write = async (db: Pick<PrismaClient, 'initiative'>) => {
+      const claim = await db.initiative.updateMany({
+        data,
+        where: { id, organizationId: orgId },
+      });
+      if (claim.count !== 1) {
+        throw new InitiativeNotFoundError();
+      }
+      const updated = await db.initiative.findUnique({ where: { id } });
+      if (!updated) {
+        throw new InitiativeNotFoundError();
+      }
+      return updated;
+    };
+    if (!input.parentId) {
+      return write(this.prisma);
+    }
+    // Re-parenting: the new parent must exist in this org, be live, not be the
+    // initiative itself or one of its descendants (cycle), and keep the depth
+    // within the cap. Check-then-write, so it runs under the org-wide lock.
+    const parentId = input.parentId;
+    return this.prisma.$transaction(async tx => {
+      await this.lockParentWrites(tx, orgId);
+      await this.assertParentAcceptsChild(orgId, parentId, id, tx);
+      return write(tx);
     });
-    if (claim.count !== 1) {
-      throw new InitiativeNotFoundError();
-    }
-    const updated = await this.prisma.initiative.findUnique({ where: { id } });
-    if (!updated) {
-      throw new InitiativeNotFoundError();
-    }
-    return updated;
   }
 
   async archive(orgId: string, id: string): Promise<Initiative> {
@@ -599,11 +627,42 @@ export class InitiativeService {
    * the resulting depth doesn't exceed MAX_INITIATIVE_DEPTH. `childId`
    * may be null on create.
    */
+  /**
+   * Serialise parent-link writes for one org. `assertParentAcceptsChild` is
+   * check-then-write; without this two concurrent opposite re-parents both
+   * pass the cycle check and form a loop. Released at commit/rollback.
+   */
+  private async lockParentWrites(tx: Pick<PrismaClient, '$queryRaw'>, orgId: string) {
+    await tx.$queryRaw`SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${`initiative-parent:${orgId}`}, 0))) AS l`;
+  }
+
+  /**
+   * An owner must be a current member of THIS org. `ownerId` is a plain FK to
+   * `users`, so without this a member could name any user id on the platform —
+   * a cross-tenant reference that renders as "No owner" and a bogus id 500s.
+   */
+  private async assertOwnerInOrg(orgId: string, ownerId: string): Promise<void> {
+    if (!UUID_RE.test(ownerId)) {
+      throw new InitiativeValidationError('ownerId must be a valid user id');
+    }
+    const member = await this.prisma.organizationMember.findFirst({
+      select: { id: true },
+      where: { organizationId: orgId, userId: ownerId },
+    });
+    if (!member) {
+      throw new InitiativeValidationError('Owner must be a member of this organization');
+    }
+  }
+
   private async assertParentAcceptsChild(
     orgId: string,
     parentId: string,
     childId: string | null,
+    db: Pick<PrismaClient, 'initiative'> = this.prisma,
   ): Promise<void> {
+    if (!UUID_RE.test(parentId)) {
+      throw new InitiativeInvalidParentError();
+    }
     if (childId && parentId === childId) {
       throw new InitiativeInvalidParentError();
     }
@@ -612,12 +671,17 @@ export class InitiativeService {
     // re-read it on every ancestor hop.
     const maxDepth = await this.config.getInt(MAX_INITIATIVE_DEPTH_KEY, { orgId });
 
-    const parent = await this.prisma.initiative.findFirst({
-      select: { id: true, parentId: true },
+    const parent = await db.initiative.findFirst({
+      select: { archivedAt: true, id: true, parentId: true },
       where: { id: parentId, organizationId: orgId },
     });
     if (!parent) {
       throw new InitiativeNotFoundError();
+    }
+    if (parent.archivedAt) {
+      // A child of an archived parent is hidden with it; restoring the child
+      // later would leave it dangling under a row nobody can see.
+      throw new InitiativeInvalidParentError('Cannot nest an initiative under an archived one');
     }
     // Walk up to root, counting depth and detecting cycles.
     let cursor: { id: string; parentId: string | null } | null = parent;
@@ -645,11 +709,10 @@ export class InitiativeService {
       if (depth >= maxDepth) {
         throw new InitiativeMaxDepthError(maxDepth);
       }
-      const next: { id: string; parentId: string | null } | null =
-        await this.prisma.initiative.findUnique({
-          select: { id: true, parentId: true },
-          where: { id: cursor.parentId },
-        });
+      const next: { id: string; parentId: string | null } | null = await db.initiative.findUnique({
+        select: { id: true, parentId: true },
+        where: { id: cursor.parentId },
+      });
       cursor = next;
     }
   }
@@ -738,8 +801,8 @@ export class InitiativeProjectNotFoundError extends Error {
 }
 
 export class InitiativeInvalidParentError extends Error {
-  constructor() {
-    super('Initiative parent cannot be itself or one of its descendants');
+  constructor(message = 'Initiative parent cannot be itself or one of its descendants') {
+    super(message);
     this.name = 'InitiativeInvalidParentError';
   }
 }

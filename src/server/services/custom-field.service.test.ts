@@ -3,6 +3,7 @@ import { TEST_ORG, TEST_TEAM } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
   CustomFieldDefinitionNotFoundError,
+  CustomFieldInvalidFormatError,
   CustomFieldInvalidOptionsError,
   CustomFieldInvalidValueError,
   CustomFieldLimitExceededError,
@@ -34,6 +35,14 @@ const TEST_TEXT_DEF = {
   name: 'External Link',
   options: null,
   type: 'url' as const,
+};
+
+const NUMBER_DEF = {
+  ...TEST_DEF,
+  id: '00000000-0000-0000-0000-000000000902',
+  name: 'Budget',
+  options: null,
+  type: 'number' as const,
 };
 
 describe('CustomFieldService', () => {
@@ -128,6 +137,156 @@ describe('CustomFieldService', () => {
           type: 'text',
         }),
       ).rejects.toBeInstanceOf(CustomFieldLimitExceededError);
+    });
+  });
+
+  describe('number format', () => {
+    const base = {
+      name: 'Budget',
+      organizationId: TEST_TEAM.organizationId,
+      teamId: TEST_TEAM.id,
+    };
+
+    it('stores the format in the options JSON on create', async () => {
+      prisma.customFieldDefinition.count.mockResolvedValue(0);
+      prisma.customFieldDefinition.create.mockResolvedValue(NUMBER_DEF);
+
+      await service.createDefinition({
+        ...base,
+        numberFormat: { currency: 'EUR', decimals: 2, kind: 'currency' },
+        type: 'number',
+      });
+
+      expect(prisma.customFieldDefinition.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          options: { numberFormat: { currency: 'EUR', decimals: 2, kind: 'currency' } },
+        }),
+      });
+    });
+
+    it.each([
+      ['a non-number field', { numberFormat: { kind: 'percent' as const }, type: 'text' as const }],
+      ['an unknown kind', { numberFormat: { kind: 'bogus' as never }, type: 'number' as const }],
+      [
+        'a currency kind without a code',
+        { numberFormat: { kind: 'currency' as const }, type: 'number' as const },
+      ],
+      [
+        'a lower-case currency',
+        { numberFormat: { currency: 'usd', kind: 'currency' as const }, type: 'number' as const },
+      ],
+      [
+        'a 2-letter currency',
+        { numberFormat: { currency: 'US', kind: 'currency' as const }, type: 'number' as const },
+      ],
+      [
+        'a 4-letter currency',
+        { numberFormat: { currency: 'USDX', kind: 'currency' as const }, type: 'number' as const },
+      ],
+      [
+        'an unassigned 3-letter currency (QQQ)',
+        { numberFormat: { currency: 'QQQ', kind: 'currency' as const }, type: 'number' as const },
+      ],
+      [
+        'the test-only currency XXX',
+        { numberFormat: { currency: 'XXX', kind: 'currency' as const }, type: 'number' as const },
+      ],
+      [
+        'a currency on a percent kind',
+        { numberFormat: { currency: 'USD', kind: 'percent' as const }, type: 'number' as const },
+      ],
+      [
+        'decimals above 6',
+        { numberFormat: { decimals: 7, kind: 'plain' as const }, type: 'number' as const },
+      ],
+      [
+        'negative decimals',
+        { numberFormat: { decimals: -1, kind: 'plain' as const }, type: 'number' as const },
+      ],
+      [
+        'fractional decimals',
+        { numberFormat: { decimals: 1.5, kind: 'plain' as const }, type: 'number' as const },
+      ],
+    ])('rejects %s on create', async (_label, extra) => {
+      await expect(service.createDefinition({ ...base, ...extra })).rejects.toBeInstanceOf(
+        CustomFieldInvalidFormatError,
+      );
+      expect(prisma.customFieldDefinition.create).not.toHaveBeenCalled();
+    });
+
+    it.each(['USD', 'EUR', 'MXN', 'JPY'])('accepts the real currency %s', async code => {
+      prisma.customFieldDefinition.count.mockResolvedValue(0);
+      prisma.customFieldDefinition.create.mockResolvedValue(NUMBER_DEF);
+      await service.createDefinition({
+        ...base,
+        numberFormat: { currency: code, kind: 'currency' },
+        type: 'number',
+      });
+      expect(prisma.customFieldDefinition.create).toHaveBeenCalled();
+    });
+
+    it('accepts the decimals bounds 0 and 6', async () => {
+      prisma.customFieldDefinition.count.mockResolvedValue(0);
+      prisma.customFieldDefinition.create.mockResolvedValue(NUMBER_DEF);
+      for (const decimals of [0, 6]) {
+        await service.createDefinition({
+          ...base,
+          numberFormat: { decimals, kind: 'plain' },
+          type: 'number',
+        });
+      }
+      expect(prisma.customFieldDefinition.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('sets, leaves alone, and clears the format on update', async () => {
+      prisma.customFieldDefinition.findUnique.mockResolvedValue(NUMBER_DEF);
+      prisma.customFieldDefinition.update.mockResolvedValue(NUMBER_DEF);
+
+      await service.updateDefinition(NUMBER_DEF.id, { numberFormat: { kind: 'percent' } });
+      expect(prisma.customFieldDefinition.update).toHaveBeenLastCalledWith({
+        data: { options: { numberFormat: { kind: 'percent' } } },
+        where: { id: NUMBER_DEF.id },
+      });
+
+      await service.updateDefinition(NUMBER_DEF.id, { name: 'Spend' });
+      expect(prisma.customFieldDefinition.update).toHaveBeenLastCalledWith({
+        data: { name: 'Spend' },
+        where: { id: NUMBER_DEF.id },
+      });
+
+      await service.updateDefinition(NUMBER_DEF.id, { numberFormat: null });
+      const lastData = prisma.customFieldDefinition.update.mock.calls.at(-1)?.[0].data;
+      expect(lastData).toHaveProperty('options');
+      expect(lastData.options).not.toEqual({ numberFormat: expect.anything() });
+    });
+
+    it('does not let an empty options array clobber a stored format', async () => {
+      prisma.customFieldDefinition.findUnique.mockResolvedValue(NUMBER_DEF);
+      prisma.customFieldDefinition.update.mockResolvedValue(NUMBER_DEF);
+
+      await service.updateDefinition(NUMBER_DEF.id, { name: 'Spend', options: [] });
+
+      expect(prisma.customFieldDefinition.update).toHaveBeenCalledWith({
+        data: { name: 'Spend' },
+        where: { id: NUMBER_DEF.id },
+      });
+    });
+
+    it('rejects a format on update for a non-number field', async () => {
+      prisma.customFieldDefinition.findUnique.mockResolvedValue(TEST_DEF);
+      await expect(
+        service.updateDefinition(TEST_DEF.id, { numberFormat: { kind: 'compact' } }),
+      ).rejects.toBeInstanceOf(CustomFieldInvalidFormatError);
+      expect(prisma.customFieldDefinition.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid currency on update', async () => {
+      prisma.customFieldDefinition.findUnique.mockResolvedValue(NUMBER_DEF);
+      await expect(
+        service.updateDefinition(NUMBER_DEF.id, {
+          numberFormat: { currency: 'xx', kind: 'currency' },
+        }),
+      ).rejects.toBeInstanceOf(CustomFieldInvalidFormatError);
     });
   });
 

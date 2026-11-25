@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testAuthGuard } from '../../../test/auth-guard-helper';
 import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
 import { TEST_ISSUE } from '../../../test/fixtures';
@@ -67,6 +67,39 @@ describe('notificationResolvers', () => {
       await testAuthGuard(
         notificationResolvers.Mutation.notificationSnooze,
         { id: 'missing', until: new Date().toISOString() },
+        ctx,
+        'NOT_FOUND',
+      );
+    });
+  });
+
+  describe('Mutation.notificationUnsnooze / notificationMarkUnread', () => {
+    it('creates a SyncAction so other devices see the change', async () => {
+      const notification = { id: TEST_NOTIFICATION_ID };
+      vi.spyOn(ctx.services.notification, 'unsnooze').mockResolvedValue(notification as never);
+      const createSyncAction = vi.spyOn(ctx.services.sync, 'createSyncAction');
+      const res = await notificationResolvers.Mutation.notificationUnsnooze(
+        null,
+        { id: TEST_NOTIFICATION_ID },
+        ctx as never,
+      );
+      expect(createSyncAction).toHaveBeenCalledWith(
+        expect.anything(),
+        'U',
+        'Notification',
+        TEST_NOTIFICATION_ID,
+        notification,
+      );
+      expect(res.lastSyncId).toBe('1');
+    });
+
+    it('markUnread remaps NotificationNotFoundError to NOT_FOUND', async () => {
+      vi.spyOn(ctx.services.notification, 'markUnread').mockRejectedValue(
+        new NotificationNotFoundError(),
+      );
+      await testAuthGuard(
+        notificationResolvers.Mutation.notificationMarkUnread,
+        { id: 'missing' },
         ctx,
         'NOT_FOUND',
       );
@@ -172,6 +205,36 @@ describe('notificationResolvers', () => {
         ctx,
         'FORBIDDEN',
       );
+    });
+  });
+
+  describe('Query.notifications arguments', () => {
+    const run = async (args: object) => {
+      const spy = vi.spyOn(ctx.services.notification, 'findByUserId').mockResolvedValue([]);
+      await notificationResolvers.Query.notifications(null, args, ctx as never);
+      return spy.mock.calls[0] as [string, string, number, { before?: Date; snoozed?: boolean }];
+    };
+
+    it('forwards snoozed and the before cursor as a Date', async () => {
+      const [userId, orgId, , opts] = await run({
+        before: '2026-01-02T03:04:05.000Z',
+        snoozed: true,
+      });
+      expect(userId).toBe(ctx.userId);
+      expect(orgId).toBe(ctx.orgId);
+      expect(opts.snoozed).toBe(true);
+      expect(opts.before).toEqual(new Date('2026-01-02T03:04:05.000Z'));
+    });
+
+    it('defaults to the live (non-snoozed), first page', async () => {
+      const [, , , opts] = await run({});
+      expect(opts.snoozed).toBe(false);
+      expect(opts.before).toBeUndefined();
+    });
+
+    it('clamps an oversized limit', async () => {
+      const [, , limit] = await run({ limit: 100000 });
+      expect(limit).toBeLessThanOrEqual(200);
     });
   });
 

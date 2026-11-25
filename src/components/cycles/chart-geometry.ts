@@ -72,6 +72,13 @@ export function xAxisStep(pointCount: number, width: number = CHART_WIDTH): numb
   return Math.max(1, Math.ceil(pointCount / slots));
 }
 
+/** Text anchor for the x label at point `i` of `count`: the last one is end-anchored. */
+export function xLabelAnchor(i: number, count: number): 'end' | 'middle' {
+  // The last tick sits PADDING_RIGHT (12px) from the edge, so a centred label
+  // would hang half its width outside the SVG and be clipped.
+  return count > 1 && i === count - 1 ? 'end' : 'middle';
+}
+
 /**
  * Every `step`-th date plus the last. A stepped label that sits fewer than
  * `step` points from the last one is dropped, because the two would overprint
@@ -86,4 +93,56 @@ export function xAxisLabels<T extends { date: string }>(
   return data
     .map((d, i) => ({ i, label: format(d.date) }))
     .filter(({ i }) => i === last || (i % step === 0 && last - i >= step));
+}
+
+/**
+ * Scope the ideal line burns down from: the first non-zero scope in the series.
+ *
+ * It used to be `data[0].scope`, which is 0 whenever the cycle's issues were
+ * stamped into it after day one (planning on the cycle's first morning, or any
+ * import) — so the "ideal" collapsed to a flat line along the axis and the
+ * chart said nothing about pace. An empty cycle still yields 0.
+ */
+export function plannedScope(data: Array<{ scope: number }>): number {
+  return data.find(d => d.scope > 0)?.scope ?? 0;
+}
+
+/**
+ * Ideal remaining work on each of `count` evenly spaced days: linear from
+ * `planned` on the first day to 0 on the last. A single day has nothing to
+ * burn towards, so it reports `planned`.
+ */
+export function idealSeries(planned: number, count: number): number[] {
+  if (count <= 1) {
+    return [planned];
+  }
+  return Array.from({ length: count }, (_, i) => planned - (planned / (count - 1)) * i);
+}
+
+const DAY_MS = 86_400_000;
+/** Safety cap so a corrupt `endsAt` cannot ask for thousands of axis points. */
+const MAX_AXIS_DAYS = 120;
+
+/**
+ * The x axis for a cycle chart: the recorded days, then every remaining day up
+ * to `endsAt`. The series stops at today but the ideal line has to reach zero
+ * on the cycle's *last* day, not today.
+ */
+export function extendAxis<T extends { date: string }>(
+  data: T[],
+  endsAt?: string | null,
+): Array<{ date: string }> {
+  const axis: Array<{ date: string }> = data.map(d => ({ date: d.date }));
+  if (!endsAt || data.length === 0) {
+    return axis;
+  }
+  const lastRecorded = Date.parse(`${data[data.length - 1].date}T00:00:00Z`);
+  const endDay = Date.parse(`${endsAt.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(lastRecorded) || Number.isNaN(endDay)) {
+    return axis;
+  }
+  for (let t = lastRecorded + DAY_MS; t <= endDay && axis.length < MAX_AXIS_DAYS; t += DAY_MS) {
+    axis.push({ date: new Date(t).toISOString().slice(0, 10) });
+  }
+  return axis;
 }

@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_ORG } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
-import { encodeCursor, parseCursor, SyncService } from './sync.service';
+import {
+  dropForeignUserRows,
+  encodeCursor,
+  PER_USER_MODELS,
+  parseCursor,
+  SyncService,
+} from './sync.service';
 
 // Minimal stand-in for the ioredis Redis instance — only `publish` is
 // touched on the path under test (createSyncAction fires it, but the
@@ -64,6 +70,7 @@ function mockEmptyBootstrap(prisma: MockPrismaClient) {
     'customFieldValue',
     'initiative',
     'initiativeProject',
+    'issueReminder',
   ] as const;
   for (const model of emptyModels) {
     prisma[model].findMany.mockResolvedValue([]);
@@ -427,6 +434,29 @@ describe('SyncService — private-team visibility (hiddenTeamIds)', () => {
     });
   });
 
+  it('delta turns an issue that moved INTO a hidden team into a delete, so the stale copy goes', async () => {
+    prisma.$queryRaw.mockResolvedValue([
+      row(1, 'Issue', { id: 'i-moved', movedFromTeamId: OPEN_TEAM, teamId: HIDDEN_TEAM }),
+      row(2, 'Issue', { id: 'i-edit', teamId: HIDDEN_TEAM }),
+      row(3, 'Issue', { id: 'i-both', movedFromTeamId: HIDDEN_TEAM, teamId: HIDDEN_TEAM }),
+    ]);
+    prisma.issue.findMany.mockResolvedValue([]);
+
+    const result = await svc.getDeltaSyncActions(
+      TEST_ORG.id,
+      parseCursor('0'),
+      undefined,
+      50,
+      scope,
+    );
+
+    // Only the row that left a team the viewer COULD see becomes a delete;
+    // ordinary edits inside the hidden team stay invisible, and a move between
+    // two hidden teams never reveals anything.
+    expect(result.actions.map(a => `${a.action}:${a.modelId}`)).toEqual(['D:i-moved']);
+    expect(result.actions[0].data).toBeNull();
+  });
+
   it('bootstrap adds no team clauses for an unrestricted caller', async () => {
     mockEmptyBootstrap(prisma);
     prisma.$queryRaw.mockResolvedValue([{ id: BigInt(1), xactId: '10' }]);
@@ -685,5 +715,131 @@ describe('SyncService — atomic write helpers', () => {
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     expect(redis.publish).toHaveBeenCalledTimes(1);
     expect(result.xactId).toBe(BigInt(1100));
+  });
+});
+
+describe('SyncService — Notification rows are per-recipient', () => {
+  let prisma: MockPrismaClient;
+  let svc: SyncService;
+  const notif = (id: bigint, userId: string) =>
+    makeRawRow(id, '10', {
+      data: { id: `n${id}`, title: 'secret', userId },
+      modelId: `n${id}`,
+      modelName: 'Notification',
+    });
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    svc = new SyncService(prisma as never, mockRedis);
+    prisma.organization.findUnique.mockResolvedValue({ syncActionsPrunedThroughXactId: null });
+    prisma.$queryRaw.mockResolvedValue([
+      notif(BigInt(1), 'user-1'),
+      notif(BigInt(2), 'someone-else'),
+      makeRawRow(BigInt(3), '10', { data: { teamId: 't-ok' } }),
+    ]);
+  });
+
+  it('delta serves an unrestricted caller only their own Notification rows', async () => {
+    const result = await svc.getDeltaSyncActions(
+      TEST_ORG.id,
+      parseCursor('0'),
+      undefined,
+      50,
+      UNRESTRICTED,
+    );
+    expect(result.actions.map(a => a.id)).toEqual([BigInt(1), BigInt(3)]);
+  });
+
+  it('delta serves a restricted caller only their own Notification rows', async () => {
+    const result = await svc.getDeltaSyncActions(TEST_ORG.id, parseCursor('0'), undefined, 50, {
+      ...UNRESTRICTED,
+      hiddenTeamIds: ['t-hidden'],
+    });
+    expect(result.actions.map(a => a.id)).toEqual([BigInt(1), BigInt(3)]);
+  });
+});
+
+describe('SyncService — per-user models (Favorite, IssueReminder) are per-recipient', () => {
+  let prisma: MockPrismaClient;
+  let svc: SyncService;
+  const rowFor = (id: bigint, modelName: string, data: unknown) =>
+    makeRawRow(id, '10', { data, modelId: `m${id}`, modelName });
+  const own = (modelName: string) => rowFor(BigInt(1), modelName, { id: 'a', userId: 'user-1' });
+  const foreign = (modelName: string) =>
+    rowFor(BigInt(2), modelName, { id: 'b', userId: 'someone-else' });
+  const plain = () => makeRawRow(BigInt(3), '10', { data: { teamId: 't-ok' } });
+
+  beforeEach(() => {
+    prisma = createMockPrisma();
+    svc = new SyncService(prisma as never, mockRedis);
+    prisma.organization.findUnique.mockResolvedValue({ syncActionsPrunedThroughXactId: null });
+  });
+
+  it.each(['Notification', 'Favorite', 'IssueReminder'])(
+    "delta drops another user's %s row, for unrestricted and restricted callers",
+    async modelName => {
+      prisma.$queryRaw.mockResolvedValue([own(modelName), foreign(modelName), plain()]);
+      for (const visibility of [UNRESTRICTED, { ...UNRESTRICTED, hiddenTeamIds: ['t-hidden'] }]) {
+        const result = await svc.getDeltaSyncActions(
+          TEST_ORG.id,
+          parseCursor('0'),
+          undefined,
+          50,
+          visibility,
+        );
+        expect(result.actions.map(a => a.id)).toEqual([BigInt(1), BigInt(3)]);
+      }
+    },
+  );
+
+  it('a delete that carries its owner is dropped for everyone else; a bare delete passes through', async () => {
+    const del = (id: bigint, data: unknown) =>
+      makeRawRow(id, '10', { action: 'D', data, modelId: `m${id}`, modelName: 'IssueReminder' });
+    prisma.$queryRaw.mockResolvedValue([
+      del(BigInt(1), { id: 'a', userId: 'user-1' }),
+      del(BigInt(2), { id: 'b', userId: 'someone-else' }),
+      del(BigInt(3), null),
+    ]);
+    const result = await svc.getDeltaSyncActions(
+      TEST_ORG.id,
+      parseCursor('0'),
+      undefined,
+      50,
+      UNRESTRICTED,
+    );
+    expect(result.actions.map(a => a.id)).toEqual([BigInt(1), BigInt(3)]);
+  });
+
+  it('dropForeignUserRows covers exactly the per-user models', () => {
+    expect([...PER_USER_MODELS].sort()).toEqual(['Favorite', 'IssueReminder', 'Notification']);
+    const rows = [{ data: { userId: 'x' }, modelName: 'Issue' }];
+    expect(dropForeignUserRows(rows, 'me')).toEqual(rows);
+  });
+});
+
+describe('SyncService.getBootstrapData — reminders', () => {
+  it("queries only the viewer's own reminders, on issues visible to them", async () => {
+    const prisma = createMockPrisma();
+    const svc = new SyncService(prisma as never, mockRedis);
+    mockEmptyBootstrap(prisma);
+    prisma.$queryRaw.mockResolvedValue([{ id: BigInt(1), xactId: '5' }]);
+    prisma.issueReminder.findMany.mockResolvedValue([{ id: 'r1', userId: 'user-1' }]);
+
+    const data = await svc.getBootstrapData(TEST_ORG.id, {
+      guestTeamIds: ['g1'],
+      hiddenTeamIds: ['h1'],
+      userId: 'user-1',
+    });
+
+    expect(data.issueReminders).toEqual([{ id: 'r1', userId: 'user-1' }]);
+    const where = prisma.issueReminder.findMany.mock.calls[0]?.[0].where;
+    expect(where).toMatchObject({ organizationId: TEST_ORG.id, userId: 'user-1' });
+    expect(where.issue).toMatchObject({
+      archivedAt: null,
+      teamId: { notIn: ['h1'] },
+      trashed: false,
+    });
+    expect(where.issue.OR).toContainEqual({ creatorId: 'user-1' });
+    expect(where.issue.OR).toContainEqual({ assigneeId: 'user-1' });
   });
 });

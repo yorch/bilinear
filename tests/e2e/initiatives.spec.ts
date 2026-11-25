@@ -29,9 +29,10 @@ test.describe('Initiatives', () => {
   });
 
   test('renders empty state or a list', async ({ page }) => {
-    // Either the empty-state copy or at least one status group should be present.
+    // Either the empty-state copy or at least one initiative row should be
+    // present. (The Active/Archived tab is always there, so it can't be the signal.)
     const emptyCopy = page.getByText(/no initiatives yet/i);
-    const anyGroup = page.getByText(/^(active|planned|completed|canceled)$/i).first();
+    const anyGroup = page.getByTestId('initiative-row').first();
     await expect(emptyCopy.or(anyGroup)).toBeVisible();
   });
 

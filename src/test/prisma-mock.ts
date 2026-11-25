@@ -6,6 +6,7 @@ type MockModel = {
   count: ReturnType<typeof vi.fn>;
   create: ReturnType<typeof vi.fn>;
   createMany: ReturnType<typeof vi.fn>;
+  createManyAndReturn: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
   deleteMany: ReturnType<typeof vi.fn>;
   findFirst: ReturnType<typeof vi.fn>;
@@ -23,6 +24,7 @@ function createMockModel(): MockModel {
     count: vi.fn(),
     create: vi.fn(),
     createMany: vi.fn(),
+    createManyAndReturn: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
     findFirst: vi.fn(),
@@ -57,6 +59,7 @@ export type MockPrismaClient = {
     | 'issue'
     | 'issueActivity'
     | 'issueLabel'
+    | 'issueReminder'
     | 'issueLabelAssignment'
     | 'issueReaction'
     | 'issueRelation'
@@ -66,6 +69,7 @@ export type MockPrismaClient = {
     | 'organization'
     | 'organizationInvite'
     | 'organizationMember'
+    | 'organizationUrlKeyAlias'
     | 'platformAuditLog'
     | 'project'
     | 'projectMember'
@@ -132,12 +136,14 @@ export function createMockPrisma(): MockPrismaClient {
     issueLabelAssignment: createMockModel(),
     issueReaction: createMockModel(),
     issueRelation: createMockModel(),
+    issueReminder: createMockModel(),
     issueTemplate: createMockModel(),
     notification: createMockModel(),
     notificationSubscription: createMockModel(),
     organization: createMockModel(),
     organizationInvite: createMockModel(),
     organizationMember: createMockModel(),
+    organizationUrlKeyAlias: createMockModel(),
     platformAuditLog: createMockModel(),
     project: createMockModel(),
     projectMember: createMockModel(),

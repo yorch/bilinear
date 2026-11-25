@@ -1,5 +1,7 @@
 import type { Favorite, PrismaClient } from '../../generated/prisma';
+import { canViewEntity, visibleEntityIds } from '../lib/entity-visibility';
 import { MAX_BULK_OPERATION } from '../lib/limits';
+import { getSyncVisibility } from '../lib/sync-visibility';
 
 export type FavoriteEntityType =
   | 'Issue'
@@ -92,6 +94,13 @@ export class FavoriteService {
     // the resolver's check.
     const belongs = await entityBelongsToOrg(this.prisma, input.entityType, input.entityId, orgId);
     if (!belongs) {
+      throw new FavoriteEntityNotInOrgError();
+    }
+    // Same-org is not enough: a private team's issue/document/team/cycle and an
+    // unshared view are addressable by id but must not be pinnable (the sidebar
+    // then renders the row's title/content) by someone who cannot see them.
+    const vis = await getSyncVisibility(this.prisma, userId, orgId);
+    if (!(await canViewEntity(this.prisma, vis, orgId, input.entityType, input.entityId))) {
       throw new FavoriteEntityNotInOrgError();
     }
 
@@ -189,10 +198,28 @@ export class FavoriteService {
 
   /** All favorites for a user inside their current org, ordered for sidebar render. */
   async findByUser(orgId: string, userId: string): Promise<Favorite[]> {
-    return this.prisma.favorite.findMany({
+    const all = await this.prisma.favorite.findMany({
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       where: { organizationId: orgId, userId },
     });
+    if (all.length === 0) {
+      return all;
+    }
+    // Favorites outlive the access that created them (the issue moved into a
+    // private team, the view was unshared). Drop rows whose target the caller
+    // can no longer see rather than ship a dangling pointer.
+    const vis = await getSyncVisibility(this.prisma, userId, orgId);
+    const byType = new Map<string, string[]>();
+    for (const f of all) {
+      byType.set(f.entityType, [...(byType.get(f.entityType) ?? []), f.entityId]);
+    }
+    const visible = new Map<string, Set<string>>();
+    await Promise.all(
+      [...byType].map(async ([type, ids]) => {
+        visible.set(type, await visibleEntityIds(this.prisma, vis, orgId, type, ids));
+      }),
+    );
+    return all.filter(f => visible.get(f.entityType)?.has(f.entityId));
   }
 
   /**

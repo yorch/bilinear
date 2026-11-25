@@ -7,6 +7,7 @@ import { AutomationService } from '../server/services/automation.service';
 import { InitiativeService } from '../server/services/initiative.service';
 import { IssueService } from '../server/services/issue.service';
 import { IssueActivityService } from '../server/services/issue-activity.service';
+import { IssueReminderService } from '../server/services/issue-reminder.service';
 import { LabelService } from '../server/services/label.service';
 import { NotificationService } from '../server/services/notification.service';
 import { OrganizationService } from '../server/services/organization.service';
@@ -35,6 +36,10 @@ class MockSyncService {
     return { id: BigInt(1) } as { id: bigint };
   }
 
+  async getLastSyncId(_orgId: string) {
+    return '1';
+  }
+
   // In-transaction marker write (atomic-sync path). Returns the same
   // predictable id so resolvers that record-then-publish still assert '1'.
   async recordSyncAction(
@@ -56,8 +61,18 @@ class MockSyncService {
 // only needs `dispatchEvent` to resolve without throwing. Returning an empty
 // array mirrors the "no subscribers" path.
 class MockWebhookService {
-  async dispatchEvent(_orgId: string, _event: string, _data: object, _teamId?: string | null) {
+  async dispatchEvent(
+    _orgId: string,
+    _event: string,
+    _data: object,
+    _teamId?: string | null,
+    _opts?: { teamScopedOnly?: boolean },
+  ) {
     return [];
+  }
+
+  async isTeamPrivate(_orgId: string, _teamId: string) {
+    return false;
   }
 }
 
@@ -91,6 +106,7 @@ export interface MockGraphQLContext {
     initiative: InitiativeService;
     issue: IssueService;
     issueActivity: IssueActivityService;
+    issueReminder: IssueReminderService;
     label: LabelService;
     notification: NotificationService;
     organization: OrganizationService;
@@ -132,6 +148,7 @@ export function createMockContext(
       initiative: new InitiativeService(prisma as never),
       issue: new IssueService(prisma as never),
       issueActivity: new IssueActivityService(prisma as never),
+      issueReminder: new IssueReminderService(prisma as never),
       label: new LabelService(prisma as never),
       notification: new NotificationService(prisma as never),
       organization: new OrganizationService(prisma as never),

@@ -45,12 +45,12 @@ describe('CommentService', () => {
   describe('findAccessTarget', () => {
     it('returns the teamId for a comment in the caller org', async () => {
       prisma.comment.findUnique.mockResolvedValue({
-        issue: { organizationId: TEST_ORG.id, teamId: TEST_TEAM.id },
+        issue: { id: 'issue-1', organizationId: TEST_ORG.id, teamId: TEST_TEAM.id },
       });
 
       const result = await service.findAccessTarget(TEST_COMMENT.id, TEST_ORG.id);
 
-      expect(result).toEqual({ teamId: TEST_TEAM.id });
+      expect(result).toEqual({ issueId: 'issue-1', teamId: TEST_TEAM.id });
     });
 
     it('returns null when the comment does not exist', async () => {

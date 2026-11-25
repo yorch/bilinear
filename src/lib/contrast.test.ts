@@ -258,6 +258,14 @@ const CHECKS: ReadonlyArray<readonly [string, string, number, string]> = [
   ['--input', '--card', 3.0, 'control border vs card'],
   ['--input', '--background', 3.0, 'control border vs page'],
   ['--warning', '--background', 3.0, 'vivid warning (due-soon)'],
+  // Chart marks (burn-up, burndown, Insights bars): strokes and fills that
+  // carry data are non-text UI, 3:1 against whatever surface they sit on.
+  ['--chart-primary', '--card', 3.0, 'chart scope line vs card'],
+  ['--chart-primary', '--background', 3.0, 'chart scope line vs page'],
+  ['--chart-actual', '--card', 3.0, 'chart completed/forecast line vs card'],
+  ['--chart-actual', '--background', 3.0, 'chart completed/forecast line vs page'],
+  ['--chart-warning', '--card', 3.0, 'chart target line vs card'],
+  ['--chart-warning', '--background', 3.0, 'chart target line vs page'],
 ];
 
 /**

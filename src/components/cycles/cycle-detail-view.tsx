@@ -429,6 +429,7 @@ export const CycleDetailView = observer(function CycleDetailView({
             {showRollover && (
               <Button
                 aria-label={t('cycles.detail.rollOver')}
+                className="max-sm:hidden"
                 disabled={rollingOver}
                 onClick={handleRollover}
                 size="sm"
@@ -455,6 +456,20 @@ export const CycleDetailView = observer(function CycleDetailView({
             >
               {close => (
                 <>
+                  {/* Below sm the header has no room for Roll over beside the title. */}
+                  {showRollover && (
+                    <button
+                      className={cn(POPOVER_ITEM_CLASS, 'sm:hidden')}
+                      disabled={rollingOver}
+                      onClick={() => {
+                        close();
+                        void handleRollover();
+                      }}
+                      type="button"
+                    >
+                      {rollingOver ? t('cycles.detail.rollingOver') : t('cycles.detail.rollOver')}
+                    </button>
+                  )}
                   <button
                     className={POPOVER_ITEM_CLASS}
                     onClick={() => {
@@ -739,7 +754,7 @@ export const CycleDetailView = observer(function CycleDetailView({
               ) : burndownError ? (
                 <InlineRetry message={t('common.somethingWentWrong')} onRetry={fetchBurndown} />
               ) : chartView === 'burndown' ? (
-                <BurndownChart data={burndown ?? []} />
+                <BurndownChart data={burndown ?? []} endsAt={cycle.endsAt} />
               ) : (
                 <BurnupChart data={burndown ?? []} />
               )}

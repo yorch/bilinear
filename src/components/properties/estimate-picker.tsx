@@ -52,6 +52,8 @@ export const SCALE_OPTIONS: Record<string, Array<{ label: string; value: number 
 interface EstimatePickerProps {
   estimationType?: string;
   forceOpen?: boolean;
+  /** Show a gauge icon before the value below `lg`, where the detail view hides property labels. */
+  iconBelowLg?: boolean;
   /** onChange receives null to clear the estimate */
   onChange: (estimate: number | null) => void;
   onClose?: () => void;
@@ -90,6 +92,7 @@ export function EstimatePicker({
   value,
   estimationType = 'notUsed',
   forceOpen,
+  iconBelowLg,
   onClose,
   onChange,
 }: EstimatePickerProps) {
@@ -106,7 +109,17 @@ export function EstimatePicker({
       listbox={scale != null}
       onClose={onClose}
       panelClassName="min-w-[120px] py-1"
-      triggerChildren={<EstimateBadge estimationType={estimationType} value={value} />}
+      triggerChildren={
+        <>
+          {iconBelowLg && value ? (
+            <Gauge
+              aria-hidden="true"
+              className="h-3 w-3 shrink-0 text-muted-foreground lg:hidden"
+            />
+          ) : null}
+          <EstimateBadge estimationType={estimationType} value={value} />
+        </>
+      }
       triggerClassName={cn('gap-1 px-1 py-0.5', TOUCH_TARGET, 'max-md:justify-start')}
       triggerTitle={t('properties.estimate.setEstimate')}
     >

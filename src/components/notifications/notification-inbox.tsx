@@ -1,24 +1,51 @@
 'use client';
 
-import { Bell, Check, CheckCheck, Clock, MessageSquare, RefreshCw, User } from 'lucide-react';
+import {
+  AlarmClock,
+  Bell,
+  BellOff,
+  Check,
+  CheckCheck,
+  Clock,
+  Mail,
+  MessageSquare,
+  RefreshCw,
+  User,
+} from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
-import { fetchNotifications } from '@/components/notifications/use-notification-sync';
+import { useEffect, useState } from 'react';
+import {
+  type InboxLane,
+  partitionByLane,
+  readStoredLane,
+  reminderTime,
+  writeStoredLane,
+} from '@/components/notifications/notification-priority';
+import {
+  NOTIFICATION_MARK_UNREAD_MUTATION,
+  NOTIFICATION_UNSNOOZE_MUTATION,
+} from '@/components/notifications/notification-queries';
+import { resolveNotificationTarget } from '@/components/notifications/notification-target';
+import {
+  fetchNotifications,
+  fetchOlderNotifications,
+  fetchSnoozedNotifications,
+} from '@/components/notifications/use-notification-sync';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { SectionHeader } from '@/components/shared/section-header';
+import { TabSwitcher, tabPanelProps } from '@/components/shared/tab-switcher';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader, Toolbar } from '@/components/ui/page-header';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { SelectPopover } from '@/components/ui/select-popover';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBNotification } from '@/lib/db';
-import { gql } from '@/lib/graphql';
+import { gql, gqlMutate } from '@/lib/graphql';
 import {
   NOTIFICATION_MARK_ALL_READ_MUTATION,
   NOTIFICATION_MARK_READ_MUTATION,
@@ -83,6 +110,8 @@ function getNotificationIcon(type: string) {
       return <MessageSquare className="h-3.5 w-3.5" />;
     case 'ISSUE_STATUS_CHANGED':
       return <RefreshCw className="h-3.5 w-3.5" />;
+    case 'REMINDER':
+      return <AlarmClock className="h-3.5 w-3.5" />;
     default:
       return <Bell className="h-3.5 w-3.5" />;
   }
@@ -98,6 +127,8 @@ function getNotificationLabelKey(type: string): string {
       return 'notifications.labels.issueCommented';
     case 'ISSUE_STATUS_CHANGED':
       return 'notifications.labels.issueStatusChanged';
+    case 'REMINDER':
+      return 'notifications.labels.reminder';
     default:
       return 'notifications.labels.default';
   }
@@ -109,7 +140,9 @@ interface NotificationItemProps {
   markingId: string | null;
   notification: DBNotification;
   onMarkRead: (id: string) => void;
+  onMarkUnread: (id: string) => void;
   onSnooze: (id: string, until: Date) => void;
+  onUnsnooze: (id: string) => void;
   snoozingId: string | null;
   workspace: string;
 }
@@ -126,19 +159,37 @@ interface NotificationItemProps {
 const NotificationItem = observer(function NotificationItem({
   notification,
   onMarkRead,
+  onMarkUnread,
   onSnooze,
+  onUnsnooze,
   markingId,
   snoozingId,
   workspace,
 }: NotificationItemProps) {
   const t = useTranslations();
-  const { formatRelativeTime } = useFormatters();
-  const { issueStore, userStore } = useStore();
-  const { type, read, createdAt, id, actorId, issueId } = notification;
+  const { formatDateTime, formatRelativeTime } = useFormatters();
+  const { documentStore, initiativeStore, issueStore, projectStore, userStore } = useStore();
+  const { type, read, createdAt, id, actorId } = notification;
   const isMarkingThis = markingId === id;
   const isSnoozingThis = snoozingId === id;
   const actor = actorId ? userStore.findById(actorId) : null;
-  const issue = issueId ? issueStore.findById(issueId) : null;
+  const snoozed = isSnoozed(notification);
+  const isReminder = type === 'REMINDER';
+  const remindAt = isReminder ? reminderTime(notification) : null;
+  const dataIssueId = (notification.data as { issueId?: unknown } | null)?.issueId;
+  const target = resolveNotificationTarget(
+    {
+      data: notification.data,
+      issueId: notification.issueId ?? (typeof dataIssueId === 'string' ? dataIssueId : null),
+    },
+    workspace,
+    {
+      document: docId => documentStore.findById(docId),
+      initiative: initId => initiativeStore.findById(initId),
+      issue: issueId => issueStore.findById(issueId),
+      project: projectId => projectStore.findById(projectId),
+    },
+  );
 
   return (
     <div
@@ -166,17 +217,17 @@ const NotificationItem = observer(function NotificationItem({
 
       <div className="min-w-0 flex-1">
         <p className="text-xs text-muted-foreground">
-          {actor
+          {actor && !isReminder
             ? t('notifications.actorDidThing', {
                 action: t(getNotificationLabelKey(type)).toLowerCase(),
                 name: actor.displayName,
               })
             : t(getNotificationLabelKey(type))}
         </p>
-        {issue ? (
+        {target ? (
           <Link
             className="mt-0.5 flex min-w-0 items-baseline gap-2 text-sm hover:underline"
-            href={`/${workspace}/issue/${issue.id}`}
+            href={target.href}
             // Following the notification is reading it. Without this the row
             // stayed unread after the user had opened the issue, and they had
             // to come back and press the check.
@@ -186,15 +237,37 @@ const NotificationItem = observer(function NotificationItem({
               }
             }}
           >
-            <span className="shrink-0 font-mono text-xs text-muted-foreground">
-              {issue.identifier}
-            </span>
+            {target.identifier ? (
+              <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                {target.identifier}
+              </span>
+            ) : null}
             <span
               className={cn('truncate', read ? 'text-foreground-secondary' : 'text-foreground')}
             >
-              {issue.title}
+              {isReminder
+                ? t('notifications.reminderTitle', { title: target.title })
+                : target.title || t('notifications.openLink')}
             </span>
           </Link>
+        ) : null}
+        {remindAt ? (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {t('notifications.remindedFor', {
+              when: formatDateTime(remindAt, { dateStyle: 'medium', timeStyle: 'short' }),
+            })}
+          </p>
+        ) : null}
+        {snoozed ? (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {t('notifications.snoozedUntil', {
+              // Absolute: the relative formatter only speaks about the past.
+              when: formatDateTime(notification.snoozedUntilAt ?? createdAt, {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              }),
+            })}
+          </p>
         ) : null}
         <p className="mt-0.5 text-xs text-muted-foreground">{formatRelativeTime(createdAt)}</p>
       </div>
@@ -202,39 +275,65 @@ const NotificationItem = observer(function NotificationItem({
       {/* Revealed on hover at pointer sizes, always present on touch — the row
           is a link, so permanently-visible per-row buttons competed with it. */}
       <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100">
-        <SelectPopover
-          align="right"
-          disabled={isSnoozingThis}
-          panelClassName="w-44 py-1 shadow-e3"
-          triggerChildren={<Clock className="h-3.5 w-3.5" />}
-          triggerClassName={cn(
-            'p-1 text-muted-foreground hover:text-foreground-secondary',
-            TOUCH_TARGET,
-          )}
-          triggerTitle={t('notifications.snooze.buttonTitle')}
-        >
-          {close => (
-            <>
-              {SNOOZE_PRESETS.map(preset => (
-                <button
-                  className="w-full px-3 py-1.5 text-left text-xs text-foreground-secondary hover:bg-accent"
-                  key={preset.labelKey}
-                  onClick={() => {
-                    close();
-                    onSnooze(id, preset.getUntil());
-                  }}
-                  type="button"
-                >
-                  {t(preset.labelKey)}
-                </button>
-              ))}
-            </>
-          )}
-        </SelectPopover>
+        {snoozed ? (
+          <button
+            className={cn(
+              'rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand disabled:opacity-50',
+              TOUCH_TARGET,
+            )}
+            disabled={isSnoozingThis}
+            onClick={() => onUnsnooze(id)}
+            title={t('notifications.unsnooze')}
+            type="button"
+          >
+            <BellOff className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <SelectPopover
+            align="right"
+            disabled={isSnoozingThis}
+            panelClassName="w-44 py-1 shadow-e3"
+            triggerChildren={<Clock className="h-3.5 w-3.5" />}
+            triggerClassName={cn(
+              'p-1 text-muted-foreground hover:text-foreground-secondary',
+              TOUCH_TARGET,
+            )}
+            triggerTitle={t('notifications.snooze.buttonTitle')}
+          >
+            {close => (
+              <>
+                {SNOOZE_PRESETS.map(preset => (
+                  <button
+                    className="w-full px-3 py-1.5 text-left text-xs text-foreground-secondary hover:bg-accent"
+                    key={preset.labelKey}
+                    onClick={() => {
+                      close();
+                      onSnooze(id, preset.getUntil());
+                    }}
+                    type="button"
+                  >
+                    {t(preset.labelKey)}
+                  </button>
+                ))}
+              </>
+            )}
+          </SelectPopover>
+        )}
 
-        {/* Read rows keep Snooze (they used to render no actions at all).
-              "Mark unread" needs a server mutation that does not exist yet. */}
-        {!read && (
+        {read ? (
+          <button
+            className={cn(
+              'rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand disabled:opacity-50',
+              TOUCH_TARGET,
+            )}
+            disabled={isMarkingThis}
+            onClick={() => onMarkUnread(id)}
+            title={t('notifications.markAsUnread')}
+            type="button"
+          >
+            <Mail className="h-3.5 w-3.5" />
+          </button>
+        ) : (
           <button
             className={cn(
               'rounded p-1 text-muted-foreground hover:bg-muted hover:text-brand disabled:opacity-50',
@@ -256,7 +355,7 @@ const NotificationItem = observer(function NotificationItem({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 /** Which slice of the inbox the list is showing. */
-type InboxTab = 'all' | 'unread';
+type InboxTab = 'all' | 'snoozed' | 'unread';
 
 export const NotificationInbox = observer(function NotificationInbox() {
   const store = useStore();
@@ -265,9 +364,76 @@ export const NotificationInbox = observer(function NotificationInbox() {
   const { workspace } = useParams<{ workspace: string }>();
 
   const [tab, setTab] = useState<InboxTab>('all');
+  // Priority vs Other. Starts on Priority (SSR-safe) and adopts the last-used
+  // lane once mounted, so the hydration markup never depends on storage.
+  const [lane, setLaneState] = useState<InboxLane>('priority');
+  const viewerId = store.userStore.currentUserId;
+  useEffect(() => {
+    const stored = readStoredLane(viewerId);
+    if (stored) {
+      setLaneState(stored);
+    }
+  }, [viewerId]);
+  const setLane = (next: InboxLane) => {
+    setLaneState(next);
+    writeStoredLane(next, viewerId);
+  };
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [snoozingId, setSnoozingId] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [snoozedLoadFailed, setSnoozedLoadFailed] = useState(false);
+
+  // Snoozed rows are hidden from the default list server-side, so the tab
+  // fetches them when it opens (and the store keeps them across refreshes).
+  useEffect(() => {
+    if (tab !== 'snoozed') {
+      return;
+    }
+    setSnoozedLoadFailed(false);
+    fetchSnoozedNotifications(notificationStore).catch(() => setSnoozedLoadFailed(true));
+  }, [tab, notificationStore]);
+
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    try {
+      await fetchOlderNotifications(notificationStore);
+    } catch {
+      toast.error(t('notifications.toasts.loadFailed'));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const handleMarkUnread = async (id: string) => {
+    const prev = notificationStore.findById(id);
+    const prevReadAt = prev?.readAt ?? null;
+    notificationStore.markUnread(id);
+    setMarkingId(id);
+    try {
+      await gqlMutate(NOTIFICATION_MARK_UNREAD_MUTATION, { id });
+    } catch {
+      notificationStore.optimisticUpdate(id, { read: true, readAt: prevReadAt });
+      toast.error(t('notifications.toasts.markUnreadFailed'));
+    } finally {
+      setMarkingId(null);
+    }
+  };
+
+  const handleUnsnooze = async (id: string) => {
+    const prevSnoozedUntilAt = notificationStore.findById(id)?.snoozedUntilAt ?? null;
+    notificationStore.optimisticUpdate(id, { snoozedUntilAt: null });
+    setSnoozingId(id);
+    try {
+      await gqlMutate(NOTIFICATION_UNSNOOZE_MUTATION, { id });
+      toast.success(t('notifications.toasts.unsnoozed'));
+    } catch {
+      notificationStore.optimisticUpdate(id, { snoozedUntilAt: prevSnoozedUntilAt });
+      toast.error(t('notifications.toasts.unsnoozeFailed'));
+    } finally {
+      setSnoozingId(null);
+    }
+  };
 
   // The shell's `useNotificationSync` already fetches on mount, on focus and
   // every minute, so the Inbox only reads the store (a second fetch here just
@@ -357,14 +523,28 @@ export const NotificationInbox = observer(function NotificationInbox() {
     }
   };
 
-  const active = notifications.filter(n => !isSnoozed(n));
+  const priorityLookups = {
+    issueAssigneeId: (issueId: string) => store.issueStore.findById(issueId)?.assigneeId ?? null,
+  };
+  const laneOf = (rows: DBNotification[]) => partitionByLane(rows, viewerId, priorityLookups);
+  const allActive = notifications.filter(n => !isSnoozed(n));
+  const activeByLane = laneOf(allActive);
+  const laneUnread = {
+    other: activeByLane.other.filter(n => !n.read).length,
+    priority: activeByLane.priority.filter(n => !n.read).length,
+  };
+  // Lane counts only see the loaded page, while the badge is the server's
+  // total — so while more pages exist they are a lower bound, and say so.
+  const laneSuffix = notificationStore.hasMore ? '+' : '';
+  const active = activeByLane[lane];
   const unread = active.filter(n => !n.read);
   const read = active.filter(n => n.read);
-  const hasUnread = unread.length > 0;
-  // Only the newest 50 rows are fetched and the server sends no unread total, so
-  // past one full page the honest count is a lower bound, not a number.
-  const unreadLabel = notificationStore.hasMore ? `${unread.length}+` : unread.length;
-  const visible = tab === 'unread' ? unread : active;
+  // The badge is the server's own total (kept exact by `unreadCount`), not the
+  // size of the fetched page — which read "7 unread" against 29 in the database.
+  const unreadLabel = notificationStore.unreadCount;
+  const hasUnread = unreadLabel > 0;
+  const snoozedRows = laneOf(notificationStore.snoozed)[lane];
+  const visible = tab === 'unread' ? unread : tab === 'snoozed' ? snoozedRows : active;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -394,17 +574,53 @@ export const NotificationInbox = observer(function NotificationInbox() {
       />
 
       <Toolbar>
-        <SegmentedControl
+        <TabSwitcher
+          ariaLabel={t('notifications.lanes.label')}
+          idPrefix="inbox-lane"
+          onChange={setLane}
+          options={[
+            {
+              label: (
+                <>
+                  {t('notifications.lanes.priority')}
+                  <span className="font-mono tabular-nums" data-testid="lane-count-priority">
+                    {laneUnread.priority}
+                    {laneSuffix}
+                  </span>
+                </>
+              ),
+              value: 'priority',
+            },
+            {
+              label: (
+                <>
+                  {t('notifications.lanes.other')}
+                  <span className="font-mono tabular-nums" data-testid="lane-count-other">
+                    {laneUnread.other}
+                    {laneSuffix}
+                  </span>
+                </>
+              ),
+              value: 'other',
+            },
+          ]}
+          panelId="inbox-tab-panel"
+          value={lane}
+        />
+        <TabSwitcher
+          ariaLabel={t('notifications.tabs.label')}
+          idPrefix="inbox-tab"
           onChange={setTab}
           options={[
             { label: t('notifications.tabs.all'), value: 'all' },
             { label: t('notifications.tabs.unread'), value: 'unread' },
+            { label: t('notifications.tabs.snoozed'), value: 'snoozed' },
           ]}
           value={tab}
         />
       </Toolbar>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div {...tabPanelProps('inbox-tab', tab)} className="min-h-0 flex-1 overflow-y-auto">
         {loading && <RowsSkeleton className="px-4 py-4" count={6} />}
 
         {/* Load failure — never render the empty state for a rejected read */}
@@ -412,32 +628,64 @@ export const NotificationInbox = observer(function NotificationInbox() {
           <InlineRetry message={t('notifications.toasts.loadFailed')} onRetry={retryLoad} />
         )}
 
+        {tab === 'snoozed' && snoozedLoadFailed && (
+          <InlineRetry
+            message={t('notifications.toasts.loadFailed')}
+            onRetry={() => {
+              setSnoozedLoadFailed(false);
+              fetchSnoozedNotifications(notificationStore).catch(() => setSnoozedLoadFailed(true));
+            }}
+          />
+        )}
+
         {!loading && !loadError && visible.length === 0 && (
           <EmptyState
             description={
-              tab === 'unread'
-                ? t('notifications.emptyState.unreadDetail')
-                : t('notifications.emptyState.detail')
+              tab === 'snoozed'
+                ? t('notifications.emptyState.snoozedDetail')
+                : tab === 'unread'
+                  ? t('notifications.emptyState.unreadDetail')
+                  : lane === 'priority'
+                    ? t('notifications.emptyState.priorityDetail')
+                    : t('notifications.emptyState.otherDetail')
             }
             icon={<Bell className="h-5 w-5" />}
             testId="empty-state"
             title={
-              tab === 'unread'
-                ? t('notifications.emptyState.unreadTitle')
-                : t('notifications.emptyState.title')
+              tab === 'snoozed'
+                ? t('notifications.emptyState.snoozedTitle')
+                : tab === 'unread'
+                  ? t('notifications.emptyState.unreadTitle')
+                  : lane === 'priority'
+                    ? t('notifications.emptyState.priorityTitle')
+                    : t('notifications.emptyState.otherTitle')
             }
           />
         )}
 
         {!loading &&
-          (tab === 'unread' ? (
+          (tab === 'snoozed' ? (
+            <NotificationGroup
+              markingId={markingId}
+              notifications={snoozedRows}
+              onMarkRead={handleMarkRead}
+              onMarkUnread={handleMarkUnread}
+              onSnooze={handleSnooze}
+              onUnsnooze={handleUnsnooze}
+              snoozingId={snoozingId}
+              title={t('notifications.snoozedCount', { count: snoozedRows.length })}
+              workspace={workspace}
+            />
+          ) : tab === 'unread' ? (
             <NotificationGroup
               markingId={markingId}
               notifications={unread}
               onMarkRead={handleMarkRead}
+              onMarkUnread={handleMarkUnread}
               onSnooze={handleSnooze}
+              onUnsnooze={handleUnsnooze}
               snoozingId={snoozingId}
-              title={t('notifications.unreadCount', { count: unreadLabel })}
+              title={t('notifications.unreadCount', { count: laneUnread[lane] })}
               workspace={workspace}
             />
           ) : (
@@ -447,9 +695,11 @@ export const NotificationInbox = observer(function NotificationInbox() {
                   markingId={markingId}
                   notifications={unread}
                   onMarkRead={handleMarkRead}
+                  onMarkUnread={handleMarkUnread}
                   onSnooze={handleSnooze}
+                  onUnsnooze={handleUnsnooze}
                   snoozingId={snoozingId}
-                  title={t('notifications.unreadCount', { count: unreadLabel })}
+                  title={t('notifications.unreadCount', { count: laneUnread[lane] })}
                   workspace={workspace}
                 />
               )}
@@ -458,7 +708,9 @@ export const NotificationInbox = observer(function NotificationInbox() {
                   markingId={markingId}
                   notifications={read}
                   onMarkRead={handleMarkRead}
+                  onMarkUnread={handleMarkUnread}
                   onSnooze={handleSnooze}
+                  onUnsnooze={handleUnsnooze}
                   snoozingId={snoozingId}
                   title={hasUnread ? t('notifications.read') : t('notifications.allNotifications')}
                   workspace={workspace}
@@ -466,6 +718,19 @@ export const NotificationInbox = observer(function NotificationInbox() {
               )}
             </>
           ))}
+
+        {!loading && tab !== 'snoozed' && notificationStore.hasMore && (
+          <div className="flex justify-center px-4 py-4">
+            <Button
+              disabled={loadingMore}
+              onClick={() => void handleLoadMore()}
+              size="sm"
+              variant="outline"
+            >
+              {loadingMore ? t('common.loading') : t('notifications.loadMore')}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -476,7 +741,9 @@ function NotificationGroup({
   markingId,
   notifications,
   onMarkRead,
+  onMarkUnread,
   onSnooze,
+  onUnsnooze,
   snoozingId,
   title,
   workspace,
@@ -484,7 +751,9 @@ function NotificationGroup({
   markingId: string | null;
   notifications: DBNotification[];
   onMarkRead: (id: string) => void;
+  onMarkUnread: (id: string) => void;
   onSnooze: (id: string, until: Date) => void;
+  onUnsnooze: (id: string) => void;
   snoozingId: string | null;
   title: string;
   workspace: string;
@@ -503,7 +772,9 @@ function NotificationGroup({
           markingId={markingId}
           notification={notification}
           onMarkRead={onMarkRead}
+          onMarkUnread={onMarkUnread}
           onSnooze={onSnooze}
+          onUnsnooze={onUnsnooze}
           snoozingId={snoozingId}
           workspace={workspace}
         />

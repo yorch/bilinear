@@ -1,0 +1,161 @@
+# Final-state screenshot index
+
+Production build (`next start`), DB bilinear_final, captured 2026-11-24. Fields: slug | viewport | theme | route | what to look for | console errors | page errors | mobile h-overflow | ok
+
+- `login-desktop-light.png` | login | desktop | light | /login | login form, brand panel | console=0 | pageerrors=0 | overflow=n/a | ok
+- `onboarding-desktop-light.png` | onboarding | desktop | light | /onboarding | Step 1 of 3 create workspace (throwaway user newbie@example.com) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-desktop-light.png` | team-eng | desktop | light | /demo/team/ENG | ENG list grouped by status, 41 issues | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-board-desktop-light.png` | team-eng-board | desktop | light | /demo/team/ENG | ENG board columns | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-filter-open-desktop-light.png` | team-eng-filter-open | desktop | light | /demo/team/ENG | filter builder, Project value picker open | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-filter-cycle-desktop-light.png` | team-eng-filter-cycle | desktop | light | /demo/team/ENG | filter builder, Cycle value picker open | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-display-desktop-light.png` | team-eng-display | desktop | light | /demo/team/ENG | Group-by select open (mobile: folded Display sheet) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-group-project-desktop-light.png` | team-eng-group-project | desktop | light | /demo/team/ENG | list grouped by project | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-bulk-desktop-light.png` | team-eng-bulk | desktop | light | /demo/team/ENG | 3 rows selected, bulk bar Cycle/Project/Due date/Delete | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-backlog-desktop-light.png` | team-backlog | desktop | light | /demo/team/ENG/backlog | backlog list | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-triage-desktop-light.png` | team-triage | desktop | light | /demo/team/ENG/triage | ENG-47 selected, Possible duplicates (ENG-48), key hints footer | console=0 | pageerrors=0 | overflow=n/a | ok
+- `triage-snooze-open-desktop-light.png` | triage-snooze-open | desktop | light | /demo/team/ENG/triage | Snooze popover open on triage issue | console=0 | pageerrors=0 | overflow=n/a | ok
+- `my-issues-desktop-light.png` | my-issues | desktop | light | /demo/my-issues | Assigned tab | console=0 | pageerrors=0 | overflow=n/a | ok
+- `my-issues-subscribed-desktop-light.png` | my-issues-subscribed | desktop | light | /demo/my-issues | Subscribed tab | console=0 | pageerrors=0 | overflow=n/a | ok
+- `issue-detail-desktop-light.png` | issue-detail | desktop | light | /demo/issue/bac465cc-1318-554e-ad05-c272e42e8198 | issue page ENG-20 (mobile: chip-row layout) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `issue-actions-menu-desktop-light.png` | issue-actions-menu | desktop | light | /demo/issue/bac465cc-1318-554e-ad05-c272e42e8198 | more-actions menu open | console=0 | pageerrors=0 | overflow=n/a | ok
+- `issue-reminder-menu-desktop-light.png` | issue-reminder-menu | desktop | light | /demo/issue/bac465cc-1318-554e-ad05-c272e42e8198 | Remind me... submenu | console=0 | pageerrors=0 | overflow=n/a | ok
+- `issue-reminder-chip-desktop-light.png` | issue-reminder-chip | desktop | light | /demo/issue/894f55e6-8e65-4a34-9b9f-4da078bb34d0 | reminder chip on issue with reminder set (issue 894f55e6, set via API) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `issue-parent-desktop-light.png` | issue-parent | desktop | light | /demo/issue/bac465cc-1318-554e-ad05-c272e42e8198 | Set parent... picker | console=0 | pageerrors=0 | overflow=n/a | ok
+- `issue-cf-currency-desktop-light.png` | issue-cf-currency | desktop | light | /demo/issue/4a74462f-90c9-4ca3-913a-bee94049efd1 | Budget custom field formatted $12,500 (ENG-1) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `cycles-list-desktop-light.png` | cycles-list | desktop | light | /demo/team/ENG/cycles | cycles list | console=0 | pageerrors=0 | overflow=n/a | ok
+- `cycles-archived-desktop-light.png` | cycles-archived | desktop | light | /demo/team/ENG/cycles | archived tab: Cycle 0 Bootstrap + Restore | console=0 | pageerrors=0 | overflow=n/a | ok
+- `cycle-active-desktop-light.png` | cycle-active | desktop | light | /demo/team/ENG/cycles/26966aa7-cfb7-597a-a903-297948526d5d | Cycle 2 burndown with ideal line | console=0 | pageerrors=0 | overflow=n/a | ok
+- `project-detail-desktop-light.png` | project-detail | desktop | light | /demo/project/public-api-v2 | Public API v2 burn-up chart + forecast + Documents section (scroll) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `projects-archived-desktop-light.png` | projects-archived | desktop | light | /demo/projects | Legacy Billing Migration archived | console=0 | pageerrors=0 | overflow=n/a | ok
+- `initiatives-desktop-light.png` | initiatives | desktop | light | /demo/initiatives | initiative list with posted + derived health badges | console=0 | pageerrors=0 | overflow=n/a | ok
+- `initiative-detail-desktop-light.png` | initiative-detail | desktop | light | /demo/initiatives/cbad0474-4af5-52b4-a85a-9a5344ddae74 | editable fields, health, updates | console=0 | pageerrors=0 | overflow=n/a | ok
+- `initiatives-archived-desktop-light.png` | initiatives-archived | desktop | light | /demo/initiatives | 2025 Platform Cleanup archived | console=0 | pageerrors=0 | overflow=n/a | ok
+- `docs-list-desktop-light.png` | docs-list | desktop | light | /demo/docs | docs list | console=0 | pageerrors=0 | overflow=n/a | ok
+- `docs-archived-desktop-light.png` | docs-archived | desktop | light | /demo/docs | Old Q2 planning notes archived | console=0 | pageerrors=0 | overflow=n/a | ok
+- `doc-subpage-desktop-light.png` | doc-subpage | desktop | light | /demo/docs/d36a9d8e-03f8-5f6c-ae03-705c2ca66d93 | nested doc breadcrumb 3 levels | console=0 | pageerrors=0 | overflow=n/a | ok
+- `inbox-desktop-light.png` | inbox | desktop | light | /demo/inbox | Priority lane (after reload; see DEFECTS) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `inbox-other-desktop-light.png` | inbox-other | desktop | light | /demo/inbox | Other lane | console=0 | pageerrors=0 | overflow=n/a | ok
+- `inbox-snoozed-desktop-light.png` | inbox-snoozed | desktop | light | /demo/inbox | Snoozed tab (2 snoozed) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `analytics-desktop-light.png` | analytics | desktop | light | /demo/analytics | workspace Insights explorer | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-analytics-desktop-light.png` | team-analytics | desktop | light | /demo/team/ENG/analytics | ENG analytics | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-desktop-light.png` | settings | desktop | light | /demo/settings | Profile card top, URL key field | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-security-desktop-light.png` | settings-security | desktop | light | /demo/settings/security | security settings | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-integrations-desktop-light.png` | settings-integrations | desktop | light | /demo/settings/integrations | Slack/GitHub Not configured rows | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-webhooks-desktop-light.png` | settings-webhooks | desktop | light | /demo/settings/webhooks | webhook list after Send test event: failure result + deliveries | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-audit-log-desktop-light.png` | settings-audit-log | desktop | light | /demo/settings/audit-log | audit log, date filter, Export CSV | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-import-desktop-light.png` | settings-import | desktop | light | /demo/settings/import | GitHub importer section | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-custom-fields-desktop-light.png` | settings-custom-fields | desktop | light | /demo/settings | Add field > Number > number format picker open | console=0 | pageerrors=0 | overflow=n/a | ok
+- `admin-users-desktop-light.png` | admin-users | desktop | light | /admin/users | Showing N of M + Load more (110 filler users added) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `admin-tenants-desktop-light.png` | admin-tenants | desktop | light | /admin/tenants | Showing N of M + Load more (110 filler orgs added) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `command-palette-desktop-light.png` | command-palette | desktop | light | /demo/team/ENG | cmdk with Go to <team> entries | console=0 | pageerrors=0 | overflow=n/a | ok
+- `shortcut-help-desktop-light.png` | shortcut-help | desktop | light | /demo/team/ENG | ? shortcuts modal | console=0 | pageerrors=0 | overflow=n/a | ok
+- `public-roadmap-desktop-light.png` | public-roadmap | desktop | light | /demo/settings/roadmap | settings/roadmap (public page /roadmap/<slug> not enabled) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `login-desktop-dark.png` | login | desktop | dark | /login | login form, brand panel | console=0 | pageerrors=0 | overflow=n/a | ok
+- `onboarding-desktop-dark.png` | onboarding | desktop | dark | /onboarding | Step 1 of 3 create workspace (throwaway user newbie@example.com) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-desktop-dark.png` | team-eng | desktop | dark | /demo/team/ENG | ENG list grouped by status, 41 issues | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-board-desktop-dark.png` | team-eng-board | desktop | dark | /demo/team/ENG | ENG board columns | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-filter-open-desktop-dark.png` | team-eng-filter-open | desktop | dark | /demo/team/ENG | filter builder, Project value picker open | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-filter-cycle-desktop-dark.png` | team-eng-filter-cycle | desktop | dark | /demo/team/ENG | filter builder, Cycle value picker open | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-display-desktop-dark.png` | team-eng-display | desktop | dark | /demo/team/ENG | Group-by select open (mobile: folded Display sheet) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-group-project-desktop-dark.png` | team-eng-group-project | desktop | dark | /demo/team/ENG | list grouped by project | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-eng-bulk-desktop-dark.png` | team-eng-bulk | desktop | dark | /demo/team/ENG | 3 rows selected, bulk bar Cycle/Project/Due date/Delete | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-backlog-desktop-dark.png` | team-backlog | desktop | dark | /demo/team/ENG/backlog | backlog list | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-triage-desktop-dark.png` | team-triage | desktop | dark | /demo/team/ENG/triage | ENG-47 selected, Possible duplicates (ENG-48), key hints footer | console=0 | pageerrors=0 | overflow=n/a | ok
+- `triage-snooze-open-desktop-dark.png` | triage-snooze-open | desktop | dark | /demo/team/ENG/triage | Snooze popover open on triage issue | console=0 | pageerrors=0 | overflow=n/a | ok
+- `my-issues-desktop-dark.png` | my-issues | desktop | dark | /demo/my-issues | Assigned tab | console=0 | pageerrors=0 | overflow=n/a | ok
+- `my-issues-subscribed-desktop-dark.png` | my-issues-subscribed | desktop | dark | /demo/my-issues | Subscribed tab | console=0 | pageerrors=0 | overflow=n/a | ok
+- `issue-detail-desktop-dark.png` | issue-detail | desktop | dark | /demo/issue/bac465cc-1318-554e-ad05-c272e42e8198 | issue page ENG-20 (mobile: chip-row layout) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `issue-actions-menu-desktop-dark.png` | issue-actions-menu | desktop | dark | /demo/issue/bac465cc-1318-554e-ad05-c272e42e8198 | more-actions menu open | console=0 | pageerrors=0 | overflow=n/a | ok
+- `issue-reminder-menu-desktop-dark.png` | issue-reminder-menu | desktop | dark | /demo/issue/bac465cc-1318-554e-ad05-c272e42e8198 | Remind me... submenu | console=0 | pageerrors=0 | overflow=n/a | ok
+- `issue-reminder-chip-desktop-dark.png` | issue-reminder-chip | desktop | dark | /demo/issue/894f55e6-8e65-4a34-9b9f-4da078bb34d0 | reminder chip on issue with reminder set (issue 894f55e6, set via API) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `issue-parent-desktop-dark.png` | issue-parent | desktop | dark | /demo/issue/bac465cc-1318-554e-ad05-c272e42e8198 | Set parent... picker | console=0 | pageerrors=0 | overflow=n/a | ok
+- `issue-cf-currency-desktop-dark.png` | issue-cf-currency | desktop | dark | /demo/issue/4a74462f-90c9-4ca3-913a-bee94049efd1 | Budget custom field formatted $12,500 (ENG-1) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `cycles-list-desktop-dark.png` | cycles-list | desktop | dark | /demo/team/ENG/cycles | cycles list | console=0 | pageerrors=0 | overflow=n/a | ok
+- `cycles-archived-desktop-dark.png` | cycles-archived | desktop | dark | /demo/team/ENG/cycles | archived tab: Cycle 0 Bootstrap + Restore | console=0 | pageerrors=0 | overflow=n/a | ok
+- `cycle-active-desktop-dark.png` | cycle-active | desktop | dark | /demo/team/ENG/cycles/26966aa7-cfb7-597a-a903-297948526d5d | Cycle 2 burndown with ideal line | console=0 | pageerrors=0 | overflow=n/a | ok
+- `project-detail-desktop-dark.png` | project-detail | desktop | dark | /demo/project/public-api-v2 | Public API v2 burn-up chart + forecast + Documents section (scroll) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `projects-archived-desktop-dark.png` | projects-archived | desktop | dark | /demo/projects | Legacy Billing Migration archived | console=0 | pageerrors=0 | overflow=n/a | ok
+- `initiatives-desktop-dark.png` | initiatives | desktop | dark | /demo/initiatives | initiative list with posted + derived health badges | console=0 | pageerrors=0 | overflow=n/a | ok
+- `initiative-detail-desktop-dark.png` | initiative-detail | desktop | dark | /demo/initiatives/cbad0474-4af5-52b4-a85a-9a5344ddae74 | editable fields, health, updates | console=0 | pageerrors=0 | overflow=n/a | ok
+- `initiatives-archived-desktop-dark.png` | initiatives-archived | desktop | dark | /demo/initiatives | 2025 Platform Cleanup archived | console=0 | pageerrors=0 | overflow=n/a | ok
+- `docs-list-desktop-dark.png` | docs-list | desktop | dark | /demo/docs | docs list | console=0 | pageerrors=0 | overflow=n/a | ok
+- `docs-archived-desktop-dark.png` | docs-archived | desktop | dark | /demo/docs | Old Q2 planning notes archived | console=0 | pageerrors=0 | overflow=n/a | ok
+- `doc-subpage-desktop-dark.png` | doc-subpage | desktop | dark | /demo/docs/d36a9d8e-03f8-5f6c-ae03-705c2ca66d93 | nested doc breadcrumb 3 levels | console=0 | pageerrors=0 | overflow=n/a | ok
+- `inbox-desktop-dark.png` | inbox | desktop | dark | /demo/inbox | Priority lane (after reload; see DEFECTS) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `inbox-other-desktop-dark.png` | inbox-other | desktop | dark | /demo/inbox | Other lane | console=0 | pageerrors=0 | overflow=n/a | ok
+- `inbox-snoozed-desktop-dark.png` | inbox-snoozed | desktop | dark | /demo/inbox | Snoozed tab (2 snoozed) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `analytics-desktop-dark.png` | analytics | desktop | dark | /demo/analytics | workspace Insights explorer | console=0 | pageerrors=0 | overflow=n/a | ok
+- `team-analytics-desktop-dark.png` | team-analytics | desktop | dark | /demo/team/ENG/analytics | ENG analytics | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-desktop-dark.png` | settings | desktop | dark | /demo/settings | Profile card top, URL key field | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-security-desktop-dark.png` | settings-security | desktop | dark | /demo/settings/security | security settings | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-integrations-desktop-dark.png` | settings-integrations | desktop | dark | /demo/settings/integrations | Slack/GitHub Not configured rows | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-webhooks-desktop-dark.png` | settings-webhooks | desktop | dark | /demo/settings/webhooks | webhook list after Send test event: failure result + deliveries | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-audit-log-desktop-dark.png` | settings-audit-log | desktop | dark | /demo/settings/audit-log | audit log, date filter, Export CSV | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-import-desktop-dark.png` | settings-import | desktop | dark | /demo/settings/import | GitHub importer section | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-custom-fields-desktop-dark.png` | settings-custom-fields | desktop | dark | /demo/settings | Add field > Number > number format picker open | console=0 | pageerrors=0 | overflow=n/a | ok
+- `admin-users-desktop-dark.png` | admin-users | desktop | dark | /admin/users | Showing N of M + Load more (110 filler users added) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `admin-tenants-desktop-dark.png` | admin-tenants | desktop | dark | /admin/tenants | Showing N of M + Load more (110 filler orgs added) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `command-palette-desktop-dark.png` | command-palette | desktop | dark | /demo/team/ENG | cmdk with Go to <team> entries | console=0 | pageerrors=0 | overflow=n/a | ok
+- `shortcut-help-desktop-dark.png` | shortcut-help | desktop | dark | /demo/team/ENG | ? shortcuts modal | console=0 | pageerrors=0 | overflow=n/a | ok
+- `public-roadmap-desktop-dark.png` | public-roadmap | desktop | dark | /demo/settings/roadmap | settings/roadmap (public page /roadmap/<slug> not enabled) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `login-mobile-light.png` | login | mobile | light | /login | login form, brand panel | console=0 | pageerrors=0 | overflow=false | ok
+- `onboarding-mobile-light.png` | onboarding | mobile | light | /onboarding | Step 1 of 3 create workspace (throwaway user newbie@example.com) | console=0 | pageerrors=0 | overflow=false | ok
+- `team-eng-mobile-light.png` | team-eng | mobile | light | /demo/team/ENG | ENG list grouped by status, 41 issues | console=0 | pageerrors=0 | overflow=false | ok
+- `team-eng-board-mobile-light.png` | team-eng-board | mobile | light | /demo/team/ENG | ENG board columns | console=0 | pageerrors=0 | overflow=false | ok
+- `team-eng-filter-open-mobile-light.png` | team-eng-filter-open | mobile | light | /demo/team/ENG | filter builder, Project value picker open | console=0 | pageerrors=0 | overflow=false | ok
+- `team-eng-filter-cycle-mobile-light.png` | team-eng-filter-cycle | mobile | light | /demo/team/ENG | filter builder, Cycle value picker open | console=0 | pageerrors=0 | overflow=false | ok
+- `team-eng-display-mobile-light.png` | team-eng-display | mobile | light | /demo/team/ENG | Group-by select open (mobile: folded Display sheet) | console=0 | pageerrors=0 | overflow=false | ok
+- `team-eng-group-project-mobile-light.png` | team-eng-group-project | mobile | light | /demo/team/ENG | list grouped by project | console=0 | pageerrors=0 | overflow=false | ok
+- `team-eng-bulk-mobile-light.png` | team-eng-bulk | mobile | light | /demo/team/ENG | 3 rows selected, bulk bar Cycle/Project/Due date/Delete | console=0 | pageerrors=0 | overflow=false | ok
+- `team-backlog-mobile-light.png` | team-backlog | mobile | light | /demo/team/ENG/backlog | backlog list | console=0 | pageerrors=0 | overflow=false | ok
+- `team-triage-mobile-light.png` | team-triage | mobile | light | /demo/team/ENG/triage | ENG-47 selected, Possible duplicates (ENG-48), key hints footer | console=0 | pageerrors=0 | overflow=false | ok
+- `triage-snooze-open-mobile-light.png` | triage-snooze-open | mobile | light | /demo/team/ENG/triage | Snooze popover open on triage issue | console=0 | pageerrors=0 | overflow=false | ok
+- `my-issues-mobile-light.png` | my-issues | mobile | light | /demo/my-issues | Assigned tab | console=0 | pageerrors=0 | overflow=false | ok
+- `my-issues-subscribed-mobile-light.png` | my-issues-subscribed | mobile | light | /demo/my-issues | Subscribed tab | console=0 | pageerrors=0 | overflow=false | ok
+- `issue-detail-mobile-light.png` | issue-detail | mobile | light | /demo/issue/bac465cc-1318-554e-ad05-c272e42e8198 | issue page ENG-20 (mobile: chip-row layout) | console=0 | pageerrors=0 | overflow=false | ok
+- `issue-actions-menu-mobile-light.png` | issue-actions-menu | mobile | light | /demo/issue/bac465cc-1318-554e-ad05-c272e42e8198 | more-actions menu open | console=0 | pageerrors=0 | overflow=false | ok
+- `issue-reminder-menu-mobile-light.png` | issue-reminder-menu | mobile | light | /demo/issue/bac465cc-1318-554e-ad05-c272e42e8198 | Remind me... submenu | console=0 | pageerrors=0 | overflow=false | ok
+- `issue-reminder-chip-mobile-light.png` | issue-reminder-chip | mobile | light | /demo/issue/894f55e6-8e65-4a34-9b9f-4da078bb34d0 | reminder chip on issue with reminder set (issue 894f55e6, set via API) | console=0 | pageerrors=0 | overflow=false | ok
+- `issue-parent-mobile-light.png` | issue-parent | mobile | light | /demo/issue/bac465cc-1318-554e-ad05-c272e42e8198 | Set parent... picker | console=0 | pageerrors=0 | overflow=false | ok
+- `issue-cf-currency-mobile-light.png` | issue-cf-currency | mobile | light | /demo/issue/4a74462f-90c9-4ca3-913a-bee94049efd1 | Budget custom field formatted $12,500 (ENG-1) | console=0 | pageerrors=0 | overflow=false | ok
+- `cycles-list-mobile-light.png` | cycles-list | mobile | light | /demo/team/ENG/cycles | cycles list | console=0 | pageerrors=0 | overflow=false | ok
+- `cycles-archived-mobile-light.png` | cycles-archived | mobile | light | /demo/team/ENG/cycles | archived tab: Cycle 0 Bootstrap + Restore | console=0 | pageerrors=0 | overflow=false | ok
+- `cycle-active-mobile-light.png` | cycle-active | mobile | light | /demo/team/ENG/cycles/26966aa7-cfb7-597a-a903-297948526d5d | Cycle 2 burndown with ideal line | console=0 | pageerrors=0 | overflow=false | ok
+- `project-detail-mobile-light.png` | project-detail | mobile | light | /demo/project/public-api-v2 | Public API v2 burn-up chart + forecast + Documents section (scroll) | console=0 | pageerrors=0 | overflow=false | ok
+- `projects-archived-mobile-light.png` | projects-archived | mobile | light | /demo/projects | Legacy Billing Migration archived | console=0 | pageerrors=0 | overflow=false | ok
+- `initiatives-mobile-light.png` | initiatives | mobile | light | /demo/initiatives | initiative list with posted + derived health badges | console=0 | pageerrors=0 | overflow=false | ok
+- `initiative-detail-mobile-light.png` | initiative-detail | mobile | light | /demo/initiatives/cbad0474-4af5-52b4-a85a-9a5344ddae74 | editable fields, health, updates | console=0 | pageerrors=0 | overflow=false | ok
+- `initiatives-archived-mobile-light.png` | initiatives-archived | mobile | light | /demo/initiatives | 2025 Platform Cleanup archived | console=0 | pageerrors=0 | overflow=false | ok
+- `docs-list-mobile-light.png` | docs-list | mobile | light | /demo/docs | docs list | console=0 | pageerrors=0 | overflow=false | ok
+- `docs-archived-mobile-light.png` | docs-archived | mobile | light | /demo/docs | Old Q2 planning notes archived | console=0 | pageerrors=0 | overflow=false | ok
+- `doc-subpage-mobile-light.png` | doc-subpage | mobile | light | /demo/docs/d36a9d8e-03f8-5f6c-ae03-705c2ca66d93 | nested doc breadcrumb 3 levels | console=0 | pageerrors=0 | overflow=false | ok
+- `inbox-mobile-light.png` | inbox | mobile | light | /demo/inbox | Priority lane (after reload; see DEFECTS) | console=0 | pageerrors=0 | overflow=false | ok
+- `inbox-other-mobile-light.png` | inbox-other | mobile | light | /demo/inbox | Other lane | console=0 | pageerrors=0 | overflow=false | ok
+- `inbox-snoozed-mobile-light.png` | inbox-snoozed | mobile | light | /demo/inbox | Snoozed tab (2 snoozed) | console=0 | pageerrors=0 | overflow=false | ok
+- `analytics-mobile-light.png` | analytics | mobile | light | /demo/analytics | workspace Insights explorer | console=0 | pageerrors=0 | overflow=false | ok
+- `team-analytics-mobile-light.png` | team-analytics | mobile | light | /demo/team/ENG/analytics | ENG analytics | console=0 | pageerrors=0 | overflow=false | ok
+- `settings-mobile-light.png` | settings | mobile | light | /demo/settings | Profile card top, URL key field | console=0 | pageerrors=0 | overflow=false | ok
+- `settings-security-mobile-light.png` | settings-security | mobile | light | /demo/settings/security | security settings | console=0 | pageerrors=0 | overflow=false | ok
+- `settings-integrations-mobile-light.png` | settings-integrations | mobile | light | /demo/settings/integrations | Slack/GitHub Not configured rows | console=0 | pageerrors=0 | overflow=false | ok
+- `settings-webhooks-mobile-light.png` | settings-webhooks | mobile | light | /demo/settings/webhooks | webhook list after Send test event: failure result + deliveries | console=0 | pageerrors=0 | overflow=false | ok
+- `settings-audit-log-mobile-light.png` | settings-audit-log | mobile | light | /demo/settings/audit-log | audit log, date filter, Export CSV | console=0 | pageerrors=0 | overflow=false | ok
+- `settings-import-mobile-light.png` | settings-import | mobile | light | /demo/settings/import | GitHub importer section | console=0 | pageerrors=0 | overflow=false | ok
+- `settings-custom-fields-mobile-light.png` | settings-custom-fields | mobile | light | /demo/settings | Add field > Number > number format picker open | console=0 | pageerrors=0 | overflow=false | ok
+- `admin-users-mobile-light.png` | admin-users | mobile | light | /admin/users | Showing N of M + Load more (110 filler users added) | console=0 | pageerrors=0 | overflow=false | ok
+- `admin-tenants-mobile-light.png` | admin-tenants | mobile | light | /admin/tenants | Showing N of M + Load more (110 filler orgs added) | console=0 | pageerrors=0 | overflow=false | ok
+- `command-palette-mobile-light.png` | command-palette | mobile | light | /demo/team/ENG | cmdk with Go to <team> entries | console=0 | pageerrors=0 | overflow=false | ok
+- `shortcut-help-mobile-light.png` | shortcut-help | mobile | light | /demo/team/ENG | ? shortcuts modal | console=0 | pageerrors=0 | overflow=false | ok
+- `public-roadmap-mobile-light.png` | public-roadmap | mobile | light | /demo/settings/roadmap | settings/roadmap (public page /roadmap/<slug> not enabled) | console=0 | pageerrors=0 | overflow=false | ok
+- `settings-webhooks-edit-desktop-light.png` | settings-webhooks-edit | desktop | light | /demo/settings/webhooks | Edit webhook dialog | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-webhooks-edit-desktop-dark.png` | settings-webhooks-edit | desktop | dark | /demo/settings/webhooks | Edit webhook dialog | console=0 | pageerrors=0 | overflow=n/a | ok
+- `settings-webhooks-edit-mobile-light.png` | settings-webhooks-edit | mobile | light | /demo/settings/webhooks | Edit webhook dialog | console=0 | pageerrors=0 | overflow=false | ok
+- `analytics-insights-desktop-light.png` | analytics-insights | desktop | light | /demo/analytics | Insights explorer scrolled: chart + table (note duplicate Issues column) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `project-documents-desktop-light.png` | project-documents | desktop | light | /demo/project/public-api-v2 | project page scrolled to Documents section + issues list | console=0 | pageerrors=0 | overflow=n/a | ok
+- `shortcut-help-triage-desktop-light.png` | shortcut-help-triage | desktop | light | /demo/team/ENG | shortcuts modal scrolled to Triage/View section | console=0 | pageerrors=0 | overflow=n/a | ok
+- `analytics-insights-desktop-dark.png` | analytics-insights | desktop | dark | /demo/analytics | Insights explorer scrolled: chart + table (note duplicate Issues column) | console=0 | pageerrors=0 | overflow=n/a | ok
+- `project-documents-desktop-dark.png` | project-documents | desktop | dark | /demo/project/public-api-v2 | project page scrolled to Documents section + issues list | console=0 | pageerrors=0 | overflow=n/a | ok
+- `shortcut-help-triage-desktop-dark.png` | shortcut-help-triage | desktop | dark | /demo/team/ENG | shortcuts modal scrolled to Triage/View section | console=0 | pageerrors=0 | overflow=n/a | ok
+- `analytics-insights-mobile-light.png` | analytics-insights | mobile | light | /demo/analytics | Insights explorer scrolled: chart + table (note duplicate Issues column) | console=0 | pageerrors=0 | overflow=false | ok
+- `project-documents-mobile-light.png` | project-documents | mobile | light | /demo/project/public-api-v2 | project page scrolled to Documents section + issues list | console=0 | pageerrors=0 | overflow=false | ok
+- `shortcut-help-triage-mobile-light.png` | shortcut-help-triage | mobile | light | /demo/team/ENG | shortcuts modal scrolled to Triage/View section | console=0 | pageerrors=0 | overflow=false | ok
+settings-custom-fields mobile earlier failed-attempt run logged React error #418 (hydration) on /demo/settings mobile; not reproduced in final capture

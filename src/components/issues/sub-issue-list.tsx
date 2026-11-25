@@ -1,12 +1,15 @@
 'use client';
 
+import { Link2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useMemo, useRef, useState } from 'react';
 import type { CreateIssueInput } from '@/components/issues/create-issue-modal';
+import { IssuePicker } from '@/components/issues/issue-picker';
 import { PriorityIcon } from '@/components/properties/priority-icon';
 import { SectionAddButton, SectionHeader } from '@/components/shared/section-header';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { useIssueCreate } from '@/hooks/use-issue-create';
+import { useIssueUpdate } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
@@ -63,6 +66,29 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
     teamId ? workflowStateStore.findByTeamId(teamId) : [],
   );
 
+  const updateIssue = useIssueUpdate();
+  // "Add existing" must not offer: the parent itself, any of its ANCESTORS
+  // (parenting an ancestor under its own descendant closes a loop) or its
+  // current direct children (already sub-issues). Deeper descendants are
+  // valid — re-parenting a grandchild up to this issue is a legitimate move.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the reactive trigger
+  const unlinkable = useMemo(() => {
+    const ids = new Set<string>([parentIssueId]);
+    const seen = new Set<string>();
+    let cursor = issueStore.findById(parentIssueId)?.parentId ?? null;
+    while (cursor && !seen.has(cursor)) {
+      seen.add(cursor);
+      ids.add(cursor);
+      cursor = issueStore.findById(cursor)?.parentId ?? null;
+    }
+    for (const issue of issueStore.pool.values()) {
+      if (issue.parentId === parentIssueId) {
+        ids.add(issue.id);
+      }
+    }
+    return ids;
+  }, [parentIssueId, issueStore.pool.size]);
+
   // pool.size is the MobX reactive dependency per repo convention.
   // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size values are the intentional reactive triggers
   const { subIssues, grouped, completedCount } = useMemo(() => {
@@ -109,10 +135,27 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
       <SectionHeader
         action={
           !showCreateForm && (
-            <SectionAddButton
-              label={t('issueDetail.subIssues.addSubIssue')}
-              onClick={() => setShowCreateForm(true)}
-            />
+            <>
+              <IssuePicker
+                excludeId={parentIssueId}
+                excludeIds={unlinkable}
+                onSelect={picked => updateIssue(picked.id, { parentId: parentIssueId })}
+                // Icon-only below sm: with the count, progress and both actions
+                // the header is wider than a phone and wraps the title.
+                triggerChildren={
+                  <span className="flex items-center gap-1 text-xs">
+                    <Link2 className="h-3.5 w-3.5" />
+                    <span className="max-sm:sr-only">{t('issueDetail.subIssues.addExisting')}</span>
+                  </span>
+                }
+                triggerClassName="rounded px-2 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground-secondary"
+                triggerTitle={t('issueDetail.subIssues.addExisting')}
+              />
+              <SectionAddButton
+                label={t('issueDetail.subIssues.addSubIssue')}
+                onClick={() => setShowCreateForm(true)}
+              />
+            </>
           )
         }
         collapsed={collapsed}
@@ -124,7 +167,7 @@ export const SubIssueList = observer(function SubIssueList({ parentIssueId }: Su
                 {completedCount}/{subIssues.length}
               </span>
               <ProgressBar
-                className="h-1 w-20"
+                className="h-1 w-20 max-sm:hidden"
                 fillClassName="bg-success duration-300"
                 value={completionPct}
               />

@@ -1,9 +1,22 @@
 import { GraphQLError } from 'graphql';
 import { logger } from '../../lib/logger';
-import { requireAuth, requireTeamMember } from '../../middleware/auth';
+import {
+  getGuestTeamIds,
+  requireAuth,
+  requireIssueAccessNotGuestOrOwn,
+  requireTeamMemberNotGuest,
+} from '../../middleware/auth';
+import { checkFixedWindow } from '../../middleware/rate-limit';
+import {
+  DuplicateSourceNotFoundError,
+  DuplicateSuggestionService,
+} from '../../services/duplicate-suggestion.service';
 import type { IssueActivityCreateInput } from '../../services/issue-activity.service';
 import type { GraphQLContext } from '../context';
 import { mapServiceError } from '../types/errors';
+
+/** Duplicate-suggestion lookups allowed per user per minute (a held J/K ≈ 30/s is capped client-side). */
+export const DUPLICATE_SUGGESTION_RATE_LIMIT = 90;
 
 const TRIAGE_ERROR_MAP = {
   BAD_USER_INPUT: [
@@ -16,9 +29,30 @@ const TRIAGE_ERROR_MAP = {
     'TriageInvalidTargetStateError',
     'TriageInvalidAssigneeError',
     'TriageInvalidCycleError',
+    'TriageNotRevertableError',
   ],
   NOT_FOUND: ['TriageIssueNotFoundError'],
 } as const;
+
+/** `extensions.reason` for "someone else already decided this issue". */
+export const TRIAGE_STALE_REASON = 'TRIAGE_STALE';
+
+/**
+ * Like `mapServiceError`, but a lost race (the issue already left the queue, or
+ * can no longer be reverted) keeps `BAD_USER_INPUT` and adds
+ * `extensions.reason = TRIAGE_STALE`. The client must tell "someone else
+ * handled this" (drop the row, do NOT roll back to the stale state) from every
+ * other BAD_USER_INPUT (the issue is still in the queue; roll back).
+ */
+function mapTriageError(err: unknown): never {
+  const name = (err as { name?: string }).name;
+  if (name === 'TriageNotInQueueError' || name === 'TriageNotRevertableError') {
+    throw new GraphQLError((err as Error).message, {
+      extensions: { code: 'BAD_USER_INPUT', reason: TRIAGE_STALE_REASON },
+    });
+  }
+  return mapServiceError(err, TRIAGE_ERROR_MAP);
+}
 
 /**
  * Compute the IssueActivity rows that should be written for a triage
@@ -108,7 +142,7 @@ export const triageResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       try {
         const updated = await ctx.services.triage.accept(issueId, input);
@@ -124,7 +158,7 @@ export const triageResolvers = {
         );
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapServiceError(err, TRIAGE_ERROR_MAP);
+        mapTriageError(err);
       }
     },
 
@@ -141,7 +175,7 @@ export const triageResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       try {
         const updated = await ctx.services.triage.decline(issueId);
@@ -155,7 +189,7 @@ export const triageResolvers = {
         );
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapServiceError(err, TRIAGE_ERROR_MAP);
+        mapTriageError(err);
       }
     },
 
@@ -172,7 +206,7 @@ export const triageResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       // The canonical issue must also exist within the user's org and on a
       // team they're a member of — otherwise a member of team A could link
@@ -184,7 +218,7 @@ export const triageResolvers = {
         });
       }
       if (canonical.teamId !== issue.teamId) {
-        await requireTeamMember(ctx.prisma, canonical.teamId, ctx.userId, ctx.orgId);
+        await requireTeamMemberNotGuest(ctx.prisma, canonical.teamId, ctx.userId, ctx.orgId);
       }
 
       try {
@@ -216,7 +250,47 @@ export const triageResolvers = {
         );
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapServiceError(err, TRIAGE_ERROR_MAP);
+        mapTriageError(err);
+      }
+    },
+
+    issueTriageRevert: async (
+      _parent: unknown,
+      { issueId }: { issueId: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+
+      const issue = await ctx.services.issue.findById(issueId);
+      if (!issue || issue.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Issue not found', {
+          extensions: { code: 'NOT_FOUND' },
+        });
+      }
+      await requireTeamMemberNotGuest(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+
+      try {
+        const { issue: updated, removedRelationIds } = await ctx.services.triage.revert(issueId);
+        await recordTriageSideEffects(ctx, issue, updated);
+        for (const relationId of removedRelationIds) {
+          await ctx.services.sync.createSyncAction(
+            ctx.orgId,
+            'D',
+            'IssueRelation',
+            relationId,
+            null,
+          );
+        }
+        const sync = await ctx.services.sync.createSyncAction(
+          ctx.orgId,
+          'U',
+          'Issue',
+          issueId,
+          updated,
+        );
+        return { issue: updated, lastSyncId: sync.id.toString(), success: true };
+      } catch (err) {
+        mapTriageError(err);
       }
     },
 
@@ -233,7 +307,7 @@ export const triageResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
 
       try {
         const updated = await ctx.services.triage.snooze(issueId, new Date(until), ctx.userId);
@@ -252,15 +326,65 @@ export const triageResolvers = {
           .catch(err => logger.error({ err }, 'webhook dispatch failed: issue.updated'));
         return { issue: updated, lastSyncId: sync.id.toString(), success: true };
       } catch (err) {
-        mapServiceError(err, TRIAGE_ERROR_MAP);
+        mapTriageError(err);
       }
     },
   },
 
   Query: {
+    triageDuplicateSuggestions: async (
+      _parent: unknown,
+      { first, issueId }: { first?: number | null; issueId: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      const issue = await ctx.services.issue.findById(issueId);
+      if (!issue || issue.organizationId !== ctx.orgId) {
+        throw new GraphQLError('Issue not found', { extensions: { code: 'NOT_FOUND' } });
+      }
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
+
+      // The query runs on every focus change in the triage queue, so it carries
+      // its own per-user budget on top of the global hourly limit.
+      const limited = await checkFixedWindow(
+        `rl:dup-suggest:${ctx.userId}`,
+        DUPLICATE_SUGGESTION_RATE_LIMIT,
+        60,
+      );
+      if (limited.exceeded) {
+        throw new GraphQLError('Too many duplicate-suggestion requests. Try again shortly.', {
+          extensions: { code: 'RATELIMITED' },
+        });
+      }
+
+      // Same visibility scope as `searchIssues`: member teams only, guests
+      // restricted to issues they created or are assigned to.
+      const memberships = await ctx.prisma.teamMembership.findMany({
+        select: { team: { select: { organizationId: true } }, teamId: true },
+        where: { team: { organizationId: ctx.orgId }, userId: ctx.userId },
+      });
+      const memberTeamIds = memberships
+        .filter(m => m.team.organizationId === ctx.orgId)
+        .map(m => m.teamId);
+      const guestTeamIds = await getGuestTeamIds(ctx.prisma, ctx.userId, ctx.orgId);
+
+      try {
+        return await new DuplicateSuggestionService(ctx.prisma).suggest(
+          ctx.orgId,
+          issueId,
+          { guestTeamIds, memberTeamIds, userId: ctx.userId },
+          first ?? undefined,
+        );
+      } catch (err) {
+        if (err instanceof DuplicateSourceNotFoundError) {
+          throw new GraphQLError('Issue not found', { extensions: { code: 'NOT_FOUND' } });
+        }
+        throw err;
+      }
+    },
     triageQueue: async (_parent: unknown, { teamId }: { teamId: string }, ctx: GraphQLContext) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, teamId, ctx.userId, ctx.orgId);
 
       const team = await ctx.services.team.findById(teamId);
       if (!team || team.organizationId !== ctx.orgId) {
@@ -278,7 +402,7 @@ export const triageResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
-      await requireTeamMember(ctx.prisma, teamId, ctx.userId, ctx.orgId);
+      await requireTeamMemberNotGuest(ctx.prisma, teamId, ctx.userId, ctx.orgId);
       return ctx.services.triage.getQueueCount(teamId);
     },
   },

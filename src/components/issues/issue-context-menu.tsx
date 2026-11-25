@@ -3,7 +3,7 @@
 import { ArrowLeft } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { LabelDot } from '@/components/properties/label-select';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
@@ -11,17 +11,56 @@ import { POPOVER_ITEM_CLASS } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useFavoriteToggle } from '@/hooks/use-favorite-toggle';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useIssueReminders } from '@/hooks/use-issue-reminders';
 import { useIssueSnooze } from '@/hooks/use-issue-snooze';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTranslations } from '@/hooks/use-translations';
 import { getBranchName, PRIORITY_OPTIONS } from '@/lib/issue-utils';
+import { toMarkdownLink } from '@/lib/markdown-link';
 import { isRovingFocusKey, nextRovingIndex } from '@/lib/roving-focus';
+import { toast } from '@/lib/toast';
+import { TransactionQueue } from '@/lib/transaction-queue';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
+import {
+  CyclePanel,
+  DueDatePanel,
+  EstimatePanel,
+  IssueSearchPanel,
+  ProjectPanel,
+  SubIssuePanel,
+  TeamPanel,
+  useParentExclusions,
+} from './issue-context-submenus';
+import { IssueReminderPanel } from './issue-reminder-panel';
 import { getSnoozePresets, isIssueSnoozed, snoozeUntilDate } from './snooze-presets';
 
-type SubMenu = 'root' | 'status' | 'priority' | 'assignee' | 'label' | 'snooze';
+type SubMenu =
+  | 'root'
+  | 'status'
+  | 'priority'
+  | 'assignee'
+  | 'label'
+  | 'remind'
+  | 'snooze'
+  | 'project'
+  | 'cycle'
+  | 'dueDate'
+  | 'estimate'
+  | 'parent'
+  | 'subIssue'
+  | 'duplicate'
+  | 'team';
+
+const CREATE_DUPLICATE_RELATION = `
+  mutation MarkDuplicate($input: IssueRelationCreateInput!) {
+    issueRelationCreate(input: $input) {
+      success
+      lastSyncId
+    }
+  }
+`;
 
 interface IssueContextMenuProps {
   currentAssigneeId?: string | null;
@@ -88,8 +127,14 @@ export const IssueContextMenu = observer(function IssueContextMenu({
   const [submenu, setSubmenu] = useState<SubMenu>('root');
   const { isFavorite, toggle: toggleFavorite } = useFavoriteToggle('Issue', issueId);
   const { snooze, unsnooze } = useIssueSnooze();
+  const { reminderFor } = useIssueReminders();
+  const hasReminder = reminderFor(issueId) !== null;
   const snoozed = isIssueSnoozed(issueStore.findById(issueId)?.snoozedUntilAt);
   const snoozePresets = getSnoozePresets();
+  const txQueue = useMemo(() => new TransactionQueue(), []);
+  const { cycleStore, teamStore } = useStore();
+  const issueRow = issueStore.findById(issueId);
+  const parentExclusions = useParentExclusions(issueId);
 
   useOutsideClick(menuRef, onClose, true, true);
 
@@ -144,6 +189,19 @@ export const IssueContextMenu = observer(function IssueContextMenu({
 
   const canQuickEdit = Boolean(onUpdate);
 
+  // Clipboard writes reject without permission or focus; say so rather than
+  // letting the menu close as if the copy had worked.
+  const copyText = (text: string, successMessage?: string) => {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        if (successMessage) {
+          toast.success(successMessage);
+        }
+      })
+      .catch(() => toast.error(t('issueDetail.properties.copyFailed')));
+  };
+
   const items: MenuEntry[] = [
     ...(onOpen
       ? ([
@@ -174,14 +232,21 @@ export const IssueContextMenu = observer(function IssueContextMenu({
     {
       label: t('issues.copyIssueUrl'),
       onClick: () => {
-        navigator.clipboard.writeText(issueUrl).catch(() => undefined);
+        copyText(issueUrl);
+        onClose();
+      },
+    },
+    {
+      label: t('issues.copyAsMarkdown'),
+      onClick: () => {
+        copyText(toMarkdownLink(`${identifier} ${title}`, issueUrl), t('issues.markdownCopied'));
         onClose();
       },
     },
     {
       label: t('issues.copyBranchName'),
       onClick: () => {
-        navigator.clipboard.writeText(getBranchName(identifier, title)).catch(() => undefined);
+        copyText(getBranchName(identifier, title));
         onClose();
       },
     },
@@ -204,6 +269,52 @@ export const IssueContextMenu = observer(function IssueContextMenu({
             label: t('commandPalette.submenu.setLabel'),
             onClick: () => setSubmenu('label'),
           },
+          {
+            label: t('commandPalette.submenu.setProject'),
+            onClick: () => setSubmenu('project'),
+          },
+          ...(issueRow && cycleStore.findByTeamId(issueRow.teamId).length > 0
+            ? ([
+                {
+                  label: t('commandPalette.submenu.setCycle'),
+                  onClick: () => setSubmenu('cycle'),
+                },
+              ] as MenuEntry[])
+            : []),
+          {
+            label: t('commandPalette.submenu.setDueDate'),
+            onClick: () => setSubmenu('dueDate'),
+          },
+          ...(issueRow &&
+          (teamStore.findById(issueRow.teamId)?.issueEstimationType ?? 'notUsed') !== 'notUsed'
+            ? ([
+                {
+                  label: t('commandPalette.submenu.setEstimate'),
+                  onClick: () => setSubmenu('estimate'),
+                },
+              ] as MenuEntry[])
+            : []),
+          { separator: true },
+          {
+            label: t('commandPalette.submenu.setParent'),
+            onClick: () => setSubmenu('parent'),
+          },
+          {
+            label: t('commandPalette.submenu.addSubIssue'),
+            onClick: () => setSubmenu('subIssue'),
+          },
+          {
+            label: t('commandPalette.submenu.markDuplicate'),
+            onClick: () => setSubmenu('duplicate'),
+          },
+          ...(teamStore.all.length > 1
+            ? ([
+                {
+                  label: t('commandPalette.submenu.moveToTeam'),
+                  onClick: () => setSubmenu('team'),
+                },
+              ] as MenuEntry[])
+            : []),
         ] as MenuEntry[])
       : []),
     { separator: true },
@@ -226,6 +337,10 @@ export const IssueContextMenu = observer(function IssueContextMenu({
           label: t('issues.snooze.snooze'),
           onClick: () => setSubmenu('snooze'),
         },
+    {
+      label: hasReminder ? t('reminders.menuItemChange') : t('reminders.menuItem'),
+      onClick: () => setSubmenu('remind'),
+    },
     ...(onArchive || onDelete ? ([{ separator: true }] as MenuEntry[]) : []),
     ...(onArchive
       ? ([
@@ -255,10 +370,36 @@ export const IssueContextMenu = observer(function IssueContextMenu({
 
   const submenuTitleKey: Record<Exclude<SubMenu, 'root'>, string> = {
     assignee: 'commandPalette.submenu.setAssignee',
+    cycle: 'commandPalette.submenu.setCycle',
+    dueDate: 'commandPalette.submenu.setDueDate',
+    duplicate: 'commandPalette.submenu.markDuplicate',
+    estimate: 'commandPalette.submenu.setEstimate',
     label: 'commandPalette.submenu.setLabel',
+    parent: 'commandPalette.submenu.setParent',
     priority: 'commandPalette.submenu.setPriority',
+    project: 'commandPalette.submenu.setProject',
+    remind: 'reminders.menuItem',
     snooze: 'issues.snooze.snooze',
     status: 'commandPalette.submenu.setStatus',
+    subIssue: 'commandPalette.submenu.addSubIssue',
+    team: 'commandPalette.submenu.moveToTeam',
+  };
+
+  // Mark as duplicate: record the relation and nothing else. The server's
+  // issueRelationCreate already moves an open issue to the team's canceled
+  // state (and leaves a completed/canceled one alone), then syncs the result
+  // back. A second client-side state write would cancel a completed issue and
+  // null its completedAt, and would leave it canceled if the relation failed.
+  const markDuplicateOf = (original: { id: string; identifier: string }) => {
+    txQueue.enqueue(
+      CREATE_DUPLICATE_RELATION,
+      { input: { issueId, relatedIssueId: original.id, type: 'duplicate' } },
+      {
+        onError: () => toast.error(t('issueDetail.relations.failedToCreate')),
+        onSuccess: () =>
+          toast.success(t('issues.markedDuplicateToast', { identifier: original.identifier })),
+      },
+    );
   };
 
   const presetLabelKey: Record<(typeof snoozePresets)[number]['key'], string> = {
@@ -269,7 +410,7 @@ export const IssueContextMenu = observer(function IssueContextMenu({
   return (
     <div
       aria-label={t('issues.actionsFor', { title })}
-      className="min-w-[200px] overflow-hidden rounded-lg border border-border bg-card py-1 shadow-e2"
+      className="max-h-[calc(100vh-1rem)] min-w-[200px] overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-e2"
       onKeyDown={handleMenuKeyDown}
       ref={menuRef}
       role="menu"
@@ -389,6 +530,7 @@ export const IssueContextMenu = observer(function IssueContextMenu({
                 ))}
               </>
             )}
+            {submenu === 'remind' && <IssueReminderPanel issueId={issueId} onClose={onClose} />}
             {submenu === 'snooze' && (
               <>
                 {snoozePresets.map(preset => (
@@ -423,6 +565,68 @@ export const IssueContextMenu = observer(function IssueContextMenu({
                   />
                 </label>
               </>
+            )}
+            {issueRow && submenu === 'project' && (
+              <ProjectPanel
+                issue={issueRow}
+                onClose={onClose}
+                onUpdate={patch => onUpdate?.(patch)}
+              />
+            )}
+            {issueRow && submenu === 'cycle' && (
+              <CyclePanel
+                issue={issueRow}
+                onClose={onClose}
+                onUpdate={patch => onUpdate?.(patch)}
+              />
+            )}
+            {issueRow && submenu === 'dueDate' && (
+              <DueDatePanel
+                issue={issueRow}
+                onClose={onClose}
+                onUpdate={patch => onUpdate?.(patch)}
+              />
+            )}
+            {issueRow && submenu === 'estimate' && (
+              <EstimatePanel
+                issue={issueRow}
+                onClose={onClose}
+                onUpdate={patch => onUpdate?.(patch)}
+              />
+            )}
+            {issueRow && submenu === 'team' && (
+              <TeamPanel issue={issueRow} onClose={onClose} onUpdate={patch => onUpdate?.(patch)} />
+            )}
+            {issueRow && submenu === 'subIssue' && (
+              <SubIssuePanel issue={issueRow} onClose={onClose} />
+            )}
+            {submenu === 'parent' && (
+              <>
+                {issueRow?.parentId && (
+                  <button
+                    className={POPOVER_ITEM_CLASS}
+                    onClick={() => {
+                      onUpdate?.({ parentId: null });
+                      onClose();
+                    }}
+                    type="button"
+                  >
+                    {t('issueDetail.properties.removeParent')}
+                  </button>
+                )}
+                <IssueSearchPanel
+                  excludeIds={parentExclusions}
+                  onClose={onClose}
+                  onSelect={picked => onUpdate?.({ parentId: picked.id })}
+                />
+              </>
+            )}
+            {submenu === 'duplicate' && (
+              <IssueSearchPanel
+                excludeIds={new Set([issueId])}
+                onClose={onClose}
+                onSelect={markDuplicateOf}
+              />
             )}
             {submenu === 'label' &&
               (labels.length === 0 ? (

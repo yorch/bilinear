@@ -22,9 +22,16 @@ test.describe('Inbox', () => {
   });
 
   test('shows empty-state or notifications list', async ({ page }) => {
-    const empty = page.getByText(/all caught up/i);
+    // Lane + filter tablists are always rendered; the panel then holds either
+    // the lane's empty state or at least one notification group.
+    await expect(page.getByRole('tablist', { name: /inbox sections/i })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /^priority/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    const empty = page.getByTestId('empty-state');
     const unreadHeader = page.getByText(/^unread \(/i);
     const readHeader = page.getByText(/^read$|^all notifications$/i);
-    await expect(empty.or(unreadHeader).or(readHeader)).toBeVisible({ timeout: 15_000 });
+    await expect(empty.or(unreadHeader).or(readHeader).first()).toBeVisible({ timeout: 15_000 });
   });
 });

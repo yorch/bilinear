@@ -2,7 +2,8 @@ import crypto from 'node:crypto';
 import { GraphQLError } from 'graphql';
 import type { User } from '../../../generated/prisma';
 import { env } from '../../lib/env';
-import { requireAuth } from '../../middleware/auth';
+import { requireAuth, requireUserId } from '../../middleware/auth';
+import { USER_SYNC_OMIT } from '../../services/sync.service';
 import type { GraphQLContext } from '../context';
 
 function buildCalendarFeedUrl(token: string | null, appUrl: string): string | null {
@@ -115,6 +116,71 @@ export const userResolvers = {
         where: { id: ctx.userId },
       });
       return { success: true, user };
+    },
+
+    userUpdateProfile: async (
+      _parent: unknown,
+      { input }: { input: { avatarUrl?: string | null; name?: string | null } },
+      ctx: GraphQLContext,
+    ) => {
+      // Org-less on purpose: onboarding offers the name step before the first
+      // workspace exists, when the session has a user but no org.
+      requireUserId(ctx);
+      const userId = ctx.userId;
+      const memberships = await ctx.services.user.listOrganizationsForUser(userId);
+      // The update and every workspace's SyncAction commit together: a person
+      // is visible in each workspace they belong to, so a partial fan-out
+      // would leave some of them showing the old name until something else
+      // re-touched the row. Publishing waits for the commit (no phantoms).
+      let result: {
+        changed: boolean;
+        recorded: Awaited<ReturnType<typeof ctx.services.sync.recordSyncAction>>[];
+        user: User;
+      };
+      try {
+        result = await ctx.prisma.$transaction(async tx => {
+          const { changed, user: updated } = await ctx.services.user.updateProfile(
+            userId,
+            input,
+            tx as never,
+          );
+          if (!changed) {
+            return { changed, recorded: [], user: updated };
+          }
+          // Sensitive columns omitted, as in bootstrap.
+          const user = await tx.user.findUnique({ omit: USER_SYNC_OMIT, where: { id: userId } });
+          if (!user) {
+            throw new GraphQLError('User not found', { extensions: { code: 'NOT_FOUND' } });
+          }
+          const recorded = [];
+          for (const { organization } of memberships) {
+            recorded.push(
+              await ctx.services.sync.recordSyncAction(
+                tx,
+                organization.id,
+                'U',
+                'User',
+                user.id,
+                user,
+              ),
+            );
+          }
+          return { changed, recorded, user: updated };
+        });
+      } catch (err) {
+        if ((err as Error).name === 'InvalidProfileError') {
+          throw new GraphQLError((err as Error).message, {
+            extensions: { code: 'BAD_USER_INPUT' },
+          });
+        }
+        throw err;
+      }
+      for (const action of result.recorded) {
+        ctx.services.sync.publish(action);
+      }
+      // The current org's id is the one handed back for the client's sync fence.
+      const own = result.recorded.find(a => a.organizationId === ctx.orgId);
+      return { lastSyncId: own ? own.id.toString() : null, success: true, user: result.user };
     },
   },
 

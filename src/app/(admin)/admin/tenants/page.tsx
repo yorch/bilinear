@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
+import { AdminListFooter } from '@/components/admin/admin-list-footer';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
 import { PromptDialog } from '@/components/shared/prompt-dialog';
@@ -13,10 +14,13 @@ import { Input } from '@/components/ui/input';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useFormatters } from '@/hooks/use-formatters';
+import { useLoadMore } from '@/hooks/use-load-more';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import {
+  type AdminPage,
   deleteTenant,
+  emptyAdminPage,
   fetchTenants,
   type PlatformTenant,
   restoreTenant,
@@ -56,17 +60,31 @@ function TenantsInner() {
   const [suspending, setSuspending] = useState<PlatformTenant | null>(null);
 
   const {
-    data: tenants,
-    setData: setTenants,
+    data: page,
+    setData: setPage,
     loading,
     error,
     cause,
     refetch: load,
-  } = useRetryableFetch<PlatformTenant[]>(
+  } = useRetryableFetch<AdminPage<PlatformTenant>>(
     () => fetchTenants(applied, includeArchived),
     [applied, includeArchived],
-    [],
+    emptyAdminPage<PlatformTenant>(),
   );
+  const tenants = page.items;
+
+  function setTenants(update: (prev: PlatformTenant[]) => PlatformTenant[]) {
+    setPage(prev => ({ ...prev, items: update(prev.items) }));
+  }
+
+  const { loadMore: handleLoadMore, loadingMore } = useLoadMore<AdminPage<PlatformTenant>>({
+    fetchMore: cursor => fetchTenants(applied, includeArchived, cursor),
+    merge: (prev, next) => ({ ...next, items: [...prev.items, ...next.items] }),
+    onError: e => toast.error(getErrorMessage(e, t('common.somethingWentWrong'))),
+    page,
+    resetKey: `${applied}\u0000${includeArchived}`,
+    setPage,
+  });
 
   function replaceRow(updated: PlatformTenant) {
     setTenants(prev => prev.map(t => (t.id === updated.id ? updated : t)));
@@ -159,7 +177,7 @@ function TenantsInner() {
         <EmptyState size="compact" title={t('admin.tenants.empty')} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[44rem] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted text-left text-xs font-medium text-muted-foreground">
                 <th className="px-4 py-2">{t('admin.tenants.colOrganization')}</th>
@@ -211,7 +229,7 @@ function TenantsInner() {
                       {formatDate(tenant.createdAt)}
                     </td>
                     <td className="px-4 py-2">
-                      <div className="flex justify-end gap-1.5">
+                      <div className="flex flex-nowrap justify-end gap-1.5 whitespace-nowrap">
                         {status === 'suspended' ? (
                           <Button
                             disabled={busyId === tenant.id}
@@ -254,6 +272,15 @@ function TenantsInner() {
             </tbody>
           </table>
         </div>
+      )}
+      {!loading && !error && tenants.length > 0 && (
+        <AdminListFooter
+          hasMore={page.hasMore}
+          loadingMore={loadingMore}
+          onLoadMore={() => void handleLoadMore()}
+          shown={tenants.length}
+          total={page.total}
+        />
       )}
       <ConfirmDialog
         confirmLabel={t('admin.tenants.archive')}

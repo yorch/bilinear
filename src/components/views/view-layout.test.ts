@@ -30,7 +30,10 @@ describe('list display helpers', () => {
   it('narrows a stored groupBy to the list groupings', () => {
     expect(coerceListGroupBy('none')).toBe('none');
     expect(coerceListGroupBy('priority')).toBe('priority');
-    expect(coerceListGroupBy('label')).toBe('status');
+    expect(coerceListGroupBy('label')).toBe('label');
+    expect(coerceListGroupBy('project')).toBe('project');
+    expect(coerceListGroupBy('cycle')).toBe('cycle');
+    expect(coerceListGroupBy('bogus')).toBe('status');
     expect(coerceListGroupBy(null)).toBe('status');
   });
 

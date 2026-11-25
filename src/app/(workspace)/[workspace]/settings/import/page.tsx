@@ -2,6 +2,7 @@
 
 import { observer } from 'mobx-react-lite';
 import { useRef, useState } from 'react';
+import { GithubImportSection } from '@/components/settings/github-import-section';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { SimpleSelect } from '@/components/ui/select';
@@ -319,6 +320,8 @@ const ImportSettingsPage = observer(function ImportSettingsPage() {
             </div>
           )}
         </section>
+
+        <GithubImportSection teams={teams.map(team => ({ id: team.id, name: team.name }))} />
 
         {/* Export */}
         <section className="space-y-3 rounded-lg border border-border bg-card p-4 md:p-6">

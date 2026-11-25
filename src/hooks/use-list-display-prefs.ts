@@ -5,9 +5,11 @@ import type { BoardGroupBy, BoardSwimlaneBy } from '@/components/issues/board-vi
 import type { ListGroupBy } from '@/components/issues/issue-list-view';
 import type { ViewMode } from '@/components/issues/view-toggle';
 import type { ListOrderBy } from '@/components/views/view-layout';
+import { COMPLETED_ISSUES_MODES, type CompletedIssuesMode } from '@/lib/issue-list-visibility';
 
 export interface ListDisplayPrefs {
   boardGroupBy: BoardGroupBy;
+  completed: CompletedIssuesMode;
   listGroupBy: ListGroupBy;
   orderBy: ListOrderBy;
   swimlaneBy: BoardSwimlaneBy;
@@ -16,6 +18,7 @@ export interface ListDisplayPrefs {
 
 export const DEFAULT_LIST_DISPLAY_PREFS: ListDisplayPrefs = {
   boardGroupBy: 'status',
+  completed: 'all',
   listGroupBy: 'status',
   orderBy: 'manual',
   swimlaneBy: 'none',
@@ -24,7 +27,8 @@ export const DEFAULT_LIST_DISPLAY_PREFS: ListDisplayPrefs = {
 
 const ALLOWED: { [K in keyof ListDisplayPrefs]: readonly ListDisplayPrefs[K][] } = {
   boardGroupBy: ['status', 'assignee', 'priority'],
-  listGroupBy: ['status', 'assignee', 'priority', 'none'],
+  completed: COMPLETED_ISSUES_MODES,
+  listGroupBy: ['status', 'assignee', 'priority', 'project', 'cycle', 'label', 'none'],
   orderBy: ['manual', 'priority', 'updated', 'created', 'dueDate'],
   swimlaneBy: ['assignee', 'priority', 'none'],
   viewMode: ['list', 'board', 'timeline'],

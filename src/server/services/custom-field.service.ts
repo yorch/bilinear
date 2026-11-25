@@ -1,4 +1,5 @@
 import { numericSettingDefault } from '@/lib/config';
+import { isValidCurrencyCode } from '@/lib/custom-field-format';
 import type {
   CustomFieldDefinition,
   CustomFieldType,
@@ -22,9 +23,23 @@ export interface CustomFieldOption {
   value: string;
 }
 
+/**
+ * Display format of a number field. Stored in the definition's `options` JSON
+ * as `{ numberFormat }` (no column, no migration) so it is a workspace-wide
+ * property of the field that syncs with the definition.
+ */
+export interface CustomFieldNumberFormat {
+  /** ISO 4217 code, upper-case; required for `currency`, rejected otherwise. */
+  currency?: string | null;
+  /** Max fraction digits, integer 0-6. */
+  decimals?: number | null;
+  kind: 'compact' | 'currency' | 'duration' | 'percent' | 'plain';
+}
+
 export interface CustomFieldDefinitionCreateInput {
   description?: string;
   name: string;
+  numberFormat?: CustomFieldNumberFormat | null;
   options?: CustomFieldOption[];
   organizationId: string;
   required?: boolean;
@@ -40,6 +55,8 @@ export interface CustomFieldDefinitionCreateInput {
 export interface CustomFieldDefinitionUpdateInput {
   description?: string | null;
   name?: string;
+  /** Omit to leave the format alone; `null` clears it back to plain. */
+  numberFormat?: CustomFieldNumberFormat | null;
   options?: CustomFieldOption[] | null;
   required?: boolean;
   sortOrder?: number;
@@ -76,6 +93,60 @@ export class CustomFieldInvalidOptionsError extends Error {
     super(`Invalid custom field options: ${reason}`);
     this.name = 'CustomFieldInvalidOptionsError';
   }
+}
+
+export class CustomFieldInvalidFormatError extends Error {
+  constructor(reason: string) {
+    super(`Invalid custom field number format: ${reason}`);
+    this.name = 'CustomFieldInvalidFormatError';
+  }
+}
+
+const NUMBER_FORMAT_KINDS = new Set(['compact', 'currency', 'duration', 'percent', 'plain']);
+
+/**
+ * Strictly validate a number format for a field of `type` and return the
+ * normalised object to store (only the keys that mean something for its kind).
+ * Rejects non-number fields, unknown kinds, a non-ISO currency, and decimals
+ * that are not integers in 0-6.
+ */
+export function validateNumberFormat(
+  type: CustomFieldType,
+  format: CustomFieldNumberFormat,
+): { currency?: string; decimals?: number; kind: CustomFieldNumberFormat['kind'] } {
+  if (type !== 'number') {
+    throw new CustomFieldInvalidFormatError(`${type} fields do not accept a number format`);
+  }
+  if (!NUMBER_FORMAT_KINDS.has(format.kind)) {
+    throw new CustomFieldInvalidFormatError(`unknown kind "${String(format.kind)}"`);
+  }
+  const out: { currency?: string; decimals?: number; kind: CustomFieldNumberFormat['kind'] } = {
+    kind: format.kind,
+  };
+  if (format.kind === 'currency') {
+    if (
+      typeof format.currency !== 'string' ||
+      format.currency !== format.currency.toUpperCase() ||
+      !isValidCurrencyCode(format.currency)
+    ) {
+      throw new CustomFieldInvalidFormatError(
+        'currency must be a recognised upper-case ISO 4217 code',
+      );
+    }
+    out.currency = format.currency;
+  } else if (format.currency !== undefined && format.currency !== null) {
+    throw new CustomFieldInvalidFormatError('currency is only allowed for the currency kind');
+  }
+  if (format.decimals !== undefined && format.decimals !== null) {
+    if (!Number.isInteger(format.decimals) || format.decimals < 0 || format.decimals > 6) {
+      throw new CustomFieldInvalidFormatError('decimals must be an integer from 0 to 6');
+    }
+    if (format.kind === 'duration') {
+      throw new CustomFieldInvalidFormatError('decimals do not apply to the duration kind');
+    }
+    out.decimals = format.decimals;
+  }
+  return out;
 }
 
 const SELECT_TYPES = new Set<CustomFieldType>(['select', 'multi_select']);
@@ -176,6 +247,9 @@ export class CustomFieldService {
 
   async createDefinition(input: CustomFieldDefinitionCreateInput): Promise<CustomFieldDefinition> {
     validateOptionsForType(input.type, input.options);
+    const numberFormat = input.numberFormat
+      ? validateNumberFormat(input.type, input.numberFormat)
+      : null;
 
     // Per-scope active-fields cap, read through the config registry rather than
     // a hardcoded constant, so an admin can raise or lower it without a deploy.
@@ -213,9 +287,11 @@ export class CustomFieldService {
         data: {
           description: input.description ?? null,
           name: input.name,
-          options: input.options
-            ? (input.options as unknown as Prisma.InputJsonValue)
-            : Prisma.JsonNull,
+          options: numberFormat
+            ? ({ numberFormat } as Prisma.InputJsonValue)
+            : input.options?.length
+              ? (input.options as unknown as Prisma.InputJsonValue)
+              : Prisma.JsonNull,
           organizationId: input.organizationId,
           required: input.required ?? false,
           sortOrder: input.sortOrder ?? activeCount,
@@ -241,6 +317,10 @@ export class CustomFieldService {
       validateOptionsForType(existing.type, input.options);
     }
 
+    const numberFormat = input.numberFormat
+      ? validateNumberFormat(existing.type, input.numberFormat)
+      : null;
+
     const data: Prisma.CustomFieldDefinitionUpdateInput = {};
     if (input.name !== undefined) {
       data.name = input.name;
@@ -251,7 +331,15 @@ export class CustomFieldService {
     if (input.required !== undefined) {
       data.required = input.required;
     }
-    if ('options' in input) {
+    if (existing.type === 'number') {
+      // A number field's `options` column holds only its format, so an
+      // `options` key (validated empty above) must not clobber it.
+      if (numberFormat) {
+        data.options = { numberFormat } as Prisma.InputJsonValue;
+      } else if (input.numberFormat === null) {
+        data.options = Prisma.JsonNull;
+      }
+    } else if ('options' in input) {
       data.options = input.options
         ? (input.options as unknown as Prisma.InputJsonValue)
         : Prisma.JsonNull;

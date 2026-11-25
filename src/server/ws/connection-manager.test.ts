@@ -71,6 +71,86 @@ describe('ConnectionManager.broadcastActions', () => {
     expect(filter).toHaveBeenCalledTimes(1);
   });
 
+  it("never sends another user's Notification row to any socket", async () => {
+    const cm = new ConnectionManager();
+    const mine = fakeWs();
+    const theirs = fakeWs();
+    const lockedMine = fakeWs();
+    cm.add('org-1', 'me', mine);
+    cm.add('org-1', 'other', theirs);
+    cm.add('org-1', 'locked', lockedMine, {
+      guestTeamIds: [],
+      hiddenTeamIds: ['t-hidden'],
+      userId: 'locked',
+    });
+    const issue = { data: { teamId: 't-open' }, modelName: 'Issue' };
+    const forMe = { data: { title: 'x', userId: 'me' }, modelName: 'Notification' };
+    const actions = [issue, forMe];
+
+    await cm.broadcastActions('org-1', actions, async (_v, batch) => batch);
+
+    expect(mine.send).toHaveBeenCalledWith(JSON.stringify({ cmd: 'sync', sync: actions }));
+    expect(theirs.send).toHaveBeenCalledWith(JSON.stringify({ cmd: 'sync', sync: [issue] }));
+    expect(lockedMine.send).toHaveBeenCalledWith(JSON.stringify({ cmd: 'sync', sync: [issue] }));
+  });
+
+  it("rewrites someone else's unshared view for an unrestricted socket instead of sending the shared frame", async () => {
+    const cm = new ConnectionManager();
+    const creator = fakeWs();
+    const other = fakeWs();
+    cm.add('org-1', 'creator', creator);
+    cm.add('org-1', 'other', other);
+    const view = {
+      action: 'U',
+      data: { creatorId: 'creator', id: 'v1', name: 'private', shared: false },
+      modelName: 'CustomView',
+    };
+
+    await cm.broadcastActions('org-1', [view], async (_v, batch) => batch);
+
+    expect(creator.send).toHaveBeenCalledWith(JSON.stringify({ cmd: 'sync', sync: [view] }));
+    const sent = JSON.parse(other.send.mock.calls[0][0]);
+    expect(sent.sync).toEqual([{ action: 'D', data: null, modelName: 'CustomView' }]);
+    expect(other.send.mock.calls[0][0]).not.toContain('private');
+  });
+
+  it("sends nothing to a user when the batch is only another user's Notification", async () => {
+    const cm = new ConnectionManager();
+    const theirs = fakeWs();
+    cm.add('org-1', 'other', theirs);
+    await cm.broadcastActions(
+      'org-1',
+      [{ data: { userId: 'me' }, modelName: 'Notification' }],
+      async (_v, batch) => batch,
+    );
+    expect(theirs.send).not.toHaveBeenCalled();
+  });
+
+  it.each(['Favorite', 'IssueReminder'])(
+    "never sends another user's %s row to any socket (incl. an owner-carrying delete)",
+    async modelName => {
+      const cm = new ConnectionManager();
+      const mine = fakeWs();
+      const theirs = fakeWs();
+      const lockedTheirs = fakeWs();
+      cm.add('org-1', 'me', mine);
+      cm.add('org-1', 'other', theirs);
+      cm.add('org-1', 'locked', lockedTheirs, {
+        guestTeamIds: [],
+        hiddenTeamIds: ['t-hidden'],
+        userId: 'locked',
+      });
+      const upsert = { action: 'I', data: { id: 'x', userId: 'me' }, modelName };
+      const del = { action: 'D', data: { id: 'x', userId: 'me' }, modelName };
+
+      await cm.broadcastActions('org-1', [upsert, del], async (_v, batch) => batch);
+
+      expect(mine.send).toHaveBeenCalledWith(JSON.stringify({ cmd: 'sync', sync: [upsert, del] }));
+      expect(theirs.send).not.toHaveBeenCalled();
+      expect(lockedTheirs.send).not.toHaveBeenCalled();
+    },
+  );
+
   it('runs the filter once per restricted user, not once per socket', async () => {
     const cm = new ConnectionManager();
     const a = fakeWs();

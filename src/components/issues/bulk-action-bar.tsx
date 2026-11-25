@@ -1,17 +1,43 @@
 'use client';
 
-import { Archive, X } from 'lucide-react';
+import { Archive, RefreshCw, Trash2, X } from 'lucide-react';
+import { observer } from 'mobx-react-lite';
+import { useParams } from 'next/navigation';
+import type { ReactNode } from 'react';
+import { useState } from 'react';
+import { getDueDatePresets } from '@/components/properties/due-date-presets';
 import { SCALE_OPTIONS } from '@/components/properties/estimate-picker';
 import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority-icon';
 import { StatusDot } from '@/components/properties/status-select';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { ColorDot } from '@/components/ui/color-dot';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useTranslations } from '@/hooks/use-translations';
+import { getCycleDisplayName } from '@/lib/cycle-utils';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
+import { useStore } from '@/providers/store-provider';
 import type { IssueLabel, IssueUser, WorkflowState } from '@/types/issues';
 
 const PRIORITIES = [0, 1, 2, 3, 4] as const;
+
+const DUE_PRESET_LABEL = {
+  endOfWeek: 'properties.dueDate.endOfWeek',
+  nextWeek: 'properties.dueDate.nextWeek',
+  today: 'properties.dueDate.today',
+  tomorrow: 'properties.dueDate.tomorrow',
+} as const;
+
+/**
+ * The bar scrolls horizontally on a phone, and a scroll container clips an
+ * absolutely-positioned child — so below `md` every panel becomes a fixed
+ * sheet floating above the bar instead.
+ */
+const MOBILE_SHEET =
+  'max-md:fixed max-md:inset-x-4 max-md:bottom-20 max-md:top-auto max-md:mb-0 max-md:mt-0 max-md:max-h-[60vh] max-md:w-auto max-md:overflow-y-auto';
+
+const ACTION_BUTTON =
+  'flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground-secondary';
 
 interface BulkActionBarProps {
   count: number;
@@ -22,38 +48,97 @@ interface BulkActionBarProps {
    */
   estimationType?: string;
   labels: IssueLabel[];
+  /**
+   * The checked issues span several teams, so no single cycle list applies.
+   * The Cycle action then renders disabled, with a tooltip saying why, rather
+   * than silently vanishing.
+   */
+  mixedTeams?: boolean;
   /** Archive every checked issue. Omitted where the page cannot archive. */
   onArchive?: () => void;
   onClear: () => void;
+  /** Permanently delete every checked issue, after a confirmation. Omitted where the page cannot delete. */
+  onDelete?: () => void;
   onSelectAll?: () => void;
   onUpdate: (patch: Record<string, unknown>) => void;
   states: WorkflowState[];
+  /** Team whose cycles the Cycle action offers; defaults to the team in the route. */
+  teamId?: string;
   totalCount?: number;
   users: IssueUser[];
 }
 
-export function BulkActionBar({
+/** One trigger + panel; keeps the mobile-sheet contract in a single place. */
+function BulkPopover({
+  children,
+  label,
+  widthClass = 'w-48',
+}: {
+  children: (close: () => void) => ReactNode;
+  label: string;
+  widthClass?: string;
+}) {
+  return (
+    <SelectPopover
+      className="shrink-0"
+      panelClassName={cn(widthClass, MOBILE_SHEET)}
+      triggerChildren={
+        <span className="whitespace-nowrap px-2 py-1 text-xs font-medium text-muted-foreground">
+          {label}
+        </span>
+      }
+      triggerClassName="rounded border border-border"
+    >
+      {close => <div className="py-1">{children(close)}</div>}
+    </SelectPopover>
+  );
+}
+
+export const BulkActionBar = observer(function BulkActionBar({
   count,
   estimationType,
   states,
   users,
   labels,
+  mixedTeams,
   onArchive,
+  onDelete,
   onUpdate,
   onClear,
   onSelectAll,
+  teamId,
   totalCount,
 }: BulkActionBarProps) {
   const t = useTranslations();
+  const { cycleStore, projectStore, teamStore } = useStore();
+  const params = useParams<{ key?: string }>();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const routeTeam = params?.key ? teamStore.findByKey(params.key) : null;
+  const cycleTeamId = teamId ?? routeTeam?.id;
+  const cycles = cycleTeamId ? cycleStore.findByTeamId(cycleTeamId) : [];
+  const projects = projectStore.all;
+  const otherTeams = teamStore.all
+    .filter(team => team.id !== cycleTeamId)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   return (
-    <div className="fixed bottom-6 left-1/2 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center gap-1 rounded-lg border border-border bg-card px-3 py-2 shadow-e3">
-      <span className="mr-2 whitespace-nowrap text-sm font-medium text-foreground-secondary">
+    <div
+      className={cn(
+        // Phone: full-width bar whose actions wrap onto further rows, so Delete
+        // is never scrolled out of sight. md+: the floating card it always was.
+        'fixed inset-x-0 bottom-0 z-50 flex max-h-[40vh] flex-wrap items-center gap-1 overflow-y-auto border-t border-border bg-card px-3 py-2 shadow-e3',
+        'md:inset-x-auto md:bottom-6 md:left-1/2 md:max-w-[calc(100vw-2rem)] md:-translate-x-1/2 md:max-h-none md:overflow-visible md:rounded-lg md:border md:border-border',
+      )}
+      data-testid="bulk-action-bar"
+    >
+      <span className="mr-2 shrink-0 whitespace-nowrap text-sm font-medium text-foreground-secondary">
         {t('issues.selectedCount', { count })}
       </span>
 
       {onSelectAll && totalCount !== undefined && count < totalCount && (
         <button
-          className="mr-1 whitespace-nowrap rounded px-2 py-1 text-xs font-medium text-primary hover:bg-accent"
+          className="mr-1 shrink-0 whitespace-nowrap rounded px-2 py-1 text-xs font-medium text-primary hover:bg-accent"
           onClick={onSelectAll}
           type="button"
         >
@@ -61,72 +146,47 @@ export function BulkActionBar({
         </button>
       )}
 
-      <SelectPopover
-        triggerChildren={
-          <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
-            {t('issues.status')}
-          </span>
+      <BulkPopover label={t('issues.status')}>
+        {close =>
+          states.map(s => (
+            <button
+              className={POPOVER_ITEM_CLASS}
+              key={s.id}
+              onClick={() => {
+                onUpdate({ stateId: s.id });
+                close();
+              }}
+              type="button"
+            >
+              <StatusDot color={s.color} />
+              <span className="truncate">{s.name}</span>
+            </button>
+          ))
         }
-        triggerClassName="rounded border border-border"
-      >
-        {close => (
-          <div className="w-48 py-1">
-            {states.map(s => (
-              <button
-                className={POPOVER_ITEM_CLASS}
-                key={s.id}
-                onClick={() => {
-                  onUpdate({ stateId: s.id });
-                  close();
-                }}
-                type="button"
-              >
-                <StatusDot color={s.color} />
-                <span className="truncate">{s.name}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </SelectPopover>
+      </BulkPopover>
 
-      <SelectPopover
-        triggerChildren={
-          <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
-            {t('issues.priority')}
-          </span>
+      <BulkPopover label={t('issues.priority')} widthClass="w-40">
+        {close =>
+          PRIORITIES.map(p => (
+            <button
+              className={POPOVER_ITEM_CLASS}
+              key={p}
+              onClick={() => {
+                onUpdate({ priority: p });
+                close();
+              }}
+              type="button"
+            >
+              <PriorityIcon className="h-3.5 w-3.5" priority={p} />
+              <span>{t(priorityLabelKey(p))}</span>
+            </button>
+          ))
         }
-        triggerClassName="rounded border border-border"
-      >
-        {close => (
-          <div className="w-40 py-1">
-            {PRIORITIES.map(p => (
-              <button
-                className={POPOVER_ITEM_CLASS}
-                key={p}
-                onClick={() => {
-                  onUpdate({ priority: p });
-                  close();
-                }}
-                type="button"
-              >
-                <PriorityIcon className="h-3.5 w-3.5" priority={p} />
-                <span>{t(priorityLabelKey(p))}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </SelectPopover>
+      </BulkPopover>
 
-      <SelectPopover
-        triggerChildren={
-          <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
-            {t('issues.assignee')}
-          </span>
-        }
-        triggerClassName="rounded border border-border"
-      >
+      <BulkPopover label={t('issues.assignee')}>
         {close => (
-          <div className="w-48 py-1">
+          <>
             <button
               className={POPOVER_ITEM_CLASS}
               onClick={() => {
@@ -154,51 +214,158 @@ export function BulkActionBar({
                 <span className="truncate">{u.displayName}</span>
               </button>
             ))}
-          </div>
+          </>
         )}
-      </SelectPopover>
+      </BulkPopover>
 
       {labels.length > 0 && (
-        <SelectPopover
-          triggerChildren={
-            <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
-              {t('issues.label')}
-            </span>
+        <BulkPopover label={t('issues.label')}>
+          {close =>
+            labels.map(l => (
+              <button
+                className={POPOVER_ITEM_CLASS}
+                key={l.id}
+                onClick={() => {
+                  onUpdate({ labelIds: [l.id] });
+                  close();
+                }}
+                type="button"
+              >
+                <ColorDot color={l.color} />
+                <span className="truncate">{l.name}</span>
+              </button>
+            ))
           }
-          triggerClassName="rounded border border-border"
-        >
+        </BulkPopover>
+      )}
+
+      {projects.length > 0 && (
+        <BulkPopover label={t('issues.project')}>
           {close => (
-            <div className="w-48 py-1">
-              {labels.map(l => (
+            <>
+              <button
+                className={POPOVER_ITEM_CLASS}
+                onClick={() => {
+                  onUpdate({ projectId: null, projectMilestoneId: null });
+                  close();
+                }}
+                type="button"
+              >
+                {t('properties.project.removeFromProject')}
+              </button>
+              {projects.map(p => (
                 <button
                   className={POPOVER_ITEM_CLASS}
-                  key={l.id}
+                  key={p.id}
                   onClick={() => {
-                    onUpdate({ labelIds: [l.id] });
+                    // A milestone belongs to its project, so moving projects clears it.
+                    onUpdate({ projectId: p.id, projectMilestoneId: null });
                     close();
                   }}
                   type="button"
                 >
-                  <ColorDot color={l.color} />
-                  <span className="truncate">{l.name}</span>
+                  <span className="truncate">{p.name}</span>
                 </button>
               ))}
-            </div>
+            </>
           )}
-        </SelectPopover>
+        </BulkPopover>
       )}
 
-      {estimationType && estimationType !== 'notUsed' && (
-        <SelectPopover
-          triggerChildren={
-            <span className="px-2 py-1 text-xs font-medium text-muted-foreground">
-              {t('issues.estimate')}
-            </span>
-          }
-          triggerClassName="rounded border border-border"
+      {mixedTeams && (
+        <button
+          aria-disabled="true"
+          className={cn(ACTION_BUTTON, 'cursor-not-allowed opacity-50 hover:bg-transparent')}
+          disabled
+          title={t('issues.bulkCycleNeedsSameTeam')}
+          type="button"
         >
+          {t('issues.cycle')}
+        </button>
+      )}
+
+      {!mixedTeams && cycles.length > 0 && (
+        <BulkPopover label={t('issues.cycle')}>
           {close => (
-            <div className="w-32 py-1">
+            <>
+              <button
+                className={POPOVER_ITEM_CLASS}
+                onClick={() => {
+                  onUpdate({ cycleId: null });
+                  close();
+                }}
+                type="button"
+              >
+                {t('properties.cycle.removeFromCycle')}
+              </button>
+              {cycles.map(c => (
+                <button
+                  className={POPOVER_ITEM_CLASS}
+                  key={c.id}
+                  onClick={() => {
+                    onUpdate({ cycleId: c.id });
+                    close();
+                  }}
+                  type="button"
+                >
+                  <RefreshCw className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{getCycleDisplayName(c)}</span>
+                </button>
+              ))}
+            </>
+          )}
+        </BulkPopover>
+      )}
+
+      <BulkPopover label={t('issues.dueDate')}>
+        {close => (
+          <>
+            {getDueDatePresets().map(preset => (
+              <button
+                className={POPOVER_ITEM_CLASS}
+                key={preset.key}
+                onClick={() => {
+                  onUpdate({ dueDate: preset.date });
+                  close();
+                }}
+                type="button"
+              >
+                <span className="flex-1 text-left">{t(DUE_PRESET_LABEL[preset.key])}</span>
+                <span className="font-mono text-xs text-muted-foreground">{preset.date}</span>
+              </button>
+            ))}
+            <label className="flex flex-col gap-1 px-3 py-1.5 text-xs text-muted-foreground">
+              {t('properties.dueDate.orPickDate')}
+              <input
+                aria-label={t('properties.dueDate.orPickDate')}
+                className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
+                onChange={e => {
+                  if (e.target.value) {
+                    onUpdate({ dueDate: e.target.value });
+                    close();
+                  }
+                }}
+                type="date"
+              />
+            </label>
+            <button
+              className={POPOVER_ITEM_CLASS}
+              onClick={() => {
+                onUpdate({ dueDate: null });
+                close();
+              }}
+              type="button"
+            >
+              {t('properties.dueDate.clearDate')}
+            </button>
+          </>
+        )}
+      </BulkPopover>
+
+      {estimationType && estimationType !== 'notUsed' && (
+        <BulkPopover label={t('issues.estimate')} widthClass="w-32">
+          {close => (
+            <>
               <button
                 className={POPOVER_ITEM_CLASS}
                 onClick={() => {
@@ -222,28 +389,56 @@ export function BulkActionBar({
                   {opt.label}
                 </button>
               ))}
-            </div>
+            </>
           )}
-        </SelectPopover>
+        </BulkPopover>
+      )}
+
+      {otherTeams.length > 0 && (
+        <BulkPopover label={t('issues.moveToTeam')}>
+          {close =>
+            otherTeams.map(team => (
+              <button
+                className={POPOVER_ITEM_CLASS}
+                key={team.id}
+                onClick={() => {
+                  onUpdate({ teamId: team.id });
+                  close();
+                }}
+                type="button"
+              >
+                <span className="shrink-0 font-mono text-xs text-muted-foreground">{team.key}</span>
+                <span className="truncate">{team.name}</span>
+              </button>
+            ))
+          }
+        </BulkPopover>
       )}
 
       {onArchive && (
-        <button
-          className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground-secondary"
-          onClick={onArchive}
-          type="button"
-        >
+        <button className={ACTION_BUTTON} onClick={onArchive} type="button">
           <Archive className="h-3.5 w-3.5" />
           {t('issues.archive')}
         </button>
       )}
 
-      <div className="mx-1 h-4 w-px bg-muted" />
+      {onDelete && (
+        <button
+          className={cn(ACTION_BUTTON, 'text-danger-subtle-foreground')}
+          onClick={() => setConfirmingDelete(true)}
+          type="button"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          {t('common.delete')}
+        </button>
+      )}
+
+      <div className="mx-1 h-4 w-px shrink-0 bg-muted" />
 
       <button
         aria-label={t('issues.clearSelection')}
         className={cn(
-          'rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
+          'shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground-secondary',
           TOUCH_TARGET,
         )}
         onClick={onClear}
@@ -252,6 +447,17 @@ export function BulkActionBar({
       >
         <X className="h-4 w-4" />
       </button>
+
+      <ConfirmDialog
+        message={t('issues.bulkDeleteConfirmBody', { count })}
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={() => {
+          setConfirmingDelete(false);
+          onDelete?.();
+        }}
+        open={confirmingDelete}
+        title={t('issues.bulkDeleteConfirmTitle', { count })}
+      />
     </div>
   );
-}
+});

@@ -1,6 +1,11 @@
 import { GraphQLError } from 'graphql';
 import type { CustomFieldDefinition, CustomFieldValue } from '../../../generated/prisma';
-import { requireAuth, requireOrgRole, requireTeamMember } from '../../middleware/auth';
+import {
+  requireAuth,
+  requireIssueAccessNotGuestOrOwn,
+  requireOrgRole,
+  requireTeamMember,
+} from '../../middleware/auth';
 import type {
   CustomFieldDefinitionCreateInput,
   CustomFieldDefinitionUpdateInput,
@@ -13,6 +18,7 @@ import { mapServiceError } from '../types/errors';
 interface CustomFieldDefinitionCreateGqlInput {
   description?: string;
   name: string;
+  numberFormat?: CustomFieldDefinitionCreateInput['numberFormat'];
   options?: Array<{ color?: string; label: string; value: string }>;
   required?: boolean;
   sortOrder?: number;
@@ -22,6 +28,7 @@ interface CustomFieldDefinitionCreateGqlInput {
 
 const CUSTOM_FIELD_ERRORS = {
   BAD_USER_INPUT: [
+    'CustomFieldInvalidFormatError',
     'CustomFieldInvalidOptionsError',
     'CustomFieldInvalidValueError',
     'CustomFieldLimitExceededError',
@@ -200,7 +207,7 @@ export const customFieldResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
       try {
         await ctx.services.customField.setValuesForIssue(
           { id: issue.id, organizationId: issue.organizationId, teamId: issue.teamId },
@@ -246,7 +253,7 @@ export const customFieldResolvers = {
           extensions: { code: 'NOT_FOUND' },
         });
       }
-      await requireTeamMember(ctx.prisma, issue.teamId, ctx.userId, ctx.orgId);
+      await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
       return ctx.services.customField.findValuesByIssueIds([issueId]);
     },
     workspaceCustomFieldDefinitions: async (

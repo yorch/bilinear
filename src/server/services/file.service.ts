@@ -1,4 +1,6 @@
 import type { PrismaClient, File as PrismaFile } from '../../generated/prisma';
+import { isIssueVisible } from '../lib/entity-visibility';
+import { getSyncVisibility } from '../lib/sync-visibility';
 
 export interface FileCreateInput {
   issueId?: string;
@@ -8,6 +10,49 @@ export interface FileCreateInput {
   projectId?: string;
   size: number;
   url: string;
+}
+
+/**
+ * Avatars are the one upload with no issue/project parent. The server mints
+ * their key with this prefix (a client cannot choose a key), which is how a
+ * parent-less row is recognised as an avatar without a schema column.
+ */
+export const AVATAR_KEY_PREFIX = 'avatar-';
+export const AVATAR_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp'] as const;
+export const MAX_AVATAR_SIZE = 2 * 1024 * 1024; // 2 MB
+
+const AVATAR_KEY_PATTERN = new RegExp(
+  `^${AVATAR_KEY_PREFIX}[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(${AVATAR_EXTENSIONS.join('|')})$`,
+);
+
+/**
+ * The storage key of `url` when it is exactly `<appUrl>/api/uploads/<avatar key>`
+ * — same origin, no query/fragment/userinfo — else null.
+ */
+export function avatarKeyFromUrl(url: string, appUrl: string): string | null {
+  let parsed: URL;
+  let base: URL;
+  try {
+    parsed = new URL(url);
+    base = new URL(appUrl);
+  } catch {
+    return null;
+  }
+  if (
+    parsed.origin !== base.origin ||
+    parsed.search ||
+    parsed.hash ||
+    parsed.username ||
+    parsed.password
+  ) {
+    return null;
+  }
+  const prefix = '/api/uploads/';
+  if (!parsed.pathname.startsWith(prefix)) {
+    return null;
+  }
+  const key = parsed.pathname.slice(prefix.length);
+  return AVATAR_KEY_PATTERN.test(key) ? key : null;
 }
 
 export class FileNotFoundError extends Error {
@@ -42,14 +87,44 @@ export class FileService {
     });
   }
 
-  async getIssueFiles(issueId: string, orgId: string): Promise<PrismaFile[]> {
-    // Scope to the caller's org before returning file metadata. Without this,
-    // any authenticated user could enumerate files from any issue in any org.
+  /**
+   * Whether `userId` may read the issue `issue` (already known to be in the
+   * caller's org): not in a private team they are outside of, and, as a guest,
+   * only their own work. Fails closed when there is no user.
+   */
+  private async canReadIssue(
+    issue: { assigneeId: string | null; creatorId: string | null; teamId: string },
+    orgId: string,
+    userId: string | undefined,
+  ): Promise<boolean> {
+    if (!userId) {
+      return false;
+    }
+    return isIssueVisible(await getSyncVisibility(this.prisma, userId, orgId), issue);
+  }
+
+  /**
+   * Write gate for `/api/upload`: the issue exists in `orgId` AND is visible to
+   * `userId` (not in a private team they are outside of; as a guest, only their
+   * own work). A hidden and a missing issue are indistinguishable to the caller.
+   */
+  async canAttachToIssue(issueId: string, orgId: string, userId: string): Promise<boolean> {
     const issue = await this.prisma.issue.findFirst({
-      select: { id: true },
+      select: { assigneeId: true, creatorId: true, teamId: true },
       where: { id: issueId, organizationId: orgId },
     });
-    if (!issue) {
+    return !!issue && (await this.canReadIssue(issue, orgId, userId));
+  }
+
+  async getIssueFiles(issueId: string, orgId: string, userId?: string): Promise<PrismaFile[]> {
+    // Scope to the caller's org AND the caller's visibility before returning
+    // file metadata. Org membership alone let any member list (and then
+    // download) the attachments of a private team's issue.
+    const issue = await this.prisma.issue.findFirst({
+      select: { assigneeId: true, creatorId: true, id: true, teamId: true },
+      where: { id: issueId, organizationId: orgId },
+    });
+    if (!issue || !(await this.canReadIssue(issue, orgId, userId))) {
       return [];
     }
     return this.prisma.file.findMany({
@@ -102,7 +177,7 @@ export class FileService {
    * prisma/schema.prisma). We therefore look up the file, then verify
    * ownership via whichever parent is set.
    */
-  async findByKeyInOrg(key: string, orgId: string): Promise<PrismaFile | null> {
+  async findByKeyInOrg(key: string, orgId: string, userId?: string): Promise<PrismaFile | null> {
     const file = await this.prisma.file.findFirst({
       where: { key },
     });
@@ -110,11 +185,11 @@ export class FileService {
       return null;
     }
     if (file.issueId) {
-      const ok = await this.prisma.issue.findFirst({
-        select: { id: true },
+      const issue = await this.prisma.issue.findFirst({
+        select: { assigneeId: true, creatorId: true, teamId: true },
         where: { id: file.issueId, organizationId: orgId },
       });
-      return ok ? file : null;
+      return issue && (await this.canReadIssue(issue, orgId, userId)) ? file : null;
     }
     if (file.projectId) {
       const ok = await this.prisma.project.findFirst({
@@ -123,7 +198,16 @@ export class FileService {
       });
       return ok ? file : null;
     }
-    // Orphan file (no parent issue/project) — treat as inaccessible.
+    // An avatar is shown to everyone the uploader works with, so it is readable
+    // from any org the uploader belongs to — and from no other.
+    if (file.uploaderId && file.key.startsWith(AVATAR_KEY_PREFIX)) {
+      const member = await this.prisma.organizationMember.findFirst({
+        select: { userId: true },
+        where: { organizationId: orgId, userId: file.uploaderId },
+      });
+      return member ? file : null;
+    }
+    // Any other orphan (no parent issue/project) — treat as inaccessible.
     return null;
   }
 }

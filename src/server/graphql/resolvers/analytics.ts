@@ -1,6 +1,11 @@
 import { GraphQLError } from 'graphql';
+import { getSyncVisibility } from '../../lib/sync-visibility';
 import { requireAuth, requireOrgRole, requireTeamMember } from '../../middleware/auth';
-import type { AnalyticsRange } from '../../services/analytics.service';
+import {
+  type AnalyticsRange,
+  InsightsInputError,
+  type IssueVisibilityScope,
+} from '../../services/analytics.service';
 import type { GraphQLContext } from '../context';
 
 interface AnalyticsInput {
@@ -29,6 +34,21 @@ async function buildFilter(
     range: { from: input?.from ?? null, to: input?.to ?? null },
     teamId,
   };
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A malformed id is the caller's mistake (400), not a database error (500). */
+function requireUuid(value: string, what: string): void {
+  if (!UUID_RE.test(value)) {
+    throw new GraphQLError(`Invalid ${what}`, { extensions: { code: 'BAD_USER_INPUT' } });
+  }
+}
+
+/** The viewer's issue scope — the same one bootstrap/delta use. */
+async function visibilityScope(ctx: GraphQLContext): Promise<IssueVisibilityScope> {
+  requireAuth(ctx);
+  return getSyncVisibility(ctx.prisma, ctx.userId, ctx.orgId);
 }
 
 export const analyticsResolvers = {
@@ -89,6 +109,55 @@ export const analyticsResolvers = {
       requireAuth(ctx);
       requireOrgRole(ctx, ['owner', 'admin']);
       return ctx.services.analytics.workspaceOverview(ctx.orgId);
+    },
+
+    initiativeHealthRollups: async (_p: unknown, _a: unknown, ctx: GraphQLContext) => {
+      requireAuth(ctx);
+      return ctx.services.analytics.initiativeHealthRollups(ctx.orgId, await visibilityScope(ctx));
+    },
+
+    insights: async (
+      _p: unknown,
+      args: { measure: string; slice: string; viewId?: string | null },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      if (args.viewId) {
+        requireUuid(args.viewId, 'viewId');
+      }
+      try {
+        return await ctx.services.analytics.insights(
+          ctx.orgId,
+          ctx.userId,
+          args.measure,
+          args.slice,
+          await visibilityScope(ctx),
+          args.viewId,
+        );
+      } catch (err) {
+        if (err instanceof InsightsInputError) {
+          throw new GraphQLError(err.message, { extensions: { code: 'BAD_USER_INPUT' } });
+        }
+        throw err;
+      }
+    },
+
+    projectBurnup: async (
+      _p: unknown,
+      { projectId }: { projectId: string },
+      ctx: GraphQLContext,
+    ) => {
+      requireAuth(ctx);
+      requireUuid(projectId, 'projectId');
+      const result = await ctx.services.analytics.projectBurnup(
+        ctx.orgId,
+        projectId,
+        await visibilityScope(ctx),
+      );
+      if (!result) {
+        throw new GraphQLError('Project not found', { extensions: { code: 'NOT_FOUND' } });
+      }
+      return result;
     },
   },
 };

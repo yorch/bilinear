@@ -73,6 +73,8 @@ remains a design target.
 | 2.34 Audit Log Entries    | ✅      | Shipped 2026-06-06 — `audit_log_entries` append-only table, see §2.34                                 |
 | 2.35 SAML Configurations  | ✅      | Shipped 2026-06-06 — `saml_configurations` one-per-org, see §2.35                                     |
 | 2.36 SCIM Tokens          | ✅      | Shipped 2026-06-06 — `scim_tokens` bearer auth for SCIM provisioning, see §2.36                       |
+| 2.40 Issue Reminders      | ✅      | Shipped 2026-11-24 — `issue_reminders`, per-user synced rows, see §2.40                               |
+| 2.41 URL-key aliases      | ✅      | Shipped 2026-11-24 — `organization_url_key_aliases`, see §2.41                                        |
 
 ---
 
@@ -2068,3 +2070,68 @@ Key properties:
 - 7-day expiry (`INVITE_EXPIRY_DAYS`), 200 outstanding invitations per org
   (`MAX_PENDING_INVITES`) as a mail-relay blast-radius bound.
 
+
+### 2.40 Issue Reminders ✅
+
+A private, per-user "remind me about this issue at <time>". Part of the
+consolidated `00000000000000_init` (the `REMINDER` value of `notification_type`
+is too).
+
+```sql
+CREATE TABLE issue_reminders (
+    id              UUID PRIMARY KEY,
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    issue_id        UUID NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    remind_at       TIMESTAMPTZ NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMPTZ NOT NULL
+);
+CREATE UNIQUE INDEX issue_reminders_issue_user_uniq ON issue_reminders(issue_id, user_id);
+CREATE INDEX issue_reminders_remind_at_idx ON issue_reminders(remind_at);
+CREATE INDEX issue_reminders_user_id_idx ON issue_reminders(user_id);
+CREATE INDEX issue_reminders_organization_id_idx ON issue_reminders(organization_id);
+```
+
+Key properties:
+- **The table holds only pending reminders.** The sweep claims due rows with one
+  `DELETE ... WHERE id IN (SELECT ... ORDER BY remind_at LIMIT n FOR UPDATE SKIP
+  LOCKED) RETURNING`, so concurrent workers fire a reminder exactly once, a
+  failed batch rolls back (the next sweep retries) and a fired reminder leaves
+  no row. There is deliberately no `fired_at`: with fired rows kept, the sweep's
+  index scan degraded to ~11 ms / 3,900 buffers at 730k rows against ~0.14 ms
+  for an index over pending rows only, and nothing ever read the history.
+- One row per `(issue, user)`: setting a reminder again moves it (`U`).
+- **Replicated per user.** Every mutation emits an `I`/`U`/`D` `IssueReminder`
+  SyncAction whose payload carries `user_id` (including the delete, so it can be
+  filtered), and `sync.service.ts` `dropForeignUserRows` drops per-user rows
+  (`Notification`, `Favorite`, `IssueReminder`) that belong to someone else in
+  bootstrap, delta and the WebSocket fan-out. Bootstrap ships the viewer's own
+  pending reminders only, narrowed to issues they can see. This replaced an
+  earlier pull query (`myIssueReminders`) that was an undocumented exception to
+  "every mutation creates a SyncAction".
+- The sweep also consumes (without notifying) reminders whose owner has left the
+  workspace (`organization_members` join) or whose issue was trashed, archived
+  or became invisible to them; leaving/removal deletes the member's reminders in
+  the same transaction.
+- Cascades on org, issue and user deletion.
+
+### 2.41 Organization URL-key aliases ✅
+
+The previous workspace URL keys of a renamed organization stay reserved for it
+and redirect to the current key. Part of the consolidated `00000000000000_init`.
+
+```sql
+CREATE TABLE organization_url_key_aliases (
+    id              UUID PRIMARY KEY,
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    url_key         VARCHAR(63) NOT NULL UNIQUE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX organization_url_key_aliases_organization_id_idx
+  ON organization_url_key_aliases(organization_id);
+```
+
+`url_key` is globally unique so a retired key can never be registered by another
+workspace; the workspace layout resolves an alias to the current key and
+redirects.

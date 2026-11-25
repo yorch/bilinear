@@ -1,6 +1,12 @@
 import { getSetting, validateSettingValue } from '@/lib/config';
 import { type Organization, Prisma, type PrismaClient, type User } from '../../generated/prisma';
 import { ConfigService, type SettingWriter } from '../config/config.service';
+import {
+  afterCreatedAtCursor,
+  decodeCreatedAtCursor,
+  encodeCreatedAtCursor,
+  InvalidCursorError,
+} from '../lib/created-at-cursor';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../lib/limits';
 import { childLogger } from '../lib/logger';
 
@@ -179,6 +185,18 @@ function clampLimit(limit?: number | null): number {
   return Math.min(Math.floor(limit), MAX_LIST_LIMIT);
 }
 
+export interface CursorPage<T> {
+  hasMore: boolean;
+  items: T[];
+  nextCursor: string | null;
+  /** Rows matching the filter, ignoring the cursor. */
+  total: number;
+}
+
+export { decodeCreatedAtCursor, encodeCreatedAtCursor, InvalidCursorError };
+
+const afterCursor = afterCreatedAtCursor;
+
 function daysAgo(days: number): Date {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
@@ -217,6 +235,46 @@ export class PlatformAdminService {
     });
 
     return rows.map(row => this.toTenantSummary(row));
+  }
+
+  async listTenantsPage(params: {
+    query?: string | null;
+    includeArchived?: boolean | null;
+    limit?: number | null;
+    cursor?: string | null;
+  }): Promise<CursorPage<TenantSummary>> {
+    const where: Prisma.OrganizationWhereInput = {};
+    if (!params.includeArchived) {
+      where.archivedAt = null;
+    }
+    if (params.query?.trim()) {
+      const q = params.query.trim();
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { urlKey: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    const after = afterCursor(params.cursor);
+    const take = clampLimit(params.limit);
+
+    const [rows, total] = await Promise.all([
+      this.prisma.organization.findMany({
+        include: { _count: { select: { issues: true, members: true } } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: take + 1,
+        where: after ? { AND: [where, after] } : where,
+      }),
+      this.prisma.organization.count({ where }),
+    ]);
+    const hasMore = rows.length > take;
+    const page = hasMore ? rows.slice(0, take) : rows;
+    const last = page[page.length - 1];
+    return {
+      hasMore,
+      items: page.map(row => this.toTenantSummary(row)),
+      nextCursor: hasMore && last ? encodeCreatedAtCursor(last) : null,
+      total,
+    };
   }
 
   async getTenant(id: string): Promise<TenantDetail | null> {
@@ -363,6 +421,47 @@ export class PlatformAdminService {
     });
 
     return rows.map(row => this.toUserSummary(row));
+  }
+
+  async listUsersPage(params: {
+    query?: string | null;
+    limit?: number | null;
+    cursor?: string | null;
+  }): Promise<CursorPage<PlatformUserSummary>> {
+    const where: Prisma.UserWhereInput = {};
+    if (params.query?.trim()) {
+      const q = params.query.trim();
+      where.OR = [
+        { email: { contains: q, mode: 'insensitive' } },
+        { name: { contains: q, mode: 'insensitive' } },
+        { displayName: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    const after = afterCursor(params.cursor);
+    const take = clampLimit(params.limit);
+
+    const [rows, total] = await Promise.all([
+      this.prisma.user.findMany({
+        include: {
+          orgMemberships: {
+            include: { organization: { select: { id: true, name: true, urlKey: true } } },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: take + 1,
+        where: after ? { AND: [where, after] } : where,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    const hasMore = rows.length > take;
+    const page = hasMore ? rows.slice(0, take) : rows;
+    const last = page[page.length - 1];
+    return {
+      hasMore,
+      items: page.map(row => this.toUserSummary(row)),
+      nextCursor: hasMore && last ? encodeCreatedAtCursor(last) : null,
+      total,
+    };
   }
 
   async getUser(id: string): Promise<PlatformUserSummary | null> {

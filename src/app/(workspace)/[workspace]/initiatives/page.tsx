@@ -1,12 +1,23 @@
 'use client';
 
-import { Archive, Flag, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Archive, ExternalLink, Flag, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { InitiativeArchivedView } from '@/components/initiatives/initiative-archived-view';
+import {
+  InitiativeHealthBadge,
+  InitiativeHealthProvider,
+} from '@/components/initiatives/initiative-health-badge';
+import {
+  INITIATIVE_UNARCHIVE_MUTATION,
+  INITIATIVE_UPDATE_MUTATION,
+} from '@/components/initiatives/initiative-mutations';
 import { InitiativeUpdatesSection } from '@/components/initiatives/initiative-updates-section';
 import { FavoriteToggle } from '@/components/layouts/favorite-toggle';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { PromptDialog } from '@/components/shared/prompt-dialog';
+import { TabSwitcher, tabPanelProps } from '@/components/shared/tab-switcher';
 import { Button } from '@/components/ui/button';
 import { ColorDot } from '@/components/ui/color-dot';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -23,7 +34,7 @@ import { gql, gqlMutate, gqlQuery } from '@/lib/graphql';
 import { toIssueUsers } from '@/lib/issue-mappers';
 import { formatDateOnly } from '@/lib/project-dates';
 import { toast } from '@/lib/toast';
-import { cn, getErrorMessage, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
+import { cn, TOUCH_TARGET, TOUCH_TARGET_SQUARE } from '@/lib/utils';
 import { useStore } from '@/providers/store-provider';
 
 /**
@@ -43,16 +54,6 @@ const INITIATIVE_CREATE_MUTATION = `
         progress
         targetDate
       }
-    }
-  }
-`;
-
-const INITIATIVE_UPDATE_MUTATION = `
-  mutation InitiativeUpdate($id: ID!, $input: InitiativeUpdateInput!) {
-    initiativeUpdate(id: $id, input: $input) {
-      success
-      lastSyncId
-      initiative { id status }
     }
   }
 `;
@@ -77,10 +78,6 @@ const INITIATIVE_REMOVE_PROJECT_MUTATION = `
 
 const INITIATIVE_ARCHIVE_MUTATION = `
   mutation InitiativeArchive($id: ID!) { initiativeArchive(id: $id) { success lastSyncId } }
-`;
-
-const INITIATIVE_UNARCHIVE_MUTATION = `
-  mutation InitiativeUnarchive($id: ID!) { initiativeUnarchive(id: $id) { success lastSyncId } }
 `;
 
 const INITIATIVE_DELETE_MUTATION = `
@@ -112,6 +109,8 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
   const t = useTranslations();
   const STATUS_LABELS = useStatusLabels();
   const { initiativeStore, projectStore, userStore } = useStore();
+  const { workspace } = useParams<{ workspace: string }>();
+  const router = useRouter();
   const { intlLocale } = useFormatters();
   const viewerId = userStore.currentUser?.id ?? '';
   const [expanded, setExpanded] = useState(false);
@@ -174,9 +173,9 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
     try {
       await gqlMutate(INITIATIVE_ARCHIVE_MUTATION, { id: initiative.id });
       toast.undo(t('initiatives.row.archived'), t('common.undo'), () => void handleUnarchive());
-    } catch (err) {
+    } catch {
       initiativeStore.optimisticUpdate(initiative.id, { archivedAt: null });
-      toast.error(getErrorMessage(err, t('initiatives.row.archiveFailed')));
+      toast.error(t('initiatives.row.archiveFailed'));
     }
   };
 
@@ -191,9 +190,9 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
     initiativeStore.optimisticUpdate(initiative.id, { status });
     try {
       await gqlMutate(INITIATIVE_UPDATE_MUTATION, { id: initiative.id, input: { status } });
-    } catch (err) {
+    } catch {
       initiativeStore.optimisticUpdate(initiative.id, { status: previous });
-      toast.error(getErrorMessage(err, t('initiatives.row.statusUpdateFailed')));
+      toast.error(t('initiatives.row.statusUpdateFailed'));
     }
   };
 
@@ -201,11 +200,11 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
     initiativeStore.optimisticUpdate(initiative.id, { archivedAt: null });
     try {
       await gqlMutate(INITIATIVE_UNARCHIVE_MUTATION, { id: initiative.id });
-    } catch (err) {
+    } catch {
       initiativeStore.optimisticUpdate(initiative.id, {
         archivedAt: new Date().toISOString(),
       });
-      toast.error(getErrorMessage(err, t('initiatives.row.unarchiveFailed')));
+      toast.error(t('initiatives.row.unarchiveFailed'));
     }
   };
 
@@ -219,9 +218,9 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
     initiativeStore.optimisticUpdate(initiative.id, { name });
     try {
       await gqlMutate(INITIATIVE_UPDATE_MUTATION, { id: initiative.id, input: { name } });
-    } catch (err) {
+    } catch {
       initiativeStore.optimisticUpdate(initiative.id, { name: previous });
-      toast.error(getErrorMessage(err, t('initiatives.row.renameFailed')));
+      toast.error(t('initiatives.row.renameFailed'));
     }
   };
 
@@ -229,8 +228,8 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
     try {
       await gqlMutate(INITIATIVE_DELETE_MUTATION, { id: initiative.id });
       toast.success(t('initiatives.row.deleted'));
-    } catch (err) {
-      toast.error(getErrorMessage(err, t('initiatives.row.deleteFailed')));
+    } catch {
+      toast.error(t('initiatives.row.deleteFailed'));
     }
   };
 
@@ -272,6 +271,7 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
             ) : null}
           </span>
           {/* No status badge: the group header above the row already says it. */}
+          <InitiativeHealthBadge className="shrink-0" compact initiativeId={initiative.id} />
           <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
             {t('initiatives.row.projectCount', { count: projectIds.length })}
           </span>
@@ -298,6 +298,17 @@ function InitiativeRow({ depth = 0, initiative }: { depth?: number; initiative: 
         >
           {close => (
             <>
+              <button
+                className={cn(POPOVER_ITEM_CLASS, 'text-foreground-secondary')}
+                onClick={() => {
+                  close();
+                  router.push(`/${workspace}/initiatives/${initiative.id}`);
+                }}
+                type="button"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                {t('initiatives.row.open')}
+              </button>
               <button
                 className={cn(POPOVER_ITEM_CLASS, 'text-foreground-secondary')}
                 onClick={() => {
@@ -488,6 +499,7 @@ const InitiativesPage = observer(function InitiativesPage() {
   const { initiativeStore, syncStore } = useStore();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
+  const [view, setView] = useState<'active' | 'archived'>('active');
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
@@ -524,83 +536,100 @@ const InitiativesPage = observer(function InitiativesPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      <PageHeader
-        actions={
-          <Button
-            onClick={() => setCreating(c => !c)}
-            size="sm"
-            type="button"
-            variant={creating ? 'outline' : 'default'}
-          >
-            {creating ? (
-              t('common.cancel')
-            ) : (
-              <>
-                <Plus className="h-3.5 w-3.5" />
-                {t('initiatives.page.newInitiative')}
-              </>
-            )}
-          </Button>
-        }
-        count={rootInitiatives.length}
-        title={t('initiatives.page.title')}
-      />
+    <InitiativeHealthProvider>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <PageHeader
+          actions={
+            <Button
+              onClick={() => setCreating(c => !c)}
+              size="sm"
+              type="button"
+              variant={creating ? 'outline' : 'default'}
+            >
+              {creating ? (
+                t('common.cancel')
+              ) : (
+                <>
+                  <Plus className="h-3.5 w-3.5" />
+                  {t('initiatives.page.newInitiative')}
+                </>
+              )}
+            </Button>
+          }
+          count={rootInitiatives.length}
+          title={t('initiatives.page.title')}
+        />
 
-      {creating ? (
         <Toolbar>
-          <Input
-            className="flex-1"
-            onChange={e => setName(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                handleCreate();
-              } else if (e.key === 'Escape') {
-                setCreating(false);
-                setName('');
-              }
-            }}
-            placeholder={t('initiatives.page.namePlaceholder')}
-            ref={inputRef}
-            value={name}
+          <TabSwitcher
+            ariaLabel={t('initiatives.page.views.label')}
+            idPrefix="initiatives-view"
+            onChange={setView}
+            options={[
+              { label: t('initiatives.page.views.active'), value: 'active' },
+              { label: t('initiatives.page.views.archived'), value: 'archived' },
+            ]}
+            value={view}
           />
-          <Button onClick={handleCreate} size="sm" type="button">
-            {t('common.create')}
-          </Button>
         </Toolbar>
-      ) : null}
 
-      <div className="flex-1 overflow-y-auto">
-        {grouped.length === 0 ? (
-          <EmptyState
-            action={
-              <Button onClick={() => setCreating(true)} size="sm" type="button">
-                <Plus className="h-3.5 w-3.5" />
-                {t('initiatives.page.newInitiative')}
-              </Button>
-            }
-            description={t('initiatives.page.emptyDescription')}
-            icon={<Flag className="h-5 w-5" />}
-            testId="empty-state"
-            title={t('initiatives.page.emptyTitle')}
-          />
-        ) : (
-          grouped.map(({ status, items }) => (
-            <div key={status}>
-              <div className="border-b border-border bg-card px-4 py-1.5">
-                <span className="text-xs font-medium text-foreground-secondary">
-                  {STATUS_LABELS[status]}
-                </span>
-                <span className="ml-2 text-xs text-muted-foreground">{items.length}</span>
+        {creating && view === 'active' ? (
+          <Toolbar>
+            <Input
+              className="flex-1"
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  handleCreate();
+                } else if (e.key === 'Escape') {
+                  setCreating(false);
+                  setName('');
+                }
+              }}
+              placeholder={t('initiatives.page.namePlaceholder')}
+              ref={inputRef}
+              value={name}
+            />
+            <Button onClick={handleCreate} size="sm" type="button">
+              {t('common.create')}
+            </Button>
+          </Toolbar>
+        ) : null}
+
+        <div {...tabPanelProps('initiatives-view', view)} className="flex-1 overflow-y-auto">
+          {view === 'archived' ? (
+            <InitiativeArchivedView />
+          ) : grouped.length === 0 ? (
+            <EmptyState
+              action={
+                <Button onClick={() => setCreating(true)} size="sm" type="button">
+                  <Plus className="h-3.5 w-3.5" />
+                  {t('initiatives.page.newInitiative')}
+                </Button>
+              }
+              description={t('initiatives.page.emptyDescription')}
+              icon={<Flag className="h-5 w-5" />}
+              testId="empty-state"
+              title={t('initiatives.page.emptyTitle')}
+            />
+          ) : (
+            grouped.map(({ status, items }) => (
+              <div key={status}>
+                <div className="border-b border-border bg-card px-4 py-1.5">
+                  <span className="text-xs font-medium text-foreground-secondary">
+                    {STATUS_LABELS[status]}
+                  </span>
+                  <span className="ml-2 text-xs text-muted-foreground">{items.length}</span>
+                </div>
+                {items.map(initiative => (
+                  <InitiativeRow initiative={initiative} key={initiative.id} />
+                ))}
               </div>
-              {items.map(initiative => (
-                <InitiativeRow initiative={initiative} key={initiative.id} />
-              ))}
-            </div>
-          ))
-        )}
+            ))
+          )}
+        </div>
       </div>
-    </div>
+    </InitiativeHealthProvider>
   );
 });
 

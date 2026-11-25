@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, CornerLeftUp, X } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CustomFieldsEditor } from '@/components/custom-fields/custom-fields-editor';
@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
+import { collectDescendantIds } from '@/lib/issue-hierarchy';
 import { getBranchName } from '@/lib/issue-utils';
 import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
@@ -28,7 +29,10 @@ import { ActivityTimeline } from './activity-timeline';
 import { AiInsights } from './ai-insights';
 import { CommentThread } from './comment-thread';
 import { FileAttachments } from './file-attachments';
+import { IssuePicker } from './issue-picker';
 import { IssueReactionBar } from './issue-reaction-bar';
+import { IssueReminderChip } from './issue-reminder-chip';
+import type { OpenProperty } from './issue-row';
 import { PullRequestsSection } from './pull-requests-section';
 import { RelationsSection } from './relations-section';
 import { isIssueSnoozed } from './snooze-presets';
@@ -52,7 +56,11 @@ export interface IssueDetailContentProps {
   issue: IssueDetail;
   labels: IssueLabel[];
   layout: IssueDetailLayout;
+  /** Called when a popover opened through `openProperty` closes, so the next shortcut press re-opens it. */
+  onPropertyClose?: () => void;
   onUpdate: (id: string, patch: Record<string, unknown>) => void;
+  /** Property popover to open programmatically (full-page keyboard shortcuts). */
+  openProperty?: OpenProperty;
   states: WorkflowState[];
   users: IssueUser[];
 }
@@ -69,7 +77,9 @@ export const IssueDetailContent = observer(function IssueDetailContent({
   users,
   labels,
   layout,
+  onPropertyClose,
   onUpdate,
+  openProperty = null,
 }: IssueDetailContentProps) {
   const t = useTranslations();
   const { formatDate } = useFormatters();
@@ -224,24 +234,90 @@ export const IssueDetailContent = observer(function IssueDetailContent({
     </div>
   ) : null;
 
+  const labelClass = cn('text-muted-foreground', isPage && 'max-lg:hidden');
+  const closeOpened = onPropertyClose;
+
+  const parentId = storeRow?.parentId ?? null;
+  const parentIssue = parentId ? issueStore.findById(parentId) : null;
+  // A parent can't be the issue itself or anything beneath it (a loop); the
+  // server refuses those too.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pool.size is the reactive trigger per repo convention
+  const parentExcluded = useMemo(
+    () => collectDescendantIds(issueStore.pool.values(), issue.id),
+    [issue.id, issueStore.pool.size],
+  );
+  const parentField = (
+    <div className="flex min-w-0 items-center gap-1">
+      <IssuePicker
+        align="right"
+        excludeId={issue.id}
+        excludeIds={parentExcluded}
+        onSelect={picked => handleUpdate(issue.id, { parentId: picked.id })}
+        triggerChildren={
+          parentIssue ? (
+            <span className="flex min-w-0 items-center gap-1.5 text-xs">
+              <CornerLeftUp className="h-3 w-3 shrink-0 text-muted-foreground" />
+              <span className="shrink-0 font-mono text-muted-foreground">
+                {parentIssue.identifier}
+              </span>
+              <span className="max-w-[10rem] truncate text-foreground-secondary">
+                {parentIssue.title}
+              </span>
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <CornerLeftUp className="h-3 w-3" />
+              {t('issueDetail.properties.setParent')}
+            </span>
+          )
+        }
+        triggerClassName={cn('rounded px-1 py-0.5 hover:bg-accent', TOUCH_TARGET)}
+        triggerTitle={t('issueDetail.properties.setParent')}
+      />
+      {parentIssue && (
+        <button
+          aria-label={t('issueDetail.properties.removeParent')}
+          className={cn(
+            'shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground',
+            TOUCH_TARGET,
+          )}
+          onClick={() => handleUpdate(issue.id, { parentId: null })}
+          title={t('issueDetail.properties.removeParent')}
+          type="button"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  );
+
   const properties = (
     <div
       className={cn(
         'grid grid-cols-[auto_1fr] items-center gap-x-4 text-sm',
         isPage ? 'gap-y-3' : 'gap-y-2',
+        // Below lg the page's rail would push the description a full screen
+        // down (ten label/value rows), so it collapses to a wrapped row of
+        // compact chips: the pickers already render as icon+value triggers.
+        isPage && 'max-lg:flex max-lg:flex-wrap max-lg:gap-x-1 max-lg:gap-y-1',
       )}
+      data-testid="issue-properties"
     >
-      <span className="text-muted-foreground">{t('issueDetail.properties.status')}</span>
+      <span className={labelClass}>{t('issueDetail.properties.status')}</span>
       <StatusSelect
+        forceOpen={openProperty === 'status'}
         onChange={stateId => handleUpdate(issue.id, { stateId })}
+        onClose={closeOpened}
         states={states}
         value={issue.stateId}
       />
 
-      <span className="text-muted-foreground">{t('issueDetail.properties.priority')}</span>
+      <span className={labelClass}>{t('issueDetail.properties.priority')}</span>
       <div className="flex min-w-0 items-center gap-1.5">
         <PrioritySelect
+          forceOpen={openProperty === 'priority'}
           onChange={priority => handleUpdate(issue.id, { priority })}
+          onClose={closeOpened}
           value={issue.priority}
         />
         <span className="truncate text-xs text-muted-foreground">
@@ -249,10 +325,12 @@ export const IssueDetailContent = observer(function IssueDetailContent({
         </span>
       </div>
 
-      <span className="text-muted-foreground">{t('issueDetail.properties.assignee')}</span>
+      <span className={labelClass}>{t('issueDetail.properties.assignee')}</span>
       <div className="flex min-w-0 items-center gap-1.5">
         <AssigneeSelect
+          forceOpen={openProperty === 'assignee'}
           onChange={assigneeId => handleUpdate(issue.id, { assigneeId })}
+          onClose={closeOpened}
           users={users}
           value={issue.assigneeId}
         />
@@ -261,30 +339,34 @@ export const IssueDetailContent = observer(function IssueDetailContent({
         </span>
       </div>
 
-      <span className="text-muted-foreground">{t('issueDetail.properties.labels')}</span>
+      <span className={labelClass}>{t('issueDetail.properties.labels')}</span>
       <div className="flex min-w-0 flex-wrap items-center gap-1">
         <LabelSelect
+          forceOpen={openProperty === 'label'}
           labels={labels}
           onChange={labelIds => handleUpdate(issue.id, { labelIds })}
+          onClose={closeOpened}
           showNames
           teamId={issue.teamId}
           value={issue.labels.map(l => l.id)}
         />
       </div>
 
-      <span className="text-muted-foreground">{t('issueDetail.properties.project')}</span>
+      <span className={labelClass}>{t('issueDetail.properties.project')}</span>
       <ProjectSelect
         onChange={projectId =>
           // A milestone belongs to its project, so moving projects clears it.
           handleUpdate(issue.id, { projectId, projectMilestoneId: null })
         }
+        onClose={closeOpened}
+        open={openProperty === 'project'}
         value={issue.projectId ?? null}
       />
 
       {/* Milestone — only meaningful once the issue is in a project */}
       {issue.projectId && (
         <>
-          <span className="text-muted-foreground">{t('issueDetail.properties.milestone')}</span>
+          <span className={labelClass}>{t('issueDetail.properties.milestone')}</span>
           <MilestoneSelect
             onChange={projectMilestoneId => handleUpdate(issue.id, { projectMilestoneId })}
             projectId={issue.projectId}
@@ -293,26 +375,36 @@ export const IssueDetailContent = observer(function IssueDetailContent({
         </>
       )}
 
-      <span className="text-muted-foreground">{t('issueDetail.properties.cycle')}</span>
+      <span className={labelClass}>{t('issueDetail.properties.cycle')}</span>
       <div className="flex min-w-0 items-center gap-1.5">
         <CycleSelect
           onChange={cycleId => handleUpdate(issue.id, { cycleId })}
+          onClose={closeOpened}
+          open={openProperty === 'cycle'}
           teamId={issue.teamId}
           value={issue.cycleId ?? null}
         />
       </div>
 
-      <span className="text-muted-foreground">{t('issueDetail.properties.startDate')}</span>
+      <span className={labelClass}>{t('issueDetail.properties.parent')}</span>
+      {parentField}
+
+      <span className={labelClass}>{t('issueDetail.properties.startDate')}</span>
       <DueDatePicker
+        iconBelowLg
+        kind="start"
         onChange={startDate => handleUpdate(issue.id, { startDate })}
         tone="neutral"
         value={issue.startDate}
       />
 
-      <span className="text-muted-foreground">{t('issueDetail.properties.dueDate')}</span>
+      <span className={labelClass}>{t('issueDetail.properties.dueDate')}</span>
       <div className="flex min-w-0 items-center gap-1.5">
         <DueDatePicker
+          forceOpen={openProperty === 'dueDate'}
+          iconBelowLg
           onChange={dueDate => handleUpdate(issue.id, { dueDate })}
+          onClose={closeOpened}
           stateType={states.find(st => st.id === issue.stateId)?.type}
           value={issue.dueDate}
         />
@@ -321,18 +413,21 @@ export const IssueDetailContent = observer(function IssueDetailContent({
       {/* Estimate — only shown when the team uses estimation */}
       {estimationType !== 'notUsed' && (
         <>
-          <span className="text-muted-foreground">{t('issueDetail.properties.estimate')}</span>
+          <span className={labelClass}>{t('issueDetail.properties.estimate')}</span>
           <EstimatePicker
             estimationType={estimationType}
+            forceOpen={openProperty === 'estimate'}
+            iconBelowLg
             onChange={estimate => handleUpdate(issue.id, { estimate: estimate ?? undefined })}
+            onClose={closeOpened}
             value={issue.estimate}
           />
         </>
       )}
 
       {/* Branch name — derived until the server assigns one */}
-      <span className="text-muted-foreground">{t('issueDetail.properties.branch')}</span>
-      <div className="flex min-w-0 items-center gap-1">
+      <span className={labelClass}>{t('issueDetail.properties.branch')}</span>
+      <div className={cn('flex min-w-0 items-center gap-1', isPage && 'max-lg:hidden')}>
         <code
           className="min-w-0 truncate font-mono text-xs text-foreground-secondary"
           data-testid="issue-branch-name"
@@ -462,6 +557,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
             {/* The full page needs a document heading; the panel is a dialog. */}
             <h1 className="m-0 text-base font-normal">{title}</h1>
             {snoozedBadge}
+            <IssueReminderChip issueId={issue.id} />
           </div>
           {description}
           {sections}
@@ -482,6 +578,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
     <div className="flex flex-col gap-4 p-5">
       {title}
       {snoozedBadge}
+      <IssueReminderChip issueId={issue.id} />
       {properties}
       <CustomFieldsEditor issueId={issue.id} teamId={issue.teamId} />
       {description}

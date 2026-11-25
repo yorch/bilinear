@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AdminListFooter } from '@/components/admin/admin-list-footer';
 import { useAdminId } from '@/components/admin/admin-shell';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { InlineRetry } from '@/components/shared/inline-retry';
@@ -11,9 +12,12 @@ import { Input } from '@/components/ui/input';
 import { ModalDialog } from '@/components/ui/modal-dialog';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useLoadMore } from '@/hooks/use-load-more';
 import { useRetryableFetch } from '@/hooks/use-retryable-fetch';
 import { useTranslations } from '@/hooks/use-translations';
 import {
+  type AdminPage,
+  emptyAdminPage,
   fetchUsers,
   type PlatformUser,
   reactivateUser,
@@ -50,13 +54,31 @@ export default function AdminUsersPage() {
   const [pickingOrgFor, setPickingOrgFor] = useState<PlatformUser | null>(null);
 
   const {
-    data: users,
-    setData: setUsers,
+    data: page,
+    setData: setPage,
     loading,
     error,
     cause,
     refetch: load,
-  } = useRetryableFetch<PlatformUser[]>(() => fetchUsers(applied), [applied], []);
+  } = useRetryableFetch<AdminPage<PlatformUser>>(
+    () => fetchUsers(applied),
+    [applied],
+    emptyAdminPage<PlatformUser>(),
+  );
+  const users = page.items;
+
+  function setUsers(update: (prev: PlatformUser[]) => PlatformUser[]) {
+    setPage(prev => ({ ...prev, items: update(prev.items) }));
+  }
+
+  const { loadMore: handleLoadMore, loadingMore } = useLoadMore<AdminPage<PlatformUser>>({
+    fetchMore: cursor => fetchUsers(applied, cursor),
+    merge: (prev, next) => ({ ...next, items: [...prev.items, ...next.items] }),
+    onError: e => toast.error(getErrorMessage(e, t('common.somethingWentWrong'))),
+    page,
+    resetKey: applied,
+    setPage,
+  });
 
   const isSelf = (u: PlatformUser) => adminId !== null && u.id === adminId;
 
@@ -155,7 +177,7 @@ export default function AdminUsersPage() {
         <EmptyState size="compact" title={t('admin.users.empty')} />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[44rem] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted text-left text-xs font-medium text-muted-foreground">
                 <th className="px-4 py-2">{t('admin.users.colUser')}</th>
@@ -206,7 +228,7 @@ export default function AdminUsersPage() {
                     </Badge>
                   </td>
                   <td className="px-4 py-2">
-                    <div className="flex flex-wrap justify-end gap-1.5">
+                    <div className="flex flex-nowrap justify-end gap-1.5 whitespace-nowrap">
                       <Button
                         disabled={
                           busyId === u.id || u.organizations.length === 0 || !u.active || isSelf(u)
@@ -274,6 +296,15 @@ export default function AdminUsersPage() {
             </tbody>
           </table>
         </div>
+      )}
+      {!loading && !error && users.length > 0 && (
+        <AdminListFooter
+          hasMore={page.hasMore}
+          loadingMore={loadingMore}
+          onLoadMore={() => void handleLoadMore()}
+          shown={users.length}
+          total={page.total}
+        />
       )}
       <ConfirmDialog
         confirmLabel={

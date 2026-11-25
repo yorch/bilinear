@@ -33,6 +33,16 @@ vi.mock('@/hooks/use-translations', () => ({
 vi.mock('@/hooks/use-theme', () => ({ useTheme: () => ({ setTheme: vi.fn() }) }));
 vi.mock('@/providers/accent-provider', () => ({ useAccent: () => ({ setAccent: vi.fn() }) }));
 vi.mock('@/hooks/use-issue-update', () => ({ useIssueUpdate: () => vi.fn() }));
+vi.mock('@/hooks/use-issue-reminders', () => ({
+  useIssueReminders: () => ({
+    clearReminder: vi.fn(),
+    reminderFor: () => null,
+    setReminder: vi.fn(),
+  }),
+}));
+vi.mock('@/hooks/use-formatters', () => ({
+  useFormatters: () => ({ formatDateTime: (d: Date) => String(d) }),
+}));
 vi.mock('next/navigation', () => ({
   useParams: () => ({ workspace: 'demo' }),
   usePathname: () => '/demo',
@@ -69,6 +79,21 @@ describe('CommandPalette', () => {
       fireEvent.keyDown(window, { key: 'Escape' });
     });
     expect(input().value).toBe('login');
+  });
+
+  it('offers "Remind me…" in the issue actions and opens the reminder presets', () => {
+    render(<CommandPalette />);
+    fireEvent.change(input(), { target: { value: 'login' } });
+    act(() => {
+      input().setSelectionRange(5, 5);
+      fireEvent.keyDown(window, { key: 'Tab' });
+    });
+    const remind = screen.getByText('commandPalette.submenu.remindMe');
+    act(() => {
+      fireEvent.click(remind);
+    });
+    expect(screen.getByText(/^reminders\.tomorrow/)).toBeTruthy();
+    expect(screen.getByText(/^reminders\.nextWeek/)).toBeTruthy();
   });
 
   it('groups sections with role=group instead of loose presentation labels', () => {

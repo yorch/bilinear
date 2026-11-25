@@ -13,7 +13,9 @@ export class ProjectStore {
       applyMilestoneSyncAction: action,
       applySyncAction: action,
       applyUpdateSyncAction: action,
+      archived: computed,
       milestonePool: observable,
+      optimisticUpdate: action,
       pool: observable,
       updatePool: observable,
       upsertMany: action,
@@ -32,6 +34,20 @@ export class ProjectStore {
         }
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
+  }
+
+  /** In-session archived projects (archived rows never ride the bootstrap). */
+  get archived(): DBProject[] {
+    return Array.from(this.pool.values())
+      .filter(p => p.archivedAt && !p.trashed)
+      .sort((a, b) => (b.archivedAt ?? '').localeCompare(a.archivedAt ?? ''));
+  }
+
+  optimisticUpdate(id: string, patch: Partial<DBProject>) {
+    const existing = this.pool.get(id);
+    if (existing) {
+      this.pool.set(id, { ...existing, ...patch });
+    }
   }
 
   findById(id: string): DBProject | null {

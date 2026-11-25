@@ -1,12 +1,13 @@
 'use client';
 
+import { runInAction } from 'mobx';
 import { useCallback, useMemo, useState } from 'react';
 import type { BoardGroupBy, BoardSwimlaneBy } from '@/components/issues/board-view';
 import type { OpenProperty } from '@/components/issues/issue-row';
 import type { ViewMode } from '@/components/issues/view-toggle';
 import { stepVisualOrder } from '@/components/issues/visual-order';
 import { useHotkeys } from '@/hooks/use-hotkeys';
-import { useIssueRemoval } from '@/hooks/use-issue-removal';
+import { ISSUE_DELETE_MUTATION, useIssueRemoval } from '@/hooks/use-issue-removal';
 import { useTranslations } from '@/hooks/use-translations';
 import { ISSUE_ARCHIVE_MUTATION } from '@/lib/graphql-queries';
 import { toIssueDetail } from '@/lib/issue-mappers';
@@ -27,8 +28,13 @@ interface UseIssueListPageOptions {
   initialSwimlaneBy?: BoardSwimlaneBy;
   /** View mode to start with (a saved view's stored `layout`). */
   initialViewMode?: ViewMode;
-  /** Currently visible/filtered issues, used for j/k navigation bounds. */
-  issues: IssueDetail[];
+  /**
+   * Currently visible/filtered issues, used for j/k navigation bounds. A
+   * function receives the live view mode, for pages whose visible set depends on
+   * the layout (the list-only "Completed issues" option); the resolved array is
+   * returned as `issues`.
+   */
+  issues: IssueDetail[] | ((viewMode: ViewMode) => IssueDetail[]);
   /** Extra side effect to run when an issue is opened (e.g. recent-items tracking). */
   onOpen?: (id: string) => void;
 }
@@ -78,7 +84,7 @@ function syncUrl(href: string): void {
  * `<ConfirmDialog {...deleteDialogProps} />` to complete it.
  */
 export function useIssueListPage({
-  issues,
+  issues: issuesOrFor,
   basePath,
   buildHref,
   initialBoardGroupBy,
@@ -97,6 +103,7 @@ export function useIssueListPage({
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode ?? 'list');
   const [boardGroupBy, setBoardGroupBy] = useState<BoardGroupBy>(initialBoardGroupBy ?? 'status');
   const [swimlaneBy, setSwimlaneBy] = useState<BoardSwimlaneBy>(initialSwimlaneBy ?? 'none');
+  const issues = typeof issuesOrFor === 'function' ? issuesOrFor(viewMode) : issuesOrFor;
 
   const hasSelection = selectedId !== null;
 
@@ -165,6 +172,40 @@ export function useIssueListPage({
       setSelectedId(prev => (prev && ids.includes(prev) ? null : prev));
     },
     [issueStore, txQueue, t, handleUnarchive],
+  );
+
+  /**
+   * Delete several issues after the bulk bar's own confirmation. Optimistic:
+   * rows leave the pool at once and come back (with one error toast) if the
+   * server refuses that issue. One summary toast, not one per row.
+   */
+  const handleDeleteMany = useCallback(
+    (ids: string[]) => {
+      if (ids.length === 0) {
+        return;
+      }
+      for (const id of ids) {
+        const snapshot = issueStore.findById(id);
+        runInAction(() => {
+          issueStore.pool.delete(id);
+        });
+        txQueue.enqueue(
+          ISSUE_DELETE_MUTATION,
+          { id },
+          {
+            onError: err => {
+              toast.error(getErrorMessage(err, t('issues.deleteFailed')));
+              if (snapshot) {
+                issueStore.applySyncAction('I', id, snapshot);
+              }
+            },
+          },
+        );
+        handleDeleted(id);
+      }
+      toast.success(t('issues.deletedManyToast', { count: ids.length }));
+    },
+    [issueStore, txQueue, t, handleDeleted],
   );
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
@@ -294,8 +335,10 @@ export function useIssueListPage({
     detailIssueId,
     handleArchive,
     handleArchiveMany,
+    handleDeleteMany,
     handleOpen,
     hasSelection,
+    issues,
     openProperty,
     requestDelete,
     selectedId,

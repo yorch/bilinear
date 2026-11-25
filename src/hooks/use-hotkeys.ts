@@ -85,6 +85,59 @@ function isNativeActivationTarget(target: EventTarget | null): boolean {
   return (target as HTMLElement).isContentEditable || target.matches(NATIVE_ACTIVATION_SELECTOR);
 }
 
+/**
+ * Shared "a chord's first key was just pressed" flag. Every `useChord` writes
+ * it, every plain `useHotkeys` reads it: without it, `G` then `I` both ran the
+ * chord AND the single-key `i` (assign to me) because the two listeners see
+ * the same keydown. Cleared on a macrotask AFTER the second key's event so
+ * listener registration order cannot matter.
+ */
+let chordPending = false;
+let chordReleaseTimer: ReturnType<typeof setTimeout> | null = null;
+
+function setChordPending(): void {
+  if (chordReleaseTimer) {
+    clearTimeout(chordReleaseTimer);
+    chordReleaseTimer = null;
+  }
+  chordPending = true;
+}
+
+function releaseChordPending(delayMs = 0): void {
+  if (chordReleaseTimer) {
+    clearTimeout(chordReleaseTimer);
+  }
+  chordReleaseTimer = setTimeout(() => {
+    chordPending = false;
+    chordReleaseTimer = null;
+  }, delayMs);
+}
+
+/** Test seam: whether a chord is currently awaiting its second key. */
+export function isChordPending(): boolean {
+  return chordPending;
+}
+
+/**
+ * Whether a modal surface or open popover currently owns the keyboard.
+ *
+ * Page-level single-key shortcuts that decide something irreversible-ish (the
+ * triage keys) must not fire from behind a dialog: with the `?` help or the
+ * `c` create modal open and a button focused, the keydown still reaches
+ * `window`. Covers native `<dialog open>`, ARIA dialogs/modals, any expanded
+ * or `aria-haspopup` trigger.
+ */
+export function isOverlayOpen(): boolean {
+  if (typeof document === 'undefined') {
+    return false;
+  }
+  return (
+    document.querySelector(
+      'dialog[open], [role="dialog"]:not(dialog), [role="alertdialog"], [aria-modal="true"], [aria-haspopup][aria-expanded="true"]',
+    ) !== null
+  );
+}
+
 export interface HotkeyOptions {
   /**
    * When true, the shortcut fires even when focus is inside an input,
@@ -99,6 +152,14 @@ export interface HotkeyOptions {
    * @default true
    */
   enabled?: boolean;
+  /**
+   * When true, auto-repeat keydowns (`e.repeat`, from holding the key) are
+   * ignored. Set it on shortcuts that perform a decision (accept / decline),
+   * where holding the key would otherwise act on successive items. Navigation
+   * (J / K) leaves it off so holding the key keeps scrolling the list.
+   * @default false
+   */
+  ignoreRepeat?: boolean;
 }
 
 /**
@@ -120,7 +181,7 @@ export function useHotkeys(
   options: HotkeyOptions = {},
   deps: unknown[] = [],
 ) {
-  const { allowInInput = false, enabled = true } = options;
+  const { allowInInput = false, enabled = true, ignoreRepeat = false } = options;
   const keys = Array.isArray(key) ? key : [key];
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: keys tracked via join; keys.some is stable
@@ -137,6 +198,10 @@ export function useHotkeys(
         return;
       }
 
+      if (ignoreRepeat && e.repeat) {
+        return;
+      }
+
       if (!allowInInput) {
         const target = e.target as HTMLElement;
         if (
@@ -150,6 +215,12 @@ export function useHotkeys(
 
       const matched = keys.find(k => eventMatchesBinding(e, k));
       if (!matched) {
+        return;
+      }
+
+      // A chord (G then I, …) owns the next bare keypress; a standalone
+      // single-key binding must not also fire on its second key.
+      if (chordPending && !e.metaKey && !e.ctrlKey && !e.altKey) {
         return;
       }
 
@@ -180,7 +251,7 @@ export function useHotkeys(
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [keys.join(','), enabled, allowInInput, handler, ...deps]);
+  }, [keys.join(','), enabled, allowInInput, ignoreRepeat, handler, ...deps]);
 }
 
 /**
@@ -190,11 +261,10 @@ export function useHotkeys(
  * be pressed. Both keys are single characters (no modifiers). The chord is
  * suppressed when focus is inside an input.
  *
- * Caveat: if a separate `useHotkeys` is registered for the same first key (e.g.
- * another `useHotkeys('g', ...)`) both handlers will fire when that key is
- * pressed alone. Currently no standalone 'g' shortcut exists in the codebase, so
- * this is safe. If one is added in future, give the chord priority by checking a
- * shared "awaiting chord" ref before running the standalone handler.
+ * While a chord is pending, plain `useHotkeys` bindings skip the next bare
+ * keypress (see `chordPending`), so `G` then `I` never also triggers a
+ * standalone `i`. A standalone binding on the chord's FIRST key still fires
+ * on that key itself — don't register one.
  */
 export function useChord(
   firstKey: string,
@@ -226,8 +296,10 @@ export function useChord(
       if (!awaitingSecond && key === firstKey.toLowerCase()) {
         e.preventDefault();
         awaitingSecond = true;
+        setChordPending();
         timer = setTimeout(() => {
           awaitingSecond = false;
+          releaseChordPending();
         }, 1000);
         return;
       }
@@ -237,6 +309,9 @@ export function useChord(
           clearTimeout(timer);
         }
         awaitingSecond = false;
+        // Keep the flag up for the rest of THIS event so a single-key
+        // listener that runs after us still sees the chord in flight.
+        releaseChordPending();
         if (key === secondKey.toLowerCase()) {
           e.preventDefault();
           handler(e);
@@ -249,6 +324,9 @@ export function useChord(
       window.removeEventListener('keydown', onKeyDown);
       if (timer) {
         clearTimeout(timer);
+      }
+      if (awaitingSecond) {
+        releaseChordPending();
       }
     };
   }, [firstKey, secondKey, handler, ...deps]);

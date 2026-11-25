@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createMockPrisma } from '@/test/prisma-mock';
-import { CustomViewService } from './custom-view.service';
+import { CustomViewInputError, CustomViewService } from './custom-view.service';
 
 const TEST_ORG_ID = '00000000-0000-0000-0000-000000000001';
 const TEST_USER_ID = '00000000-0000-0000-0000-000000000010';
@@ -34,6 +34,23 @@ describe('CustomViewService', () => {
   beforeEach(() => {
     prisma = createMockPrisma();
     service = new CustomViewService(prisma as never);
+  });
+
+  describe('filter validation', () => {
+    it.each([
+      [{ conditions: [null] }],
+      [{ conditions: [{ field: 'zzz', operator: 'eq' }] }],
+      [{ conditions: Array.from({ length: 80 }, () => ({ field: 'priority', operator: 'eq' })) }],
+    ])('rejects a malformed filter set on create and update (%#)', async filters => {
+      await expect(
+        service.create(TEST_ORG_ID, TEST_USER_ID, { filters: filters as object, name: 'x' }),
+      ).rejects.toBeInstanceOf(CustomViewInputError);
+      await expect(
+        service.update(TEST_VIEW.id, { filters: filters as object }),
+      ).rejects.toBeInstanceOf(CustomViewInputError);
+      expect(prisma.customView.create).not.toHaveBeenCalled();
+      expect(prisma.customView.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('create', () => {

@@ -116,9 +116,9 @@ export class OrganizationService {
    *
    * `urlKey` is validated and its uniqueness violation remapped the same way
    * `createWithOwner` does, because changing it is the same operation as
-   * choosing it. Note that changing it invalidates existing workspace URLs;
-   * that is the caller's decision to make, and the resolver gates it on
-   * owner/admin.
+   * choosing it. Note that the old key is retired to an alias row, so existing
+   * workspace URLs redirect to the new one and nobody else can claim the old
+   * key. The resolver gates this on owner/admin.
    */
   async update(
     orgId: string,
@@ -145,15 +145,44 @@ export class OrganizationService {
       throw new InvalidLogoUrlError();
     }
     try {
-      return await this.prisma.organization.update({
-        data: {
+      return await this.prisma.$transaction(async tx => {
+        const data = {
           ...(input.name !== undefined ? { name: input.name } : {}),
-          ...(input.urlKey !== undefined ? { urlKey: input.urlKey } : {}),
           // `logoUrl` is nullable, so `null` is a meaningful value (clear it)
           // and must be distinguished from `undefined` (leave it alone).
           ...(input.logoUrl !== undefined ? { logoUrl: input.logoUrl } : {}),
-        },
-        where: { id: orgId },
+        };
+        if (input.urlKey === undefined) {
+          return tx.organization.update({ data, where: { id: orgId } });
+        }
+        const current = await tx.organization.findUnique({
+          select: { urlKey: true },
+          where: { id: orgId },
+        });
+        if (!current || current.urlKey === input.urlKey) {
+          return tx.organization.update({ data, where: { id: orgId } });
+        }
+        // The new key may be one this org used to have (switching back); it
+        // may not be another org's retired key.
+        const alias = await tx.organizationUrlKeyAlias.findUnique({
+          where: { urlKey: input.urlKey },
+        });
+        if (alias && alias.organizationId !== orgId) {
+          throw new UrlKeyTakenError();
+        }
+        if (alias) {
+          await tx.organizationUrlKeyAlias.delete({ where: { id: alias.id } });
+        }
+        const updated = await tx.organization.update({
+          data: { ...data, urlKey: input.urlKey },
+          where: { id: orgId },
+        });
+        // Retire, don't free: old links keep resolving (to a redirect) and
+        // nobody else can claim the key and receive them.
+        await tx.organizationUrlKeyAlias.create({
+          data: { organizationId: orgId, urlKey: current.urlKey },
+        });
+        return updated;
       });
     } catch (err) {
       if (isUniqueViolation(err)) {
@@ -161,6 +190,18 @@ export class OrganizationService {
       }
       throw err;
     }
+  }
+
+  /**
+   * The organization that used to own `urlKey`, if any — what the workspace
+   * layout redirects an old link to. Null for a key that was never retired.
+   */
+  async findByRetiredUrlKey(urlKey: string): Promise<{ id: string; urlKey: string } | null> {
+    const alias = await this.prisma.organizationUrlKeyAlias.findUnique({
+      select: { organization: { select: { id: true, urlKey: true } } },
+      where: { urlKey },
+    });
+    return alias?.organization ?? null;
   }
 
   /**
@@ -174,6 +215,14 @@ export class OrganizationService {
 
     try {
       return await this.prisma.$transaction(async tx => {
+        // A retired key still belongs to the workspace that renamed away from it.
+        const retired = await tx.organizationUrlKeyAlias.findUnique({
+          select: { id: true },
+          where: { urlKey: input.urlKey },
+        });
+        if (retired) {
+          throw new UrlKeyTakenError();
+        }
         const org = await tx.organization.create({
           data: { name: input.name, urlKey: input.urlKey },
         });
@@ -336,6 +385,9 @@ export class OrganizationService {
       await tx.teamMembership.deleteMany({
         where: { team: { organizationId: orgId }, userId },
       });
+      // Pending reminders are personal to a workspace the user is leaving; the
+      // sweep also consumes any it races past without notifying.
+      await tx.issueReminder.deleteMany({ where: { organizationId: orgId, userId } });
       return tx.organizationMember.delete({
         where: { organizationId_userId: { organizationId: orgId, userId } },
       });

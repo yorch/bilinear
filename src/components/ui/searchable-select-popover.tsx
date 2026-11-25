@@ -27,6 +27,11 @@ interface SearchableSelectPopoverProps<T> {
   footer?: (ctx: { close: () => void; search: string }) => ReactNode;
   forceOpen?: boolean;
   getKey: (item: T) => string;
+  /**
+   * Live-search mode only: rows to offer before anything is typed (e.g. recent
+   * items), so the panel is not a bare input that looks broken.
+   */
+  idleItems?: T[];
   isSelected?: (item: T) => boolean;
   /** Static list, filtered locally via matchesSearch. Mutually exclusive with onSearch. */
   items?: T[];
@@ -57,6 +62,7 @@ interface SearchableSelectPopoverProps<T> {
 
 export function SearchableSelectPopover<T>({
   align = 'left',
+  idleItems,
   className,
   closeOnSelect = true,
   footer,
@@ -104,7 +110,7 @@ export function SearchableSelectPopover<T>({
   const filtered = onSearch
     ? search.trim()
       ? onSearch(search)
-      : []
+      : (idleItems ?? [])
     : search.trim()
       ? (items ?? []).filter(item => matchesSearch?.(item, search))
       : (items ?? []);

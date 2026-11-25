@@ -22,7 +22,12 @@ test.describe('Cycles', () => {
 
   test('shows empty state or one of the cycle groups', async ({ page }) => {
     const empty = page.getByText(/no cycles yet/i);
-    const group = page.getByRole('button', { name: /^(active|upcoming|completed)\b/i }).first();
+    // The Active/Archived switcher also has an "Active" control, so a group
+    // header is identified by its disclosure semantics (aria-expanded).
+    const group = page
+      .locator('button[aria-expanded]')
+      .filter({ hasText: /^(active|upcoming|completed)\b/i })
+      .first();
     await expect(empty.or(group)).toBeVisible({ timeout: 15_000 });
   });
 });

@@ -1,13 +1,15 @@
-import type { Notification, NotificationType, PrismaClient } from '../../generated/prisma';
+import type { Notification, NotificationType, Prisma, PrismaClient } from '../../generated/prisma';
 import {
   sendAssignmentNotificationEmail,
   sendCommentNotificationEmail,
   sendMentionNotificationEmail,
   sendStatusChangeNotificationEmail,
 } from '../lib/email';
+import { isIssueVisible } from '../lib/entity-visibility';
 import { env } from '../lib/env';
 import { DEFAULT_LIST_LIMIT } from '../lib/limits';
 import { childLogger } from '../lib/logger';
+import { getSyncVisibility, getSyncVisibilityBatch } from '../lib/sync-visibility';
 
 const log = childLogger({ module: 'notification' });
 
@@ -46,21 +48,128 @@ export class NotificationService {
     return this.prisma.notification.findUnique({ where: { id } });
   }
 
+  /**
+   * Narrow a user's notifications to issues they can still see. A notification
+   * outlives the access that produced it (the issue moved into a private team,
+   * the user was demoted to guest), and its row carries the issue id and an
+   * excerpt — so rows pointing at a hidden issue are left out of every read.
+   */
+  private async issueVisibilityWhere(
+    userId: string,
+    orgId: string,
+  ): Promise<Prisma.NotificationWhereInput> {
+    const vis = await getSyncVisibility(this.prisma, userId, orgId);
+    if (vis.hiddenTeamIds.length === 0 && vis.guestTeamIds.length === 0) {
+      return {};
+    }
+    return {
+      OR: [
+        { issueId: null },
+        {
+          issue: {
+            AND: [
+              ...(vis.hiddenTeamIds.length > 0 ? [{ teamId: { notIn: vis.hiddenTeamIds } }] : []),
+              ...(vis.guestTeamIds.length > 0
+                ? [
+                    {
+                      OR: [
+                        { teamId: { notIn: vis.guestTeamIds } },
+                        { creatorId: userId },
+                        { assigneeId: userId },
+                      ],
+                    },
+                  ]
+                : []),
+            ],
+          },
+        },
+      ],
+    };
+  }
+
+  /**
+   * Recipients (of `userIds`) who may still see `issueId`. Every fan-out path
+   * runs its candidate list through this — a subscriber or @mentioned user
+   * who lost access (issue moved to a private team, demoted to guest) must
+   * not receive a row or an email carrying the issue's title or excerpt.
+   */
+  async filterVisibleRecipients(
+    orgId: string,
+    issueId: string,
+    userIds: readonly string[],
+  ): Promise<string[]> {
+    if (userIds.length === 0) {
+      return [];
+    }
+    const issue = await this.prisma.issue.findUnique({
+      select: { assigneeId: true, creatorId: true, organizationId: true, teamId: true },
+      where: { id: issueId },
+    });
+    if (!issue || issue.organizationId !== orgId) {
+      return [];
+    }
+    const scopes = await getSyncVisibilityBatch(
+      this.prisma,
+      userIds.map(userId => ({ orgId, userId })),
+    );
+    return userIds.filter((_, i) => {
+      const scope = scopes[i];
+      return scope ? isIssueVisible(scope, issue) : false;
+    });
+  }
+
   async findByUserId(
     userId: string,
     orgId: string,
     limit = DEFAULT_LIST_LIMIT,
+    opts: { before?: Date; snoozed?: boolean } = {},
   ): Promise<Notification[]> {
     const now = new Date();
+    const visibility = await this.issueVisibilityWhere(userId, orgId);
     return this.prisma.notification.findMany({
       orderBy: { createdAt: 'desc' },
       take: limit,
       where: {
-        OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: now } }],
+        AND: [visibility],
+        // `snoozed` flips the visibility rule: the default list hides rows
+        // until they wake, the Snoozed view shows exactly those rows.
+        ...(opts.snoozed
+          ? { snoozedUntilAt: { gt: now } }
+          : { OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: now } }] }),
+        ...(opts.before ? { createdAt: { lt: opts.before } } : {}),
         organizationId: orgId,
         userId,
       },
     });
+  }
+
+  /** Put a read notification back to unread (clears `readAt`). */
+  async markUnread(id: string, userId: string, orgId?: string): Promise<Notification> {
+    await this.assertOwned(id, userId, orgId);
+    return this.prisma.notification.update({
+      data: { read: false, readAt: null },
+      where: { id },
+    });
+  }
+
+  /** Wake a snoozed notification immediately. */
+  async unsnooze(id: string, userId: string, orgId?: string): Promise<Notification> {
+    await this.assertOwned(id, userId, orgId);
+    return this.prisma.notification.update({
+      data: { snoozedUntilAt: null },
+      where: { id },
+    });
+  }
+
+  private async assertOwned(id: string, userId: string, orgId?: string): Promise<void> {
+    const notification = await this.prisma.notification.findUnique({ where: { id } });
+    if (
+      !notification ||
+      notification.userId !== userId ||
+      (orgId !== undefined && notification.organizationId !== orgId)
+    ) {
+      throw new NotificationNotFoundError();
+    }
   }
 
   async markRead(id: string, userId: string, orgId?: string): Promise<Notification> {
@@ -111,8 +220,10 @@ export class NotificationService {
 
   async getUnreadCount(userId: string, orgId: string): Promise<number> {
     const now = new Date();
+    const visibility = await this.issueVisibilityWhere(userId, orgId);
     return this.prisma.notification.count({
       where: {
+        AND: [visibility],
         OR: [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: now } }],
         organizationId: orgId,
         read: false,
@@ -128,6 +239,9 @@ export class NotificationService {
     actorId: string,
   ): Promise<Notification | null> {
     if (assigneeId === actorId) {
+      return null;
+    }
+    if ((await this.filterVisibleRecipients(orgId, issueId, [assigneeId])).length === 0) {
       return null;
     }
     const notification = await this.create(orgId, {
@@ -155,7 +269,11 @@ export class NotificationService {
   ): Promise<{ count: number }> {
     const subscribers = await this.getSubscribers(issueId);
 
-    const recipientIds = subscribers.filter(id => id !== actorId);
+    const recipientIds = await this.filterVisibleRecipients(
+      orgId,
+      issueId,
+      subscribers.filter(id => id !== actorId),
+    );
     if (recipientIds.length === 0) {
       return { count: 0 };
     }
@@ -187,6 +305,9 @@ export class NotificationService {
     excerpt?: string,
   ): Promise<Notification | null> {
     if (mentionedUserId === actorId) {
+      return null;
+    }
+    if ((await this.filterVisibleRecipients(orgId, issueId, [mentionedUserId])).length === 0) {
       return null;
     }
     const notification = await this.create(orgId, {
@@ -229,8 +350,14 @@ export class NotificationService {
     mentionedUserIds: string[];
     actorId: string;
     excerpt?: string;
+    /**
+     * Users already notified for this same comment by another path (the reply
+     * target `notifyCommentSubscribers` returns) — skipped so a reply that
+     * also @mentions its parent's author yields one notification, not two.
+     */
+    skipUserIds?: readonly string[];
   }): Promise<void> {
-    const { orgId, teamId, issueId, mentionedUserIds, actorId, excerpt } = params;
+    const { orgId, teamId, issueId, mentionedUserIds, actorId, excerpt, skipUserIds } = params;
     if (mentionedUserIds.length === 0) {
       return;
     }
@@ -244,8 +371,9 @@ export class NotificationService {
     });
     const authorizedMentionedIds = new Set(teamMembers.map(m => m.userId));
     const subscribers = new Set(await this.getSubscribers(issueId));
+    const skip = new Set(skipUserIds ?? []);
     const recipientIds = mentionedUserIds.filter(
-      userId => authorizedMentionedIds.has(userId) && !subscribers.has(userId),
+      userId => authorizedMentionedIds.has(userId) && !subscribers.has(userId) && !skip.has(userId),
     );
     await Promise.all(
       recipientIds.map(userId => this.createForMention(orgId, issueId, userId, actorId, excerpt)),
@@ -275,6 +403,26 @@ export class NotificationService {
     return subscription?.active === true;
   }
 
+  /**
+   * Ids of the live issues the user is actively subscribed to in this org,
+   * most recently subscribed first. Subscriptions are user-local (they never
+   * produce a SyncAction), so the My Issues "Subscribed" tab asks for this set
+   * and resolves the rows from its local issue pool. Archived and trashed
+   * issues are left out, matching every other list.
+   */
+  async listSubscribedIssueIds(userId: string, orgId: string): Promise<string[]> {
+    const subscriptions = await this.prisma.notificationSubscription.findMany({
+      orderBy: { updatedAt: 'desc' },
+      select: { issueId: true },
+      where: {
+        active: true,
+        issue: { archivedAt: null, organizationId: orgId, trashed: false },
+        userId,
+      },
+    });
+    return subscriptions.map(s => s.issueId);
+  }
+
   async getSubscribers(issueId: string): Promise<string[]> {
     const subscriptions = await this.prisma.notificationSubscription.findMany({
       select: { userId: true },
@@ -302,15 +450,63 @@ export class NotificationService {
     });
   }
 
+  /**
+   * Author of the comment `commentId` replies to, or null when it is a
+   * top-level comment, the parent is gone, the author is the actor, or the
+   * author is no longer a member of the issue's team (so a reply never leaks
+   * to someone who lost access). A guest parent author only counts while they
+   * still created or are assigned the issue — the same visibility rule guests
+   * get everywhere else.
+   */
+  private async resolveReplyTarget(commentId: string, actorId: string): Promise<string | null> {
+    const comment = await this.prisma.comment.findUnique({
+      select: {
+        issue: { select: { assigneeId: true, creatorId: true, teamId: true } },
+        parent: { select: { authorId: true } },
+      },
+      where: { id: commentId },
+    });
+    const parentAuthorId = comment?.parent?.authorId;
+    if (!parentAuthorId || parentAuthorId === actorId || !comment.issue) {
+      return null;
+    }
+    const membership = await this.prisma.teamMembership.findFirst({
+      select: { userId: true },
+      where: { teamId: comment.issue.teamId, userId: parentAuthorId },
+    });
+    if (!membership) {
+      return null;
+    }
+    const role = await this.prisma.teamMemberRole.findUnique({
+      select: { role: true },
+      where: { teamId_userId: { teamId: comment.issue.teamId, userId: parentAuthorId } },
+    });
+    // Mirrors `getTeamRole`: an unrecognised role is least-privilege (guest).
+    const isGuest = role != null && role.role !== 'member' && role.role !== 'admin';
+    const ownsIssue =
+      comment.issue.creatorId === parentAuthorId || comment.issue.assigneeId === parentAuthorId;
+    if (isGuest && !ownsIssue) {
+      return null;
+    }
+    return parentAuthorId;
+  }
+
   async notifyCommentSubscribers(
     orgId: string,
     issueId: string,
     actorId: string,
     commentId: string,
     excerpt?: string,
-  ): Promise<{ count: number }> {
+  ): Promise<{ count: number; replyToUserId?: string }> {
     const subscribers = await this.getSubscribers(issueId);
-    const recipientIds = subscribers.filter(id => id !== actorId);
+    const replyToUserId = await this.resolveReplyTarget(commentId, actorId);
+    const candidates = new Set(subscribers.filter(id => id !== actorId));
+    // The parent comment's author is told about a direct reply even if they
+    // never subscribed (or have since been dropped from the subscriber set).
+    if (replyToUserId) {
+      candidates.add(replyToUserId);
+    }
+    const recipientIds = await this.filterVisibleRecipients(orgId, issueId, [...candidates]);
     if (recipientIds.length === 0) {
       return { count: 0 };
     }
@@ -318,7 +514,10 @@ export class NotificationService {
     const result = await this.prisma.notification.createMany({
       data: recipientIds.map(userId => ({
         actorId,
-        data: { commentId, excerpt, issueId },
+        // `replyToUserId` is the ONE reply marker: the inbox puts the row in
+        // the Priority lane for the viewer it names, and in Other for every
+        // other subscriber of the same thread.
+        data: { commentId, excerpt, issueId, ...(replyToUserId ? { replyToUserId } : {}) },
         issueId,
         organizationId: orgId,
         type: 'ISSUE_COMMENTED',
@@ -330,7 +529,7 @@ export class NotificationService {
       log.error({ err }, 'Failed to send comment notification emails'),
     );
 
-    return result;
+    return replyToUserId ? { ...result, replyToUserId } : result;
   }
 
   // ---------------------------------------------------------------------------

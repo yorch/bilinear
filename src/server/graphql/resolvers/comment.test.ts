@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testAuthGuard } from '../../../test/auth-guard-helper';
 import { createMockContext, type MockGraphQLContext } from '../../../test/context-mock';
 import { TEST_ISSUE, TEST_ORG, TEST_TEAM, TEST_USER, TEST_USER_2 } from '../../../test/fixtures';
@@ -43,6 +43,40 @@ function createCtx(
     services: { ...base.services, comment: new CommentService(base.prisma as never) },
   };
 }
+
+describe('commentReactionAdd sync payload', () => {
+  it('carries the issueId so the sync filter can tie the reaction to its issue', async () => {
+    const ctx = createCtx();
+    vi.spyOn(ctx.services.comment, 'findAccessTarget').mockResolvedValue({
+      issueId: 'issue-1',
+      teamId: TEST_TEAM.id,
+    });
+    ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+      team: { organizationId: TEST_ORG.id },
+      teamId: TEST_TEAM.id,
+      userId: TEST_USER.id,
+    });
+    vi.spyOn(ctx.services.comment, 'addReaction').mockResolvedValue({
+      commentId: TEST_COMMENT.id,
+      emoji: 'x',
+      id: 'r1',
+      userId: TEST_USER.id,
+    } as never);
+    const spy = vi.spyOn(ctx.services.sync, 'createSyncAction');
+    await commentResolvers.Mutation.commentReactionAdd(
+      {},
+      { commentId: TEST_COMMENT.id, emoji: 'x' },
+      ctx as never,
+    );
+    expect(spy).toHaveBeenCalledWith(
+      TEST_ORG.id,
+      'I',
+      'CommentReaction',
+      'r1',
+      expect.objectContaining({ issueId: 'issue-1' }),
+    );
+  });
+});
 
 describe('commentResolvers', () => {
   let ctx: CtxWithComment;
@@ -93,6 +127,33 @@ describe('commentResolvers', () => {
       );
     });
 
+    it('passes the reply target to notifyMentions so a reply that @mentions its parent author notifies once', async () => {
+      ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
+      ctx.prisma.teamMembership.findUnique.mockResolvedValue({
+        team: { organizationId: TEST_ORG.id },
+        teamId: TEST_TEAM.id,
+        userId: TEST_USER.id,
+      });
+      vi.spyOn(ctx.services.comment, 'create').mockResolvedValue(TEST_COMMENT as never);
+      vi.spyOn(ctx.services.notification, 'notifyCommentSubscribers').mockResolvedValue({
+        count: 1,
+        replyToUserId: TEST_USER_2.id,
+      });
+      const mentions = vi
+        .spyOn(ctx.services.notification, 'notifyMentions')
+        .mockResolvedValue(undefined);
+
+      await commentResolvers.Mutation.commentCreate(
+        null,
+        { input: { body: 'hi', issueId: TEST_ISSUE.id } },
+        ctx as never,
+      );
+
+      expect(mentions).toHaveBeenCalledWith(
+        expect.objectContaining({ skipUserIds: [TEST_USER_2.id] }),
+      );
+    });
+
     it('remaps CommentValidationError to BAD_USER_INPUT', async () => {
       ctx.prisma.issue.findUnique.mockResolvedValue(TEST_ISSUE);
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
@@ -136,6 +197,7 @@ describe('commentResolvers', () => {
 
     it('throws FORBIDDEN when the caller is not a member of the comment team', async () => {
       vi.spyOn(ctx.services.comment, 'findAccessTarget').mockResolvedValue({
+        issueId: 'issue-1',
         teamId: TEST_TEAM.id,
       });
       ctx.prisma.teamMembership.findUnique.mockResolvedValue(null);
@@ -150,6 +212,7 @@ describe('commentResolvers', () => {
 
     it('remaps CommentForbiddenError to FORBIDDEN when the caller does not own the comment', async () => {
       vi.spyOn(ctx.services.comment, 'findAccessTarget').mockResolvedValue({
+        issueId: 'issue-1',
         teamId: TEST_TEAM.id,
       });
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
@@ -169,6 +232,7 @@ describe('commentResolvers', () => {
 
     it('remaps CommentNotFoundError to NOT_FOUND', async () => {
       vi.spyOn(ctx.services.comment, 'findAccessTarget').mockResolvedValue({
+        issueId: 'issue-1',
         teamId: TEST_TEAM.id,
       });
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
@@ -199,6 +263,7 @@ describe('commentResolvers', () => {
 
     it('remaps CommentReactionNotFoundError to NOT_FOUND', async () => {
       vi.spyOn(ctx.services.comment, 'findAccessTarget').mockResolvedValue({
+        issueId: 'issue-1',
         teamId: TEST_TEAM.id,
       });
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({
@@ -231,6 +296,7 @@ describe('commentResolvers', () => {
 
     it('remaps CommentForbiddenError to FORBIDDEN when the caller does not own the comment', async () => {
       vi.spyOn(ctx.services.comment, 'findAccessTarget').mockResolvedValue({
+        issueId: 'issue-1',
         teamId: TEST_TEAM.id,
       });
       ctx.prisma.teamMembership.findUnique.mockResolvedValue({

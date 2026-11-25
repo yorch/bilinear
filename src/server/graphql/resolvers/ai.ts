@@ -1,7 +1,21 @@
 import { GraphQLError } from 'graphql';
-import { requireAuth } from '../../middleware/auth';
+import { visibleEntityIds } from '../../lib/entity-visibility';
+import { requireAuth, requireIssueAccessNotGuestOrOwn } from '../../middleware/auth';
 import { AiDisabledError, AiRequestError } from '../../services/ai.service';
 import type { GraphQLContext } from '../context';
+import { getRequestVisibility } from '../request-visibility';
+
+/** The issue, after org + team/guest access checks; NOT_FOUND hides cross-org ids. */
+async function requireAccessibleIssue(
+  ctx: GraphQLContext & { orgId: string; userId: string },
+  issueId: string,
+) {
+  const issue = await ctx.services.issue.findById(issueId);
+  if (!issue || issue.organizationId !== ctx.orgId) {
+    throw new GraphQLError('Issue not found', { extensions: { code: 'NOT_FOUND' } });
+  }
+  await requireIssueAccessNotGuestOrOwn(ctx.prisma, issue, ctx.userId, ctx.orgId);
+}
 
 function mapAiError(err: unknown): never {
   if (err instanceof AiDisabledError) {
@@ -21,9 +35,20 @@ export const aiResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      await requireAccessibleIssue(ctx, issueId);
       try {
         await ctx.services.ai.assertEnabled(ctx.orgId);
-        const duplicates = await ctx.services.ai.findDuplicates(ctx.orgId, issueId);
+        const found = await ctx.services.ai.findDuplicates(ctx.orgId, issueId);
+        // Candidates come from an org-wide search; drop any the caller cannot see.
+        const vis = await getRequestVisibility(ctx);
+        const visible = await visibleEntityIds(
+          ctx.prisma,
+          vis,
+          ctx.orgId,
+          'Issue',
+          found.map(d => d.id),
+        );
+        const duplicates = found.filter(d => visible.has(d.id));
         return { duplicates, success: true };
       } catch (err) {
         mapAiError(err);
@@ -51,6 +76,7 @@ export const aiResolvers = {
       ctx: GraphQLContext,
     ) => {
       requireAuth(ctx);
+      await requireAccessibleIssue(ctx, issueId);
       try {
         await ctx.services.ai.assertEnabled(ctx.orgId);
         const summary = await ctx.services.ai.summarizeIssue(ctx.orgId, issueId);

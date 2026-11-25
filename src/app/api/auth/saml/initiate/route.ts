@@ -4,11 +4,12 @@ import { env } from '@/server/lib/env';
 import { childLogger } from '@/server/lib/logger';
 import { prisma } from '@/server/lib/prisma';
 import { bindRequestContext, withRequestContext } from '@/server/lib/request-context';
-import {
-  SamlNotConfiguredError,
-  SamlNotEnabledError,
-  SamlService,
-} from '@/server/services/saml.service';
+import { rateLimitKeyIp } from '@/server/lib/request-security';
+import { checkFixedWindow } from '@/server/middleware/rate-limit';
+import { SamlService } from '@/server/services/saml.service';
+
+// A well-formed UUID no organization has, so a miss costs the same query.
+const NO_ORG_ID = '00000000-0000-0000-0000-000000000000';
 
 const log = childLogger({ module: 'saml' });
 const samlService = new SamlService(prisma);
@@ -23,37 +24,64 @@ const RELAY_STATE_MAX_AGE = 5 * 60;
  * The org URL key and intended post-login redirect are stored in a
  * short-lived `saml_relay` cookie so the callback route can retrieve them.
  */
+/**
+ * Every "SSO can't start for this workspace" outcome — unknown key, SAML never
+ * configured, SAML switched off — collapses into this one response, after the
+ * same lookups and a fixed minimum latency, so the route is not an oracle for
+ * which workspaces exist or how they are set up. A client probe (`probe=1`,
+ * used by the sign-in page's fetch) gets a bare 404 it can tell apart from the
+ * IdP redirect; a plain navigation lands back on /login with the message.
+ */
+const MIN_RESPONSE_MS = 300;
+export const INITIATE_PER_MINUTE = 20;
+export const INITIATE_PER_MINUTE_UNKNOWN_IP = 120;
+
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+function unavailable(req: NextRequest, probe: boolean): NextResponse {
+  if (probe) {
+    return NextResponse.json({ error: 'SSO unavailable' }, { status: 404 });
+  }
+  return NextResponse.redirect(new URL('/login?sso=unavailable', req.url), 302);
+}
+
 async function handleGet(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const orgKey = searchParams.get('org');
   const redirect = searchParams.get('redirect') ?? '/';
+  const probe = searchParams.get('probe') === '1';
+  const startedAt = Date.now();
 
-  if (!orgKey) {
-    return NextResponse.json({ error: 'Missing org parameter' }, { status: 400 });
+  // With no trusted client IP (TRUST_PROXY_HEADERS unset) everyone shares one
+  // bucket with a larger limit: still finite, so the limiter never switches off.
+  const { ip, known } = rateLimitKeyIp(req);
+  const { exceeded } = await checkFixedWindow(
+    `rl:saml-initiate:${ip}`,
+    known ? INITIATE_PER_MINUTE : INITIATE_PER_MINUTE_UNKNOWN_IP,
+    60,
+  );
+  if (exceeded) {
+    return NextResponse.json(
+      { error: 'Too many attempts — try again in a minute' },
+      { headers: { 'Retry-After': '60' }, status: 429 },
+    );
   }
 
-  const org = await prisma.organization.findUnique({
-    where: { urlKey: orgKey },
-  });
-
-  if (!org) {
-    return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+  const org = orgKey ? await prisma.organization.findUnique({ where: { urlKey: orgKey } }) : null;
+  if (org) {
+    bindRequestContext({ orgId: org.id });
   }
-  bindRequestContext({ orgId: org.id });
+  const config = await samlService.getConfig(org?.id ?? NO_ORG_ID);
 
-  const config = await samlService.getConfig(org.id);
-
-  try {
-    if (!config) {
-      throw new SamlNotConfiguredError();
+  if (!orgKey || !org || !config?.enabled) {
+    if (org) {
+      log.warn({ orgId: org.id, orgKey }, config ? 'SAML not enabled' : 'SAML not configured');
     }
-    if (!config.enabled) {
-      throw new SamlNotEnabledError();
+    const wait = MIN_RESPONSE_MS - (Date.now() - startedAt);
+    if (wait > 0) {
+      await sleep(wait);
     }
-  } catch (err) {
-    const message = (err as Error).message;
-    log.warn({ orgId: org.id, orgKey }, message);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return unavailable(req, probe);
   }
 
   const appUrl = env.APP_URL;

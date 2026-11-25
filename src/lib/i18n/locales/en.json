@@ -45,6 +45,11 @@
       "stopping": "Stopping…",
       "viewingAs": "Viewing {org} as {user} — signed in by {admin}. Actions are audited."
     },
+    "list": {
+      "loadingMore": "Loading…",
+      "loadMore": "Load more",
+      "showing": "Showing {shown} of {total}"
+    },
     "nav": {
       "adminTitle": "Admin",
       "audit": "Audit log",
@@ -146,6 +151,63 @@
     }
   },
   "analytics": {
+    "explorer": {
+      "allIssues": "All issues",
+      "cycleTimeNote": "Averages cover issues that were started and completed. An issue moved straight to Done has no start time and is left out; n is how many issues each average is based on.",
+      "days": "{count}d",
+      "description": "Pick a measure and a slice. Only issues you can see are counted.",
+      "empty": "No issues match this selection.",
+      "exportCsv": "Export CSV",
+      "failedToLoad": "Failed to load insights",
+      "filter": "Filter",
+      "groupCount_one": "{count} group",
+      "groupCount_other": "{count} groups",
+      "issues": "Issues",
+      "labelNote": "An issue with several labels is counted under each.",
+      "measure": "Measure",
+      "measures": {
+        "count": "Issue count",
+        "cycleTime": "Avg cycle time",
+        "estimate": "Estimate sum"
+      },
+      "none": {
+        "assignee": "Unassigned",
+        "label": "No label",
+        "priority": "No priority",
+        "project": "No project",
+        "status": "No status",
+        "team": "No team"
+      },
+      "priority": {
+        "0": "No priority",
+        "1": "Urgent",
+        "2": "High",
+        "3": "Medium",
+        "4": "Low"
+      },
+      "sampleHeader": "Sample (n)",
+      "sampleShort": "n={count}",
+      "scanCapped": "More than {count} issues matched, so the figures cover only the newest {count}. Narrow the selection with a saved view.",
+      "slice": "Slice",
+      "slices": {
+        "assignee": "Assignee",
+        "label": "Label",
+        "priority": "Priority",
+        "project": "Project",
+        "status": "Status",
+        "team": "Team"
+      },
+      "summary_one": "{issues} issue in {groups}.",
+      "summary_other": "{issues} issues in {groups}.",
+      "tableCaption": "{measure} by {slice}",
+      "title": "Insights",
+      "truncated": "Showing the top {count} groups only.",
+      "valueHeader": {
+        "count": "Issues",
+        "cycleTime": "Avg days",
+        "estimate": "Points"
+      }
+    },
     "insights": {
       "avgTimeInState": "Avg time in state",
       "avgTimeInStateSubtitle": "approximation from lifecycle timestamps; full audit log is a follow-up",
@@ -160,7 +222,7 @@
       "noStateTransitionData": "No state-transition data yet",
       "rangeAll": "All",
       "rangeDays": "{count}d",
-      "title": "Insights"
+      "title": "Cycle and lead time"
     },
     "team": {
       "allTime": "all time",
@@ -213,6 +275,7 @@
     },
     "workspace": {
       "activeTeams": "Active teams",
+      "adminOnly": "The workspace overview is available to workspace admins. Insights below still covers the issues you can see.",
       "avgCycle": "Avg cycle",
       "completed": "Completed",
       "completedCol": "Completed",
@@ -233,15 +296,16 @@
   },
   "auth": {
     "backToSignIn": "Back to sign in",
+    "backToWorkspace": "Back to {workspace}",
     "canvas": {
       "headline": "Issues that stay in sync, even when you don’t.",
       "statLocalesLabel": "languages",
       "statLocalesValue": "2",
-      "statOfflineLabel": "offline capable",
-      "statOfflineValue": "100%",
+      "statOfflineLabel": "offline writes",
+      "statOfflineValue": "Queued",
       "statSyncLabel": "optimistic write",
       "statSyncValue": "<40ms",
-      "subhead": "Offline-first by design. Write while you’re on a plane, land, and find the queue already drained."
+      "subhead": "Your workspace is cached on this device. Changes you make offline are queued and sync when you reconnect."
     },
     "checkYourEmail": "Check your email",
     "codeHint": "The code expires in 15 minutes. Check your spam folder if you don’t see it.",
@@ -269,10 +333,39 @@
     "retryWithProvider": "Try {provider} again",
     "sending": "Sending…",
     "sessionExpiredOrTampered": "Your sign-in session expired. Please try again.",
+    "setup": {
+      "createTeam": "Create team",
+      "creatingTeam": "Creating team…",
+      "finish": "Go to workspace",
+      "inviteFailed": "Couldn’t invite: {emails}. Try again or skip.",
+      "inviteHint": "Separate several addresses with commas.",
+      "inviteInvalid": "These don’t look like email addresses: {emails}",
+      "inviteLabel": "Email addresses",
+      "invitePlaceholder": "ada@example.com, grace@example.com",
+      "inviteSubtitle": "They’ll get an email with a link to join. You can do this later too.",
+      "inviteTitle": "Invite your teammates",
+      "sendInvites": "Send invites",
+      "sendingInvites": "Sending…",
+      "skip": "Skip for now",
+      "stepOf": "Step {current} of {total}",
+      "teamKey": "Team key",
+      "teamKeyHint": "Prefixes issue ids, like ENG-12. Letters only.",
+      "teamName": "Team name",
+      "teamNamePlaceholder": "Engineering",
+      "teamSubtitle": "Teams own issues, cycles and workflows. You can add more later.",
+      "teamTitle": "Create your first team"
+    },
     "signInSubtitle": "We’ll email you a 6-digit sign-in code",
     "signInTitle": "Sign in to {appName}",
     "signingInWithProvider": "Signing you in with {provider}…",
     "signOutSwitch": "Use another account",
+    "sso": {
+      "button": "Continue with SSO",
+      "checking": "Checking…",
+      "continue": "Continue",
+      "hint": "Your workspace URL, e.g. acme",
+      "unavailable": "Single sign-on isn’t available for that workspace. Check the URL, or sign in another way."
+    },
     "urlKeyMinLength": "Must be at least 3 characters",
     "urlKeyTaken": "That URL is already taken. Try another.",
     "urlKeyTakenSuggestion": "Try “{suggestion}” instead",
@@ -280,7 +373,9 @@
     "verificationCode": "Verification code",
     "verifyCode": "Verify code",
     "verifying": "Verifying…",
-    "workspaceUrl": "Workspace URL"
+    "workspaceUrl": "Workspace URL",
+    "yourName": "Your name",
+    "yourNameHint": "Shown to teammates. You can change it later in settings."
   },
   "commandPalette": {
     "actions": {
@@ -300,6 +395,9 @@
       "goToRoadmap": "Go to Roadmap settings",
       "goToSecurity": "Go to Security",
       "goToSettings": "Go to Settings",
+      "goToTeamBacklog": "Go to {team} backlog",
+      "goToTeamCycles": "Go to {team} cycles",
+      "goToTeamIssues": "Go to {team} issues",
       "goToWebhooks": "Go to Webhooks",
       "keyboardShortcuts": "Keyboard shortcuts",
       "switchAccent": "Switch to {accent} accent",
@@ -327,12 +425,21 @@
     },
     "submenu": {
       "actions": "Issue actions…",
+      "addSubIssue": "Add sub-issue…",
       "current": "Current",
+      "markDuplicate": "Mark as duplicate…",
+      "moveToTeam": "Move to team…",
       "noAssignee": "No assignee",
       "noOptions": "No options",
+      "remindMe": "Remind me…",
       "setAssignee": "Set assignee…",
+      "setCycle": "Set cycle…",
+      "setDueDate": "Set due date…",
+      "setEstimate": "Set estimate…",
       "setLabel": "Set label…",
+      "setParent": "Set parent…",
       "setPriority": "Set priority…",
+      "setProject": "Set project…",
       "setStatus": "Set status…"
     }
   },
@@ -352,6 +459,7 @@
       "weeksAgo": "{count}w ago",
       "yesterday": "yesterday"
     },
+    "restore": "Restore",
     "retry": "Retry",
     "save": "Save",
     "saving": "Saving…",
@@ -484,6 +592,24 @@
     },
     "name": "Name",
     "namePlaceholder": "e.g. Severity",
+    "numberFormat": {
+      "currency": "Currency code",
+      "decimals": "Decimal places",
+      "decimalsAuto": "Auto",
+      "decimalsCount_one": "{count} decimal",
+      "decimalsCount_other": "{count} decimals",
+      "hint": "Display only: the stored value stays a plain number, so sorting and filtering are unchanged.",
+      "invalidCurrency": "Unknown currency code",
+      "kinds": {
+        "compact": "Compact (1.2k)",
+        "currency": "Currency",
+        "duration": "Duration (minutes)",
+        "percent": "Percent",
+        "plain": "Plain number"
+      },
+      "preview": "Preview:",
+      "title": "Number format"
+    },
     "optionLabel": "Label",
     "options": "Options",
     "optionValue": "Value",
@@ -607,14 +733,27 @@
     },
     "failedToLoad": "Failed to load data. Please refresh.",
     "list": {
+      "archive": "Archive",
+      "archiveAria": "Archive {name}",
+      "archivedEmptyDescription": "Cycles you archive show up here, where you can restore them.",
+      "archivedEmptyTitle": "No archived cycles",
+      "archivedToast": "Cycle archived",
+      "archiveFailed": "Failed to archive cycle",
       "daysLeft_one": "{count} day left",
       "daysLeft_other": "{count} days left",
       "emptyDescription": "Cycles help you plan and track work in time-boxed iterations.",
       "emptyTitle": "No cycles yet",
       "enableCycles": "Enable cycles in team settings",
+      "loadArchivedFailed": "Failed to load archived cycles",
+      "restoreFailed": "Failed to restore cycle",
+      "restoreOverlap": "Can't restore this cycle: its dates overlap another active cycle. Adjust or archive that cycle first.",
       "showMore": "Show {count} more",
       "teamTitle": "{team} — Cycles",
-      "title": "Cycles"
+      "title": "Cycles",
+      "views": {
+        "active": "Active",
+        "archived": "Archived"
+      }
     },
     "status": {
       "active": "Active",
@@ -625,7 +764,9 @@
   },
   "documents": {
     "archive": "Archive",
-    "archiveConfirm": "Archive \"{title}\"? It will be hidden from the list.",
+    "archiveConfirm": "Archive \"{title}\"? It is hidden from the list, along with any sub-pages nested under it. You can restore it from the Archived view.",
+    "archivedEmptyDescription": "Documents you archive show up here, where you can restore them.",
+    "archivedEmptyTitle": "No archived documents",
     "archiveFailed": "Failed to archive document",
     "backToDocs": "Back to documents",
     "breadcrumb": "Breadcrumb",
@@ -640,10 +781,15 @@
     "documentNotFound": "Document not found.",
     "emptyDescription": "Documents are long-form notes that live beside your issues — specs, retros, runbooks.",
     "emptyState": "No documents yet",
+    "loadArchivedFailed": "Couldn't load archived documents",
     "loadFailed": "Failed to load data. Please refresh.",
     "moreActions": "More actions",
     "newDocument": "New document",
+    "newProjectDocument": "New document",
+    "newSubPage": "New sub-page",
+    "projectSection": "Documents",
     "rename": "Rename",
+    "restoreFailed": "Failed to restore document",
     "saved": "Saved",
     "saveFailed": "Save failed",
     "saving": "Saving…",
@@ -652,7 +798,12 @@
     "teamNotFound": "Team not found.",
     "title": "Documents",
     "titleLabel": "Document title",
-    "untitled": "Untitled"
+    "untitled": "Untitled",
+    "views": {
+      "active": "Active",
+      "archived": "Archived",
+      "label": "Document view"
+    }
   },
   "editor": {
     "embed": {
@@ -819,22 +970,65 @@
     "removed": "Removed from favorites"
   },
   "initiatives": {
+    "detail": {
+      "back": "Back to initiatives",
+      "description": "Description",
+      "descriptionPlaceholder": "Add a description…",
+      "noOwner": "No owner",
+      "noParent": "No parent",
+      "notFound": "Initiative not found",
+      "owner": "Owner",
+      "parent": "Parent initiative",
+      "properties": "Properties",
+      "status": "Status",
+      "targetDate": "Target date",
+      "updateFailed": "Couldn't save the change"
+    },
+    "health": {
+      "aProject": "a project",
+      "derived": "Derived: {health}",
+      "derivedHint": "Derived from project health and forecasts; it does not replace a posted update.",
+      "label": {
+        "atRisk": "At risk",
+        "noData": "No data",
+        "offTrack": "Off track",
+        "onTrack": "On track"
+      },
+      "posted": "Posted: {health}",
+      "reason": {
+        "initiativeTargetSlip": "projects are projected to finish after the initiative target date",
+        "noActiveProjects": "no active projects",
+        "noSignals": "no project health, target dates or forecasts yet",
+        "projectManualHealth": "{project} was posted as at risk or off track",
+        "projectOverdue": "{project} is past its target date and unfinished",
+        "projectProjectedLate": "{project} is projected to finish after its target date"
+      },
+      "title": "Health"
+    },
     "page": {
+      "archivedEmptyDescription": "Initiatives you archive show up here, where you can restore them.",
+      "archivedEmptyTitle": "No archived initiatives",
       "createdSuccess": "Initiative created",
       "createFailed": "Failed to create initiative",
       "empty": "No initiatives yet. Create one to start grouping projects.",
       "emptyDescription": "Initiatives group related projects under one goal, so you can track a quarter without reading every project.",
       "emptyTitle": "No initiatives yet",
+      "loadArchivedFailed": "Couldn't load archived initiatives",
       "namePlaceholder": "Initiative name",
       "newInitiative": "New initiative",
-      "title": "Initiatives"
+      "title": "Initiatives",
+      "views": {
+        "active": "Active",
+        "archived": "Archived",
+        "label": "Initiative view"
+      }
     },
     "row": {
       "addedProject": "Added {name}",
       "addProject": "+ Add project",
       "addProjectFailed": "Failed to add project",
       "archive": "Archive",
-      "archiveConfirm": "Archive \"{name}\"? Its projects stay where they are.",
+      "archiveConfirm": "Archive \"{name}\"? It and its sub-initiatives are hidden from the list. Its projects stay where they are, and you can restore it from the Archived view.",
       "archived": "Initiative archived",
       "archiveFailed": "Failed to archive initiative",
       "deleteConfirm": "Delete \"{name}\"? This cannot be undone.",
@@ -843,6 +1037,7 @@
       "moreActions": "More actions",
       "noProjectsToAdd": "No projects to add.",
       "noProjectsYet": "No projects yet.",
+      "open": "Open details",
       "projectCount_one": "{count} project",
       "projectCount_other": "{count} projects",
       "projects": "Projects ({count})",
@@ -851,6 +1046,7 @@
       "removeProjectTitle": "Remove {name} from this initiative",
       "rename": "Rename",
       "renameFailed": "Failed to rename initiative",
+      "restored": "Restored \"{name}\"",
       "statusUpdateFailed": "Failed to update status",
       "unarchiveFailed": "Failed to restore initiative"
     },
@@ -903,6 +1099,7 @@
         "project": "project",
         "startDate": "start date",
         "status": "status",
+        "team": "team",
         "title": "title",
         "trashed": "trash"
       },
@@ -999,8 +1196,11 @@
       "labels": "Labels",
       "milestone": "Milestone",
       "noAssignee": "No assignee",
+      "parent": "Parent",
       "priority": "Priority",
       "project": "Project",
+      "removeParent": "Remove parent",
+      "setParent": "Set parent…",
       "startDate": "Start date",
       "status": "Status"
     },
@@ -1037,6 +1237,7 @@
     },
     "subIssues": {
       "add": "Add",
+      "addExisting": "Add existing",
       "adding": "Adding…",
       "addSubIssue": "Add sub-issue",
       "categories": {
@@ -1115,8 +1316,12 @@
     "archivedToast": "Issue archived",
     "archiveFailed": "Failed to archive issue",
     "assignee": "Assignee",
+    "backlogDescription": "Issues in backlog states, not yet planned. Todo issues are on the team page.",
     "boardViewShortcut": "Board view (Alt+2)",
     "builtIn": "Built-in",
+    "bulkCycleNeedsSameTeam": "Select issues from a single team to set a cycle",
+    "bulkDeleteConfirmBody": "{count} issues will be permanently deleted. This cannot be undone.",
+    "bulkDeleteConfirmTitle": "Delete {count} issues?",
     "bulkUpdateFailed": "Failed to update issues",
     "clear": "Clear",
     "clearAll": "Clear all",
@@ -1125,6 +1330,11 @@
     "columnPicker": "Column picker",
     "columns": "Columns",
     "columnsWideOnly": "Columns show on screens 1024px and wider; the detail panel has every property.",
+    "completedAll": "All completed issues",
+    "completedIssuesLabel": "Completed issues",
+    "completedNone": "No completed issues",
+    "completedPastWeek": "Completed in past week",
+    "copyAsMarkdown": "Copy as Markdown",
     "copyBranchName": "Copy branch name",
     "copyIssueId": "Copy issue ID",
     "copyIssueUrl": "Copy issue URL",
@@ -1134,12 +1344,15 @@
     "csvHeaderId": "ID",
     "csvHeaderTitle": "Title",
     "csvHeaderUpdated": "Updated",
+    "cursorAnnouncement": "{identifier} {title}, {position} of {total}",
     "customFields": "Custom fields",
     "cycle": "Cycle",
     "deleteConfirmBody": "{identifier} will be permanently deleted. This cannot be undone.",
     "deleteConfirmTitle": "Delete issue?",
+    "deletedManyToast": "{count} issues deleted",
     "deletedToast": "Issue deleted",
     "deleteFailed": "Failed to delete issue",
+    "display": "Display",
     "draggingCount_one": "Dragging {count} issue",
     "draggingCount_other": "Dragging {count} issues",
     "dueDate": "Due date",
@@ -1156,10 +1369,15 @@
     "ganttEmptyMessage": "No issues with start or due dates. Add dates to issues to populate the timeline.",
     "groupBy": "Group by",
     "groupByAssignee": "Group by assignee",
+    "groupByCycle": "Group by cycle",
     "groupByLabel": "Group by",
+    "groupByLabelOption": "Group by label",
     "groupByNone": "No grouping",
     "groupByPriority": "Group by priority",
+    "groupByProject": "Group by project",
     "groupByStatus": "Group by status",
+    "idCopied": "Copied {identifier}",
+    "inTriageLink": "{count} in triage",
     "issuesCount_one": "{count} issue",
     "issuesCount_other": "{count} issues",
     "issuesGroupName": "Issues",
@@ -1171,28 +1389,37 @@
     "layoutList": "List",
     "layoutTimeline": "Timeline",
     "listViewShortcut": "List view (Alt+1)",
+    "markdownCopied": "Copied as Markdown",
+    "markedDuplicateToast": "Marked as a duplicate of {identifier}",
     "moreActions": "More actions",
     "moveIssue": "Move {identifier}",
+    "moveToTeam": "Move to team",
     "myIssues": "My Issues",
     "newIssue": "New issue",
     "noBacklogIssues": "No backlog issues",
     "noBacklogIssuesDescription": "The backlog holds work you have accepted but not scheduled into a cycle yet.",
+    "noCycle": "No cycle",
     "noIssues": "No issues",
     "noIssuesDescription": "Nothing matches this view. Create an issue or widen the filters.",
     "noIssuesFoundPrefix": "No issues found. Press",
     "noIssuesFoundSuffix": "to create one.",
     "noIssuesMatchFilters": "No issues match these filters",
     "noIssuesMatchFiltersDescription": "Try removing a filter to see more issues.",
+    "noLabel": "No label",
+    "noProject": "No project",
     "noSwimlanes": "No swimlanes",
     "nothingToExport": "Nothing to export — apply different filters or add issues.",
     "openInNewTab": "Open in new tab",
     "openIssue": "Open issue",
+    "operatorAfter": "is after",
+    "operatorBefore": "is before",
     "operatorIs": "is",
     "operatorIsAnyOf": "is any of",
     "operatorIsNoneOf": "is none of",
     "operatorIsNot": "is not",
     "operatorIsNotSet": "is not set",
     "operatorIsSet": "is set",
+    "operatorOverdue": "is overdue",
     "or": "OR",
     "orderByCreated": "Newest",
     "orderByDueDate": "Due date",
@@ -1209,11 +1436,13 @@
     "restoreFailed": "Failed to restore issue",
     "saveCurrentFiltersAsView": "Save current filters as a view",
     "saveView": "Save view",
+    "saveViewBacklogOrUnsupported": "A backlog view can't be saved while the filters are combined with OR. Switch them to AND, or save from the team issues page.",
     "saveViewSummary_one": "{count} filter · {layout}",
     "saveViewSummary_other": "{count} filters · {layout}",
     "scope": {
       "assigned": "Assigned",
-      "created": "Created"
+      "created": "Created",
+      "subscribed": "Subscribed"
     },
     "selectAllCount": "Select all {count}",
     "selectEllipsis": "Select…",
@@ -1236,6 +1465,7 @@
       "unsnoozeFailed": "Failed to unsnooze issue"
     },
     "status": "Status",
+    "subscribedLoadFailed": "Couldn't load your subscribed issues",
     "swimlaneBy": "Swimlanes",
     "swimlaneByAssignee": "Swimlane by assignee",
     "swimlaneByLabel": "Swimlanes",
@@ -1264,13 +1494,18 @@
   "layout": {
     "shortcutHelp": {
       "archiveIssue": "Archive issue",
+      "assignToMe": "Assign to me",
       "boardView": "Board view",
       "closeAriaLabel": "Close shortcuts",
       "closeDeselect": "Close / deselect",
       "commandPalette": "Command palette",
+      "copyIssueId": "Copy issue ID",
       "createIssue": "Create issue",
       "goToInbox": "Go to Inbox",
       "goToMyIssues": "Go to My Issues",
+      "goToTeamBacklog": "Go to team backlog",
+      "goToTeamCycles": "Go to team cycles",
+      "goToTeamIssues": "Go to team issues",
       "listView": "List view",
       "moveDown": "Move down",
       "moveUp": "Move up",
@@ -1283,6 +1518,7 @@
         "issueActions": "Issue Actions",
         "issueList": "Issue List",
         "navigation": "Navigation",
+        "triage": "Triage",
         "view": "View"
       },
       "setAssignee": "Set assignee",
@@ -1295,7 +1531,13 @@
       "setStatus": "Set status",
       "timelineView": "Timeline view",
       "title": "Keyboard Shortcuts",
-      "toggleSidebar": "Toggle sidebar"
+      "toggleSelectIssue": "Select / deselect issue",
+      "toggleSidebar": "Toggle sidebar",
+      "toggleSubscription": "Subscribe / unsubscribe",
+      "triageAccept": "Accept (move to backlog)",
+      "triageDecline": "Decline (cancel)",
+      "triageDuplicate": "Mark as duplicate",
+      "triageSnooze": "Snooze"
     },
     "skipToContent": "Skip to content",
     "workspaceError": {
@@ -1355,6 +1597,12 @@
     "allNotifications": "All notifications",
     "emptyState": {
       "detail": "No notifications yet. You'll be notified when something needs your attention.",
+      "otherDetail": "Activity on issues you follow shows up here.",
+      "otherTitle": "Nothing else",
+      "priorityDetail": "Assignments, mentions, replies and reminders land here.",
+      "priorityTitle": "No priority notifications",
+      "snoozedDetail": "Snoozed notifications wait here until they wake.",
+      "snoozedTitle": "Nothing snoozed",
       "title": "All caught up",
       "unreadDetail": "Everything here has been read. Switch to All to see the rest.",
       "unreadTitle": "Nothing unread"
@@ -1364,12 +1612,23 @@
       "issueAssigned": "assigned you to an issue",
       "issueCommented": "commented on an issue",
       "issueMentioned": "mentioned you in an issue",
-      "issueStatusChanged": "changed the status of an issue"
+      "issueStatusChanged": "changed the status of an issue",
+      "reminder": "Reminder"
     },
+    "lanes": {
+      "label": "Inbox sections",
+      "other": "Other",
+      "priority": "Priority"
+    },
+    "loadMore": "Load more",
     "markAllRead": "Mark all read",
     "markAsRead": "Mark as read",
+    "markAsUnread": "Mark as unread",
     "marking": "Marking…",
+    "openLink": "Open",
     "read": "Read",
+    "remindedFor": "Reminder set for {when}",
+    "reminderTitle": "Reminder: {title}",
     "snooze": {
       "buttonTitle": "Snooze",
       "fourHours": "4 hours",
@@ -1377,8 +1636,12 @@
       "oneHour": "1 hour",
       "tomorrow9am": "Tomorrow 9am"
     },
+    "snoozedCount": "Snoozed ({count})",
+    "snoozedUntil": "Snoozed until {when}",
     "tabs": {
       "all": "All",
+      "label": "Inbox filter",
+      "snoozed": "Snoozed",
       "unread": "Unread"
     },
     "title": "Inbox",
@@ -1386,11 +1649,15 @@
       "loadFailed": "Failed to load notifications",
       "markAllReadFailed": "Failed to mark all notifications as read",
       "markReadFailed": "Failed to mark notification as read",
+      "markUnreadFailed": "Failed to mark notification as unread",
       "snoozed": "Notification snoozed",
-      "snoozeFailed": "Failed to snooze notification"
+      "snoozeFailed": "Failed to snooze notification",
+      "unsnoozed": "Notification unsnoozed",
+      "unsnoozeFailed": "Failed to unsnooze notification"
     },
     "unreadBadge": "{count} unread",
-    "unreadCount": "Unread ({count})"
+    "unreadCount": "Unread ({count})",
+    "unsnooze": "Unsnooze"
   },
   "projects": {
     "active": "Active",
@@ -1400,8 +1667,43 @@
     "addTeam": "Add team",
     "addUpdate": "Add update",
     "archive": "Archive",
-    "archiveConfirm": "Archive \"{name}\"? Its issues stay where they are.",
+    "archiveConfirm": "Archive \"{name}\"? It is hidden from lists and stops counting toward its initiatives' progress. Its issues stay where they are, and you can restore it from the Archived view.",
+    "archivedEmptyDescription": "Projects you archive show up here, where you can restore them.",
+    "archivedEmptyTitle": "No archived projects",
+    "archivedTab": "Archived",
+    "archivedView": "Archived projects",
     "backToProjects": "Back to projects",
+    "burnup": {
+      "aheadOfTarget_one": "{count} day ahead of target ({date})",
+      "aheadOfTarget_other": "{count} days ahead of target ({date})",
+      "ariaLabel": "Project burn-up: scope and completed issues over time with a projected finish",
+      "complete": "All issues complete",
+      "completed": "Completed",
+      "dateHeader": "Date",
+      "description": "Scope and completed issues per day, with a forecast from recent pace.",
+      "empty": "No issues in this project yet.",
+      "failedToLoad": "Failed to load the burn-up chart",
+      "forecast": "Forecast",
+      "hover": "{date}: scope {scope}, completed {completed}",
+      "keyboardHint": "Use the left and right arrow keys to read each day; Home and End jump to the first and last day.",
+      "noTarget": "No target date set",
+      "notEnoughData": "Not enough data to forecast",
+      "pastTarget_one": "{count} day past target ({date})",
+      "pastTarget_other": "{count} days past target ({date})",
+      "projectedFinish": "Projected finish {date}",
+      "reason": {
+        "noCompletions": "Nothing was completed in the recent window, so there is no pace to project.",
+        "noIssues": "This project has no issues.",
+        "tooFar": "At the current pace the finish is more than two years away.",
+        "tooShort": "Needs at least a week of history."
+      },
+      "scope": "Scope",
+      "target": "Target date",
+      "targetAfter": "Target {date} (beyond the chart)",
+      "targetBefore": "Target {date} (before the chart starts)",
+      "title": "Burn-up",
+      "velocity": "Pace: {count} issues/week over the last {days} days"
+    },
     "completed": "Completed",
     "createProject": "Create project",
     "createProjectPrompt": "Create a project to track work across teams.",
@@ -1432,6 +1734,9 @@
     "lead": "Lead",
     "list": "List",
     "listView": "List view",
+    "loadArchivedFailed": "Couldn't load archived projects",
+    "loadMoreArchived": "Load more",
+    "loadMoreArchivedFailed": "Couldn't load more archived projects.",
     "members": "Members",
     "milestoneName": "Milestone name",
     "milestonesCount": "Milestones ({count})",
@@ -1453,6 +1758,7 @@
     "projectCreated": "Project created",
     "projectDeleted": "Project deleted",
     "projectNotFound": "Project not found.",
+    "projectRestored": "Restored \"{name}\"",
     "projectUpdated": "Project updated",
     "properties": "Properties",
     "removeMember": "Remove member {name}",
@@ -1476,7 +1782,8 @@
     "title": "Projects",
     "trend": "Trend",
     "unknownAuthor": "Unknown",
-    "updatesCount": "Updates ({count})"
+    "updatesCount": "Updates ({count})",
+    "viewLabel": "Projects view"
   },
   "properties": {
     "assignee": {
@@ -1553,6 +1860,10 @@
       "shareWithTeam": "Share with team",
       "title": "Save view"
     },
+    "startDate": {
+      "noStartDate": "No start date",
+      "startsOn": "Starts {date}"
+    },
     "status": {
       "noStatusesFound": "No statuses found",
       "searchPlaceholder": "Search statuses...",
@@ -1578,6 +1889,26 @@
       "updateDeleted": "Update deleted",
       "yes": "Yes"
     }
+  },
+  "reminders": {
+    "chipLabel": "Reminder: {when}",
+    "chipTitle": "Reminder set for {when}",
+    "clear": "Clear reminder",
+    "cleared": "Reminder cleared",
+    "clearFailed": "Couldn't clear the reminder",
+    "customLabel": "Custom date and time",
+    "invalidTime": "Enter a valid date and time",
+    "laterToday": "Later today",
+    "menuItem": "Remind me…",
+    "menuItemChange": "Change reminder…",
+    "nextWeek": "Next week",
+    "pastTime": "Pick a time in the future",
+    "set": "We'll remind you on {when}",
+    "setCustom": "Set reminder",
+    "setFailed": "Couldn't set the reminder",
+    "shifted": "That time doesn't exist because the clocks change. The reminder is set for {when}.",
+    "tomorrow": "Tomorrow",
+    "tooFar": "Reminders can be at most one year ahead"
   },
   "roadmap": {
     "gantt": {
@@ -1648,6 +1979,67 @@
   },
   "settings": {
     "auditLog": {
+      "actions": {
+        "api_key": {
+          "created": "API key created",
+          "revoked": "API key revoked"
+        },
+        "audit_log": {
+          "exported": "Audit log exported"
+        },
+        "auth": {
+          "login": "Signed in",
+          "login_failed": "Sign-in failed",
+          "logout": "Signed out"
+        },
+        "github": {
+          "webhook_secret_revealed": "GitHub webhook secret revealed",
+          "webhook_secret_rotated": "GitHub webhook secret rotated"
+        },
+        "issue": {
+          "archived": "Issue archived",
+          "bulk_updated": "Issues bulk updated",
+          "created": "Issue created",
+          "deleted": "Issue deleted"
+        },
+        "member": {
+          "invite_accepted": "Invite accepted",
+          "invite_revoked": "Invite revoked",
+          "invited": "Member invited",
+          "left": "Member left",
+          "removed": "Member removed",
+          "role_changed": "Member role changed"
+        },
+        "project": {
+          "created": "Project created",
+          "deleted": "Project deleted"
+        },
+        "saml": {
+          "configured": "SAML configured",
+          "disabled": "SAML disabled",
+          "enabled": "SAML enabled"
+        },
+        "scim": {
+          "token_created": "SCIM token created",
+          "token_revoked": "SCIM token revoked"
+        },
+        "settings": {
+          "config_changed": "Configuration changed",
+          "security_changed": "Security settings changed"
+        },
+        "team": {
+          "created": "Team created",
+          "deleted": "Team deleted"
+        },
+        "webhook": {
+          "archived": "Webhook archived",
+          "created": "Webhook created",
+          "deleted": "Webhook deleted",
+          "secret_rotated": "Webhook secret rotated",
+          "tested": "Webhook test sent",
+          "updated": "Webhook updated"
+        }
+      },
       "allActions": "All actions",
       "allUsers": "All users",
       "apply": "Apply",
@@ -1657,11 +2049,28 @@
       "columnResource": "Resource",
       "columnTimestamp": "Timestamp",
       "columnUser": "User",
+      "dateFrom": "From date",
+      "dateTo": "To date",
       "description": "Security-relevant events for your organization. Only admins can view this log.",
+      "exportCsv": "Export CSV",
+      "exportError": "Failed to export the audit log",
+      "exported": "Exported {rows} entries",
+      "exporting": "Exporting…",
+      "exportTruncated": "Export limited to the newest {rows} entries.",
       "filterByUserId": "Filter by user ID",
       "forbidden": "You need admin access to view audit logs.",
       "loadMore": "Load more",
       "noEntriesFound": "No audit log entries found.",
+      "resourceTypes": {
+        "AuditLog": "Audit log",
+        "GitHubIntegration": "GitHub integration",
+        "Issue": "Issue",
+        "OrganizationInvite": "Invite",
+        "OrganizationMember": "Member",
+        "Setting": "Setting",
+        "Team": "Team",
+        "Webhook": "Webhook"
+      },
       "system": "system",
       "title": "Audit Log",
       "toggleDetails": "Show details"
@@ -1736,6 +2145,37 @@
       "fieldPriority": "Priority",
       "fieldState": "Status (name)",
       "fieldTitle": "Title",
+      "github": {
+        "check": "Check repository",
+        "checkFailed": "Could not reach the repository",
+        "checking": "Checking…",
+        "closedAsOpen": "{count} closed on GitHub but imported as open: this team has no Done or Canceled status.",
+        "commentsTruncated": "{count} issues had more comments than the import limit; the rest were not imported.",
+        "continue": "Continue from page {page}",
+        "done": "Finished. Assignees are matched by the public email on the GitHub profile; others are left unassigned.",
+        "extras": "{labels} labels and {comments} comments created",
+        "heading": "Import issues from GitHub",
+        "hint": "Imports the issues of one repository (pull requests are skipped). Re-running is safe: issues already imported are skipped, so an interrupted import can simply be started again.",
+        "includeClosed": "Include closed issues",
+        "includeComments": "Import comments (slower)",
+        "limitReached": "Import limit for one run reached. Continue to import the rest.",
+        "limitReachedHint": "This run reached the workspace import limit. Continue to resume at GitHub page {page}; issues already imported are skipped.",
+        "previewCount_one": "{repo} has {count} issue.",
+        "previewCount_other": "{repo} has {count} issues.",
+        "previewUnknown": "{repo} is reachable (issue count unavailable).",
+        "progress": "Read {processed} · created {created} · already imported {existing}",
+        "repo": "Repository",
+        "repoRequired": "Enter a repository as owner/name",
+        "source": {
+          "integration": "Using the connected GitHub account.",
+          "none": "No token: public data only, strict rate limit.",
+          "personal": "Using your personal access token."
+        },
+        "start": "Start import",
+        "stop": "Stop after this page",
+        "token": "Personal access token (optional)",
+        "tokenHint": "Used for this import only and never stored. Needed for private repositories; the connected GitHub account can only read public ones. Without any token GitHub allows very few requests."
+      },
       "importCount_one": "Import {count} issue",
       "importCount_other": "Import {count} issues",
       "importedCount_one": "Imported {count} issue",
@@ -1776,9 +2216,11 @@
       "githubDisconnectError": "Failed to disconnect GitHub",
       "githubDisconnected": "GitHub disconnected",
       "loadGithubError": "Failed to load GitHub integration",
-      "newSecretTooShort": "New secret must be at least 16 characters",
-      "newWebhookSecretPlaceholder": "New webhook secret (min 16 chars)",
-      "rotateWebhookSecret": "Rotate webhook secret",
+      "notConfigured": "Not configured on this server",
+      "notConfiguredHint": "The {provider} integration isn't set up on this server. Ask whoever runs this deployment to configure it.",
+      "rotateWebhookSecret": "Generate new webhook secret",
+      "rotateWebhookSecretConfirm": "Generate a new webhook secret? The current one stops working immediately, so update the secret in GitHub's webhook settings or inbound events will be rejected.",
+      "showWebhookSecret": "Show webhook secret",
       "slack": "Slack",
       "slackDescriptionPrefix": "Create issues from Slack with the",
       "slackDescriptionSuffix": "command.",
@@ -1786,13 +2228,25 @@
       "slackDisconnected": "Slack disconnected",
       "slackRequestUrlLabel": "Slack request URL",
       "title": "Integrations",
-      "webhookSecretInstructions": "Enter a webhook secret that you'll configure in GitHub when setting up the webhook. It must be at least 16 characters. Keep it secret — it's used to verify that incoming events are genuinely from GitHub.",
-      "webhookSecretPlaceholder": "Webhook secret (min 16 chars)",
-      "webhookSecretTooShort": "Webhook secret must be at least 16 characters",
+      "webhookSecretInstructions": "A webhook secret is generated for you when you connect. After connecting, use “Show webhook secret” and paste it into your GitHub webhook so incoming events can be verified.",
+      "webhookSecretLabel": "Webhook secret",
+      "webhookSecretRevealError": "Failed to load the webhook secret",
       "webhookSecretUpdated": "Webhook secret updated",
       "webhookSecretUpdateError": "Failed to rotate webhook secret",
       "webhookUrlHint": "Webhook URL (configure this in your GitHub repo or org settings):",
       "webhookUrlLabel": "Webhook URL"
+    },
+    "profile": {
+      "avatar": "Photo",
+      "avatarError": "Couldn’t update your photo.",
+      "avatarRemove": "Remove",
+      "avatarUpload": "Upload photo",
+      "avatarUploading": "Uploading…",
+      "email": "Email",
+      "name": "Name",
+      "saved": "Profile updated",
+      "saveError": "Couldn’t update your profile.",
+      "title": "Profile"
     },
     "roles": {
       "admin": "Admin",
@@ -2054,31 +2508,44 @@
     },
     "triage": {
       "accept": "Accept",
+      "accepted": "Accepted {identifier}",
       "acceptFailed": "Failed to accept issue",
       "allClear": "All clear — nothing in triage.",
       "allClearDescription": "Nothing is waiting to be triaged. New issues land here before they reach the backlog.",
       "allClearTitle": "All clear",
+      "alreadyHandled": "Someone else already handled this issue",
       "backToQueue": "Queue",
       "cannotMarkDuplicateOfItself": "Cannot mark an issue as a duplicate of itself",
       "decline": "Decline",
+      "declined": "Declined {identifier}",
       "declineFailed": "Failed to decline issue",
       "duplicate": "Duplicate",
+      "duplicateMatchedTerms": "Shared terms: {terms}",
+      "duplicateSuggestionsFailed": "Couldn't load duplicate suggestions",
       "fromCreator": "from {name} · {date}",
+      "inTriage": "In triage",
       "markDuplicateFailed": "Failed to mark duplicate",
+      "markDuplicateOf": "Mark as duplicate of {identifier}",
       "markDuplicateTitle": "Mark as duplicate of another issue",
       "markedAsDuplicate": "Marked as duplicate of {identifier}",
       "noDescription": "No description",
       "openFullIssue": "Open full issue",
       "pageTitle": "{name} — Triage",
+      "possibleDuplicates": "Possible duplicates",
       "snooze": "Snooze",
       "snooze1Day": "1 day",
       "snooze1Week": "1 week",
       "snooze4Hours": "4 hours",
       "snoozeFailed": "Failed to snooze issue",
+      "snoozeMenuLabel": "Snooze until",
+      "suggestionsLanguageHint": "Suggestions work best with space-separated languages.",
       "teamNotFound": "Team not found.",
       "toTriageCount": "{count} to triage",
       "triageNotEnabled": "Triage is not enabled for this team.",
-      "triageNotEnabledHint": "Enable it in team settings to route incoming issues here."
+      "triageNotEnabledHint": "Enable it in team settings to route incoming issues here.",
+      "undo": "Undo",
+      "undoExpired": "Too late to undo — this issue was already handled again",
+      "undoFailed": "Couldn't undo that decision"
     },
     "webhooks": {
       "addWebhook": "+ Add webhook",
@@ -2104,6 +2571,7 @@
       "description": "Send events to external HTTP endpoints. Each delivery is signed with HMAC SHA-256 (X-Bilinear-Signature header).",
       "disable": "Disable",
       "disabled": "Disabled",
+      "editWebhook": "Edit webhook",
       "enable": "Enable",
       "enabled": "Enabled",
       "events": "Events",
@@ -2122,15 +2590,25 @@
       "secretCopied": "Signing secret copied",
       "secretRotated": "Signing secret rotated",
       "selectAllEvents": "Select all",
+      "sendTest": "Send test event",
       "signingSecret": "Signing secret:",
+      "testError": "Failed to send the test event",
+      "testFailed": "Test event failed",
+      "testFailedDetail": "Test event failed: {detail}",
+      "testing": "Sending…",
+      "testNeedsEnabled": "Enable the webhook to send a test event",
+      "testRateLimited": "Too many test events. Wait a minute and try again.",
+      "testSucceeded": "Test event delivered (HTTP {status})",
       "title": "Webhooks",
       "updateError": "Failed to update webhook",
       "url": "URL",
+      "urlInvalid": "Enter a valid http(s) URL, e.g. https://example.com/hook.",
       "urlRequired": "Enter the URL that should receive events.",
       "webhookCreated": "Webhook created",
       "webhookDeleted": "Webhook deleted",
       "webhookDisabled": "Webhook disabled",
-      "webhookEnabled": "Webhook enabled"
+      "webhookEnabled": "Webhook enabled",
+      "webhookUpdated": "Webhook updated"
     },
     "workspace": {
       "accentDescription": "The accent colour used for selection, focus and primary actions.",
@@ -2254,6 +2732,11 @@
       "tokenRevoked": "Token revoked",
       "tokenRevokeError": "Failed to revoke token",
       "urlKey": "URL key",
+      "urlKeyChangeConfirm": "Change URL",
+      "urlKeyChangeMessage": "Links that use /{old} — bookmarks, shared issue links, integrations — will stop working. Your workspace will move to /{next}.",
+      "urlKeyChangeTitle": "Change workspace URL?",
+      "urlKeyHint": "Lowercase letters, numbers and hyphens. Changing it breaks existing links.",
+      "urlKeyUpdateError": "Couldn’t change the workspace URL.",
       "webhooks": "Webhooks",
       "webhooksDescription": "Send outbound HTTP events"
     }

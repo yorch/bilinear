@@ -238,6 +238,30 @@ async function main() {
       stateKey: 'Triage',
       title: 'Triage: typo on marketing landing page',
     },
+    // Backlog — unplanned work. The backlog page lists backlog-category states
+    // only, so a fresh seeded DB needs rows here or that page (and the bulk-
+    // action e2e specs, which need >= 2 rows) renders empty.
+    {
+      identifier: 'ENG-7',
+      number: 7,
+      priority: 3,
+      stateKey: 'Backlog',
+      title: 'Evaluate dark-launch tooling',
+    },
+    {
+      identifier: 'ENG-8',
+      number: 8,
+      priority: 4,
+      stateKey: 'Backlog',
+      title: 'Document the release checklist',
+    },
+    {
+      identifier: 'ENG-9',
+      number: 9,
+      priority: 0,
+      stateKey: 'Backlog',
+      title: 'Audit unused dependencies',
+    },
   ];
 
   for (const seed of issueSeeds) {

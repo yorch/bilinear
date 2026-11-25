@@ -5,6 +5,8 @@ import { useModKey } from '@/hooks/use-mod-key';
 import { useTranslations } from '@/hooks/use-translations';
 
 interface ShortcutEntry {
+  /** A second, equivalent binding, shown after the primary one ("1 / A"). */
+  alias?: string[];
   descriptionKey: string;
   keys: string[];
 }
@@ -36,6 +38,9 @@ const SECTIONS: ShortcutSection[] = [
     shortcuts: [
       { descriptionKey: 'layout.shortcutHelp.goToMyIssues', keys: ['G', 'I'] },
       { descriptionKey: 'layout.shortcutHelp.goToInbox', keys: ['G', 'N'] },
+      { descriptionKey: 'layout.shortcutHelp.goToTeamIssues', keys: ['G', 'T'] },
+      { descriptionKey: 'layout.shortcutHelp.goToTeamBacklog', keys: ['G', 'B'] },
+      { descriptionKey: 'layout.shortcutHelp.goToTeamCycles', keys: ['G', 'C'] },
     ],
     titleKey: 'layout.shortcutHelp.sections.navigation',
   },
@@ -43,6 +48,7 @@ const SECTIONS: ShortcutSection[] = [
     shortcuts: [
       { descriptionKey: 'layout.shortcutHelp.moveDown', keys: ['J'] },
       { descriptionKey: 'layout.shortcutHelp.moveUp', keys: ['K'] },
+      { descriptionKey: 'layout.shortcutHelp.toggleSelectIssue', keys: ['X'] },
       { descriptionKey: 'layout.shortcutHelp.openIssue', keys: ['Enter'] },
       { descriptionKey: 'layout.shortcutHelp.closeDeselect', keys: ['Esc'] },
     ],
@@ -58,9 +64,23 @@ const SECTIONS: ShortcutSection[] = [
       { descriptionKey: 'layout.shortcutHelp.setEstimate', keys: ['Shift', 'E'] },
       { descriptionKey: 'layout.shortcutHelp.setProject', keys: ['Shift', 'P'] },
       { descriptionKey: 'layout.shortcutHelp.setCycle', keys: ['Q'] },
+      { descriptionKey: 'layout.shortcutHelp.assignToMe', keys: ['I'] },
+      { descriptionKey: 'layout.shortcutHelp.copyIssueId', keys: [MOD, '.'] },
+      { descriptionKey: 'layout.shortcutHelp.toggleSubscription', keys: ['Shift', 'S'] },
       { descriptionKey: 'layout.shortcutHelp.archiveIssue', keys: ['⌫'] },
     ],
     titleKey: 'layout.shortcutHelp.sections.issueActions',
+  },
+  {
+    // Live only on a team's Triage page (`triage/page.tsx`); J / K move
+    // through the queue there exactly as in the issue list.
+    shortcuts: [
+      { alias: ['A'], descriptionKey: 'layout.shortcutHelp.triageAccept', keys: ['1'] },
+      { alias: ['M'], descriptionKey: 'layout.shortcutHelp.triageDuplicate', keys: ['2'] },
+      { alias: ['D'], descriptionKey: 'layout.shortcutHelp.triageDecline', keys: ['3'] },
+      { alias: ['S'], descriptionKey: 'layout.shortcutHelp.triageSnooze', keys: ['H'] },
+    ],
+    titleKey: 'layout.shortcutHelp.sections.triage',
   },
   {
     shortcuts: [
@@ -110,7 +130,7 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
       <ModalHeader title={t('layout.shortcutHelp.title')} />
 
       {/* Body — two-column grid of sections */}
-      <div className="max-h-[70vh] overflow-y-auto p-6">
+      <div className="max-h-[70vh] overflow-y-auto rounded-md p-6 focus-visible:outline-offset-[-2px]">
         <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2 gap-y-6">
           {SECTIONS.map(section => (
             <div key={section.titleKey}>
@@ -126,7 +146,17 @@ export function ShortcutHelpModal({ onClose, open }: ShortcutHelpModalProps) {
                     <span className="text-sm text-foreground-secondary">
                       {t(shortcut.descriptionKey)}
                     </span>
-                    <KbdGroup keys={shortcut.keys.map(k => (k === MOD ? modKey : k))} />
+                    <span className="flex shrink-0 items-center gap-1">
+                      <KbdGroup keys={shortcut.keys.map(k => (k === MOD ? modKey : k))} />
+                      {shortcut.alias ? (
+                        <>
+                          <span aria-hidden="true" className="text-xs text-muted-foreground">
+                            /
+                          </span>
+                          <KbdGroup keys={shortcut.alias} />
+                        </>
+                      ) : null}
+                    </span>
                   </div>
                 ))}
               </div>

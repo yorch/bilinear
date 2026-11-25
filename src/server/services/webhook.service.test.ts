@@ -9,8 +9,10 @@ import {
   WebhookInvalidNameError,
   WebhookInvalidUrlError,
   WebhookNoEventsError,
+  WebhookNotFoundError,
   WebhookPrivateUrlError,
   WebhookService,
+  WebhookTestUnavailableError,
 } from './webhook.service';
 
 // Mirrors the private constants in webhook.service.ts (not exported — kept
@@ -148,6 +150,72 @@ describe('WebhookService', () => {
     });
   });
 
+  describe('sendTest', () => {
+    const delivery = (over: Record<string, unknown>) => ({
+      ...TEST_DELIVERY,
+      event: 'ping',
+      ...over,
+    });
+
+    it('creates a signed ping delivery, processes it now, and returns the outcome', async () => {
+      prisma.webhook.findFirst.mockResolvedValue(TEST_WEBHOOK_IP);
+      prisma.webhookDelivery.create.mockResolvedValue({});
+      const spy = vi.spyOn(service, 'processDelivery').mockResolvedValue();
+      prisma.webhookDelivery.findUnique.mockResolvedValue(
+        delivery({ responseStatus: 204, status: 'success' }),
+      );
+
+      const result = await service.sendTest(TEST_ORG.id, TEST_WEBHOOK_IP.id);
+
+      expect(result.status).toBe('success');
+      const data = prisma.webhookDelivery.create.mock.calls[0]?.[0].data;
+      expect(data).toMatchObject({
+        event: 'ping',
+        status: 'pending',
+        webhookId: TEST_WEBHOOK_IP.id,
+      });
+      expect(data.payload.deliveryId).toBe(data.id);
+      expect(spy).toHaveBeenCalledWith(data.id);
+      expect(prisma.webhookDelivery.update).not.toHaveBeenCalled();
+    });
+
+    it('closes a failed ping out instead of leaving it on the retry schedule', async () => {
+      prisma.webhook.findFirst.mockResolvedValue(TEST_WEBHOOK_IP);
+      prisma.webhookDelivery.create.mockResolvedValue({});
+      vi.spyOn(service, 'processDelivery').mockResolvedValue();
+      prisma.webhookDelivery.findUnique.mockResolvedValue(
+        delivery({ attempts: 1, errorMessage: 'connect ECONNREFUSED', status: 'pending' }),
+      );
+      prisma.webhookDelivery.update.mockResolvedValue(delivery({ status: 'failed' }));
+
+      const result = await service.sendTest(TEST_ORG.id, TEST_WEBHOOK_IP.id);
+
+      expect(prisma.webhookDelivery.update).toHaveBeenCalledWith({
+        data: { nextAttemptAt: null, status: 'failed' },
+        where: { id: expect.any(String) },
+      });
+      expect(result.status).toBe('failed');
+    });
+
+    it('rejects a disabled or archived webhook without enqueueing anything', async () => {
+      prisma.webhook.findFirst.mockResolvedValue({ ...TEST_WEBHOOK_IP, enabled: false });
+      await expect(service.sendTest(TEST_ORG.id, TEST_WEBHOOK_IP.id)).rejects.toBeInstanceOf(
+        WebhookTestUnavailableError,
+      );
+      expect(prisma.webhookDelivery.create).not.toHaveBeenCalled();
+    });
+
+    it('is org-scoped: an unknown id in this org is NotFound', async () => {
+      prisma.webhook.findFirst.mockResolvedValue(null);
+      await expect(service.sendTest(TEST_ORG.id, 'nope')).rejects.toBeInstanceOf(
+        WebhookNotFoundError,
+      );
+      expect(prisma.webhook.findFirst).toHaveBeenCalledWith({
+        where: { id: 'nope', organizationId: TEST_ORG.id },
+      });
+    });
+  });
+
   describe('signPayload / verifySignature', () => {
     it('produces a hex SHA-256 HMAC', () => {
       const sig = signPayload('hello', 'secret');
@@ -188,6 +256,51 @@ describe('WebhookService', () => {
     it('rejects empty header value', () => {
       expect(verifySignature('hello', 'secret', '')).toBe(false);
       expect(verifySignature('hello', 'secret', 'sha256=')).toBe(false);
+    });
+  });
+
+  describe('isBlockedHost special-purpose ranges', () => {
+    it.each([
+      ['100.64.0.1', 'CGNAT low'],
+      ['100.100.100.200', 'CGNAT cloud metadata'],
+      ['100.127.255.254', 'CGNAT high'],
+      ['198.18.0.1', 'benchmarking'],
+      ['198.19.255.255', 'benchmarking high'],
+      ['192.0.0.8', 'IETF protocol assignments'],
+      ['192.0.2.1', 'TEST-NET-1'],
+      ['198.51.100.1', 'TEST-NET-2'],
+      ['203.0.113.1', 'TEST-NET-3'],
+      ['240.0.0.1', 'reserved'],
+      ['255.255.255.255', 'broadcast'],
+      ['fe90::1', 'link-local beyond fe80:'],
+      ['febf::1', 'link-local top'],
+      ['fec0::1', 'site-local'],
+      ['::7f00:1', 'IPv4-compatible loopback'],
+      ['::ffff:0:7f00:1', 'IPv4-translated loopback'],
+      ['::ffff:7f00:1', 'IPv4-mapped loopback'],
+      ['::ffff:100.100.100.200', 'IPv4-mapped CGNAT'],
+      ['64:ff9b::7f00:1', 'NAT64'],
+      ['2002:7f00:1::', '6to4 embedding loopback'],
+      ['2001:db8::1', 'documentation'],
+      ['ff02::1', 'multicast'],
+    ])('blocks %s (%s)', host => {
+      expect(isBlockedHost(host)).toBe(true);
+      expect(isBlockedHost(`[${host}]`)).toBe(true);
+    });
+
+    it.each([
+      '8.8.8.8',
+      '100.63.255.255',
+      '100.128.0.1',
+      '198.17.255.255',
+      '198.20.0.1',
+      '172.32.0.1',
+      '1.1.1.1',
+      '2606:4700:4700::1111',
+      '2001:4860:4860::8888',
+      '::ffff:8.8.8.8',
+    ])('does not block the public address %s', host => {
+      expect(isBlockedHost(host)).toBe(false);
     });
   });
 
@@ -287,6 +400,38 @@ describe('WebhookService', () => {
       expect(prisma.webhookDelivery.create).not.toHaveBeenCalled();
     });
 
+    it('team-scoped dispatch includes org-wide hooks; teamScopedOnly excludes them', async () => {
+      prisma.webhook.findMany.mockResolvedValue([]);
+      await service.dispatchEvent(TEST_ORG.id, 'issue.updated', { id: 'x' }, 'team-1');
+      expect(prisma.webhook.findMany.mock.calls[0][0].where).toMatchObject({
+        OR: [{ teamId: null }, { teamId: 'team-1' }],
+      });
+      await service.dispatchEvent(TEST_ORG.id, 'issue.updated', { id: 'x' }, 'team-1', {
+        teamScopedOnly: true,
+      });
+      const where = prisma.webhook.findMany.mock.calls[1][0].where;
+      expect(where.teamId).toBe('team-1');
+      expect(where.OR).toBeUndefined();
+    });
+
+    it('an event from a PRIVATE team goes only to hooks scoped to that team', async () => {
+      prisma.webhook.findMany.mockResolvedValue([]);
+      prisma.team.findFirst.mockResolvedValue({ private: true });
+      await service.dispatchEvent(TEST_ORG.id, 'issue.updated', { id: 'x' }, 'team-priv');
+      const where = prisma.webhook.findMany.mock.calls[0][0].where;
+      expect(where.teamId).toBe('team-priv');
+      expect(where.OR).toBeUndefined();
+    });
+
+    it('an event from a public team still reaches org-wide hooks', async () => {
+      prisma.webhook.findMany.mockResolvedValue([]);
+      prisma.team.findFirst.mockResolvedValue({ private: false });
+      await service.dispatchEvent(TEST_ORG.id, 'issue.updated', { id: 'x' }, 'team-pub');
+      expect(prisma.webhook.findMany.mock.calls[0][0].where).toMatchObject({
+        OR: [{ teamId: null }, { teamId: 'team-pub' }],
+      });
+    });
+
     it('batches deliveries with createMany and fires processDelivery per row', async () => {
       const TEST_WEBHOOK_2 = { ...TEST_WEBHOOK, id: '00000000-0000-0000-0000-000000000a01' };
       prisma.webhook.findMany.mockResolvedValue([TEST_WEBHOOK, TEST_WEBHOOK_2]);
@@ -319,7 +464,7 @@ describe('WebhookService', () => {
 
     beforeEach(() => {
       fetchMock.mockReset();
-      vi.stubGlobal('fetch', fetchMock);
+      service = new WebhookService(prisma as never, undefined, undefined, fetchMock as never);
       vi.useFakeTimers();
       vi.setSystemTime(FROZEN_NOW);
     });
@@ -327,6 +472,24 @@ describe('WebhookService', () => {
     afterEach(() => {
       vi.unstubAllGlobals();
       vi.useRealTimers();
+    });
+
+    it('re-screens a stored IP-literal URL on every delivery (stale rows are not grandfathered)', async () => {
+      prisma.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
+      prisma.webhookDelivery.findUnique.mockResolvedValue({
+        ...TEST_DELIVERY,
+        webhook: { ...TEST_WEBHOOK_IP, url: 'http://100.100.100.200/latest/meta-data/' },
+      });
+      prisma.webhookDelivery.update.mockResolvedValue({});
+
+      await service.processDelivery(TEST_DELIVERY.id);
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(prisma.webhookDelivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ nextAttemptAt: null, status: 'failed' }),
+        }),
+      );
     });
 
     describe('atomic pending→in_flight claim', () => {

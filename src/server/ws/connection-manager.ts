@@ -1,5 +1,6 @@
 import type { WebSocket } from 'ws';
 import { isUnrestricted, type SyncVisibility } from '@/server/lib/sync-visibility';
+import { dropForeignUserRows } from '@/server/services/sync.service';
 
 export interface ClientInfo {
   orgId: string;
@@ -118,13 +119,26 @@ export class ConnectionManager {
     const filteredByUser = new Map<string, Promise<string | null>>();
     const pending: Promise<void>[] = [];
     for (const info of set) {
+      // A per-user row (Notification, Favorite, IssueReminder) belongs to one recipient and must never reach any
+      // other socket, restricted or not — so the shared frame is only safe
+      // when this user's own view of the batch is identical to the whole batch.
+      const own = dropForeignUserRows(
+        actions as unknown as Array<{ action?: string; data: unknown; modelName: string }>,
+        info.userId,
+      ) as unknown as T[];
       if (!info.visibility) {
-        this.sendTo(info, full);
+        // Identity, not length: a row rewritten for this user (an unshared view
+        // turned into a delete) keeps the count but must not get the shared frame.
+        if (own.length === actions.length && own.every((row, i) => row === actions[i])) {
+          this.sendTo(info, full);
+        } else if (own.length > 0) {
+          this.sendTo(info, JSON.stringify({ cmd: 'sync', sync: own }));
+        }
         continue;
       }
       let frame = filteredByUser.get(info.userId);
       if (!frame) {
-        frame = filter(info.visibility, actions).then(visible =>
+        frame = filter(info.visibility, own).then(visible =>
           visible.length > 0 ? JSON.stringify({ cmd: 'sync', sync: visible }) : null,
         );
         filteredByUser.set(info.userId, frame);

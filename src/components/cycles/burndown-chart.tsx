@@ -5,11 +5,14 @@ import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
 import {
   CHART_HEIGHT,
+  extendAxis,
+  idealSeries,
   makeScales,
   PADDING_BOTTOM,
   PADDING_LEFT,
   PADDING_RIGHT,
   PADDING_TOP,
+  plannedScope,
   toPath,
   xAxisLabels,
   xAxisStep,
@@ -25,9 +28,11 @@ interface BurndownPoint {
 
 interface BurndownChartProps {
   data: BurndownPoint[];
+  /** Cycle end; the ideal line reaches zero here rather than on the last recorded day. */
+  endsAt?: string | null;
 }
 
-export function BurndownChart({ data }: BurndownChartProps) {
+export function BurndownChart({ data, endsAt }: BurndownChartProps) {
   const t = useTranslations();
   const { formatDate } = useFormatters();
   const { ref, width } = useChartWidth();
@@ -44,25 +49,25 @@ export function BurndownChart({ data }: BurndownChartProps) {
   }
 
   const initialScope = data[0].scope;
-  const maxY = Math.max(...data.map(d => Math.max(d.remaining, d.scope)), 1);
+  const planned = plannedScope(data);
+  // Days the chart spans: everything recorded so far plus the rest of the cycle.
+  const axis = extendAxis(data, endsAt);
   const n = data.length;
+  const total = axis.length;
+  const ideal = idealSeries(planned, total);
+  const maxY = Math.max(...data.map(d => Math.max(d.remaining, d.scope)), planned, 1);
   const scopeChanged = data.some(d => d.scope !== initialScope);
 
-  const { xScale, yScale, yTicks } = makeScales(n, maxY, width);
+  const { xScale, yScale, yTicks } = makeScales(total, maxY, width);
 
-  // Ideal burndown: linear from initialScope on day 0 to 0 on the last day.
-  const idealPath = toPath(
-    data.map((_, i) => ({
-      x: xScale(i),
-      y: yScale(n === 1 ? 0 : initialScope - (initialScope / (n - 1)) * i),
-    })),
-  );
+  // Ideal burndown: linear from the planned scope on day 0 to 0 on the last day.
+  const idealPath = toPath(ideal.map((v, i) => ({ x: xScale(i), y: yScale(v) })));
 
   const remainingPath = toPath(data.map((d, i) => ({ x: xScale(i), y: yScale(d.remaining) })));
   const scopePath = toPath(data.map((d, i) => ({ x: xScale(i), y: yScale(d.scope) })));
 
   const fmt = (date: string) => formatDate(date, { day: 'numeric', month: 'short' });
-  const xLabels = xAxisLabels(data, fmt, xAxisStep(n, width));
+  const xLabels = xAxisLabels(axis, fmt, xAxisStep(total, width));
 
   const handleMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -133,7 +138,7 @@ export function BurndownChart({ data }: BurndownChartProps) {
             className="fill-muted-foreground"
             fontSize={11}
             key={i}
-            textAnchor={i === n - 1 && i > 0 ? 'end' : 'middle'}
+            textAnchor={i === total - 1 && i > 0 ? 'end' : 'middle'}
             x={xScale(i)}
             y={CHART_HEIGHT - PADDING_BOTTOM + 16}
           >

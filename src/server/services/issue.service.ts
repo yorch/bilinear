@@ -28,6 +28,20 @@ export type IssueUpdateTxHook = (
   result: { issue: Issue; cascaded: Issue[] },
 ) => Promise<void>;
 /**
+ * Optional per-call controls for `update`. `authorize` runs INSIDE the write
+ * transaction, after the issue row is locked and re-read, with the row's
+ * current owner/team — throw to abort. The resolver's own authz read happens
+ * before the transaction and can be stale by the time the lock is granted.
+ */
+export interface IssueUpdateOptions {
+  authorize?: (current: {
+    assigneeId: string | null;
+    creatorId: string | null;
+    organizationId: string;
+    teamId: string;
+  }) => Promise<void>;
+}
+/**
  * Hook for single-row issue mutations (archive/unarchive/snooze/unsnooze/
  * delete). Receives the post-write row (for delete, the row as it was just
  * before removal) so the resolver can record the SyncAction inside the same
@@ -76,6 +90,8 @@ export interface IssueUpdateInput {
   sortOrder?: number;
   startDate?: string | null;
   stateId?: string;
+  /** Move the issue to another team of the same organisation (new identifier). */
+  teamId?: string;
   title?: string;
   trashed?: boolean;
 }
@@ -178,6 +194,9 @@ export interface IssuePage {
   };
   totalCount: number;
 }
+
+/** Upper bound on how far up a parent chain the cycle check walks. */
+const MAX_PARENT_DEPTH = 200;
 
 export class IssueService {
   constructor(private prisma: PrismaClient) {}
@@ -497,7 +516,8 @@ export class IssueService {
     id: string,
     input: IssueUpdateInput,
     txHook?: IssueUpdateTxHook,
-  ): Promise<{ issue: Issue; cascaded: Issue[] }> {
+    opts: IssueUpdateOptions = {},
+  ): Promise<{ issue: Issue; cascaded: Issue[]; droppedLabelNames: string[] }> {
     assertValidTitle(input.title);
     assertValidDescription(input.description);
     assertValidPriority(input.priority);
@@ -564,14 +584,39 @@ export class IssueService {
     }
 
     return this.prisma.$transaction(async tx => {
+      // Lock order, always: org parent advisory lock -> issue row -> team row.
+      // The advisory lock goes first (not after the team-row increment, as it
+      // used to) because a cascade later in this transaction updates OTHER
+      // issue rows: a transaction that already holds one of them and then
+      // waits for the advisory lock would otherwise deadlock with this one.
+      if (input.parentId) {
+        const owner = await tx.issue.findUnique({
+          select: { organizationId: true },
+          where: { id },
+        });
+        if (!owner) {
+          throw new IssueNotFoundError();
+        }
+        await this.lockParentWrites(tx, owner.organizationId);
+      }
+      // Row lock BEFORE the read below: without it two concurrent updates both
+      // read the same pre-image, so a team move and a stateId write validated
+      // against the old team interleave into an issue in team B carrying team
+      // A's workflow state — and authz computed from a stale `teamId` admits a
+      // writer who is not in the issue's (new) team. The loser blocks here and
+      // then reads the winner's committed row (READ COMMITTED).
+      await tx.$queryRaw`SELECT id FROM issues WHERE id = ${id}::uuid FOR UPDATE`;
       // Fetch the current row once, up front — needed both for the stateId/
       // team check below AND to validate every other cross-entity reference
       // (parentId/projectId/cycleId/projectMilestoneId/assigneeId) against
       // THIS issue's org/team, not the caller-supplied `id` alone.
       const existing = await tx.issue.findUnique({
         select: {
+          assigneeId: true,
           canceledAt: true,
           completedAt: true,
+          creatorId: true,
+          identifier: true,
           organizationId: true,
           projectId: true,
           startedAt: true,
@@ -582,6 +627,66 @@ export class IssueService {
       });
       if (!existing) {
         throw new IssueNotFoundError();
+      }
+      // Authorization against the row as it is NOW, under the lock — the
+      // resolver's pre-transaction read can be stale by the time we get here.
+      await opts.authorize?.(existing);
+
+      // Team move: allocate the next number in the target team, remember the
+      // old identifier (so old links keep resolving) and re-home the workflow
+      // state. A cycle belongs to one team, so it never travels with the issue.
+      let effectiveTeamId = existing.teamId;
+      let nextStateId = input.stateId;
+      let isTeamMove = false;
+      let existingStateType: string | null = null;
+      if (input.teamId !== undefined && input.teamId !== existing.teamId) {
+        isTeamMove = true;
+        // An archived team is read-only history; nothing may be moved into it.
+        const target = await tx.team.findFirst({
+          select: { id: true },
+          where: { archivedAt: null, id: input.teamId, organizationId: existing.organizationId },
+        });
+        if (!target) {
+          throw new IssueInvalidReferenceError('teamId');
+        }
+        // Sub-issues would be stranded in the old team (their identifiers,
+        // states and cycle all belong to it). Moving a tree is not supported;
+        // refuse rather than leave a cross-team hierarchy half-moved.
+        const childCount = await tx.issue.count({
+          where: { archivedAt: null, parentId: id },
+        });
+        if (childCount > 0) {
+          throw new IssueValidationError(
+            'This issue has sub-issues. Move or detach them before moving the issue to another team.',
+          );
+        }
+        const moved = await tx.team.update({
+          data: { issueCount: { increment: 1 } },
+          where: { id: input.teamId },
+        });
+        effectiveTeamId = input.teamId;
+        data.teamId = input.teamId;
+        data.number = moved.issueCount;
+        data.identifier = `${moved.key}-${moved.issueCount}`;
+        data.previousIdentifiers = { push: existing.identifier };
+        const currentState = await tx.workflowState.findUnique({
+          select: { type: true },
+          where: { id: existing.stateId },
+        });
+        existingStateType = currentState?.type ?? null;
+        if (!('cycleId' in input)) {
+          data.cycleId = null;
+          data.addedToCycleAt = null;
+        }
+        if (nextStateId === undefined) {
+          nextStateId = await this.resolveStateForTeamMove(
+            tx,
+            existing.stateId,
+            input.teamId,
+            moved.defaultIssueStateId,
+          );
+          data.stateId = nextStateId;
+        }
       }
 
       // Validate stateId belongs to the same team as the issue. Create
@@ -594,16 +699,22 @@ export class IssueService {
       // Captured from the new-state read below so the auto-close cascade can
       // gate on it without a second workflowState fetch — see the cascade block.
       let newStateType: string | null = null;
-      if (input.stateId !== undefined) {
+      if (nextStateId !== undefined) {
         const state = await tx.workflowState.findFirst({
           select: { teamId: true, type: true },
-          where: { archivedAt: null, id: input.stateId },
+          where: { archivedAt: null, id: nextStateId },
         });
-        if (!state || state.teamId !== existing.teamId) {
+        if (!state || state.teamId !== effectiveTeamId) {
           throw new IssueInvalidStateError();
         }
         newStateType = state.type;
-        if (input.stateId !== existing.stateId) {
+        // A team move remaps the state id even when the workflow position is
+        // unchanged (same TYPE in the new team). That is not a transition:
+        // keep startedAt/completedAt/canceledAt or cycle-time analytics are
+        // re-stamped to "now" by a mere re-home.
+        const isTransition =
+          nextStateId !== existing.stateId && !(isTeamMove && state.type === existingStateType);
+        if (isTransition) {
           const now = new Date();
           // First-set semantics for startedAt/completedAt/canceledAt:
           // stamp on transition into the matching category, clear when
@@ -627,7 +738,7 @@ export class IssueService {
       await this.validateReferences(
         tx,
         existing.organizationId,
-        [existing.teamId],
+        [effectiveTeamId],
         {
           assigneeId: input.assigneeId,
           cycleId: input.cycleId,
@@ -637,11 +748,50 @@ export class IssueService {
         },
         existing.projectId,
       );
+      if (input.parentId) {
+        // The org parent lock was taken at the top of the transaction: the
+        // cycle check below is a read-then-write that READ COMMITTED does not
+        // protect, so two concurrent opposite re-parents would each pass it.
+        await this.assertNoParentCycle(tx, [id], input.parentId);
+      }
 
       const issue = await tx.issue.update({ data, where: { id } });
 
       if (input.labelIds !== undefined) {
         await this.syncLabels(tx, id, existing.organizationId, input.labelIds);
+      }
+
+      // Related data that is scoped to the OLD team must not follow the issue.
+      const droppedLabelNames: string[] = [];
+      let customFieldValues: Awaited<ReturnType<typeof tx.customFieldValue.findMany>> | undefined;
+      if (isTeamMove) {
+        const stale = await tx.issueLabelAssignment.findMany({
+          select: { label: { select: { name: true, teamId: true } }, labelId: true },
+          where: { issueId: id },
+        });
+        const staleLabels = (stale ?? []).filter(
+          a => a.label.teamId != null && a.label.teamId !== effectiveTeamId,
+        );
+        if (staleLabels.length > 0) {
+          await tx.issueLabelAssignment.deleteMany({
+            where: { issueId: id, labelId: { in: staleLabels.map(a => a.labelId) } },
+          });
+          droppedLabelNames.push(...staleLabels.map(a => a.label.name));
+        }
+        await tx.customFieldValue.deleteMany({
+          where: {
+            definition: { AND: [{ teamId: { not: null } }, { teamId: { not: effectiveTeamId } }] },
+            issueId: id,
+          },
+        });
+        // Always ship the surviving set, not only when something was dropped. A
+        // viewer who GAINS visibility through this move receives the issue row
+        // for the first time and has no values for it; the row's value set
+        // replaces whatever they hold, so existing viewers are unaffected.
+        // (Comments, reactions and attachments are not in the offline cache —
+        // the client fetches them over GraphQL when the issue is opened, under
+        // the same visibility rules, so they need no backfill.)
+        customFieldValues = await tx.customFieldValue.findMany({ where: { issueId: id } });
       }
 
       const cascaded: Issue[] = [];
@@ -685,6 +835,10 @@ export class IssueService {
       // labels to [] on every connected client — and persists that to Dexie.
       const withLabels = {
         ...issue,
+        ...(customFieldValues ? { customFieldValues } : {}),
+        // Lets sync visibility filtering tell a viewer who just lost sight of
+        // the issue (private/guest destination) to delete their stale copy.
+        ...(isTeamMove ? { movedFromTeamId: existing.teamId } : {}),
         labelAssignments: await tx.issueLabelAssignment.findMany({
           select: { labelId: true },
           where: { issueId: id },
@@ -695,7 +849,7 @@ export class IssueService {
       // transaction so the markers can't survive a rollback of the writes.
       await txHook?.(tx, { cascaded, issue: withLabels });
 
-      return { cascaded, issue: withLabels };
+      return { cascaded, droppedLabelNames, issue: withLabels };
     });
   }
 
@@ -789,6 +943,11 @@ export class IssueService {
     assertValidTitle(input.title);
     assertValidDescription(input.description);
     assertValidPriority(input.priority);
+    if (input.teamId !== undefined) {
+      // A move allocates a per-issue number and remaps the state, so it goes
+      // through update() one row at a time.
+      throw new IssueValidationError('teamId cannot be changed in a bulk update');
+    }
 
     const data: Parameters<PrismaClient['issue']['update']>[0]['data'] = {};
     if (input.title !== undefined) {
@@ -882,6 +1041,10 @@ export class IssueService {
         projectId: input.projectId,
         projectMilestoneId: input.projectMilestoneId,
       });
+      if (input.parentId) {
+        await this.lockParentWrites(tx, orgId);
+        await this.assertNoParentCycle(tx, ids, input.parentId);
+      }
 
       if (input.labelIds !== undefined) {
         // Bulk label replacement: sequential per-row because Prisma's
@@ -1205,6 +1368,85 @@ export class IssueService {
    * which means a milestone with no explicit project reference at all is
    * rejected outright — a milestone can't float free of a project.
    */
+  /**
+   * Transaction-scoped advisory lock serialising parent-link writes for one
+   * org. `assertNoParentCycle` is check-then-write; without this two
+   * concurrent opposite re-parents both pass the check and form a loop.
+   * Released automatically at commit/rollback.
+   */
+  private async lockParentWrites(tx: Pick<PrismaClient, '$queryRaw'>, orgId: string) {
+    await tx.$queryRaw`SELECT 1 AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${`issue-parent:${orgId}`}, 0))) AS l`;
+  }
+
+  /**
+   * Reject a parent link that would make an issue its own ancestor: the new
+   * parent must not be one of `ids`, nor sit below one of them. Walks up from
+   * the proposed parent (bounded, and stops on an already-seen row so a
+   * pre-existing loop cannot hang the request).
+   */
+  private async assertNoParentCycle(
+    tx: Pick<PrismaClient, 'issue'>,
+    ids: string[],
+    parentId: string,
+  ): Promise<void> {
+    const moving = new Set(ids);
+    const seen = new Set<string>();
+    let cursor: string | null = parentId;
+    while (cursor && !seen.has(cursor) && seen.size < MAX_PARENT_DEPTH) {
+      if (moving.has(cursor)) {
+        throw new IssueValidationError(
+          cursor === parentId && ids.includes(parentId)
+            ? 'An issue cannot be its own parent'
+            : 'An issue cannot be a sub-issue of its own descendant',
+        );
+      }
+      seen.add(cursor);
+      const row: { parentId: string | null } | null = await tx.issue.findUnique({
+        select: { parentId: true },
+        where: { id: cursor },
+      });
+      cursor = row?.parentId ?? null;
+    }
+    // Ran out of budget with the chain still climbing: we cannot prove the new
+    // parent is not below `ids`, so refuse instead of silently admitting a
+    // possible loop (a 203-deep chain used to pass this check).
+    if (cursor && !seen.has(cursor) && seen.size >= MAX_PARENT_DEPTH) {
+      throw new IssueValidationError(
+        `Issue hierarchy is deeper than ${MAX_PARENT_DEPTH} levels; cannot verify the new parent is safe`,
+      );
+    }
+  }
+
+  /**
+   * Pick the workflow state an issue lands in when it moves to another team:
+   * the same-named state if the target has one, else the first state of the
+   * same type, else the target's default.
+   */
+  private async resolveStateForTeamMove(
+    tx: Pick<PrismaClient, 'workflowState'>,
+    currentStateId: string,
+    targetTeamId: string,
+    targetDefaultStateId: string | null,
+  ): Promise<string> {
+    const current = await tx.workflowState.findUnique({
+      select: { name: true, type: true },
+      where: { id: currentStateId },
+    });
+    const candidates = await tx.workflowState.findMany({
+      orderBy: { position: 'asc' },
+      select: { id: true, name: true, type: true },
+      where: { archivedAt: null, teamId: targetTeamId },
+    });
+    const match =
+      candidates.find(c => c.name === current?.name) ??
+      candidates.find(c => c.type === current?.type);
+    const resolved = match?.id ?? targetDefaultStateId ?? candidates[0]?.id;
+    if (!resolved) {
+      throw new IssueStateRequiredError();
+    }
+    return resolved;
+  }
+
   private async validateReferences(
     tx: Pick<
       PrismaClient,

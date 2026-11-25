@@ -2,12 +2,18 @@
 
 import { observer } from 'mobx-react-lite';
 import { useState } from 'react';
+import { NumberFormatPicker } from '@/components/custom-fields/number-format-picker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { SimpleSelect } from '@/components/ui/select';
 import { useTranslations } from '@/hooks/use-translations';
+import {
+  DEFAULT_NUMBER_FORMAT,
+  type NumberFieldFormat,
+  toNumberFormatInput,
+} from '@/lib/custom-field-format';
 import type { DBCustomFieldDefinition } from '@/lib/db';
 import { gqlMutate } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
@@ -61,6 +67,7 @@ export const WorkspaceCustomFieldsCard = observer(function WorkspaceCustomFields
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<CustomFieldType>('text');
+  const [format, setFormat] = useState<NumberFieldFormat>(DEFAULT_NUMBER_FORMAT);
   const [saving, setSaving] = useState(false);
 
   async function handleCreate() {
@@ -71,11 +78,17 @@ export const WorkspaceCustomFieldsCard = observer(function WorkspaceCustomFields
     setSaving(true);
     try {
       await gqlMutate(WORKSPACE_CUSTOM_FIELD_CREATE_MUTATION, {
-        input: { name: trimmed, teamId: null, type },
+        input: {
+          name: trimmed,
+          ...(type === 'number' ? { numberFormat: toNumberFormatInput(format) } : {}),
+          teamId: null,
+          type,
+        },
       });
       toast.success(t('customFields.addSuccess'));
       setName('');
       setType('text');
+      setFormat(DEFAULT_NUMBER_FORMAT);
       setAdding(false);
     } catch (err) {
       toast.error(getErrorMessage(err, t('customFields.createFailed')));
@@ -124,6 +137,11 @@ export const WorkspaceCustomFieldsCard = observer(function WorkspaceCustomFields
             options={SIMPLE_TYPES.map(o => ({ label: t(o.labelKey), value: o.value }))}
             value={type}
           />
+          {type === 'number' && (
+            <div className="w-full">
+              <NumberFormatPicker onChange={setFormat} value={format} />
+            </div>
+          )}
           <Button disabled={saving || !name.trim()} size="sm" type="submit">
             {saving ? t('customFields.adding') : t('common.create')}
           </Button>

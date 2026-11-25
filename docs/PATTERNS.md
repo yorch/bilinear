@@ -413,7 +413,7 @@ export function requireAuth(ctx: AuthContext): asserts ctx is { userId: string; 
 // After requireAuth(ctx), TypeScript knows ctx.userId is string (not null)
 ```
 
-Route protection is enforced **per page**, not by edge middleware (there is no `src/middleware.ts`). Server components read the `access_token` cookie via `next/headers` and `redirect('/login')` when it is missing or fails verification — see `src/app/page.tsx`:
+Route protection is enforced **per page**, not by edge middleware (there is no `src/middleware.ts`, and `src/proxy.ts` — Next 16's renamed middleware — contains no auth logic). Server components read the `access_token` cookie via `next/headers` and `redirect('/login')` when it is missing or fails verification — see `src/app/page.tsx`:
 
 ```typescript
 const token = (await cookies()).get('access_token')?.value;
@@ -424,6 +424,8 @@ try {
   redirect('/login'); // token invalid/expired
 }
 ```
+
+**The one proxy exception.** `src/proxy.ts` exists for a single reason: a server layout cannot read the request URL, so the `[workspace]` and `(admin)` layouts could only redirect a signed-out visitor to `/login?next=/<workspace>`, losing the deep link (PLT-03). The proxy copies `pathname + search` into the `x-bilinear-path` request header (always overwriting, so a client cannot forge it) and does nothing else — no cookie reads, no redirects, no verification. Layouts read it with `loginRedirectPath()` (`src/lib/deep-link.ts`), which runs it through `safeRelativePath` and falls back to a known-safe path. The matcher excludes `api`, `_next` and anything with a file extension, so API routes, static assets, `sw.js` and `offline.html` never pay for it. Do not add auth or business logic here; keep it a header forwarder.
 
 The `(auth)` route group runs no such check, so its routes are public by construction: `/login`, `/verify`, `/onboarding`, and the OAuth callbacks `/auth/google/callback` and `/auth/github/callback` (each exchanges its `code` + `state` and installs session cookies before redirecting to `/`).
 
@@ -1609,6 +1611,10 @@ return { issue, lastSyncId: sync.id.toString(), success: true };
 **Concurrency-safe retries.** `processDelivery` atomically transitions the row from `pending` to `in_flight` in a single `updateMany`. Two concurrent runners contend on the row; the loser sees `count=0` and bails, so an event is never delivered twice. Crashed-worker recovery is built in: the claim also accepts `in_flight` rows whose stamped `next_attempt_at` deadline has elapsed. Auto-disable (after `consecutive_failures >= 20`) uses an atomic conditional update so a successful delivery cannot be raced into a disabled state.
 
 **Background sweep.** The WS server's `setInterval(processDuePending, 30s)` drains both `pending` and stale `in_flight` rows whose `next_attempt_at <= now()`. Backoff schedule: 30s → 2m → 10m → 30m → 2h, capped at 5 attempts. With multiple WS replicas every replica runs the sweep — the atomic `pending → in_flight` claim keeps deliveries unique, but replicas waste a query/tick contending for the same rows. Add a leader election or `pg_advisory_lock` if the fleet grows.
+
+**Private teams.** An event from a *private* team (`dispatchEvent` looks the team up) goes only to hooks scoped to that team; org-wide hooks never receive it. A hook has no per-team membership, so conservatively a hook created by a team member is still org-wide unless scoped. A move into a private team sends org-wide and old-team hooks only the redacted `{ id, identifier, movedOut, teamId }` event, never the post-move row.
+
+**Sync filter additions (S2-B).** `filterVisibleActions` fails *closed*: an `Issue` row whose payload lacks `teamId` (the partial `{ customFieldValues }` update; its shape is load-bearing for the client, so it cannot grow keys) is resolved from the live issue by `modelId`; `ISSUE_BOUND_MODELS` / `TEAM_BOUND_MODELS` rows that name no issue/team are dropped. `dropForeignUserRows` also narrows `CustomView` rows with `shared:false` to their creator (insert dropped, anything else rewritten to a delete; unshared->shared is emitted as an insert). `movedFromTeamId` and `previousIdentifiers` carrying a hidden team's key are stripped for non-members, in delta/WS and bootstrap. A team move always ships the issue's surviving `customFieldValues`, so a viewer who gains visibility has them; comments/attachments are not in the offline cache and are fetched over GraphQL under the same rules.
 
 **Field-level secret guard.** `Webhook.signingSecret` has a field-level resolver that re-checks org admin role; non-admins get `null` even if some future query path returns the row.
 

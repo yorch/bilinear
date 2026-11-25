@@ -1,7 +1,10 @@
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { WorkspaceMismatch } from '@/components/layouts/workspace-mismatch';
+import { loginRedirectPath, REQUEST_PATH_HEADER, withWorkspaceKey } from '@/lib/deep-link';
 import { prisma } from '@/server/lib/prisma';
 import { readSessionClaim } from '@/server/lib/session-claim';
+import { OrganizationService } from '@/server/services/organization.service';
 import { UserService } from '@/server/services/user.service';
 
 /**
@@ -39,10 +42,15 @@ export default async function WorkspaceGuardLayout({
   const { workspace } = await params;
   const claim = await readSessionClaim();
   if (!claim) {
-    // Keep the workspace through sign-in. The full deep path is not available
-    // to a layout (and the app deliberately has no edge middleware to stash
-    // it), so the workspace root is the most precise target we can name.
-    redirect(`/login?next=${encodeURIComponent(`/${workspace}`)}`);
+    // Keep the full deep path through sign-in. `src/proxy.ts` forwards it as a
+    // header; the workspace root is the fallback if it is missing or unsafe.
+    redirect(
+      loginRedirectPath(
+        (await headers()).get(REQUEST_PATH_HEADER),
+        `/${workspace}`,
+        `/${workspace}`,
+      ),
+    );
   }
 
   const urlOrg = await prisma.organization.findUnique({
@@ -52,6 +60,18 @@ export default async function WorkspaceGuardLayout({
 
   if (urlOrg && urlOrg.id === claim.orgId) {
     return <>{children}</>;
+  }
+
+  // A key nobody holds may be one a workspace renamed away from. Follow it —
+  // but only for a member, same as any other workspace the viewer can't see.
+  if (!urlOrg) {
+    const renamed = await new OrganizationService(prisma).findByRetiredUrlKey(workspace);
+    if (renamed && (await new UserService(prisma).findUsableMembership(claim.userId, renamed.id))) {
+      redirect(
+        withWorkspaceKey((await headers()).get(REQUEST_PATH_HEADER), renamed.urlKey) ??
+          `/${renamed.urlKey}`,
+      );
+    }
   }
 
   // The session's own org is re-derived rather than trusted, so a claim

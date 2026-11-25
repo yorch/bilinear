@@ -94,6 +94,10 @@ async function handleGet(req: NextRequest) {
       lines.push(`InitiativeProject=${JSON.stringify(link)}`);
     }
 
+    for (const reminder of data.issueReminders) {
+      lines.push(`IssueReminder=${JSON.stringify(reminder)}`);
+    }
+
     lines.push(`_metadata_=${JSON.stringify({ lastSyncId: data.lastSyncId })}`);
 
     return new NextResponse(lines.join('\n'), {

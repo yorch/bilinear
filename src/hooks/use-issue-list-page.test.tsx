@@ -55,3 +55,20 @@ describe('useIssueListPage property hotkeys', () => {
     expect(result.current.openProperty).toBe('status');
   });
 });
+
+describe('useIssueListPage issues as a function of the view mode', () => {
+  it('resolves the issues for the live view mode and returns them', () => {
+    const all = [{ id: 'a' }, { id: 'b' }] as never;
+    const listOnly = [{ id: 'a' }] as never;
+    const { result } = renderHook(() =>
+      useIssueListPage({
+        basePath: '/x',
+        buildHref: id => `/x/${id}`,
+        issues: mode => (mode === 'list' ? listOnly : all),
+      }),
+    );
+    expect(result.current.issues).toEqual(listOnly);
+    act(() => result.current.setViewMode('board'));
+    expect(result.current.issues).toEqual(all);
+  });
+});

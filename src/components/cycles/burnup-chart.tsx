@@ -11,6 +11,7 @@ import {
   toPath,
   xAxisLabels,
   xAxisStep,
+  xLabelAnchor,
 } from './chart-geometry';
 import { useChartWidth } from './use-chart-width';
 
@@ -99,7 +100,7 @@ export function BurnupChart({ data }: BurnupChartProps) {
             className="fill-muted-foreground"
             fontSize={11}
             key={i}
-            textAnchor="middle"
+            textAnchor={xLabelAnchor(i, n)}
             x={xScale(i)}
             y={CHART_HEIGHT - PADDING_BOTTOM + 14}
           >

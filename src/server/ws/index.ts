@@ -40,6 +40,7 @@ import {
   type SessionUserRow,
 } from '@/server/middleware/auth';
 import { CycleService } from '@/server/services/cycle.service';
+import { IssueReminderService } from '@/server/services/issue-reminder.service';
 import { type SyncActionRow, SyncService } from '@/server/services/sync.service';
 import { WebhookService } from '@/server/services/webhook.service';
 import { ConnectionManager, MAX_SOCKETS_PER_USER } from './connection-manager';
@@ -62,6 +63,8 @@ const PONG_TIMEOUT_MS = WS_PONG_TIMEOUT_MS;
 const WEBHOOK_RETRY_INTERVAL_MS = 30_000;
 // Check for cycles past their endsAt every 5 minutes and roll them over.
 const CYCLE_ROLLOVER_INTERVAL_MS = 5 * 60_000;
+/** Issue reminders fire within this window of their due time. */
+const REMINDER_SWEEP_INTERVAL_MS = 30_000;
 // Re-validate every live connection's auth (user still active, org not
 // suspended/archived) every 60s — matches the ws_ticket's own lifetime, so a
 // revoked connection is caught about as fast as a fresh connect attempt
@@ -528,10 +531,23 @@ const cycleRolloverTimer = setInterval(() => {
   });
 }, CYCLE_ROLLOVER_INTERVAL_MS);
 
+// ─── Issue reminder scheduler ───────────────────────────────────────────────
+// Claims due reminders with an atomic DELETE ... RETURNING (safe with several
+// ws workers), emits one REMINDER notification each, and a delete SyncAction per
+// reminder so open clients drop the chip and the inbox updates live. `sweep`
+// loops over full batches within a time budget and guards against re-entrancy.
+const issueReminderService = new IssueReminderService(prisma, { sync: syncService });
+const reminderTimer = setInterval(() => {
+  issueReminderService.sweep().catch((err: Error) => {
+    log.error({ err }, 'Issue reminder sweep failed');
+  });
+}, REMINDER_SWEEP_INTERVAL_MS);
+
 // Graceful shutdown — handle both SIGTERM (process manager) and SIGINT (Ctrl-C in dev)
 function shutdown() {
   clearInterval(webhookTimer);
   clearInterval(cycleRolloverTimer);
+  clearInterval(reminderTimer);
   clearInterval(reauthTimer);
   clearInterval(syncPruneTimer);
   clearInterval(settingsPruneTimer);

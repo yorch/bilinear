@@ -1,3 +1,4 @@
+import { autorun } from 'mobx';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DBNotification } from '@/lib/db';
 import { NotificationStore } from './notification-store';
@@ -138,6 +139,104 @@ describe('NotificationStore', () => {
       expect(store.pool.has('beyond-page')).toBe(true);
       expect(store.pool.has('gone')).toBe(false);
       expect(store.pool.has('a')).toBe(true);
+    });
+  });
+
+  describe('unreadCount with a server total', () => {
+    it('reports the server total, not the size of the fetched page', () => {
+      store.reconcile([makeNotification({ id: 'a' }), makeNotification({ id: 'b' })], 2, 29);
+      expect(store.unreadCount).toBe(29);
+    });
+
+    it('moves by local read/unread flips since the fetch', () => {
+      store.reconcile([makeNotification({ id: 'a' }), makeNotification({ id: 'b' })], 2, 29);
+      store.markRead('a');
+      expect(store.unreadCount).toBe(28);
+      store.markUnread('a');
+      expect(store.unreadCount).toBe(29);
+    });
+
+    it('does not count older unread rows from Load more twice', () => {
+      store.reconcile([makeNotification({ id: 'a' })], 1, 3);
+      store.appendPage([makeNotification({ createdAt: '2025-01-01T00:00:00Z', id: 'older' })], 1);
+      expect(store.unreadCount).toBe(3);
+    });
+
+    it('stops counting a row once it is snoozed', () => {
+      store.reconcile([makeNotification({ id: 'a' })], 50, 5);
+      store.optimisticUpdate('a', { snoozedUntilAt: '2999-01-01T00:00:00Z' });
+      expect(store.unreadCount).toBe(4);
+      expect(store.snoozed.map(n => n.id)).toEqual(['a']);
+    });
+  });
+
+  describe('reconcile and snoozed rows', () => {
+    it('keeps a snoozed row that the default list omits', () => {
+      store.upsertMany([
+        makeNotification({ id: 'sn', snoozedUntilAt: '2999-01-01T00:00:00Z' }),
+        makeNotification({ id: 'kept' }),
+      ]);
+      store.reconcile([makeNotification({ id: 'kept' })], 50);
+      expect(store.pool.has('sn')).toBe(true);
+    });
+  });
+
+  describe('markAllRead past the first page', () => {
+    it('drops the badge to zero even when unread rows sit beyond the pooled page', () => {
+      // 7 unread pooled, 29 unread on the server: the 22 unpooled ones are
+      // cleared by the same server call, so the badge must not keep them.
+      const page = Array.from({ length: 7 }, (_, i) => makeNotification({ id: `n${i}` }));
+      store.reconcile(page, 50, 29);
+      expect(store.unreadCount).toBe(29);
+      store.markAllRead();
+      expect(store.unreadCount).toBe(0);
+      expect(store.serverUnread).toBe(0);
+      expect(store.baselineUnread).toBe(0);
+    });
+
+    it('still counts rows that arrive unread afterwards', () => {
+      store.reconcile([makeNotification({ id: 'a' })], 50, 5);
+      store.markAllRead();
+      store.applySyncAction('I', 'new', makeNotification({ id: 'new' }));
+      expect(store.unreadCount).toBe(1);
+    });
+  });
+
+  describe('snooze expiry', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
+      // `window` gates the wake-up timer (SSR safety); the jsdom/node env here may lack it.
+      vi.stubGlobal('window', globalThis);
+    });
+    afterEach(() => {
+      store.dispose();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    });
+
+    it('returns a row to the unread count and badge when its snooze elapses, with no other store write', () => {
+      store = new NotificationStore();
+      // Observe like a component does — an unobserved computed recomputes on every
+      // read and would hide a stale-clock bug.
+      const stop = autorun(() => {
+        void store.unreadCount;
+        void store.unread;
+        void store.snoozed;
+      });
+      store.reconcile([makeNotification({ id: 'a' })], 50, 5);
+      store.optimisticUpdate('a', { snoozedUntilAt: '2026-06-15T12:10:00Z' });
+      expect(store.unreadCount).toBe(4);
+      expect(store.unread).toHaveLength(0);
+      expect(store.snoozed.map(n => n.id)).toEqual(['a']);
+
+      vi.setSystemTime(new Date('2026-06-15T12:10:01Z'));
+      vi.advanceTimersByTime(10 * 60 * 1000 + 100);
+
+      expect(store.unreadCount).toBe(5);
+      expect(store.unread.map(n => n.id)).toEqual(['a']);
+      expect(store.snoozed).toHaveLength(0);
+      stop();
     });
   });
 });
