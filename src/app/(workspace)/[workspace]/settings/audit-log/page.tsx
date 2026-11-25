@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import { ScrollX } from '@/components/ui/scroll-x';
 import { SimpleSelect } from '@/components/ui/select';
 import { RowsSkeleton } from '@/components/ui/skeleton';
 import { useDocumentTitle } from '@/hooks/use-document-title';
@@ -347,7 +348,7 @@ const AuditLogPage = observer(function AuditLogPage() {
         ) : entries.length === 0 ? (
           <EmptyState size="compact" title={t('settings.auditLog.noEntriesFound')} />
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border">
+          <ScrollX className="rounded-lg border border-border">
             <table className="w-full min-w-[40rem] text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted">
@@ -474,7 +475,7 @@ const AuditLogPage = observer(function AuditLogPage() {
                 })}
               </tbody>
             </table>
-          </div>
+          </ScrollX>
         )}
 
         {hasMore && (

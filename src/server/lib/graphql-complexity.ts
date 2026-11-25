@@ -1,4 +1,11 @@
-import type { ComplexityEstimator } from 'graphql-query-complexity';
+import type { DocumentNode, GraphQLSchema } from 'graphql';
+import { GraphQLError } from 'graphql';
+import {
+  type ComplexityEstimator,
+  fieldExtensionsEstimator,
+  getComplexity,
+  simpleEstimator,
+} from 'graphql-query-complexity';
 import { MAX_LIST_LIMIT } from './limits';
 
 /**
@@ -58,4 +65,52 @@ export function listArgumentEstimator(): ComplexityEstimator {
     // costs exactly what it did before list-awareness was added.
     return 1 + multiplier * childComplexity;
   };
+}
+
+/**
+ * Complexity of one request, with variable-coercion failures reported as
+ * BAD_USER_INPUT.
+ *
+ * `getComplexity` coerces the request's variables itself and throws a plain
+ * `GraphQLError` (no `extensions.code`) when one is invalid, e.g. an enum value
+ * of the wrong case (`favoriteCreate(entityType: "ISSUE")`). That error escapes
+ * `didResolveOperation` before Apollo's own coercion (which does tag it
+ * BAD_USER_INPUT) ever runs, and the route's `formatError` masks any error
+ * without a client code to "Internal server error". Re-throwing it with the
+ * code keeps graphql-js's message, which names the bad value and suggests the
+ * right one, without exposing anything internal.
+ */
+export function computeOperationComplexity(args: {
+  document: DocumentNode;
+  operationName?: string | null;
+  schema: GraphQLSchema;
+  variables?: Record<string, unknown> | null;
+}): number {
+  try {
+    return getComplexity({
+      // Order matters: the first estimator to return a number for a field wins.
+      estimators: [
+        fieldExtensionsEstimator(),
+        listArgumentEstimator(),
+        simpleEstimator({ defaultComplexity: 1 }),
+      ],
+      operationName: args.operationName ?? undefined,
+      query: args.document,
+      schema: args.schema,
+      variables: args.variables ?? {},
+    });
+  } catch (err) {
+    // Matched by name, not `instanceof`: graphql-query-complexity can resolve a
+    // different copy of `graphql` than the one this module imports.
+    if (err instanceof Error && err.name === 'GraphQLError') {
+      const { extensions } = err as GraphQLError;
+      if (!extensions?.code) {
+        throw new GraphQLError(err.message, {
+          extensions: { code: 'BAD_USER_INPUT' },
+          originalError: err,
+        });
+      }
+    }
+    throw err;
+  }
 }

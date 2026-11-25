@@ -36,7 +36,9 @@ export function PageHeader({ actions, count, description, leading, title }: Page
             </h1>
             {count !== undefined && <Badge tone="muted">{count}</Badge>}
           </div>
-          {description && <p className="truncate text-xs text-muted-foreground">{description}</p>}
+          {description && (
+            <p className="text-xs text-muted-foreground sm:truncate">{description}</p>
+          )}
         </div>
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
