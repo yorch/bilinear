@@ -84,7 +84,9 @@ export function Calendar({ className, max, min, onChange, value }: CalendarProps
   const weekdays = useMemo(() => {
     const fmt = new Intl.DateTimeFormat(intlLocale, { weekday: 'short' });
     // 2023-01-01 was a Sunday.
-    return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2023, 0, 1 + ((start + i) % 7))));
+    return Array.from({ length: 7 }, (_, i) =>
+      fmt.format(new Date(2023, 0, 1 + ((start + i) % 7))),
+    );
   }, [intlLocale, start]);
   const monthLabel = new Intl.DateTimeFormat(intlLocale, {
     month: 'long',

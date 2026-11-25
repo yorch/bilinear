@@ -20,8 +20,8 @@ vi.mock('@/hooks/use-translations', () => ({
 }));
 vi.mock('@/hooks/use-formatters', () => ({
   useFormatters: () => ({
-    intlLocale: 'en-US',
     formatDateTime: (v: string | Date) => new Date(v).toISOString(),
+    intlLocale: 'en-US',
   }),
 }));
 vi.mock('@/providers/store-provider', () => ({ useStore: () => storeHolder.current }));
@@ -129,9 +129,7 @@ describe('IssueReminderPanel', () => {
     render(<IssueReminderPanel issueId="i1" onClose={onClose} />);
 
     expect((screen.getByLabelText('calendar.time') as HTMLInputElement).value).toBe('14:15');
-    expect(
-      screen.getByRole('button', { name: '30' }).getAttribute('aria-pressed'),
-    ).toBe('true');
+    expect(screen.getByRole('button', { name: '30' }).getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(screen.getByText('reminders.clear'));
     expect(enqueue.mock.calls[0]?.[1]).toEqual({ issueId: 'i1' });
     expect(onClose).toHaveBeenCalled();

@@ -26,6 +26,10 @@ vi.mock('@/hooks/use-translations', () => ({
     params ? `${key}:${JSON.stringify(params)}` : key,
 }));
 
+vi.mock('@/hooks/use-formatters', () => ({
+  useFormatters: () => ({ intlLocale: 'en-US' }),
+}));
+
 const base = {
   count: 2,
   labels: [],
@@ -88,6 +92,13 @@ describe('BulkActionBar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'issues.cycle' }));
     fireEvent.click(screen.getByRole('button', { name: /Sprint 7/ }));
     expect(onUpdate).toHaveBeenLastCalledWith({ cycleId: 'c1' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'issues.dueDate' }));
+    // The themed calendar replaces the native date input: picking a day writes `YYYY-MM-DD`.
+    const now = new Date();
+    const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-15`;
+    fireEvent.click(screen.getByRole('button', { name: '15' }));
+    expect(onUpdate).toHaveBeenLastCalledWith({ dueDate: key });
 
     fireEvent.click(screen.getByRole('button', { name: 'issues.dueDate' }));
     fireEvent.click(screen.getByRole('button', { name: 'properties.dueDate.clearDate' }));

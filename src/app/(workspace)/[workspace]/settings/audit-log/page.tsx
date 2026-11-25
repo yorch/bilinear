@@ -14,8 +14,8 @@ import {
 import { LoadError } from '@/components/shared/load-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { EmptyState } from '@/components/ui/empty-state';
 import { DateField } from '@/components/ui/date-field';
+import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import { SimpleSelect } from '@/components/ui/select';
 import { RowsSkeleton } from '@/components/ui/skeleton';
@@ -371,11 +371,8 @@ const AuditLogPage = observer(function AuditLogPage() {
                 {entries.map(entry => {
                   const open = expanded.has(entry.id);
                   const resource = entry.resourceType
-                    ? auditResourceLabel(
-                        t,
-                        entry.resourceType,
-                        entry.resourceId,
-                        (type, id) => resolveResourceName(type, id, entry.metadata),
+                    ? auditResourceLabel(t, entry.resourceType, entry.resourceId, (type, id) =>
+                        resolveResourceName(type, id, entry.metadata),
                       )
                     : null;
                   const meta = entry.metadata && Object.keys(entry.metadata).length > 0;

@@ -1,7 +1,7 @@
 'use client';
 
 import { observer } from 'mobx-react-lite';
-import { type FormEvent, type KeyboardEvent, useState } from 'react';
+import { type FormEvent, type KeyboardEvent, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
@@ -40,6 +40,7 @@ export const IssueReminderPanel = observer(function IssueReminderPanel({
   onClose,
 }: IssueReminderPanelProps) {
   const t = useTranslations();
+  const timeId = useId();
   const { formatDateTime } = useFormatters();
   const { clearReminder, reminderFor, setReminder } = useIssueReminders();
   const existing = reminderFor(issueId);
@@ -120,13 +121,17 @@ export const IssueReminderPanel = observer(function IssueReminderPanel({
           }}
           value={custom.slice(0, 10)}
         />
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <label
+          className="flex items-center gap-2 text-xs text-muted-foreground"
+          htmlFor={`${timeId}-time`}
+        >
           {t('calendar.time')}
           <Input
             aria-describedby="reminder-custom-note"
             aria-invalid={error ? true : undefined}
             className="w-auto px-2 py-1"
             data-autofocus
+            id={`${timeId}-time`}
             onChange={e => {
               const time = e.target.value;
               // Keep the chosen day; a time with no day yet means today.

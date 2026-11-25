@@ -7,7 +7,7 @@ import {
   type RequestInit as UndiciRequestInit,
   fetch as undiciFetch,
 } from 'undici';
-import type { PrismaClient, Webhook, WebhookDelivery } from '../../generated/prisma';
+import { Prisma, type PrismaClient, type Webhook, type WebhookDelivery } from '../../generated/prisma';
 import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { env } from '../lib/env';
 import { MAX_WEBHOOK_NAME_LENGTH } from '../lib/limits';
@@ -388,7 +388,9 @@ export class WebhookService {
       attempts: 0,
       createdAt: now,
       deliveredAt: null,
+      errorCode: null,
       errorMessage: null,
+      errorParams: null,
       event: r.event,
       id: r.id,
       nextAttemptAt: r.nextAttemptAt,
@@ -473,7 +475,9 @@ export class WebhookService {
       // Hook was disabled between enqueue and attempt — drop the delivery.
       await this.prisma.webhookDelivery.update({
         data: {
+          errorCode: 'WEBHOOK_DISABLED',
           errorMessage: 'Webhook disabled',
+          errorParams: Prisma.DbNull,
           nextAttemptAt: null,
           status: 'failed',
         },
@@ -491,7 +495,9 @@ export class WebhookService {
     } catch {
       await this.prisma.webhookDelivery.update({
         data: {
+          errorCode: 'URL_NOT_ALLOWED',
           errorMessage: 'Webhook URL is no longer allowed',
+          errorParams: Prisma.DbNull,
           nextAttemptAt: null,
           status: 'failed',
         },
@@ -505,7 +511,7 @@ export class WebhookService {
 
     let responseStatus: number | null = null;
     let responseBody: string | null = null;
-    let errorMessage: string | null = null;
+    let failure: DeliveryError | null = null;
     let success = false;
     const attempt = delivery.attempts + 1;
 
@@ -549,8 +555,23 @@ export class WebhookService {
         clearTimeout(timeout);
       }
     } catch (err) {
-      errorMessage = describeDeliveryError(err, requestTimeoutMs);
+      failure = describeDeliveryError(err, requestTimeoutMs);
     }
+
+    if (!success && !failure && responseStatus !== null) {
+      // A response that is not 2xx (including an unfollowed redirect) is a
+      // failure with no thrown error; record the status so the UI can say why.
+      failure = {
+        code: 'HTTP_STATUS',
+        message: `Received HTTP ${responseStatus}`,
+        params: { status: responseStatus },
+      };
+    }
+    const errorFields = {
+      errorCode: failure?.code ?? null,
+      errorMessage: failure?.message ?? null,
+      errorParams: failure?.params ?? Prisma.DbNull,
+    };
 
     const now = new Date();
     if (success) {
@@ -559,7 +580,9 @@ export class WebhookService {
           data: {
             attempts: attempt,
             deliveredAt: now,
+            errorCode: null,
             errorMessage: null,
+            errorParams: Prisma.DbNull,
             nextAttemptAt: null,
             responseBody,
             responseStatus,
@@ -585,7 +608,7 @@ export class WebhookService {
         this.prisma.webhookDelivery.update({
           data: {
             attempts: attempt,
-            errorMessage,
+            ...errorFields,
             nextAttemptAt: null,
             responseBody,
             responseStatus,
@@ -627,7 +650,7 @@ export class WebhookService {
       this.prisma.webhookDelivery.update({
         data: {
           attempts: attempt,
-          errorMessage,
+          ...errorFields,
           nextAttemptAt,
           responseBody,
           responseStatus,
@@ -1062,12 +1085,45 @@ export async function readBodyCapped(res: {
 }
 
 /**
- * Plain-language text for the network failures people actually hit, so the UI
- * does not show undici's `fetch failed (ENOTFOUND: getaddrinfo ENOTFOUND host)`.
- * The error code stays in parentheses for anyone debugging. Unknown codes
- * return null and fall back to the raw description.
+ * Machine-readable classification of a failed delivery attempt. `code` and
+ * `params` are what the client localises from; `message` is the English
+ * fallback (and what old rows, written before codes existed, carry alone).
  */
-function friendlyNetworkError(cause: unknown): string | null {
+export type DeliveryErrorCode =
+  | 'ECONNREFUSED'
+  | 'ECONNRESET'
+  | 'EAI_AGAIN'
+  | 'ENOTFOUND'
+  | 'HTTP_STATUS'
+  | 'PRIVATE_ADDRESS'
+  | 'TIMEOUT'
+  | 'TLS'
+  | 'URL_NOT_ALLOWED'
+  | 'WEBHOOK_DISABLED';
+
+export interface DeliveryError {
+  /** Null for failures we cannot classify; the UI then shows `message`. */
+  code: DeliveryErrorCode | null;
+  /** English fallback text, credential-stripped and bounded. */
+  message: string;
+  /** Interpolation values for the localised copy (`host`, `target`, `ms`, `status`, `tlsCode`). */
+  params: Record<string, number | string> | null;
+}
+
+function sanitizeDeliveryMessage(text: string): string {
+  return text
+    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, '$1***@')
+    .replace(/\s+/g, ' ')
+    .slice(0, 500);
+}
+
+/**
+ * Plain-language classification for the network failures people actually hit,
+ * so the UI does not show undici's `fetch failed (ENOTFOUND: getaddrinfo
+ * ENOTFOUND host)`. The error code stays in parentheses for anyone debugging.
+ * Unknown codes return null and fall back to the raw description.
+ */
+function friendlyNetworkError(cause: unknown): DeliveryError | null {
   if (!cause || typeof cause !== 'object') {
     return null;
   }
@@ -1079,57 +1135,96 @@ function friendlyNetworkError(cause: unknown): string | null {
   // `getaddrinfo ENOTFOUND host` / `connect ECONNREFUSED 1.2.3.4:443`: the
   // target is whatever follows the code.
   const target = text.split(code)[1]?.trim().split(/\s+/)[0] ?? '';
+  const targetParams = target ? { target } : null;
   switch (code) {
     case 'ENOTFOUND':
     case 'EAI_AGAIN':
-      return `Couldn't resolve host${target ? ` ${target}` : ''} (${code})`;
+      return {
+        code,
+        message: `Couldn't resolve host${target ? ` ${target}` : ''} (${code})`,
+        params: targetParams,
+      };
     case 'ECONNREFUSED':
-      return `Connection refused${target ? ` by ${target}` : ''} (${code})`;
+      return {
+        code,
+        message: `Connection refused${target ? ` by ${target}` : ''} (${code})`,
+        params: targetParams,
+      };
     case 'ECONNRESET':
-      return `Connection was reset by the server (${code})`;
+      return {
+        code,
+        message: `Connection was reset by the server (${code})`,
+        params: null,
+      };
     case 'ETIMEDOUT':
     case 'UND_ERR_CONNECT_TIMEOUT':
     case 'UND_ERR_HEADERS_TIMEOUT':
-      return `Timed out connecting to the server (${code})`;
+      return {
+        code: 'TIMEOUT',
+        message: `Timed out connecting to the server (${code})`,
+        params: null,
+      };
     case 'CERT_HAS_EXPIRED':
     case 'DEPTH_ZERO_SELF_SIGNED_CERT':
     case 'SELF_SIGNED_CERT_IN_CHAIN':
     case 'UNABLE_TO_VERIFY_LEAF_SIGNATURE':
     case 'ERR_TLS_CERT_ALTNAME_INVALID':
-      return `TLS certificate problem (${code})`;
+      return {
+        code: 'TLS',
+        message: `TLS certificate problem (${code})`,
+        params: { tlsCode: code },
+      };
     default:
       return null;
   }
 }
 
 /**
- * Human-readable reason for a failed attempt. undici reports nearly every
- * network failure as `TypeError: fetch failed` with the real reason in
- * `cause`, so the bare message hides whether the SSRF guard refused the
- * address, DNS failed, TLS failed or the socket was refused. Credentials in
- * URLs and anything long are stripped before it is stored.
+ * Structured reason for a failed attempt. undici reports nearly every network
+ * failure as `TypeError: fetch failed` with the real reason in `cause`, so the
+ * bare message hides whether the SSRF guard refused the address, DNS failed,
+ * TLS failed or the socket was refused. Credentials in URLs and anything long
+ * are stripped from `message` (and from the `target`/`host` params) before
+ * anything is stored.
  */
-export function describeDeliveryError(err: unknown, timeoutMs?: number): string {
+export function describeDeliveryError(err: unknown, timeoutMs?: number): DeliveryError {
   if (err instanceof Error && err.name === 'AbortError') {
-    return timeoutMs ? `Request timed out after ${timeoutMs} ms` : 'Request timed out';
+    return {
+      code: 'TIMEOUT',
+      message: timeoutMs ? `Request timed out after ${timeoutMs} ms` : 'Request timed out',
+      params: timeoutMs ? { ms: timeoutMs } : null,
+    };
   }
   const base = err instanceof Error ? err.message : String(err);
   const cause = err instanceof Error ? (err as { cause?: unknown }).cause : undefined;
-  let detail = '';
   if (cause instanceof WebhookPrivateUrlError) {
-    detail = cause.message;
-  } else if (cause && typeof cause === 'object') {
+    return {
+      code: 'PRIVATE_ADDRESS',
+      message: sanitizeDeliveryMessage(`${base} (${cause.message})`),
+      params: null,
+    };
+  }
+  let detail = '';
+  if (cause && typeof cause === 'object') {
     const { code, message } = cause as { code?: unknown; message?: unknown };
     detail = [typeof code === 'string' ? code : '', typeof message === 'string' ? message : '']
       .filter(Boolean)
       .join(': ');
   }
   const friendly = friendlyNetworkError(cause);
-  const full = friendly ?? (detail && !base.includes(detail) ? `${base} (${detail})` : base);
-  return full
-    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, '$1***@')
-    .replace(/\s+/g, ' ')
-    .slice(0, 500);
+  if (friendly) {
+    const params = friendly.params
+      ? Object.fromEntries(
+          Object.entries(friendly.params).map(([k, v]) => [
+            k,
+            typeof v === 'string' ? sanitizeDeliveryMessage(v).slice(0, 200) : v,
+          ]),
+        )
+      : null;
+    return { code: friendly.code, message: sanitizeDeliveryMessage(friendly.message), params };
+  }
+  const full = detail && !base.includes(detail) ? `${base} (${detail})` : base;
+  return { code: null, message: sanitizeDeliveryMessage(full), params: null };
 }
 
 // ─── Errors ─────────────────────────────────────────────────────────────────

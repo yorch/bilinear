@@ -1411,6 +1411,12 @@ model WebhookDelivery {
   responseStatus Int?    @map("response_status")
   responseBody   String? @map("response_body")
   errorMessage   String? @map("error_message")
+  // Machine-readable classification of the failure (ENOTFOUND, TLS,
+  // HTTP_STATUS, ...) and its interpolation values, so the UI can localise.
+  // Null on rows written before codes existed; `errorMessage` stays as the
+  // English fallback.
+  errorCode      String? @map("error_code") @db.VarChar(40)
+  errorParams    Json?   @map("error_params")
 
   // Next retry timestamp; null when status != pending.
   nextAttemptAt DateTime? @map("next_attempt_at") @db.Timestamptz

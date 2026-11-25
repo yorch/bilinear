@@ -88,9 +88,7 @@ describe('resolveAuditResourceName', () => {
   });
 
   it('reads a webhook name from the row metadata', () => {
-    expect(resolveAuditResourceName('Webhook', 'w1', { name: 'Deploys' }, lookups)).toBe(
-      'Deploys',
-    );
+    expect(resolveAuditResourceName('Webhook', 'w1', { name: 'Deploys' }, lookups)).toBe('Deploys');
   });
 
   it('returns null when unresolvable so the label falls back to the short id', () => {
