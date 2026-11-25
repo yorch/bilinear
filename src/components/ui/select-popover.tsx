@@ -69,7 +69,7 @@ export function SelectPopover({
     panelRef,
     triggerRef,
   } = usePopoverPanel({ itemSelector: 'button:not([disabled])' }, open);
-  const openUpward = usePopoverFlip(open, triggerRef);
+  const openUpward = usePopoverFlip(open, triggerRef, panelRef);
 
   const close = useCallback(() => {
     setOpen(false);

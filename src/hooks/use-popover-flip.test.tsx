@@ -141,3 +141,32 @@ describe('usePopoverFlip', () => {
     });
   });
 });
+
+describe('usePopoverFlip with a measured panel', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function setup(panelHeight: number, triggerBottom: number) {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    const trigger = document.createElement('div');
+    const panel = document.createElement('div');
+    document.body.append(trigger, panel);
+    trigger.getBoundingClientRect = () => rect({ bottom: triggerBottom, top: triggerBottom - 30 });
+    panel.getBoundingClientRect = () => rect({ height: panelHeight });
+    return renderHook(() => usePopoverFlip(true, { current: trigger }, { current: panel }));
+  }
+
+  it('flips up when ~350px remain below but the 380px panel would overflow the viewport', () => {
+    // 350px below clears the legacy 160px floor, so only the measured height flips it.
+    expect(setup(380, 450).result.current).toBe(true);
+  });
+
+  it('stays down when the panel fits below', () => {
+    expect(setup(380, 300).result.current).toBe(false);
+  });
+
+  it('stays down when there is less room above than below', () => {
+    expect(setup(380, 100).result.current).toBe(false);
+  });
+});

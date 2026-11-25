@@ -22,6 +22,8 @@ function findClipBoundary(el: HTMLElement): { bottom: number; top: number } {
   return { bottom: window.innerHeight, top: 0 };
 }
 
+const PANEL_GAP_PX = 4;
+
 /**
  * Decide whether a popover panel anchored below `triggerRef` should instead
  * open upward, when there isn't enough room below within the trigger's
@@ -31,7 +33,11 @@ function findClipBoundary(el: HTMLElement): { bottom: number; top: number } {
  * container's edge). Cheap heuristic: measured once per open, no
  * scroll-tracking.
  */
-export function usePopoverFlip(open: boolean, triggerRef: RefObject<HTMLElement | null>): boolean {
+export function usePopoverFlip(
+  open: boolean,
+  triggerRef: RefObject<HTMLElement | null>,
+  panelRef?: RefObject<HTMLElement | null>,
+): boolean {
   const [openUpward, setOpenUpward] = useState(false);
 
   useLayoutEffect(() => {
@@ -47,9 +53,13 @@ export function usePopoverFlip(open: boolean, triggerRef: RefObject<HTMLElement 
     const boundary = findClipBoundary(trigger);
     const spaceBelow = boundary.bottom - rect.bottom;
     const spaceAbove = rect.top - boundary.top;
-    // Only flip when space below is tight and there's meaningfully more room above.
-    setOpenUpward(spaceBelow < 160 && spaceAbove > spaceBelow);
-  }, [open, triggerRef]);
+    // A tall panel (the due-date calendar is ~380px) needs more than the fixed
+    // 160px floor, so when the rendered panel is available, require its real
+    // height plus the 4px gap. Either way only flip when there is more room above.
+    const panelHeight = panelRef?.current?.getBoundingClientRect().height ?? 0;
+    const needed = Math.max(160, panelHeight + PANEL_GAP_PX);
+    setOpenUpward(spaceBelow < needed && spaceAbove > spaceBelow);
+  }, [open, triggerRef, panelRef]);
 
   return openUpward;
 }
