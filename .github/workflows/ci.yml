@@ -24,6 +24,53 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Full history: the append-only migration guard diffs against the
+          # base branch, which a depth-1 clone does not contain.
+          fetch-depth: 0
+
+      # A deployed database records migrations by name, so rewriting one that
+      # already shipped changes its contents without changing its name:
+      # `prisma migrate deploy` then reports "no pending migrations" and the new
+      # DDL never runs. That is exactly how production drifted on 2026-11-25 —
+      # the 2026-10-12 database kept the old baseline while `main` carried a
+      # regenerated one, so `issue_reminders`, `organization_url_key_aliases`,
+      # `webhook_deliveries.error_code` and the `REMINDER` enum value were never
+      # created. Migrations are append-only from here on.
+      - name: Migrations are append-only
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="origin/${{ github.base_ref }}"
+          else
+            base="${{ github.event.before }}"
+            git rev-parse --verify --quiet "${base}^{commit}" > /dev/null || base="HEAD~1"
+          fi
+          changed="$(git diff --diff-filter=MDR --name-only "${base}...HEAD" -- prisma/migrations || true)"
+          if [ -n "$changed" ]; then
+            # One-time reconciliation (2026-11-25) needed this, and any future
+            # rewrite must be just as deliberate: the marker has to be written
+            # in the PR body or in one of the branch's commits, and the review
+            # sees it. Grepping the whole commit range matters — on a
+            # `pull_request` event HEAD is GitHub's synthetic merge commit, and
+            # after merging it is the merge commit on `main`; neither carries
+            # the author's message.
+            marker="$(printf '%s\n%s' "${PR_BODY:-}" "$(git log --pretty=%B "${base}..HEAD")")"
+            if printf '%s' "$marker" | grep -qF 'ALLOW-MIGRATION-REWRITE'; then
+              echo "::warning::Append-only guard bypassed via ALLOW-MIGRATION-REWRITE in the PR body or commit message."
+              echo "Every rewrite must be justified in the PR and recorded in docs/CHANGELOG.md."
+              printf '%s\n' "$changed"
+              exit 0
+            fi
+            echo "::error::Existing migrations were edited, renamed or deleted:"
+            printf '%s\n' "$changed"
+            echo "Deployed databases already recorded them by name, so those edits will never be applied."
+            echo "Add a new migration instead — see docs/DATABASE_SCHEMA.md §4."
+            exit 1
+          fi
+          echo "OK — migration chain is append-only relative to ${base}."
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -123,14 +170,29 @@ jobs:
       # fence) is invisible to `prisma migrate diff`, and a no-op edit to it
       # applies cleanly while doing nothing. This is the one job with a live
       # Postgres, so it is where those verifiers earn their keep.
+      #
+      # This replaced a gate that had been dead since the Prisma 7 upgrade: it
+      # passed `--shadow-database-url`, which Prisma 7 rejects outright, and
+      # swallowed the failure with `|| true`. Diffing the migrated database
+      # needs no shadow database at all.
+      #
+      # Exactly two statements are expected — the artifacts of objects the
+      # datamodel cannot declare (the xid8 covering index and the pg_trgm title
+      # index). Any other statement is real drift.
       - name: Validate schema and check for drift
         run: |
+          set -euo pipefail
           yarn prisma validate
-          yarn prisma migrate diff \
-            --from-migrations prisma/migrations \
-            --to-schema-datamodel prisma/schema.prisma \
-            --shadow-database-url "$DATABASE_URL" \
-            --exit-code || true
+          drift="$(yarn prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script)"
+          unexpected="$(printf '%s\n' "$drift" \
+            | grep -vE '^\s*(--.*)?$' \
+            | grep -vE '^DROP INDEX "(idx_issues_title_trgm|sync_actions_organization_id_xact_id_id_idx)";$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "::error::The migrated database does not match schema.prisma:"
+            printf '%s\n' "$unexpected"
+            exit 1
+          fi
+          echo "OK — the migration chain reproduces schema.prisma (only the two undeclarable indexes differ)."
           yarn db:verify:schema
           yarn db:verify:fence
           yarn db:verify:config

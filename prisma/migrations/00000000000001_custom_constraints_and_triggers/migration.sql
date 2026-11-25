@@ -67,22 +67,6 @@ CREATE INDEX IF NOT EXISTS idx_issues_fts
   USING GIN (to_tsvector('english', title || ' ' || COALESCE(description, '')));
 
 -- ---------------------------------------------------------------------------
--- Trigram index on issues.title: duplicate suggestions for no-space scripts
--- ---------------------------------------------------------------------------
--- The 'english' FTS configuration cannot segment Chinese, Japanese or Thai: a
--- whole clause becomes one token, so FTS only matches an identical run of
--- characters. DuplicateSuggestionService falls back to pg_trgm similarity
--- (`title % $source`, ranked by similarity()) for those titles; this index
--- serves the % operator. pg_trgm is a trusted extension (PG13+), so the
--- database owner can create it. Prisma can declare neither the extension nor a
--- gin_trgm_ops opclass.
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-
-CREATE INDEX IF NOT EXISTS idx_issues_title_trgm
-  ON issues
-  USING GIN (title gin_trgm_ops);
-
--- ---------------------------------------------------------------------------
 -- Preserve NOT NULL on String[] columns (Prisma 7 array gotcha)
 -- ---------------------------------------------------------------------------
 -- Prisma 7 emits String[] columns as nullable at the DB level even though

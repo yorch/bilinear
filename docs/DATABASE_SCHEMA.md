@@ -1754,58 +1754,105 @@ yarn prisma migrate dev  # applies new migration
 
 ### Migration Files
 
-**While the app is unreleased there are exactly two migrations, and that is
-deliberate.** Anything Prisma's schema DSL can express is folded back into a
-regenerated `00000000000000_init` rather than stacking an additive migration on
-top; only DDL Prisma *cannot* express gets its own file. There is no deployed
-database whose history would be invalidated, so a two-file baseline stays far
-easier to read than a growing chain of one-line `ALTER`s.
+**Migrations are append-only. Never edit, rename or delete one that has already
+been applied.** A database records applied migrations by directory name, so
+rewriting an applied file changes its contents without changing its name and
+`prisma migrate deploy` reports "no pending migrations" — the new DDL simply
+never runs, silently. `prisma migrate status` and `migrate deploy` do not verify
+checksums, so nothing complains.
+
+> **This is not hypothetical.** A database has been deployed since
+> **2026-10-12 16:49 UTC**. Until 2026-11-25 this section said the opposite —
+> that there was no deployed database, so the baseline could be regenerated at
+> will. That was true until it wasn't: PRs #167 and #168 regenerated
+> `00000000000000_init` and extended the custom migration, `migrate deploy`
+> reported "No pending migrations", and production ran for hours with
+> `issue_reminders` and `organization_url_key_aliases` missing, no
+> `webhook_deliveries.error_code`, and no `REMINDER` enum value. Bootstrap
+> failed on every retry, the inbox counts 500'd, and both the reminder and
+> webhook sweeps threw on every cycle. The proof is in `_prisma_migrations`:
+> the recorded `init` checksum was still the 2026-08-21 file. The fix was
+> `00000000000002_issue_reminders_url_aliases_webhook_error_codes` — the two
+> pre-2026-11-25 migration files restored byte-for-byte, with the missing DDL
+> appended as its own migration. CI now fails any PR that modifies an existing
+> migration; that one reconciliation carried the `ALLOW-MIGRATION-REWRITE`
+> marker in its PR body, which is the only bypass the guard accepts (it needs
+> the marker in the PR body or the commit message, prints a warning, and should
+> never be used again).
+
+The chain is now three files, and it only grows:
 
 ```
 prisma/
 ├── schema.prisma
 ├── prisma.config.ts                              -- CLI datasource url (Prisma 7)
 └── migrations/
-    ├── 00000000000000_init/                      -- consolidated baseline, generated
-    │                                             --   verbatim from schema.prisma:
-    │                                             --   every table, column, FK, enum,
-    │                                             --   and schema-expressible index
-    └── 00000000000001_custom_constraints_and_triggers/
-                                                  -- hand-written DDL Prisma can't express:
-                                                  --   partial/expression indexes (incl. the
-                                                  --   teams(org, key) WHERE archived_at IS
-                                                  --   NULL unique and the issues(team, state)
-                                                  --   WHERE active partial), the FTS GIN
-                                                  --   index, the sync_actions (org, xact_id,
-                                                  --   id) index (the xact_id column itself is
-                                                  --   in init), check constraints, and the
-                                                  --   String[] NOT NULL guards
+    ├── 00000000000000_init/                      -- frozen baseline (2026-08-21):
+    │                                             --   every object schema.prisma
+    │                                             --   could express at that commit
+    ├── 00000000000001_custom_constraints_and_triggers/
+    │                                             -- hand-written DDL Prisma can't express:
+    │                                             --   partial/expression indexes (incl. the
+    │                                             --   teams(org, key) WHERE archived_at IS
+    │                                             --   NULL unique and the issues(team, state)
+    │                                             --   WHERE active partial), the FTS GIN
+    │                                             --   index, the sync_actions (org, xact_id,
+    │                                             --   id) index (the xact_id column itself is
+    │                                             --   in init), check constraints, and the
+    │                                             --   String[] NOT NULL guards
+    └── 00000000000002_issue_reminders_url_aliases_webhook_error_codes/
+                                                  -- the 2026-11-25 additions that the
+                                                  --   squashed baseline had hidden:
+                                                  --   issue_reminders, org URL-key
+                                                  --   aliases, webhook error codes,
+                                                  --   the REMINDER enum value, and the
+                                                  --   pg_trgm title index
 ```
 
-**Regenerating the baseline** (no database required — it diffs an empty
-datamodel against the schema file):
+**Adding a migration.** Change `schema.prisma`, then generate the DDL from a
+scratch database that is already up to date — never by hand, and never by
+editing an existing file:
 
 ```bash
-yarn prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script \
-  > prisma/migrations/00000000000000_init/migration.sql
+# with DATABASE_URL pointing at a dev/scratch database at HEAD
+npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma \
+  --script > prisma/migrations/<timestamp>_<name>/migration.sql
 ```
 
-> Prisma 7 renamed `--to-schema-datamodel` to `--to-schema`; the old flag now
-> exits non-zero with a usage dump rather than a helpful alias error.
+DDL Prisma cannot express (extensions, opclasses, partial indexes, triggers,
+`Unsupported` columns' indexes) must be appended to that same new file by hand.
 
-**Verifying the pair** against a throwaway Postgres before merging a schema
-change — this is the check `prisma migrate diff` alone cannot do, because it is
-blind to everything in the custom file:
+**Verifying a migration** against a throwaway Postgres before merging — this is
+the check `prisma migrate diff` alone cannot do, because it is blind to the
+hand-written DDL:
 
 ```bash
 docker run -d --name mig-verify -e POSTGRES_PASSWORD=pg -e POSTGRES_DB=bilinear \
   -p 55432:5432 postgres:18-alpine   # match docker-compose.infra.yml and CI
 export DATABASE_URL="postgresql://postgres:pg@127.0.0.1:55432/bilinear?schema=public"
-yarn prisma migrate deploy                     # both migrations apply cleanly
-yarn prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma \
-  --script                                     # see "expected residual" below
-yarn db:seed                                   # schema is actually usable
+yarn prisma migrate deploy                     # every migration applies cleanly
 ```
+
+> **Also verify the upgrade path, not just the fresh install.** CI only ever
+> builds a database from scratch, which is why the 2026-11-25 drift was
+> invisible to it: a fresh `migrate deploy` replays the *squashed* baseline, so
+> it always matched. Before shipping a migration, restore a dump of the
+> deployed database into a scratch instance and apply the chain there:
+>
+> ```bash
+> docker exec <prod-pg> pg_dump -U bilinear -d bilinear -Fc > /tmp/prod.dump
+> docker exec -i mig-verify pg_restore -U postgres -d bilinear --no-owner < /tmp/prod.dump
+> yarn prisma migrate deploy     # must apply only the NEW migration
+> ```
+>
+> Then confirm both paths produce the same schema (only pg_dump's random
+> `\restrict` tokens may differ):
+>
+> ```bash
+> pg_dump -s --no-owner --no-privileges ... > fresh.sql
+> pg_dump -s --no-owner --no-privileges ... > upgraded.sql
+> diff fresh.sql upgraded.sql
+> ```
 
 > **Expected residual in the drift check.** The diff is no longer empty, and
 > `--exit-code` will not return 0. It emits exactly two statements:
@@ -1821,14 +1868,15 @@ yarn db:seed                                   # schema is actually usable
 > database object the datamodel doesn't know how to declare and proposes
 > dropping it. **Never apply that statement**: the index is what makes the
 > commit-order fence's `ORDER BY (xact_id, id)` read cheap. The same goes for
-> the trigram index: it needs the `pg_trgm` extension and a `gin_trgm_ops`
-> opclass, neither of which the datamodel can declare, and it serves the
-> duplicate-suggestion fallback for Chinese/Japanese/Thai titles.
+> the trigram index (created by migration `00000000000002`): it needs the
+> `pg_trgm` extension and a `gin_trgm_ops` opclass, neither of which the
+> datamodel can declare, and it serves the duplicate-suggestion fallback for
+> Chinese/Japanese/Thai titles.
 >
-> The check still has teeth. Treat *any other* statement in the output as real
-> drift. Anything Prisma **can** express — a column, a type, a nullability
-> change — must be folded into the regenerated baseline until this is the only
-> line left.
+> The check still has teeth, and CI now enforces exactly this filter: *any
+> other* statement fails the build. Anything Prisma **can** express — a column,
+> a type, a nullability change — belongs in a new migration, which is why the
+> output must stay at these two lines.
 
 Then confirm the custom objects exist, since a no-op custom migration would pass
 every check above. **`yarn db:verify:schema` runs all of it** and exits non-zero
@@ -2020,9 +2068,9 @@ Key properties:
 ### 2.38 Org-scoped API keys ✅
 
 Binds `auth_tokens` rows of type `api_key` to the organization they were
-created in (see PATTERNS.md §77). Part of the consolidated
-`00000000000000_init` — nothing is deployed yet, so this landed by
-regenerating the baseline rather than as a forward migration.
+created in (see PATTERNS.md §77). Part of the frozen
+`00000000000000_init` baseline — it landed before the 2026-10-12 deployment,
+when regenerating the baseline was still safe (see §4).
 
 ```sql
 ALTER TABLE auth_tokens ADD COLUMN organization_id UUID;
@@ -2098,9 +2146,10 @@ Key properties:
 
 ### 2.40 Issue Reminders ✅
 
-A private, per-user "remind me about this issue at <time>". Part of the
-consolidated `00000000000000_init` (the `REMINDER` value of `notification_type`
-is too).
+A private, per-user "remind me about this issue at <time>". Shipped 2026-11-24 in
+migration `00000000000002_issue_reminders_url_aliases_webhook_error_codes`, along
+with the `REMINDER` value of `notification_type` — not in the baseline, which was
+frozen at the 2026-08-21 state the deployed database was built from.
 
 ```sql
 CREATE TABLE issue_reminders (
@@ -2144,7 +2193,8 @@ Key properties:
 ### 2.41 Organization URL-key aliases ✅
 
 The previous workspace URL keys of a renamed organization stay reserved for it
-and redirect to the current key. Part of the consolidated `00000000000000_init`.
+and redirect to the current key. Shipped 2026-11-24 in migration
+`00000000000002_issue_reminders_url_aliases_webhook_error_codes`.
 
 ```sql
 CREATE TABLE organization_url_key_aliases (

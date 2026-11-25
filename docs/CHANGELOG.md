@@ -17,7 +17,68 @@ Conventions elsewhere live in [`PATTERNS.md`](PATTERNS.md); open findings live i
 
 ---
 
-## Recently shipped (2026-11-25, follow-up to the platform review — the flagged gaps, closed, plus what the adversarial pass found)
+## Incident fix (2026-11-25, production ran with a schema the code expected and the database never had — migrations became append-only)
+
+Deploying #167/#168 broke the running instance: `/api/sync/bootstrap` failed
+**93 times in six minutes** (`P2021: table issue_reminders does not exist`), the
+inbox lane counts 500'd on an unknown `notification_type` value `REMINDER`, and
+the WS server threw on every reminder and webhook sweep (`issue_reminders`
+missing, `webhook_deliveries.error_code` missing). The client retry loop made it
+look like a crash; nothing was crashing.
+
+**Root cause: the repo's migration doctrine assumed no deployed database.**
+`DATABASE_SCHEMA.md` §4 said so explicitly, and it was true until **2026-10-12
+16:49 UTC**, when this instance was initialized. Both PRs then folded their DDL
+into the already-applied baseline files instead of adding a migration. Because
+Prisma keys applied migrations by *directory name*, `migrate deploy` printed "No
+pending migrations to apply." — and neither deploy nor `migrate status` verifies
+checksums, so the drift was completely silent. `_prisma_migrations` still held
+the 2026-08-21 checksum (`edcae233…`), byte-identical to
+`git show 6a929e2:prisma/migrations/00000000000000_init/migration.sql`, while
+`main` carried a different file under the same name.
+
+Five objects were missing: `issue_reminders` (+4 indexes, 4 FKs),
+`organization_url_key_aliases` (+2 indexes, 1 FK), `webhook_deliveries.error_code`
+and `.error_params`, the `REMINDER` enum value, and — invisible to
+`migrate diff`, because it lives in hand-written DDL — the `pg_trgm` extension
+plus `idx_issues_title_trgm`.
+
+**Fix.** Both pre-incident migration files restored byte-for-byte to their
+`6a929e2` contents (checksums again match what prod recorded), and all of the
+missing DDL added as `00000000000002_issue_reminders_url_aliases_webhook_error_codes`.
+Verified on two scratch Postgres instances before touching production: a fresh
+`migrate deploy` (all three migrations) and a `pg_dump` restore of production
+(only `00000000000002` applies). Both then report exactly the two documented
+`DROP INDEX` lines as residual drift, pass `db:verify:schema`, and produce
+byte-identical schemas (1240 lines, only `pg_dump`'s random `\restrict` tokens
+differ). `db:seed` runs on the result. Production had 1 user / 1 issue at the
+time; a `pg_dump` was taken first.
+
+**Two guards, both proven non-vacuous** (each was regressed to confirm it fails):
+
+- **Migrations are append-only.** CI fails if a PR modifies, renames or deletes
+  a migration that already exists (`--diff-filter=MDR` against the base branch;
+  the job now checks out full history). Regressing it against the real squashing
+  commits lists both files. This fix needed the one-time
+  `ALLOW-MIGRATION-REWRITE` marker in the PR body to land — it is the only
+  bypass the guard accepts, and it warns loudly when used.
+- **The drift gate was dead.** `ci.yml` passed `--shadow-database-url`, which
+  Prisma 7 rejects outright, and wrapped it in `|| true` — so it had been a
+  no-op since the Prisma 7 upgrade, on top of the `--to-schema-datamodel` flag
+  rename. It now diffs the *migrated database* (`--from-config-datasource`, no
+  shadow DB needed), filters the two undeclarable indexes, and fails on anything
+  else; the old `|| true` is gone. Dropping a column makes it fail as intended.
+
+**Why the guards matter more than the fix.** CI builds every database from
+scratch, so a fresh `migrate deploy` always matched the squashed baseline — the
+hit rate of that check against this class of bug was exactly zero. Any migration
+now also needs the upgrade path verified: restore a dump of the deployed
+database, apply the chain there, and diff the two schemas. That recipe is in
+`DATABASE_SCHEMA.md` §4.
+
+---
+
+
 
 Closed every gap listed after #167, each stream reviewed by an adversarial Opus pass.
 
@@ -28,9 +89,11 @@ Closed every gap listed after #167, each stream reviewed by an adversarial Opus 
   time and in the sweep; every message is re-validated (10 s cache per
   connection); every writer since the last store is re-checked. Trade-off: a
   room tainted by a revoked writer stops persisting until it unloads (fail closed).
-- **Webhook errors** are stored as `errorCode` + `errorParams` (folded into init)
-  and localised client-side; old rows fall back to the stored text. Non-2xx
-  deliveries now record `HTTP_STATUS` (previously a null `errorMessage`).
+- **Webhook errors** are stored as `errorCode` + `errorParams` (shipped as
+  migration `00000000000002`, not by folding them into the baseline — see the
+  incident entry above) and localised client-side; old rows fall back to the
+  stored text. Non-2xx deliveries now record `HTTP_STATUS` (previously a null
+  `errorMessage`).
 - **Duplicate suggestions** gained a `pg_trgm` scorer for scripts without spaces
   and a Latin typo fallback. It needs a UTF-8 `LC_CTYPE` database (on `C` the
   trigram set is empty and similarity is silently 0), so `db:verify:schema` now
