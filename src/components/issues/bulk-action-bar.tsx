@@ -147,7 +147,7 @@ function BulkMoreMenu({ close, entries }: { close: () => void; entries: MoreEntr
           </button>
         </div>
         <div
-          className={cn('border-t border-border', 'max-h-64 overflow-y-auto')}
+          className={cn('border-t border-border', !active.tall && 'max-h-64 overflow-y-auto')}
           data-testid="bulk-more-body"
         >
           {active.render(close)}
@@ -512,7 +512,7 @@ export const BulkActionBar = observer(function BulkActionBar({
         {moreEntries.length > 0 && (
           <BulkPopover
             label={t('issues.bulkMore')}
-            
+            sheetClassName={MOBILE_SHEET_TALL}
             widthClass="w-64"
           >
             {close => <BulkMoreMenu close={close} entries={moreEntries} />}

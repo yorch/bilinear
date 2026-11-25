@@ -46,7 +46,7 @@ export const toast = {
  * neutral border is mixed too. Nothing here may be `transparent` or an alpha token.
  */
 const tint = (role: 'danger' | 'info' | 'success' | 'warning') =>
-  `color-mix(in oklab, var(--${role}) 14%, transparent)`;
+  `color-mix(in oklab, var(--${role}) 14%, var(--popover))`;
 const edge = (role: 'danger' | 'info' | 'success' | 'warning') =>
   `color-mix(in oklab, var(--${role}) 35%, var(--popover))`;
 
@@ -58,7 +58,7 @@ const TOAST_THEME = {
   '--info-border': edge('info'),
   '--info-text': 'var(--info-subtle-foreground)',
   '--normal-bg': 'var(--popover)',
-  '--normal-border': 'var(--border)',
+  '--normal-border': `color-mix(in oklab, var(--foreground) 12%, var(--popover))`,
   '--normal-text': 'var(--popover-foreground)',
   '--success-bg': tint('success'),
   '--success-border': edge('success'),

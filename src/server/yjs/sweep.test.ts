@@ -15,7 +15,6 @@ import { createRequire } from 'node:module';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const DOC_ID = '00000000-0000-0000-0000-00000000d0c1';
-const ORG_ID = '00000000-0000-0000-0000-0000000000f0';
 
 const state = vi.hoisted(() => ({
   active: new Set<string>(),
