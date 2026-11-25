@@ -224,6 +224,46 @@ describe('NotificationStore', () => {
     });
   });
 
+  describe('lane counts when the classifier inputs change after reconcile', () => {
+    const rows = () => [
+      makeNotification({ id: 'a', type: 'ISSUE_STATUS_CHANGED' }),
+      makeNotification({ id: 'b', type: 'ISSUE_STATUS_CHANGED' }),
+      makeNotification({ id: 'c', type: 'ISSUE_COMMENTED' }),
+    ];
+
+    it('does not move the counts when an unread row re-classifies (cold-load race)', () => {
+      // The server counted a and b as priority; the issue store was empty at
+      // reconcile so the client first saw them as "other".
+      store.setLaneClassifier(() => 'other');
+      store.reconcile(rows(), 3, 10, { other: 4, priority: 6 });
+      expect(store.laneUnreadCount('priority')).toBe(6);
+      // The issues arrive: the same rows now classify as priority.
+      store.setLaneClassifier(n => (n.type === 'ISSUE_STATUS_CHANGED' ? 'priority' : 'other'));
+      expect(store.laneUnreadCount('priority')).toBe(6);
+      expect(store.laneUnreadCount('other')).toBe(4);
+    });
+
+    it('classifies a row read after the swap with the current classifier', () => {
+      store.setLaneClassifier(() => 'other');
+      store.reconcile(rows(), 3, 10, { other: 4, priority: 6 });
+      store.setLaneClassifier(n => (n.type === 'ISSUE_STATUS_CHANGED' ? 'priority' : 'other'));
+      store.markRead('a');
+      expect(store.laneUnreadCount('priority')).toBe(5);
+      expect(store.laneUnreadCount('other')).toBe(4);
+    });
+
+    it('adds a newly unread row to the lane it classifies into now', () => {
+      store.setLaneClassifier(() => 'other');
+      store.reconcile(rows(), 3, 10, { other: 4, priority: 6 });
+      store.applySyncAction('I', 'd', makeNotification({ id: 'd', type: 'ISSUE_ASSIGNED' }));
+      store.setLaneClassifier(n =>
+        n.type === 'ISSUE_ASSIGNED' || n.type === 'ISSUE_STATUS_CHANGED' ? 'priority' : 'other',
+      );
+      expect(store.laneUnreadCount('priority')).toBe(7);
+      expect(store.laneUnreadCount('other')).toBe(4);
+    });
+  });
+
   describe('reconcile and snoozed rows', () => {
     it('keeps a snoozed row that the default list omits', () => {
       store.upsertMany([

@@ -26,8 +26,16 @@ export class NotificationStore {
   baselineUnread = 0;
   /** The server's exact unread total per inbox lane, or null before the first fetch. */
   serverLaneUnread: LaneUnread | null = null;
-  /** Pool-derived active-unread count per lane when `serverLaneUnread` was read. */
-  baselineLaneUnread: LaneUnread = { other: 0, priority: 0 };
+  /**
+   * The rows that were active-unread when `serverLaneUnread` was read (by id).
+   * The server counted each of them in the lane it belonged to THEN; storing
+   * ids rather than per-lane counts means a later change to the classifier's
+   * inputs (the issue arriving in the store, an assignee change, `viewerId`
+   * resolving) cannot shift a row between lanes and double count it. Rows
+   * unread both then and now contribute nothing to the delta, whatever lane
+   * they classify into.
+   */
+  baselineLaneUnread: Map<string, DBNotification> = new Map();
   /** Which lane a row belongs to; injected by the shell (needs the issue store). */
   private classify: (n: DBNotification) => InboxLane = () => 'other';
   /**
@@ -100,12 +108,8 @@ export class NotificationStore {
     this.classify = fn;
   }
 
-  private pooledLaneUnread(): LaneUnread {
-    const out: LaneUnread = { other: 0, priority: 0 };
-    for (const n of this.unread) {
-      out[this.classify(n)] += 1;
-    }
-    return out;
+  private snapshotUnread(): Map<string, DBNotification> {
+    return new Map(this.unread.map(n => [n.id, n]));
   }
 
   /**
@@ -117,8 +121,23 @@ export class NotificationStore {
     if (this.serverLaneUnread === null) {
       return null;
     }
-    const pooled = this.pooledLaneUnread()[lane];
-    return Math.max(0, this.serverLaneUnread[lane] + pooled - this.baselineLaneUnread[lane]);
+    let delta = 0;
+    const unreadNow = new Set<string>();
+    for (const n of this.unread) {
+      unreadNow.add(n.id);
+      // Newly unread since the snapshot (mark-unread, sync insert, un-snooze).
+      if (!this.baselineLaneUnread.has(n.id) && this.classify(n) === lane) {
+        delta += 1;
+      }
+    }
+    for (const [id, snapshotRow] of this.baselineLaneUnread) {
+      // No longer unread (read, snoozed, deleted). Classify the row as it is now
+      // when we still hold it; a deleted row falls back to its snapshot.
+      if (!unreadNow.has(id) && this.classify(this.pool.get(id) ?? snapshotRow) === lane) {
+        delta -= 1;
+      }
+    }
+    return Math.max(0, this.serverLaneUnread[lane] + delta);
   }
 
   refreshClock() {
@@ -228,7 +247,7 @@ export class NotificationStore {
     }
     if (this.serverLaneUnread !== null) {
       this.serverLaneUnread = { other: 0, priority: 0 };
-      this.baselineLaneUnread = { other: 0, priority: 0 };
+      this.baselineLaneUnread = new Map();
     }
     for (const [id, notification] of this.pool) {
       if (!notification.read) {
@@ -289,7 +308,7 @@ export class NotificationStore {
     }
     if (laneUnread !== undefined) {
       this.serverLaneUnread = laneUnread;
-      this.baselineLaneUnread = this.pooledLaneUnread();
+      this.baselineLaneUnread = this.snapshotUnread();
     }
   }
 
@@ -302,12 +321,14 @@ export class NotificationStore {
     this.hasMore = notifications.length >= limit;
     this.clock = Date.now();
     const now = this.clock;
+    const baseline = new Map(this.baselineLaneUnread);
     for (const n of notifications) {
       if (!this.pool.has(n.id) && !n.read && !isSnoozedAt(n, now)) {
         this.baselineUnread += 1;
-        this.baselineLaneUnread[this.classify(n)] += 1;
+        baseline.set(n.id, n);
       }
     }
+    this.baselineLaneUnread = baseline;
     this.upsertMany(notifications);
   }
 

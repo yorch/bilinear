@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { notifyDroppedLabels } from '@/hooks/use-issue-update';
+import { droppedLabelNamesOf } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
 import { ISSUE_UPDATE_MUTATION, ISSUES_BULK_UPDATE_MUTATION } from '@/lib/graphql-queries';
@@ -64,14 +64,31 @@ export function useIssuesBulkUpdate(): (ids: string[], patch: Record<string, unk
       if ('teamId' in patch) {
         let settled = 0;
         let failed = 0;
-        // One toast for the whole batch, however many rows were refused.
+        // Labels scoped to the old team that the server removed, de-duplicated
+        // across the batch, and how many issues lost at least one.
+        const droppedNames = new Set<string>();
+        let droppedIssues = 0;
+        // One toast per kind for the whole batch, however many rows were refused
+        // or lost labels; shown once the last row has settled.
         const settle = (ok: boolean) => {
           settled++;
           if (!ok) {
             failed++;
           }
-          if (settled === ids.length && failed > 0) {
+          if (settled !== ids.length) {
+            return;
+          }
+          if (failed > 0) {
             toast.error(t('issues.bulkUpdateFailed'));
+          }
+          if (droppedNames.size > 0) {
+            toast.info(
+              t('issues.labelsDroppedOnBulkMove', {
+                count: droppedNames.size,
+                issues: droppedIssues,
+                labels: [...droppedNames].join(', '),
+              }),
+            );
           }
         };
         for (const id of ids) {
@@ -87,7 +104,13 @@ export function useIssuesBulkUpdate(): (ids: string[], patch: Record<string, unk
                 settle(false);
               },
               onSuccess: data => {
-                notifyDroppedLabels(data, t);
+                const dropped = droppedLabelNamesOf(data);
+                if (dropped.length > 0) {
+                  droppedIssues++;
+                  for (const name of dropped) {
+                    droppedNames.add(name);
+                  }
+                }
                 const updated = (data as { issueUpdate?: { issue?: Record<string, unknown> } })
                   ?.issueUpdate?.issue;
                 const row = updated ? toIssueSyncRow(updated) : null;

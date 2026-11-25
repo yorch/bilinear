@@ -1392,6 +1392,8 @@
     "issuesGroupName": "Tareas",
     "label": "Etiqueta",
     "labels": "Etiquetas",
+    "labelsDroppedOnBulkMove_one": "Movidas. Se quitó la etiqueta de {issues} incidencia(s) porque no existe en el nuevo equipo: {labels}",
+    "labelsDroppedOnBulkMove_other": "Movidas. Se quitaron las etiquetas de {issues} incidencia(s) porque no existen en el nuevo equipo: {labels}",
     "labelsDroppedOnMove_one": "Movida. Se quitó la etiqueta porque no existe en el nuevo equipo: {labels}",
     "labelsDroppedOnMove_other": "Movida. Se quitaron las etiquetas porque no existen en el nuevo equipo: {labels}",
     "lastUpdatedDaysAgo_one": "Actualizado hace {count} día",

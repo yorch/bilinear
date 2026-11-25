@@ -1871,6 +1871,18 @@ SELECT table_name, column_name FROM information_schema.columns
 -- Expect exactly: auth_tokens.scopes, webhooks.events
 ```
 
+> **The database's `LC_CTYPE` must be a UTF-8 ctype** (`C.UTF-8`, `en_US.UTF-8`, …),
+> not `C`/`POSIX`. `pg_trgm` only extracts trigrams from characters the ctype
+> treats as alphanumeric: under `LC_CTYPE=C`, `show_trgm('导出')` is `{}` and
+> every Chinese/Japanese/Thai `similarity()` is 0, so duplicate suggestions for
+> those titles silently return nothing (the index still builds, nothing errors).
+> `yarn db:verify:schema` asserts it and fails naming the ctype; the server
+> logs a one-time warning on the first trigram lookup. Fix by recreating the
+> database (`CREATE DATABASE … TEMPLATE template0 LC_CTYPE 'C.UTF-8'`) — the
+> ctype cannot be changed in place. The `postgres:18` image's default is fine.
+> `DUPLICATE_SUGGESTION_TEST_DB` points the real-Postgres duplicate tests at a
+> migrated scratch DB; CI sets it in the `e2e` job.
+
 > **There are no user triggers any more.** `SELECT tgname FROM pg_trigger WHERE
 > NOT tgisinternal` returns **zero rows**, and that is correct — the only one
 > this project ever had was `set_sync_action_committed_at`, removed when the

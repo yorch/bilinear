@@ -1392,6 +1392,8 @@
     "issuesGroupName": "Issues",
     "label": "Label",
     "labels": "Labels",
+    "labelsDroppedOnBulkMove_one": "Moved. Label removed from {issues} issue(s) because it doesn't exist in the new team: {labels}",
+    "labelsDroppedOnBulkMove_other": "Moved. Labels removed from {issues} issue(s) because they don't exist in the new team: {labels}",
     "labelsDroppedOnMove_one": "Moved. Label removed because it doesn't exist in the new team: {labels}",
     "labelsDroppedOnMove_other": "Moved. Labels removed because they don't exist in the new team: {labels}",
     "lastUpdatedDaysAgo_one": "Last updated {count} day ago",

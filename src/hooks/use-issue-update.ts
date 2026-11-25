@@ -18,13 +18,19 @@ const log = createClientLogger('use-issue-update');
  * them in `issueUpdate.droppedLabelNames`; tell the user which ones went.
  * Informational only (no Undo: the labels don't exist in the new team).
  */
+export function droppedLabelNamesOf(data: unknown): string[] {
+  return (
+    (data as { issueUpdate?: { droppedLabelNames?: string[] | null } } | null)?.issueUpdate
+      ?.droppedLabelNames ?? []
+  );
+}
+
 export function notifyDroppedLabels(
   data: unknown,
   t: (key: string, params?: Record<string, string | number>) => string,
 ): void {
-  const names = (data as { issueUpdate?: { droppedLabelNames?: string[] | null } } | null)
-    ?.issueUpdate?.droppedLabelNames;
-  if (names && names.length > 0) {
+  const names = droppedLabelNamesOf(data);
+  if (names.length > 0) {
     toast.info(t('issues.labelsDroppedOnMove', { count: names.length, labels: names.join(', ') }));
   }
 }

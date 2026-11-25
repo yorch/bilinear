@@ -290,15 +290,41 @@ describe('NotificationService', () => {
 
       expect(result).toEqual({ other: 7, priority: 5 });
       const [total, priority] = prisma.notification.count.mock.calls.map(c => c[0].where);
-      for (const where of [total, priority]) {
-        expect(where).toMatchObject({
-          organizationId: TEST_ORG.id,
-          read: false,
-          userId: TEST_USER.id,
-        });
-      }
-      expect(JSON.stringify(priority.AND[1])).toContain('replyToUserId');
-      expect(total.AND).toHaveLength(1);
+      const snooze = [{ snoozedUntilAt: null }, { snoozedUntilAt: { lte: expect.any(Date) } }];
+      const scoped = {
+        OR: snooze,
+        organizationId: TEST_ORG.id,
+        read: false,
+        userId: TEST_USER.id,
+      };
+      // Full objects, not toMatchObject: a dropped snooze filter or visibility
+      // AND on EITHER query breaks "priority + other === getUnreadCount".
+      expect(total).toEqual({ ...scoped, AND: [{}] });
+      expect(priority).toEqual({
+        ...scoped,
+        AND: [
+          {},
+          {
+            OR: [
+              { type: { in: ['ISSUE_ASSIGNED', 'ISSUE_MENTIONED', 'REMINDER'] } },
+              {
+                data: { equals: TEST_USER.id, path: ['replyToUserId'] },
+                type: 'ISSUE_COMMENTED',
+              },
+              { issue: { assigneeId: TEST_USER.id }, type: 'ISSUE_STATUS_CHANGED' },
+            ],
+          },
+        ],
+      });
+    });
+
+    it('scopes both counts exactly like getUnreadCount', async () => {
+      prisma.notification.count.mockResolvedValue(0);
+      await service.getUnreadCount(TEST_USER.id, TEST_ORG.id);
+      await service.getLaneUnreadCounts(TEST_USER.id, TEST_ORG.id);
+      const [unread, total, priority] = prisma.notification.count.mock.calls.map(c => c[0].where);
+      expect(total).toEqual(unread);
+      expect(priority).toEqual({ ...unread, AND: [...unread.AND, expect.anything()] });
     });
   });
 
