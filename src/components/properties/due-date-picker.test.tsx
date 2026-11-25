@@ -1,5 +1,4 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DueDatePicker } from './due-date-picker';
 
@@ -55,7 +54,7 @@ describe('DueDatePicker calendar panel', () => {
     expect(screen.getByRole('grid')).toBeTruthy();
   });
 
-  it('opens focused on the selected day, so the first Enter cannot clear the date', async () => {
+  it('opens focused on the selected day, so the first Enter cannot clear the date', () => {
     const { onChange } = open({ value: '2026-03-05' });
     const day = screen.getByRole('button', { name: 'Thursday, March 5, 2026' });
     expect(document.activeElement).toBe(day);
@@ -63,9 +62,10 @@ describe('DueDatePicker calendar panel', () => {
     expect(document.activeElement).not.toBe(
       screen.getByRole('button', { name: 'properties.dueDate.clearDate' }),
     );
-    // A real Enter activates the focused day; it re-picks the same date, which
-    // must not reach the caller as a mutation, and must never clear it.
-    await userEvent.keyboard('{Enter}');
+    // jsdom has no Enter-activates-button, so click the focused element: that
+    // is what Enter does. It re-picks the same date, which must not reach the
+    // caller as a mutation, and must never clear it.
+    fireEvent.click(document.activeElement as HTMLElement);
     expect(onChange).not.toHaveBeenCalled();
   });
 
