@@ -13,12 +13,14 @@ vi.mock('@/lib/transaction-queue', () => ({
 }));
 
 vi.mock('@/hooks/use-translations', () => ({
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string, params?: Record<string, unknown>) =>
+    params ? `${key}:${JSON.stringify(params)}` : key,
 }));
 
 const toastErrorMock = vi.fn();
+const toastInfoMock = vi.fn();
 vi.mock('@/lib/toast', () => ({
-  toast: { error: toastErrorMock },
+  toast: { error: toastErrorMock, info: toastInfoMock },
 }));
 
 const findByIdMock = vi.fn();
@@ -155,6 +157,28 @@ describe('useIssueUpdate', () => {
         // Labels are narrowed to ids on the way in — the store holds `labelIds`.
         labels: [{ id: 'lbl_1' }],
       });
+    });
+
+    it('tells the user which labels a team move dropped', () => {
+      findByIdMock.mockReturnValue({ id: '1', teamId: 'team_1' });
+      const { result } = renderHook(() => useIssueUpdate());
+      act(() => result.current('1', { teamId: 'team_2' }));
+      const [, , callbacks] = enqueueMock.mock.calls[0];
+      callbacks.onSuccess({
+        issueUpdate: { droppedLabelNames: ['eng-only', 'infra'], issue: SERVER_ISSUE },
+      });
+      expect(toastInfoMock).toHaveBeenCalledWith(
+        'issues.labelsDroppedOnMove:{"count":2,"labels":"eng-only, infra"}',
+      );
+    });
+
+    it('stays silent when no labels were dropped', () => {
+      findByIdMock.mockReturnValue({ id: '1' });
+      const { result } = renderHook(() => useIssueUpdate());
+      act(() => result.current('1', { title: 'x' }));
+      const [, , callbacks] = enqueueMock.mock.calls[0];
+      callbacks.onSuccess({ issueUpdate: { droppedLabelNames: [], issue: SERVER_ISSUE } });
+      expect(toastInfoMock).not.toHaveBeenCalled();
     });
 
     it('does not reconcile a response that is not a whole issue row', () => {

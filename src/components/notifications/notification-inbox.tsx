@@ -529,13 +529,22 @@ export const NotificationInbox = observer(function NotificationInbox() {
   const laneOf = (rows: DBNotification[]) => partitionByLane(rows, viewerId, priorityLookups);
   const allActive = notifications.filter(n => !isSnoozed(n));
   const activeByLane = laneOf(allActive);
-  const laneUnread = {
+  const pooledLaneUnread = {
     other: activeByLane.other.filter(n => !n.read).length,
     priority: activeByLane.priority.filter(n => !n.read).length,
   };
-  // Lane counts only see the loaded page, while the badge is the server's
-  // total — so while more pages exist they are a lower bound, and say so.
-  const laneSuffix = notificationStore.hasMore ? '+' : '';
+  // The server's per-lane totals are exact. Only before they arrive (or against
+  // an older server) do the counts fall back to the loaded page — a lower bound
+  // while more pages exist, and then they say so.
+  const serverLane = {
+    other: notificationStore.laneUnreadCount('other'),
+    priority: notificationStore.laneUnreadCount('priority'),
+  };
+  const laneUnread = {
+    other: serverLane.other ?? pooledLaneUnread.other,
+    priority: serverLane.priority ?? pooledLaneUnread.priority,
+  };
+  const laneSuffix = serverLane.priority === null && notificationStore.hasMore ? '+' : '';
   const active = activeByLane[lane];
   const unread = active.filter(n => !n.read);
   const read = active.filter(n => n.read);

@@ -377,6 +377,12 @@
     "yourName": "Tu nombre",
     "yourNameHint": "Lo verán tus compañeros. Puedes cambiarlo después en ajustes."
   },
+  "calendar": {
+    "clear": "Borrar fecha",
+    "nextMonth": "Mes siguiente",
+    "previousMonth": "Mes anterior",
+    "time": "Hora"
+  },
   "commandPalette": {
     "actions": {
       "createIssue": "Crear nueva tarea",
@@ -1094,6 +1100,8 @@
         "dueDate": "fecha límite",
         "estimate": "estimación",
         "labels": "etiquetas",
+        "labelsDroppedOnMove_one": "Movida. Se quitó la etiqueta porque no existe en el nuevo equipo: {labels}",
+        "labelsDroppedOnMove_other": "Movida. Se quitaron las etiquetas porque no existen en el nuevo equipo: {labels}",
         "parent": "tarea principal",
         "priority": "prioridad",
         "project": "proyecto",

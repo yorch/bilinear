@@ -377,6 +377,12 @@
     "yourName": "Your name",
     "yourNameHint": "Shown to teammates. You can change it later in settings."
   },
+  "calendar": {
+    "clear": "Clear date",
+    "nextMonth": "Next month",
+    "previousMonth": "Previous month",
+    "time": "Time"
+  },
   "commandPalette": {
     "actions": {
       "createIssue": "Create new issue",
@@ -1094,6 +1100,8 @@
         "dueDate": "due date",
         "estimate": "estimate",
         "labels": "labels",
+        "labelsDroppedOnMove_one": "Moved. Label removed because it doesn't exist in the new team: {labels}",
+        "labelsDroppedOnMove_other": "Moved. Labels removed because they don't exist in the new team: {labels}",
         "parent": "parent issue",
         "priority": "priority",
         "project": "project",

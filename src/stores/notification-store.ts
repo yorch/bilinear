@@ -1,10 +1,13 @@
 import { action, computed, makeObservable, observable, reaction } from 'mobx';
+import type { InboxLane } from '@/components/notifications/notification-priority';
 import type { DBNotification } from '@/lib/db';
 import { applyPoolSyncAction } from './apply-pool-sync-action';
 
 function isSnoozedAt(n: { snoozedUntilAt?: string | null }, now: number): boolean {
   return n.snoozedUntilAt ? new Date(n.snoozedUntilAt).getTime() > now : false;
 }
+
+export type LaneUnread = Record<InboxLane, number>;
 
 export class NotificationStore {
   pool = new Map<string, DBNotification>();
@@ -21,6 +24,12 @@ export class NotificationStore {
   serverUnread: number | null = null;
   /** Pool-derived active-unread count at the moment `serverUnread` was read. */
   baselineUnread = 0;
+  /** The server's exact unread total per inbox lane, or null before the first fetch. */
+  serverLaneUnread: LaneUnread | null = null;
+  /** Pool-derived active-unread count per lane when `serverLaneUnread` was read. */
+  baselineLaneUnread: LaneUnread = { other: 0, priority: 0 };
+  /** Which lane a row belongs to; injected by the shell (needs the issue store). */
+  private classify: (n: DBNotification) => InboxLane = () => 'other';
   /**
    * "Now" as the computeds see it. Reading `Date.now()` inside a computed caches
    * it, so a snooze elapsing changed nothing until some unrelated store write —
@@ -37,6 +46,7 @@ export class NotificationStore {
       all: computed,
       appendPage: action,
       applySyncAction: action,
+      baselineLaneUnread: observable,
       baselineUnread: observable,
       clock: observable,
       hasMore: observable,
@@ -50,7 +60,9 @@ export class NotificationStore {
       pool: observable,
       reconcile: action,
       refreshClock: action,
+      serverLaneUnread: observable,
       serverUnread: observable,
+      setLaneClassifier: action,
       setLoadState: action,
       snoozed: computed,
       unread: computed,
@@ -82,6 +94,31 @@ export class NotificationStore {
       clearTimeout(this.wakeTimer);
       this.wakeTimer = null;
     }
+  }
+
+  setLaneClassifier(fn: (n: DBNotification) => InboxLane) {
+    this.classify = fn;
+  }
+
+  private pooledLaneUnread(): LaneUnread {
+    const out: LaneUnread = { other: 0, priority: 0 };
+    for (const n of this.unread) {
+      out[this.classify(n)] += 1;
+    }
+    return out;
+  }
+
+  /**
+   * Exact unread count for one lane: the server's per-lane total moved by the
+   * pooled rows that have flipped since (optimistic read/snooze), like
+   * `unreadCount`. Null before the server's counts arrive.
+   */
+  laneUnreadCount(lane: InboxLane): number | null {
+    if (this.serverLaneUnread === null) {
+      return null;
+    }
+    const pooled = this.pooledLaneUnread()[lane];
+    return Math.max(0, this.serverLaneUnread[lane] + pooled - this.baselineLaneUnread[lane]);
   }
 
   refreshClock() {
@@ -189,6 +226,10 @@ export class NotificationStore {
       this.serverUnread = 0;
       this.baselineUnread = 0;
     }
+    if (this.serverLaneUnread !== null) {
+      this.serverLaneUnread = { other: 0, priority: 0 };
+      this.baselineLaneUnread = { other: 0, priority: 0 };
+    }
     for (const [id, notification] of this.pool) {
       if (!notification.read) {
         this.pool.set(id, { ...notification, read: true, readAt: now });
@@ -217,7 +258,12 @@ export class NotificationStore {
     this.loadState = state;
   }
 
-  reconcile(notifications: DBNotification[], limit: number, serverUnread?: number) {
+  reconcile(
+    notifications: DBNotification[],
+    limit: number,
+    serverUnread?: number,
+    laneUnread?: LaneUnread,
+  ) {
     this.clock = Date.now();
     this.hasMore = notifications.length >= limit;
     const returned = new Set(notifications.map(n => n.id));
@@ -241,6 +287,10 @@ export class NotificationStore {
       this.serverUnread = serverUnread;
       this.baselineUnread = this.unread.length;
     }
+    if (laneUnread !== undefined) {
+      this.serverLaneUnread = laneUnread;
+      this.baselineLaneUnread = this.pooledLaneUnread();
+    }
   }
 
   /**
@@ -255,6 +305,7 @@ export class NotificationStore {
     for (const n of notifications) {
       if (!this.pool.has(n.id) && !n.read && !isSnoozedAt(n, now)) {
         this.baselineUnread += 1;
+        this.baselineLaneUnread[this.classify(n)] += 1;
       }
     }
     this.upsertMany(notifications);

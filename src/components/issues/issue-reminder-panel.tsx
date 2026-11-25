@@ -3,6 +3,8 @@
 import { observer } from 'mobx-react-lite';
 import { type FormEvent, type KeyboardEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Input } from '@/components/ui/input';
 import { POPOVER_ITEM_CLASS } from '@/components/ui/select-popover';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useIssueReminders } from '@/hooks/use-issue-reminders';
@@ -44,6 +46,7 @@ export const IssueReminderPanel = observer(function IssueReminderPanel({
   const [custom, setCustom] = useState(() =>
     existing ? toReminderInputValue(new Date(existing.remindAt)) : '',
   );
+  const customTime = custom.slice(11, 16) || '09:00';
   const [touched, setTouched] = useState(false);
   const presets = getReminderPresets();
   const when = (d: Date) =>
@@ -106,22 +109,34 @@ export const IssueReminderPanel = observer(function IssueReminderPanel({
         </button>
       ))}
       <form className="flex flex-col gap-1.5 px-3 py-1.5" noValidate onSubmit={submit}>
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          {t('reminders.customLabel')}
-          <input
+        <p className="text-xs text-muted-foreground">{t('reminders.customLabel')}</p>
+        <Calendar
+          className="-mx-2 w-auto"
+          max={reminderInputMax().slice(0, 10)}
+          min={reminderInputMin().slice(0, 10)}
+          onChange={date => {
+            setCustom(`${date}T${customTime}`);
+            setTouched(true);
+          }}
+          value={custom.slice(0, 10)}
+        />
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          {t('calendar.time')}
+          <Input
             aria-describedby="reminder-custom-note"
             aria-invalid={error ? true : undefined}
-            className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
+            className="w-auto px-2 py-1"
             data-autofocus
-            max={reminderInputMax()}
-            min={reminderInputMin()}
             onChange={e => {
-              setCustom(e.target.value);
+              const time = e.target.value;
+              // Keep the chosen day; a time with no day yet means today.
+              const day = custom.slice(0, 10) || reminderInputMin().slice(0, 10);
+              setCustom(time ? `${day}T${time}` : '');
               setTouched(true);
             }}
             onKeyDown={onKeyDown}
-            type="datetime-local"
-            value={custom}
+            type="time"
+            value={customTime}
           />
         </label>
         <p

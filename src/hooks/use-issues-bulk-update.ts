@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
+import { notifyDroppedLabels } from '@/hooks/use-issue-update';
 import { useTranslations } from '@/hooks/use-translations';
 import type { DBIssue } from '@/lib/db';
 import { ISSUE_UPDATE_MUTATION, ISSUES_BULK_UPDATE_MUTATION } from '@/lib/graphql-queries';
@@ -86,6 +87,7 @@ export function useIssuesBulkUpdate(): (ids: string[], patch: Record<string, unk
                 settle(false);
               },
               onSuccess: data => {
+                notifyDroppedLabels(data, t);
                 const updated = (data as { issueUpdate?: { issue?: Record<string, unknown> } })
                   ?.issueUpdate?.issue;
                 const row = updated ? toIssueSyncRow(updated) : null;

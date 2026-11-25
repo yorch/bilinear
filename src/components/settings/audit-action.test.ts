@@ -8,6 +8,7 @@ import {
   auditResourceLabel,
   endOfDayIso,
   humanizeAction,
+  resolveAuditResourceName,
   startOfDayIso,
 } from './audit-action';
 
@@ -67,5 +68,38 @@ describe('auditResourceLabel', () => {
 
   it('humanises an unknown type', () => {
     expect(auditResourceLabel(tEn, 'FooBar', null).type).toBe('Foo Bar');
+  });
+});
+
+describe('resolveAuditResourceName', () => {
+  const lookups = {
+    member: (id: string) => (id === 'u1' ? 'Ada Lovelace' : null),
+    team: (id: string) => (id === 't1' ? 'Engineering' : null),
+  };
+
+  it('resolves members from the user lookup, not the short id', () => {
+    expect(resolveAuditResourceName('OrganizationMember', 'u1', null, lookups)).toBe(
+      'Ada Lovelace',
+    );
+  });
+
+  it('resolves teams', () => {
+    expect(resolveAuditResourceName('Team', 't1', null, lookups)).toBe('Engineering');
+  });
+
+  it('reads a webhook name from the row metadata', () => {
+    expect(resolveAuditResourceName('Webhook', 'w1', { name: 'Deploys' }, lookups)).toBe(
+      'Deploys',
+    );
+  });
+
+  it('returns null when unresolvable so the label falls back to the short id', () => {
+    expect(resolveAuditResourceName('OrganizationMember', 'gone', null, lookups)).toBeNull();
+    expect(resolveAuditResourceName('Webhook', 'w1', { name: '  ' }, lookups)).toBeNull();
+    expect(resolveAuditResourceName('Webhook', 'w1', undefined, lookups)).toBeNull();
+    const label = auditResourceLabel(tEn, 'Webhook', 'abcdef123456', (type, id) =>
+      resolveAuditResourceName(type, id, null, lookups),
+    );
+    expect(label.id).toBe('abcdef12');
   });
 });

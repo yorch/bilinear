@@ -170,6 +170,60 @@ describe('NotificationStore', () => {
     });
   });
 
+  describe('exact lane counts', () => {
+    const laneOf = (n: DBNotification) => (n.type === 'ISSUE_ASSIGNED' ? 'priority' : 'other');
+
+    it('reports the server lane totals, not the loaded page', () => {
+      store.setLaneClassifier(laneOf);
+      store.reconcile([makeNotification({ id: 'a' })], 1, 30, { other: 20, priority: 10 });
+      expect(store.laneUnreadCount('priority')).toBe(10);
+      expect(store.laneUnreadCount('other')).toBe(20);
+    });
+
+    it('is null before the server counts arrive', () => {
+      expect(store.laneUnreadCount('priority')).toBeNull();
+    });
+
+    it('moves only the affected lane on optimistic mark-read and snooze', () => {
+      store.setLaneClassifier(laneOf);
+      store.reconcile(
+        [
+          makeNotification({ id: 'p', type: 'ISSUE_ASSIGNED' }),
+          makeNotification({ id: 'o', type: 'ISSUE_COMMENTED' }),
+        ],
+        2,
+        30,
+        { other: 20, priority: 10 },
+      );
+      store.markRead('p');
+      expect(store.laneUnreadCount('priority')).toBe(9);
+      expect(store.laneUnreadCount('other')).toBe(20);
+      store.optimisticUpdate('o', { snoozedUntilAt: '2999-01-01T00:00:00Z' });
+      expect(store.laneUnreadCount('other')).toBe(19);
+    });
+
+    it('does not double count rows from Load more, and zeroes on mark all read', () => {
+      store.setLaneClassifier(laneOf);
+      store.reconcile([makeNotification({ id: 'a', type: 'ISSUE_ASSIGNED' })], 1, 5, {
+        other: 0,
+        priority: 5,
+      });
+      store.appendPage(
+        [
+          makeNotification({
+            createdAt: '2025-01-01T00:00:00Z',
+            id: 'old',
+            type: 'ISSUE_ASSIGNED',
+          }),
+        ],
+        1,
+      );
+      expect(store.laneUnreadCount('priority')).toBe(5);
+      store.markAllRead();
+      expect(store.laneUnreadCount('priority')).toBe(0);
+    });
+  });
+
   describe('reconcile and snoozed rows', () => {
     it('keeps a snoozed row that the default list omits', () => {
       store.upsertMany([

@@ -19,7 +19,10 @@ vi.mock('@/hooks/use-translations', () => ({
   useTranslations: () => (key: string) => key,
 }));
 vi.mock('@/hooks/use-formatters', () => ({
-  useFormatters: () => ({ formatDateTime: (v: string | Date) => new Date(v).toISOString() }),
+  useFormatters: () => ({
+    intlLocale: 'en-US',
+    formatDateTime: (v: string | Date) => new Date(v).toISOString(),
+  }),
 }));
 vi.mock('@/providers/store-provider', () => ({ useStore: () => storeHolder.current }));
 
@@ -61,12 +64,14 @@ describe('IssueReminderPanel', () => {
     expect(toastSuccess).toHaveBeenCalledWith('reminders.set');
   });
 
-  it('the custom picker has a one-year max and does NOT commit when the value changes', () => {
+  it('the custom picker disables days outside [today, +1 year] and does NOT commit on pick', () => {
     render(<IssueReminderPanel issueId="i1" onClose={vi.fn()} />);
-    const input = screen.getByLabelText('reminders.customLabel') as HTMLInputElement;
-    expect(input.max).toBe(local(new Date(NOW.getTime() + 365 * 86_400_000)));
+    // Nov 2026: today is the 25th — the 24th is in the past.
+    expect((screen.getByRole('button', { name: '24' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: '25' }) as HTMLButtonElement).disabled).toBe(false);
 
-    fireEvent.change(input, { target: { value: '2026-11-26T08:30' } });
+    fireEvent.click(screen.getByRole('button', { name: '26' }));
+    fireEvent.change(screen.getByLabelText('calendar.time'), { target: { value: '08:30' } });
 
     expect(enqueue).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'reminders.setCustom' }));
@@ -78,32 +83,31 @@ describe('IssueReminderPanel', () => {
 
   it('Enter submits the form', () => {
     render(<IssueReminderPanel issueId="i1" onClose={vi.fn()} />);
-    const input = screen.getByLabelText('reminders.customLabel');
-    fireEvent.change(input, { target: { value: '2026-11-26T08:30' } });
+    fireEvent.click(screen.getByRole('button', { name: '26' }));
+    const input = screen.getByLabelText('calendar.time');
     fireEvent.submit(input.closest('form') as HTMLFormElement);
     expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue.mock.calls[0]?.[1]).toMatchObject({
+      remindAt: new Date(2026, 10, 26, 9, 0).toISOString(),
+    });
   });
 
-  it('validates inline: past and too-far values disable Set and explain why', () => {
+  it('validates inline: a time earlier today disables Set and explains why', () => {
     render(<IssueReminderPanel issueId="i1" onClose={vi.fn()} />);
-    const input = screen.getByLabelText('reminders.customLabel');
     const set = screen.getByRole('button', { name: 'reminders.setCustom' }) as HTMLButtonElement;
 
-    fireEvent.change(input, { target: { value: '2026-11-25T09:00' } });
+    fireEvent.click(screen.getByRole('button', { name: '25' }));
+    fireEvent.change(screen.getByLabelText('calendar.time'), { target: { value: '09:00' } });
     expect(set.disabled).toBe(true);
     expect(screen.getByText('reminders.pastTime')).toBeTruthy();
-
-    fireEvent.change(input, { target: { value: '2028-01-01T09:00' } });
-    expect(set.disabled).toBe(true);
-    expect(screen.getByText('reminders.tooFar')).toBeTruthy();
     expect(enqueue).not.toHaveBeenCalled();
   });
 
   it('Escape abandons the picker without setting anything', () => {
     const onClose = vi.fn();
     render(<IssueReminderPanel issueId="i1" onClose={onClose} />);
-    const input = screen.getByLabelText('reminders.customLabel');
-    fireEvent.change(input, { target: { value: '2026-11-26T08:30' } });
+    fireEvent.click(screen.getByRole('button', { name: '26' }));
+    const input = screen.getByLabelText('calendar.time');
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(enqueue).not.toHaveBeenCalled();
@@ -124,9 +128,10 @@ describe('IssueReminderPanel', () => {
     const onClose = vi.fn();
     render(<IssueReminderPanel issueId="i1" onClose={onClose} />);
 
-    expect((screen.getByLabelText('reminders.customLabel') as HTMLInputElement).value).toBe(
-      '2026-11-30T14:15',
-    );
+    expect((screen.getByLabelText('calendar.time') as HTMLInputElement).value).toBe('14:15');
+    expect(
+      screen.getByRole('button', { name: '30' }).getAttribute('aria-pressed'),
+    ).toBe('true');
     fireEvent.click(screen.getByText('reminders.clear'));
     expect(enqueue.mock.calls[0]?.[1]).toEqual({ issueId: 'i1' });
     expect(onClose).toHaveBeenCalled();

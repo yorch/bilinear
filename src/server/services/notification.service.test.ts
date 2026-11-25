@@ -282,6 +282,26 @@ describe('NotificationService', () => {
     });
   });
 
+  describe('getLaneUnreadCounts', () => {
+    it('counts the priority rule and derives other from the visible total', async () => {
+      prisma.notification.count.mockResolvedValueOnce(12).mockResolvedValueOnce(5);
+
+      const result = await service.getLaneUnreadCounts(TEST_USER.id, TEST_ORG.id);
+
+      expect(result).toEqual({ other: 7, priority: 5 });
+      const [total, priority] = prisma.notification.count.mock.calls.map(c => c[0].where);
+      for (const where of [total, priority]) {
+        expect(where).toMatchObject({
+          organizationId: TEST_ORG.id,
+          read: false,
+          userId: TEST_USER.id,
+        });
+      }
+      expect(JSON.stringify(priority.AND[1])).toContain('replyToUserId');
+      expect(total.AND).toHaveLength(1);
+    });
+  });
+
   describe('createForIssueAssignment', () => {
     it('creates ISSUE_ASSIGNED notification', async () => {
       prisma.notification.create.mockResolvedValue(TEST_NOTIFICATION);

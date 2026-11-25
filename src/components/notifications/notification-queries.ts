@@ -11,6 +11,7 @@ export const NOTIFICATIONS_WITH_COUNT_QUERY = `
   query NotificationsWithCount($limit: Int) {
     notifications(limit: $limit) { ${NOTIFICATION_FIELDS} }
     notificationUnreadCount
+    notificationLaneUnreadCounts { priority other }
   }
 `;
 

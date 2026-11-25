@@ -8,13 +8,14 @@ import {
   auditActionLabel,
   auditResourceLabel,
   endOfDayIso,
+  resolveAuditResourceName,
   startOfDayIso,
 } from '@/components/settings/audit-action';
 import { LoadError } from '@/components/shared/load-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Input } from '@/components/ui/input';
+import { DateField } from '@/components/ui/date-field';
 import { PageHeader } from '@/components/ui/page-header';
 import { SimpleSelect } from '@/components/ui/select';
 import { RowsSkeleton } from '@/components/ui/skeleton';
@@ -89,8 +90,18 @@ const AUDIT_LOGS_QUERY = `
 const AuditLogPage = observer(function AuditLogPage() {
   const t = useTranslations();
   const { organizationMemberStore, teamStore, userStore } = useStore();
-  const resolveResourceName = (type: string, id: string): string | null =>
-    type === 'Team' ? (teamStore.findById(id)?.name ?? null) : null;
+  const resolveResourceName = (
+    type: string,
+    id: string,
+    metadata?: Record<string, unknown> | null,
+  ): string | null =>
+    resolveAuditResourceName(type, id, metadata, {
+      member: memberId => {
+        const u = userStore.findById(memberId);
+        return u ? u.displayName || u.email : null;
+      },
+      team: teamId => teamStore.findById(teamId)?.name ?? null,
+    });
   const memberRoles = organizationMemberStore.rolesByUserId as Record<string, unknown>;
   const memberOptions = userStore.all
     .filter(u => memberRoles[u.id] !== undefined)
@@ -296,20 +307,18 @@ const AuditLogPage = observer(function AuditLogPage() {
             options={[{ label: t('settings.auditLog.allUsers'), value: '' }, ...memberOptions]}
             value={userIdFilter}
           />
-          <Input
-            aria-label={t('settings.auditLog.dateFrom')}
-            className="w-full sm:w-40"
+          <DateField
+            ariaLabel={t('settings.auditLog.dateFrom')}
+            className="w-full sm:w-44"
             max={toDate || undefined}
-            onChange={e => setFromDate(e.target.value)}
-            type="date"
+            onChange={setFromDate}
             value={fromDate}
           />
-          <Input
-            aria-label={t('settings.auditLog.dateTo')}
-            className="w-full sm:w-40"
+          <DateField
+            ariaLabel={t('settings.auditLog.dateTo')}
+            className="w-full sm:w-44"
             min={fromDate || undefined}
-            onChange={e => setToDate(e.target.value)}
-            type="date"
+            onChange={setToDate}
             value={toDate}
           />
           <Button onClick={handleApplyFilters} size="sm" type="button">
@@ -366,7 +375,7 @@ const AuditLogPage = observer(function AuditLogPage() {
                         t,
                         entry.resourceType,
                         entry.resourceId,
-                        resolveResourceName,
+                        (type, id) => resolveResourceName(type, id, entry.metadata),
                       )
                     : null;
                   const meta = entry.metadata && Object.keys(entry.metadata).length > 0;

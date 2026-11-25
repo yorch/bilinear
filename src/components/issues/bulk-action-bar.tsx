@@ -11,6 +11,7 @@ import { PriorityIcon, priorityLabelKey } from '@/components/properties/priority
 import { StatusDot } from '@/components/properties/status-select';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { ColorDot } from '@/components/ui/color-dot';
+import { Calendar } from '@/components/ui/calendar';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useTranslations } from '@/hooks/use-translations';
@@ -317,7 +318,7 @@ export const BulkActionBar = observer(function BulkActionBar({
         </BulkPopover>
       )}
 
-      <BulkPopover label={t('issues.dueDate')}>
+      <BulkPopover label={t('issues.dueDate')} widthClass="w-64">
         {close => (
           <>
             {getDueDatePresets().map(preset => (
@@ -334,20 +335,15 @@ export const BulkActionBar = observer(function BulkActionBar({
                 <span className="font-mono text-xs text-muted-foreground">{preset.date}</span>
               </button>
             ))}
-            <label className="flex flex-col gap-1 px-3 py-1.5 text-xs text-muted-foreground">
+            <p className="border-t border-border px-3 pt-2 text-xs text-muted-foreground">
               {t('properties.dueDate.orPickDate')}
-              <input
-                aria-label={t('properties.dueDate.orPickDate')}
-                className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
-                onChange={e => {
-                  if (e.target.value) {
-                    onUpdate({ dueDate: e.target.value });
-                    close();
-                  }
-                }}
-                type="date"
-              />
-            </label>
+            </p>
+            <Calendar
+              onChange={date => {
+                onUpdate({ dueDate: date });
+                close();
+              }}
+            />
             <button
               className={POPOVER_ITEM_CLASS}
               onClick={() => {
