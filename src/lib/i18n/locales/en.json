@@ -1313,8 +1313,6 @@
     "unsubscribeShortcut": "Unsubscribe (Shift+S)"
   },
   "issues": {
-    "labelsDroppedOnMove_one": "Moved. Label removed because it doesn't exist in the new team: {labels}",
-    "labelsDroppedOnMove_other": "Moved. Labels removed because they don't exist in the new team: {labels}",
     "actionsFor": "Actions for {title}",
     "add": "Add",
     "addFilter": "Add filter",
@@ -1391,6 +1389,8 @@
     "issuesGroupName": "Issues",
     "label": "Label",
     "labels": "Labels",
+    "labelsDroppedOnMove_one": "Moved. Label removed because it doesn't exist in the new team: {labels}",
+    "labelsDroppedOnMove_other": "Moved. Labels removed because they don't exist in the new team: {labels}",
     "lastUpdatedDaysAgo_one": "Last updated {count} day ago",
     "lastUpdatedDaysAgo_other": "Last updated {count} days ago",
     "layoutBoard": "Board",
@@ -2582,7 +2582,8 @@
           "ECONNRESET": "The server reset the connection",
           "ENOTFOUND": "Couldn't resolve host {target}",
           "ENOTFOUNDNoDetail": "Couldn't resolve the host",
-          "HTTP_STATUS": "The endpoint responded with HTTP {status}",
+        "HTTP_STATUS": "The endpoint responded with HTTP {status}",
+          "HTTP_STATUSNoDetail": "The endpoint responded with an error status",
           "PRIVATE_ADDRESS": "The URL points to a private or internal address",
           "TIMEOUT": "Timed out after {ms} ms",
           "TIMEOUTNoDetail": "Timed out waiting for the server",

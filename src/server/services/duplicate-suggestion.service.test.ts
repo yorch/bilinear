@@ -7,7 +7,11 @@ import {
   DuplicateSuggestionService,
   extractQueryTerms,
   FtsDuplicateScorer,
+  hasNoSpaceScript,
+  LanguageAwareDuplicateScorer,
   MAX_DUPLICATE_SUGGESTIONS,
+  TRIGRAM_MIN_SIMILARITY,
+  TrigramDuplicateScorer,
 } from './duplicate-suggestion.service';
 
 const SCOPE = { guestTeamIds: [], memberTeamIds: ['team-a'], userId: 'user-1' };
@@ -123,6 +127,86 @@ describe('FtsDuplicateScorer', () => {
       }),
     ).toEqual([]);
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe('hasNoSpaceScript', () => {
+  it('detects Han, kana and Thai but not space-separated scripts', () => {
+    expect(hasNoSpaceScript('导出失败')).toBe(true);
+    expect(hasNoSpaceScript('ログインできない')).toBe(true);
+    expect(hasNoSpaceScript('เข้าสู่ระบบไม่ได้')).toBe(true);
+    expect(hasNoSpaceScript('Export 失败 on Safari')).toBe(true);
+    expect(hasNoSpaceScript('Error al iniciar sesión')).toBe(false);
+    expect(hasNoSpaceScript('로그인 실패')).toBe(false);
+  });
+});
+
+describe('TrigramDuplicateScorer', () => {
+  it('uses the indexed % operator with an explicit floor and the same scoping rules', async () => {
+    const prisma = createMockPrisma();
+    prisma.$queryRaw.mockResolvedValue([{ id: 'x', score: '0.5' }]);
+    const out = await new TrigramDuplicateScorer(prisma as never).score({
+      limit: 4,
+      orgId: TEST_ORG.id,
+      scope: { ...SCOPE, guestTeamIds: ['team-a'] },
+      source: { ...SOURCE, title: '导出失败' },
+    });
+    expect(out).toEqual([{ issueId: 'x', score: 0.5 }]);
+    const { sql, values } = sqlOf(prisma.$queryRaw.mock.calls[0][0]);
+    expect(sql).toContain('i.title %');
+    expect(sql).toContain('similarity(');
+    expect(values).toContain(TRIGRAM_MIN_SIMILARITY);
+    expect(values).toContain('导出失败');
+    expect(values).toContainEqual(['team-a']);
+    expect(sql).toContain('archived_at IS NULL');
+    expect(sql).toContain('trashed = false');
+    expect(sql).toContain("ws.type::text != 'canceled'");
+    expect(sql).toContain('creator_id');
+  });
+
+  it('never queries with no visible teams or a blank title', async () => {
+    const prisma = createMockPrisma();
+    const scorer = new TrigramDuplicateScorer(prisma as never);
+    const base = { limit: 3, orgId: 'o', scope: SCOPE, source: SOURCE };
+    expect(await scorer.score({ ...base, scope: { ...SCOPE, memberTeamIds: [] } })).toEqual([]);
+    expect(await scorer.score({ ...base, source: { ...SOURCE, title: '   ' } })).toEqual([]);
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe('LanguageAwareDuplicateScorer', () => {
+  const hit = [{ issueId: 'a', score: 1 }];
+  function make(fts: unknown[], trg: unknown[]) {
+    const f = { score: vi.fn().mockResolvedValue(fts) };
+    const t = { score: vi.fn().mockResolvedValue(trg) };
+    return { f, scorer: new LanguageAwareDuplicateScorer(f as never, t as never), t };
+  }
+  const req = (title: string) => ({
+    limit: 3,
+    orgId: 'o',
+    scope: SCOPE,
+    source: { ...SOURCE, title },
+  });
+
+  it('goes straight to trigram for a no-space-script title and skips FTS when it hits', async () => {
+    const { f, scorer, t } = make([], hit);
+    expect(await scorer.score(req('导出失败'))).toBe(hit);
+    expect(t.score).toHaveBeenCalledTimes(1);
+    expect(f.score).not.toHaveBeenCalled();
+  });
+
+  it('keeps FTS first for other titles and does not call trigram on a hit', async () => {
+    const { f, scorer, t } = make(hit, []);
+    expect(await scorer.score(req('Login crashes'))).toBe(hit);
+    expect(f.score).toHaveBeenCalledTimes(1);
+    expect(t.score).not.toHaveBeenCalled();
+  });
+
+  it('falls back to trigram when FTS finds nothing, and to FTS when trigram finds nothing', async () => {
+    const a = make([], hit);
+    expect(await a.scorer.score(req('Login crashes'))).toBe(hit);
+    const b = make(hit, []);
+    expect(await b.scorer.score(req('导出失败'))).toBe(hit);
   });
 });
 

@@ -1313,8 +1313,6 @@
     "unsubscribeShortcut": "Cancelar suscripción (Mayús+S)"
   },
   "issues": {
-    "labelsDroppedOnMove_one": "Movida. Se quitó la etiqueta porque no existe en el nuevo equipo: {labels}",
-    "labelsDroppedOnMove_other": "Movida. Se quitaron las etiquetas porque no existen en el nuevo equipo: {labels}",
     "actionsFor": "Acciones para {title}",
     "add": "Agregar",
     "addFilter": "Añadir filtro",
@@ -1391,6 +1389,8 @@
     "issuesGroupName": "Tareas",
     "label": "Etiqueta",
     "labels": "Etiquetas",
+    "labelsDroppedOnMove_one": "Movida. Se quitó la etiqueta porque no existe en el nuevo equipo: {labels}",
+    "labelsDroppedOnMove_other": "Movida. Se quitaron las etiquetas porque no existen en el nuevo equipo: {labels}",
     "lastUpdatedDaysAgo_one": "Actualizado hace {count} día",
     "lastUpdatedDaysAgo_other": "Actualizado hace {count} días",
     "layoutBoard": "Tablero",
@@ -2582,7 +2582,8 @@
           "ECONNRESET": "El servidor restableció la conexión",
           "ENOTFOUND": "No se pudo resolver el host {target}",
           "ENOTFOUNDNoDetail": "No se pudo resolver el host",
-          "HTTP_STATUS": "El endpoint respondió con HTTP {status}",
+        "HTTP_STATUS": "El endpoint respondió con HTTP {status}",
+          "HTTP_STATUSNoDetail": "El endpoint respondió con un estado de error",
           "PRIVATE_ADDRESS": "La URL apunta a una dirección privada o interna",
           "TIMEOUT": "Tiempo de espera agotado tras {ms} ms",
           "TIMEOUTNoDetail": "Tiempo de espera agotado esperando al servidor",

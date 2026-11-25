@@ -15,7 +15,11 @@ import { randomUUID } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../../generated/prisma';
-import { DuplicateSuggestionService, FtsDuplicateScorer } from './duplicate-suggestion.service';
+import {
+  DuplicateSuggestionService,
+  FtsDuplicateScorer,
+  TrigramDuplicateScorer,
+} from './duplicate-suggestion.service';
 
 const DB_URL = process.env.DUPLICATE_SUGGESTION_TEST_DB;
 
@@ -100,10 +104,80 @@ describe.skipIf(!DB_URL)('duplicate suggestions against real Postgres', () => {
     expect(frHit.map(r => r.issue.id)).toContain(fr.id);
   });
 
-  it('matches a non-space-separated title only on an identical run (documented limit)', async () => {
+  it('matches an identical non-space-separated title', async () => {
     const cn = await issue('导出失败');
     const same = (await suggestFor('导出失败')).out;
     expect(same.map(r => r.issue.id)).toContain(cn.id);
+  });
+
+  // FTS sees each of these as one opaque token, so only trigram similarity can
+  // connect a reworded title to its neighbour.
+  it.each([
+    ['Japanese', 'ログイン画面でエラーが発生する', 'ログイン画面がエラーになる'],
+    ['Chinese', '导出报表时系统崩溃', '导出报表的时候崩溃'],
+    ['Thai', 'ไม่สามารถเข้าสู่ระบบได้', 'เข้าสู่ระบบไม่ได้'],
+  ])('finds a reworded %s title via the trigram fallback', async (_name, existing, query) => {
+    const target = await issue(existing);
+    const unrelated = await issue('完全に無関係なタイトルです');
+    const { out, source } = await suggestFor(query);
+    const ids = out.map(r => r.issue.id);
+    expect(ids).toContain(target.id);
+    expect(ids).not.toContain(unrelated.id);
+    expect(ids).not.toContain(source.id);
+  });
+
+  it('applies scoping and exclusions to trigram matches', async () => {
+    const archived = await issue('搜索结果为空时崩溃');
+    await prisma.issue.update({ data: { archivedAt: new Date() }, where: { id: archived.id } });
+    const declined = await issue('搜索结果为空时崩溃了', canceledId);
+    const otherTeam = await prisma.team.create({
+      data: { displayName: 'Hidden', key: 'HID', name: 'Hidden', organizationId: orgId },
+    });
+    const hiddenState = await prisma.workflowState.create({
+      data: { color: '#000', name: 'Backlog', teamId: otherTeam.id, type: 'backlog' },
+    });
+    n += 1;
+    const hidden = await prisma.issue.create({
+      data: {
+        identifier: `HID-${n}`,
+        number: n,
+        organizationId: orgId,
+        stateId: hiddenState.id,
+        teamId: otherTeam.id,
+        title: '搜索结果为空时崩溃',
+      },
+    });
+    const visible = await issue('搜索结果为空时崩溃');
+    try {
+      const { out, source } = await suggestFor('搜索结果为空时崩溃');
+      // The scorer's own SQL must exclude them; hydration is only the second line.
+      const raw = await new TrigramDuplicateScorer(prisma).score({
+        limit: 5,
+        orgId,
+        scope: scope(),
+        source,
+      });
+      const rawIds = raw.map(r => r.issueId);
+      expect(rawIds).toContain(visible.id);
+      expect(rawIds).not.toContain(archived.id);
+      expect(rawIds).not.toContain(declined.id);
+      expect(rawIds).not.toContain(hidden.id);
+      const ids = out.map(r => r.issue.id);
+      expect(ids).toContain(visible.id);
+      expect(ids).not.toContain(archived.id);
+      expect(ids).not.toContain(declined.id);
+      expect(ids).not.toContain(hidden.id);
+    } finally {
+      await prisma.issue.delete({ where: { id: hidden.id } });
+      await prisma.workflowState.delete({ where: { id: hiddenState.id } });
+      await prisma.team.delete({ where: { id: otherTeam.id } });
+    }
+  });
+
+  it('falls back to trigram for a misspelt Latin title FTS cannot match', async () => {
+    const target = await issue('Checkout totals incorrect');
+    const { out } = await suggestFor('Chekout totalz incorect');
+    expect(out.map(r => r.issue.id)).toContain(target.id);
   });
 
   it('ignores stop words when setting the match threshold', async () => {

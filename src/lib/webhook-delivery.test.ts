@@ -62,12 +62,12 @@ describe('deliveryErrorText', () => {
 
   it('has complete copy in both locales for every code, with and without detail', () => {
     const full = {
-      ENOTFOUND: { target: 'h' },
-      ECONNREFUSED: { target: 'h' },
       EAI_AGAIN: { target: 'h' },
+      ECONNREFUSED: { target: 'h' },
+      ENOTFOUND: { target: 'h' },
+      HTTP_STATUS: { status: 500 },
       TIMEOUT: { ms: 5 },
       TLS: { tlsCode: 'X' },
-      HTTP_STATUS: { status: 500 },
     } as Record<string, object>;
     for (const code of DELIVERY_ERROR_CODES) {
       for (const [t, locale] of [
