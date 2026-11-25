@@ -379,7 +379,10 @@
   },
   "calendar": {
     "clear": "Clear date",
+    "dateInput": "Type a date",
+    "invalidDate": "Enter a date like {example}",
     "nextMonth": "Next month",
+    "outOfRange": "That date is outside the allowed range",
     "previousMonth": "Previous month",
     "time": "Time"
   },

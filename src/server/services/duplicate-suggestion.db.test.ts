@@ -126,6 +126,68 @@ describe.skipIf(!DB_URL)('duplicate suggestions against real Postgres', () => {
     expect(ids).not.toContain(source.id);
   });
 
+  // The 0.22 floor exists for short rewordings like this (similarity 0.25),
+  // which the old 0.3 floor dropped; unrelated short titles must stay out.
+  it('finds a short CJK rewording but not unrelated short titles', async () => {
+    const target = await issue('导出失败');
+    const unrelated = await issue('用户头像上传');
+    const { out } = await suggestFor('导出成功');
+    const ids = out.map(r => r.issue.id);
+    expect(ids).toContain(target.id);
+    expect(ids).not.toContain(unrelated.id);
+  });
+
+  it.each([
+    [
+      'Japanese',
+      'ログイン画面でエラーが発生する',
+      ['メール通知が届かない', 'ダークモードで文字が読めない'],
+    ],
+    ['Chinese', '导出报表时系统崩溃', ['用户头像上传失败', '搜索结果为空时崩溃']],
+    ['Thai', 'ไม่สามารถเข้าสู่ระบบได้', ['ทดสอบการแสดงผลหน้าจอมือถือ']],
+  ])(
+    'does not suggest unrelated %s titles (precision at the lowered floor)',
+    async (_n, query, negatives) => {
+      const ids: string[] = [];
+      for (const title of negatives) {
+        ids.push((await issue(title)).id);
+      }
+      const { out } = await suggestFor(query);
+      const got = out.map(r => r.issue.id);
+      for (const id of ids) {
+        expect(got).not.toContain(id);
+      }
+    },
+  );
+
+  // One CJK character used to route the whole title to trigram-first, and any
+  // trigram hit then hid every FTS word match.
+  it('merges FTS and trigram results for a mixed-script title', async () => {
+    const ftsOnly = await issue(
+      'Safari users see a blank screen after every single export attempt in the dashboard',
+    );
+    const trigramOnly = await issue('Export 失败 on Safari today');
+    const { out } = await suggestFor('Export 失败 on Safari');
+    const ids = out.map(r => r.issue.id);
+    expect(ids).toContain(ftsOnly.id);
+    expect(ids).toContain(trigramOnly.id);
+  });
+
+  it('does not offer a same-prefix Latin title through the typo fallback', async () => {
+    const other = await issue('Checkout page loads slowly');
+    const { out } = await suggestFor('Checkout totals incorrect');
+    expect(out.map(r => r.issue.id)).not.toContain(other.id);
+  });
+
+  it('skips the typo fallback for long Latin titles', async () => {
+    const target = await issue(
+      'Checkout totals incorrect when paying with saved card on the second try today',
+    );
+    const long = 'Chekout totalz incorect wehn payng wth savd cardd on teh secnd tryy todya';
+    const { out } = await suggestFor(long);
+    expect(out.map(r => r.issue.id)).not.toContain(target.id);
+  });
+
   it('applies scoping and exclusions to trigram matches', async () => {
     const archived = await issue('搜索结果为空时崩溃');
     await prisma.issue.update({ data: { archivedAt: new Date() }, where: { id: archived.id } });

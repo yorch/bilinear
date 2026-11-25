@@ -10,14 +10,22 @@ import {
   hasNoSpaceScript,
   LanguageAwareDuplicateScorer,
   MAX_DUPLICATE_SUGGESTIONS,
+  resetTrigramCheckForTests,
+  TRIGRAM_FALLBACK_MAX_TERMS,
+  TRIGRAM_FALLBACK_MIN_SIMILARITY,
   TRIGRAM_MIN_SIMILARITY,
   TrigramDuplicateScorer,
+  warnIfTrigramIneffective,
 } from './duplicate-suggestion.service';
 
 const SCOPE = { guestTeamIds: [], memberTeamIds: ['team-a'], userId: 'user-1' };
 const SOURCE = { description: null, id: 'src', teamId: 'team-a', title: 'Login page crashes' };
 
-function sqlOf(call: unknown): { sql: string; values: unknown[] } {
+function sqlOf(call: unknown, rest: unknown[] = []): { sql: string; values: unknown[] } {
+  // `$queryRaw\`…\`` passes (TemplateStringsArray, ...values); `$queryRaw(Prisma.sql…)` a Sql.
+  if (Array.isArray(call)) {
+    return { sql: call.join('?'), values: rest };
+  }
   const q = call as { sql: string; values: unknown[] };
   return { sql: q.sql, values: q.values };
 }
@@ -141,6 +149,11 @@ describe('hasNoSpaceScript', () => {
   });
 });
 
+/** The scoring statement among the check / set_config / scoring `$queryRaw` calls. */
+function trigramCall(prisma: ReturnType<typeof createMockPrisma>): unknown {
+  return prisma.$queryRaw.mock.calls.map(c => c[0]).find(q => sqlOf(q).sql.includes('i.title %'));
+}
+
 describe('TrigramDuplicateScorer', () => {
   it('uses the indexed % operator with an explicit floor and the same scoping rules', async () => {
     const prisma = createMockPrisma();
@@ -152,7 +165,7 @@ describe('TrigramDuplicateScorer', () => {
       source: { ...SOURCE, title: '导出失败' },
     });
     expect(out).toEqual([{ issueId: 'x', score: 0.5 }]);
-    const { sql, values } = sqlOf(prisma.$queryRaw.mock.calls[0][0]);
+    const { sql, values } = sqlOf(trigramCall(prisma));
     expect(sql).toContain('i.title %');
     expect(sql).toContain('similarity(');
     expect(values).toContain(TRIGRAM_MIN_SIMILARITY);
@@ -164,6 +177,40 @@ describe('TrigramDuplicateScorer', () => {
     expect(sql).toContain('creator_id');
   });
 
+  it('floors primary matches at 0.22 and fallback matches at the stricter 0.4, with timeouts', async () => {
+    const prisma = createMockPrisma();
+    prisma.$queryRaw.mockResolvedValue([]);
+    const scorer = new TrigramDuplicateScorer(prisma as never);
+    const base = { limit: 3, orgId: 'o', scope: SCOPE, source: SOURCE };
+    await scorer.score(base);
+    const primary = sqlOf(trigramCall(prisma)).values;
+    expect(primary).toContain(TRIGRAM_MIN_SIMILARITY);
+    expect(primary).not.toContain(TRIGRAM_FALLBACK_MIN_SIMILARITY);
+    const setCfg = prisma.$queryRaw.mock.calls
+      .map(c => sqlOf(c[0], c.slice(1)))
+      .find(q => q.sql.includes('set_config'));
+    expect(setCfg?.sql).toContain('pg_trgm.similarity_threshold');
+    expect(setCfg?.sql).toContain('statement_timeout');
+    expect(setCfg?.values).toContain(String(TRIGRAM_MIN_SIMILARITY));
+
+    prisma.$queryRaw.mockClear();
+    await scorer.score({ ...base, fallback: true });
+    expect(sqlOf(trigramCall(prisma)).values).toContain(TRIGRAM_FALLBACK_MIN_SIMILARITY);
+  });
+
+  it('swallows a fallback failure (timeout) but not a primary one', async () => {
+    const prisma = createMockPrisma();
+    prisma.$queryRaw.mockImplementation((q: unknown) =>
+      sqlOf(q).sql.includes('i.title %')
+        ? Promise.reject(new Error('timeout'))
+        : Promise.resolve([]),
+    );
+    const scorer = new TrigramDuplicateScorer(prisma as never);
+    const base = { limit: 3, orgId: 'o', scope: SCOPE, source: SOURCE };
+    expect(await scorer.score({ ...base, fallback: true })).toEqual([]);
+    await expect(scorer.score(base)).rejects.toThrow('timeout');
+  });
+
   it('never queries with no visible teams or a blank title', async () => {
     const prisma = createMockPrisma();
     const scorer = new TrigramDuplicateScorer(prisma as never);
@@ -171,6 +218,22 @@ describe('TrigramDuplicateScorer', () => {
     expect(await scorer.score({ ...base, scope: { ...SCOPE, memberTeamIds: [] } })).toEqual([]);
     expect(await scorer.score({ ...base, source: { ...SOURCE, title: '   ' } })).toEqual([]);
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe('warnIfTrigramIneffective', () => {
+  it('checks once per process and never throws', async () => {
+    resetTrigramCheckForTests();
+    const prisma = createMockPrisma();
+    prisma.$queryRaw.mockResolvedValue([{ ok: false }]);
+    await warnIfTrigramIneffective(prisma as never);
+    await warnIfTrigramIneffective(prisma as never);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(sqlOf(prisma.$queryRaw.mock.calls[0][0]).sql).toContain('show_trgm');
+    resetTrigramCheckForTests();
+    prisma.$queryRaw.mockRejectedValue(new Error('no pg_trgm'));
+    await expect(warnIfTrigramIneffective(prisma as never)).resolves.toBeUndefined();
+    resetTrigramCheckForTests();
   });
 });
 
@@ -188,25 +251,62 @@ describe('LanguageAwareDuplicateScorer', () => {
     source: { ...SOURCE, title },
   });
 
-  it('goes straight to trigram for a no-space-script title and skips FTS when it hits', async () => {
-    const { f, scorer, t } = make([], hit);
-    expect(await scorer.score(req('导出失败'))).toBe(hit);
+  it('merges FTS and trigram for a no-space-script title (round-robin, de-duplicated)', async () => {
+    const trg = [
+      { issueId: 't1', score: 0.9 },
+      { issueId: 'both', score: 0.5 },
+    ];
+    const fts = [
+      { issueId: 'both', score: 3 },
+      { issueId: 'f2', score: 1 },
+    ];
+    const { f, scorer, t } = make(fts, trg);
+    const out = await scorer.score({ ...req('Export 失败 on Safari'), limit: 5 });
+    expect(out.map(c => c.issueId)).toEqual(['t1', 'both', 'f2']);
     expect(t.score).toHaveBeenCalledTimes(1);
-    expect(f.score).not.toHaveBeenCalled();
+    expect(f.score).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps FTS first for other titles and does not call trigram on a hit', async () => {
+  it('keeps FTS word matches when trigram also answers on a mixed-script title', async () => {
+    const { scorer } = make([{ issueId: 'f', score: 2 }], [{ issueId: 't', score: 0.4 }]);
+    const out = await scorer.score({ ...req('Export 失败 on Safari'), limit: 5 });
+    expect(out.map(c => c.issueId).sort()).toEqual(['f', 't']);
+  });
+
+  it('respects the limit when merging', async () => {
+    const { scorer } = make(
+      [{ issueId: 'f1', score: 1 }],
+      [
+        { issueId: 't1', score: 1 },
+        { issueId: 't2', score: 1 },
+      ],
+    );
+    expect(await scorer.score({ ...req('导出失败'), limit: 2 })).toHaveLength(2);
+  });
+
+  it('does not call trigram when FTS hits a Latin title', async () => {
     const { f, scorer, t } = make(hit, []);
     expect(await scorer.score(req('Login crashes'))).toBe(hit);
     expect(f.score).toHaveBeenCalledTimes(1);
     expect(t.score).not.toHaveBeenCalled();
   });
 
-  it('falls back to trigram when FTS finds nothing, and to FTS when trigram finds nothing', async () => {
+  it('falls back to trigram (flagged as fallback) when FTS misses a short Latin title', async () => {
+    const { scorer, t } = make([], hit);
+    expect(await scorer.score(req('Login crashes'))).toBe(hit);
+    expect(t.score).toHaveBeenCalledWith(expect.objectContaining({ fallback: true }));
+  });
+
+  it('skips the typo fallback for long titles', async () => {
+    const long = Array.from({ length: TRIGRAM_FALLBACK_MAX_TERMS + 1 }, (_, i) => `word${i}`).join(
+      ' ',
+    );
     const a = make([], hit);
-    expect(await a.scorer.score(req('Login crashes'))).toBe(hit);
-    const b = make(hit, []);
-    expect(await b.scorer.score(req('导出失败'))).toBe(hit);
+    expect(await a.scorer.score(req(long))).toEqual([]);
+    expect(a.t.score).not.toHaveBeenCalled();
+    const b = make([], hit);
+    expect(await b.scorer.score(req(`${'x'.repeat(90)} crash`))).toEqual([]);
+    expect(b.t.score).not.toHaveBeenCalled();
   });
 });
 

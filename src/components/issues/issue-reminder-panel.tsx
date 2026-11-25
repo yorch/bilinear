@@ -19,6 +19,28 @@ import {
   toReminderInputValue,
 } from './reminder-presets';
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * The time prefilled once a day is chosen: 09:00, except that today after 09:00
+ * gets the next quarter hour — otherwise picking "today" would open on a time
+ * that has already passed and flag a past-time error for a value the user never
+ * entered.
+ */
+function defaultTimeFor(day: string, now: Date = new Date()): string {
+  const morning = '09:00';
+  if (day !== reminderInputMin(now).slice(0, 10)) {
+    return morning;
+  }
+  const next = new Date(now);
+  next.setMinutes(Math.floor(next.getMinutes() / 15) * 15 + 15, 0, 0);
+  if (next.getDate() !== now.getDate()) {
+    return '23:59';
+  }
+  const value = `${pad2(next.getHours())}:${pad2(next.getMinutes())}`;
+  return value > morning ? value : morning;
+}
+
 interface IssueReminderPanelProps {
   issueId: string;
   onClose: () => void;
@@ -44,10 +66,16 @@ export const IssueReminderPanel = observer(function IssueReminderPanel({
   const { formatDateTime } = useFormatters();
   const { clearReminder, reminderFor, setReminder } = useIssueReminders();
   const existing = reminderFor(issueId);
-  const [custom, setCustom] = useState(() =>
+  // Day and time are separate state, combined only for validation and submit:
+  // emptying the time field must not forget the chosen day. `time === null`
+  // means "untouched", so the default follows whichever day is picked.
+  const [initial] = useState(() =>
     existing ? toReminderInputValue(new Date(existing.remindAt)) : '',
   );
-  const customTime = custom.slice(11, 16) || '09:00';
+  const [day, setDay] = useState(initial.slice(0, 10));
+  const [time, setTime] = useState<string | null>(initial ? initial.slice(11, 16) : null);
+  const customTime = time ?? defaultTimeFor(day);
+  const custom = day && customTime ? `${day}T${customTime}` : '';
   const [touched, setTouched] = useState(false);
   const presets = getReminderPresets();
   const when = (d: Date) =>
@@ -109,17 +137,22 @@ export const IssueReminderPanel = observer(function IssueReminderPanel({
           <span className="text-xs text-muted-foreground">{when(preset.at)}</span>
         </button>
       ))}
-      <form className="flex flex-col gap-1.5 px-3 py-1.5" noValidate onSubmit={submit}>
+      <form
+        className="flex flex-col gap-1.5 px-3 py-1.5"
+        noValidate
+        onKeyDown={onKeyDown}
+        onSubmit={submit}
+      >
         <p className="text-xs text-muted-foreground">{t('reminders.customLabel')}</p>
         <Calendar
           className="-mx-2 w-auto"
           max={reminderInputMax().slice(0, 10)}
           min={reminderInputMin().slice(0, 10)}
           onChange={date => {
-            setCustom(`${date}T${customTime}`);
+            setDay(date);
             setTouched(true);
           }}
-          value={custom.slice(0, 10)}
+          value={day}
         />
         <label
           className="flex items-center gap-2 text-xs text-muted-foreground"
@@ -133,13 +166,13 @@ export const IssueReminderPanel = observer(function IssueReminderPanel({
             data-autofocus
             id={`${timeId}-time`}
             onChange={e => {
-              const time = e.target.value;
-              // Keep the chosen day; a time with no day yet means today.
-              const day = custom.slice(0, 10) || reminderInputMin().slice(0, 10);
-              setCustom(time ? `${day}T${time}` : '');
+              setTime(e.target.value);
+              // A time typed before any day means today.
+              if (!day) {
+                setDay(reminderInputMin().slice(0, 10));
+              }
               setTouched(true);
             }}
-            onKeyDown={onKeyDown}
             type="time"
             value={customTime}
           />

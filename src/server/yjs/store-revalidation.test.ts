@@ -20,6 +20,8 @@ const state = vi.hoisted(() => ({
   active: new Set<string>(),
   issue: { assigneeId: null as string | null, creatorId: null as string | null },
   roles: {} as Record<string, string>,
+  // Decoded text of every persisted state, to assert WHAT was stored.
+  stored: [] as Uint8Array[],
   // userId -> in the (private) team
   teamMembers: new Set<string>(),
   writes: [] as string[],
@@ -39,7 +41,8 @@ vi.mock('@/server/lib/prisma', () => ({
         id: '00000000-0000-0000-0000-00000000d0c1',
         teamId: '00000000-0000-0000-0000-0000000000aa',
       }),
-      update: async () => {
+      update: async ({ data }: { data: { contentState: Uint8Array } }) => {
+        state.stored.push(data.contentState);
         state.writes.push('document');
       },
     },
@@ -123,6 +126,14 @@ async function editAndFlush(c: ReturnType<typeof connect>, text: string) {
   await sleep(500);
 }
 
+function storedText(): string {
+  const d = new Y.Doc() as import('yjs').Doc;
+  for (const bytes of state.stored) {
+    Y.applyUpdate(d, bytes);
+  }
+  return d.getText('t').toString();
+}
+
 describe('yjs store-time access revalidation', () => {
   beforeAll(async () => {
     await server.listen(PORT);
@@ -132,6 +143,7 @@ describe('yjs store-time access revalidation', () => {
   });
   beforeEach(async () => {
     state.writes.length = 0;
+    state.stored.length = 0;
     state.active = new Set(['member', 'guest', 'outsider']);
     state.teamMembers = new Set(['member', 'guest']);
     state.roles = { guest: 'guest', member: 'member' };
@@ -192,5 +204,91 @@ describe('yjs store-time access revalidation', () => {
     await editAndFlush(o, 'x');
     expect(state.writes).toEqual([]);
     o.close();
+  });
+
+  it('control: a member who stays a member keeps persisting after the same flow', async () => {
+    const m = connect(`document:${DOC_ID}`, 'member');
+    await m.synced;
+    state.roles.member = 'member'; // unchanged
+    await editAndFlush(m, 'still fine');
+    expect(state.writes).toContain('document');
+    m.close();
+  });
+
+  it('does not persist an edit from a member demoted to guest after syncing', async () => {
+    const m = connect(`document:${DOC_ID}`, 'member');
+    await m.synced;
+    state.roles.member = 'guest'; // demoted while the socket is open
+    await editAndFlush(m, 'demoted edit');
+    expect(state.writes).toEqual([]);
+    m.close();
+  });
+
+  it('two writers: a revoked user edit is not persisted via an entitled peer store', async () => {
+    const a = connect(`document:${DOC_ID}`, 'member');
+    const b = connect(`document:${DOC_ID}`, 'member2');
+    state.active.add('member2');
+    state.teamMembers.add('member2');
+    state.roles.member2 = 'member';
+    await Promise.all([a.synced, b.synced]);
+    state.teamMembers.delete('member'); // A revoked after connecting
+    a.doc.getText('t').insert(0, 'REVOKED');
+    await sleep(200);
+    b.doc.getText('t').insert(0, 'ok'); // entitled peer is the last writer
+    await sleep(300);
+    server.hocuspocus.flushPendingStores();
+    await sleep(500);
+    expect(state.writes).toEqual([]);
+    expect(storedText()).not.toContain('REVOKED');
+    a.close();
+    b.close();
+  });
+
+  it('two writers control: both entitled, both edits persisted', async () => {
+    const a = connect(`document:${DOC_ID}`, 'member');
+    const b = connect(`document:${DOC_ID}`, 'member2');
+    state.active.add('member2');
+    state.teamMembers.add('member2');
+    state.roles.member2 = 'member';
+    await Promise.all([a.synced, b.synced]);
+    a.doc.getText('t').insert(0, 'alpha');
+    await sleep(200);
+    b.doc.getText('t').insert(0, 'beta');
+    await sleep(300);
+    server.hocuspocus.flushPendingStores();
+    await sleep(500);
+    expect(storedText()).toContain('alpha');
+    expect(storedText()).toContain('beta');
+    a.close();
+    b.close();
+  });
+
+  it('per-message gate: a revoked user update is rejected before it reaches peers', async () => {
+    const a = connect(`document:${DOC_ID}`, 'member');
+    const b = connect(`document:${DOC_ID}`, 'member2');
+    state.active.add('member2');
+    state.teamMembers.add('member2');
+    state.roles.member2 = 'member';
+    await Promise.all([a.synced, b.synced]);
+    state.teamMembers.delete('member');
+    // Step past the 10s per-connection cache so the next message re-checks.
+    const real = Date.now;
+    const spy = vi.spyOn(Date, 'now').mockImplementation(() => real() + 11_000);
+    try {
+      a.doc.getText('t').insert(0, 'REVOKED');
+      await sleep(400);
+      expect(b.doc.getText('t').toString()).not.toContain('REVOKED');
+      b.doc.getText('t').insert(0, 'ok');
+      await sleep(300);
+      server.hocuspocus.flushPendingStores();
+      await sleep(500);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(state.writes).toContain('document');
+    expect(storedText()).toContain('ok');
+    expect(storedText()).not.toContain('REVOKED');
+    a.close();
+    b.close();
   });
 });

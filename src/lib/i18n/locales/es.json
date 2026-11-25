@@ -379,7 +379,10 @@
   },
   "calendar": {
     "clear": "Borrar fecha",
+    "dateInput": "Escribe una fecha",
+    "invalidDate": "Introduce una fecha como {example}",
     "nextMonth": "Mes siguiente",
+    "outOfRange": "Esa fecha está fuera del rango permitido",
     "previousMonth": "Mes anterior",
     "time": "Hora"
   },
