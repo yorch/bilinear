@@ -127,9 +127,12 @@ test.describe('Webhooks Settings', () => {
     await page.getByRole('checkbox', { name: 'issue.created' }).check();
     await page.getByRole('button', { name: /^create webhook$/i }).click();
 
-    // The server refuses it (WebhookPrivateUrlError); the UI shows its own
-    // localized failure toast, never the raw server text, and keeps the form open.
-    await expect(page.getByText('Failed to create webhook')).toBeVisible();
+    // The server refuses it (WebhookPrivateUrlError -> BAD_USER_INPUT/PRIVATE_URL); the
+    // UI shows its own localized, specific message (never the raw server text) and
+    // keeps the form open.
+    await expect(
+      page.getByText('URL cannot point to a private or internal address').first(),
+    ).toBeVisible();
     await expect(page.getByPlaceholder('Production CI')).toBeVisible();
 
     // Webhook should NOT appear in the list.
