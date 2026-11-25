@@ -7,7 +7,12 @@ import {
   type RequestInit as UndiciRequestInit,
   fetch as undiciFetch,
 } from 'undici';
-import { Prisma, type PrismaClient, type Webhook, type WebhookDelivery } from '../../generated/prisma';
+import {
+  Prisma,
+  type PrismaClient,
+  type Webhook,
+  type WebhookDelivery,
+} from '../../generated/prisma';
 import { type ConfigReader, DEFAULTS_ONLY_CONFIG } from '../config/reader';
 import { env } from '../lib/env';
 import { MAX_WEBHOOK_NAME_LENGTH } from '../lib/limits';

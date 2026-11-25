@@ -101,6 +101,7 @@ hand-maintained stamp here only ever drifts.
 - [79. Design System — tokens, accent, primitives (2026-08-01)](#79-design-system--tokens-accent-primitives-2026-08-01)
 - [80. Schema and Sync Residuals (2026-08-02)](#80-schema-and-sync-residuals-2026-08-02)
 - [81. Installable Web App (PWA) (2026-08-02)](#81-installable-web-app-pwa-2026-08-02)
+- [82. Client IP and `TRUST_PROXY_HEADERS`](#82-client-ip-and-trust_proxy_headers)
 
 ---
 
@@ -3235,3 +3236,20 @@ purposes is wrong for one of them.
 The icon and splash screen can't follow the user's selected accent — they're
 baked into the launcher entry at install time — so they use the default accent
 (Aurora).
+
+## 82. Client IP and `TRUST_PROXY_HEADERS`
+
+`getClientIp()` (`src/server/lib/request-security.ts`) returns `null` unless
+`TRUST_PROXY_HEADERS=1`, because `X-Forwarded-For` is client-controlled on a
+directly exposed server and recording it would let anyone forge an audit trail.
+Consequences of leaving it unset (the default):
+
+- `audit_logs.ip_address` (and impersonation / SAML records) is `null`.
+- Per-IP rate limits fall back to a shared bucket.
+
+This is a documented limitation, not a bug, and the default must not be
+loosened. Set `TRUST_PROXY_HEADERS=1` only behind a proxy/edge that overwrites
+the forwarding header (Vercel, Cloudflare, a reverse proxy you control). The
+audit-log page makes the gap visible: an empty IP cell renders `—` with a
+tooltip (`settings.auditLog.ipUnavailable`, `AuditIpCell`). The server logs a
+warning once when the header is needed but untrusted.

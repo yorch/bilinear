@@ -1490,6 +1490,14 @@ export const typeDefs = `
     responseStatus: Int
     responseBody: String
     errorMessage: String
+    """
+    Machine-readable failure class (ENOTFOUND, TLS, HTTP_STATUS, ...); null for
+    unclassified failures and for rows that predate codes. errorMessage stays
+    as the English fallback.
+    """
+    errorCode: String
+    "Interpolation values for errorCode, e.g. { status: 502 }."
+    errorParams: JSON
     nextAttemptAt: DateTime
     deliveredAt: DateTime
     createdAt: DateTime!

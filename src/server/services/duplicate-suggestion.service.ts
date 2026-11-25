@@ -9,6 +9,27 @@ export const DEFAULT_DUPLICATE_SUGGESTIONS = 3;
 const MAX_TERMS = 12;
 const MIN_TERM_LENGTH = 3;
 
+/**
+ * Minimum `similarity()` for the trigram fallback. 0.3 is pg_trgm's own default
+ * for `%`; it is spelled out here (and applied with `similarity() >=` beside
+ * the index-served `%`) so a changed `pg_trgm.similarity_threshold` GUC can
+ * only ever make the result stricter, never looser than this.
+ */
+export const TRIGRAM_MIN_SIMILARITY = 0.3;
+
+/**
+ * Scripts written without spaces between words. The `english` FTS
+ * configuration sees a whole clause as one token in these, so word matching
+ * degenerates to "identical run of characters". Hangul is deliberately absent:
+ * Korean is space-separated.
+ */
+const NO_SPACE_SCRIPT =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+
+export function hasNoSpaceScript(text: string): boolean {
+  return NO_SPACE_SCRIPT.test(text);
+}
+
 export class DuplicateSourceNotFoundError extends Error {
   constructor() {
     super('Issue not found');
@@ -81,8 +102,9 @@ function isShortToken(raw: string): boolean {
  * title. Stop words ("for", "you") survive here and are dropped in SQL, where
  * the FTS configuration decides what a stop word is.
  *
- * Limitation: languages written without spaces (Chinese, Japanese) produce one
- * long token per clause, so they only match an identical run of characters.
+ * Limitation: languages written without spaces (Chinese, Japanese, Thai) produce
+ * one long token per clause, so FTS only matches an identical run of characters;
+ * `LanguageAwareDuplicateScorer` routes those titles to trigram similarity.
  */
 export function extractQueryTerms(text: string): string[] {
   const seen = new Set<string>();
@@ -127,14 +149,7 @@ export class FtsDuplicateScorer implements DuplicateScorer {
     if (terms.length === 0 || scope.memberTeamIds.length === 0) {
       return [];
     }
-    const guestFilter =
-      scope.guestTeamIds.length > 0
-        ? Prisma.sql`AND (
-            i.team_id != ALL(${scope.guestTeamIds}::uuid[])
-            OR i.creator_id = ${scope.userId}::uuid
-            OR i.assignee_id = ${scope.userId}::uuid
-          )`
-        : Prisma.sql``;
+    const guestFilter = guestVisibility(scope);
 
     const rows = await this.prisma.$queryRaw<
       Array<{ id: string; matched: string[]; score: number }>
@@ -194,10 +209,94 @@ export class FtsDuplicateScorer implements DuplicateScorer {
   }
 }
 
+/** Candidate-visibility predicate shared by every SQL scorer. */
+function guestVisibility(scope: SearchVisibilityScope) {
+  return scope.guestTeamIds.length > 0
+    ? Prisma.sql`AND (
+        i.team_id != ALL(${scope.guestTeamIds}::uuid[])
+        OR i.creator_id = ${scope.userId}::uuid
+        OR i.assignee_id = ${scope.userId}::uuid
+      )`
+    : Prisma.sql``;
+}
+
+/**
+ * Trigram scorer (`pg_trgm`) over `issues.title`, served by
+ * `idx_issues_title_trgm` through the `%` operator. It exists for titles the
+ * FTS scorer cannot tokenise: Chinese, Japanese, Thai and similar scripts, and
+ * as a typo-tolerant fallback when FTS finds nothing. Same visibility, archived,
+ * trashed and canceled-without-duplicate rules as the FTS scorer. `matchedTerms`
+ * is left undefined (trigrams have no word-level match), so the service derives
+ * it from whole-token overlap. Scores are `similarity()` in 0..1, a different
+ * scale from `ts_rank`; callers never mix the two in one ranking.
+ */
+export class TrigramDuplicateScorer implements DuplicateScorer {
+  constructor(private prisma: PrismaClient) {}
+
+  async score({ limit, orgId, scope, source }: DuplicateScoreRequest): Promise<ScoredCandidate[]> {
+    const title = source.title.normalize('NFC').trim();
+    if (!title || scope.memberTeamIds.length === 0) {
+      return [];
+    }
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; score: number }>>(
+      Prisma.sql`
+        SELECT i.id,
+               similarity(i.title, ${title}::text)
+                 * (CASE WHEN i.team_id = ${source.teamId}::uuid THEN 1.0 ELSE 0.8 END) AS score
+        FROM issues i
+        JOIN workflow_states ws ON ws.id = i.state_id
+        WHERE i.organization_id = ${orgId}::uuid
+          AND i.id != ${source.id}::uuid
+          AND i.archived_at IS NULL
+          AND i.trashed = false
+          AND (
+            ws.type::text != 'canceled'
+            OR EXISTS (
+              SELECT 1 FROM issue_relations r
+              WHERE r.issue_id = i.id AND r.type = 'duplicate'
+            )
+          )
+          AND i.team_id = ANY(${scope.memberTeamIds}::uuid[])
+          ${guestVisibility(scope)}
+          AND i.title % ${title}::text
+          AND similarity(i.title, ${title}::text) >= ${TRIGRAM_MIN_SIMILARITY}
+        ORDER BY score DESC, i.created_at DESC
+        LIMIT ${limit}
+      `,
+    );
+    return rows.map(r => ({ issueId: r.id, score: Number(r.score) }));
+  }
+}
+
+/**
+ * Default scorer. Titles containing a no-space script go to the trigram scorer
+ * first (FTS only matches an identical run of characters there); every other
+ * title goes to FTS first. Whichever came first is tried again with the other
+ * when it returns nothing, so a Japanese title that happens to share an exact
+ * run still matches, and a misspelt English one still finds its neighbour.
+ */
+export class LanguageAwareDuplicateScorer implements DuplicateScorer {
+  constructor(
+    private fts: DuplicateScorer,
+    private trigram: DuplicateScorer,
+  ) {}
+
+  async score(request: DuplicateScoreRequest): Promise<ScoredCandidate[]> {
+    const [first, second] = hasNoSpaceScript(request.source.title)
+      ? [this.trigram, this.fts]
+      : [this.fts, this.trigram];
+    const primary = await first.score(request);
+    return primary.length > 0 ? primary : second.score(request);
+  }
+}
+
 export class DuplicateSuggestionService {
   constructor(
     private prisma: PrismaClient,
-    private scorer: DuplicateScorer = new FtsDuplicateScorer(prisma),
+    private scorer: DuplicateScorer = new LanguageAwareDuplicateScorer(
+      new FtsDuplicateScorer(prisma),
+      new TrigramDuplicateScorer(prisma),
+    ),
   ) {}
 
   async suggest(

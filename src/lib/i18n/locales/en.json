@@ -1100,8 +1100,6 @@
         "dueDate": "due date",
         "estimate": "estimate",
         "labels": "labels",
-        "labelsDroppedOnMove_one": "Moved. Label removed because it doesn't exist in the new team: {labels}",
-        "labelsDroppedOnMove_other": "Moved. Labels removed because they don't exist in the new team: {labels}",
         "parent": "parent issue",
         "priority": "priority",
         "project": "project",
@@ -1315,6 +1313,8 @@
     "unsubscribeShortcut": "Unsubscribe (Shift+S)"
   },
   "issues": {
+    "labelsDroppedOnMove_one": "Moved. Label removed because it doesn't exist in the new team: {labels}",
+    "labelsDroppedOnMove_other": "Moved. Labels removed because they don't exist in the new team: {labels}",
     "actionsFor": "Actions for {title}",
     "add": "Add",
     "addFilter": "Add filter",
@@ -2067,6 +2067,7 @@
       "exportTruncated": "Export limited to the newest {rows} entries.",
       "filterByUserId": "Filter by user ID",
       "forbidden": "You need admin access to view audit logs.",
+      "ipUnavailable": "IP unavailable: configure TRUST_PROXY_HEADERS behind a trusted proxy",
       "loadMore": "Load more",
       "noEntriesFound": "No audit log entries found.",
       "resourceTypes": {
@@ -2573,6 +2574,23 @@
         "colStatus": "Status",
         "colTime": "Time",
         "empty": "No deliveries yet",
+        "errors": {
+          "EAI_AGAIN": "Temporary DNS failure resolving {target}",
+          "EAI_AGAINNoDetail": "Temporary DNS failure resolving the host",
+          "ECONNREFUSED": "Connection refused by {target}",
+          "ECONNREFUSEDNoDetail": "Connection refused by the server",
+          "ECONNRESET": "The server reset the connection",
+          "ENOTFOUND": "Couldn't resolve host {target}",
+          "ENOTFOUNDNoDetail": "Couldn't resolve the host",
+          "HTTP_STATUS": "The endpoint responded with HTTP {status}",
+          "PRIVATE_ADDRESS": "The URL points to a private or internal address",
+          "TIMEOUT": "Timed out after {ms} ms",
+          "TIMEOUTNoDetail": "Timed out waiting for the server",
+          "TLS": "TLS certificate problem ({tlsCode})",
+          "TLSNoDetail": "TLS certificate problem",
+          "URL_NOT_ALLOWED": "The webhook URL is no longer allowed",
+          "WEBHOOK_DISABLED": "The webhook was disabled"
+        },
         "loadError": "Failed to load deliveries",
         "title": "Recent deliveries"
       },
@@ -2611,6 +2629,7 @@
       "updateError": "Failed to update webhook",
       "url": "URL",
       "urlInvalid": "Enter a valid http(s) URL, e.g. https://example.com/hook.",
+      "urlPrivate": "URL cannot point to a private or internal address. Use a publicly reachable URL.",
       "urlRequired": "Enter the URL that should receive events.",
       "webhookCreated": "Webhook created",
       "webhookDeleted": "Webhook deleted",

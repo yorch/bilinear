@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changedWebhookFields, isHttpUrl } from './webhook-form';
+import { changedWebhookFields, isHttpUrl, webhookUrlErrorKey } from './webhook-form';
 
 const current = {
   events: ['issue.created', 'issue.updated'],
@@ -39,5 +39,27 @@ describe('isHttpUrl', () => {
     expect(isHttpUrl('not-a-url')).toBe(false);
     expect(isHttpUrl('ftp://example.com')).toBe(false);
     expect(isHttpUrl('javascript:alert(1)')).toBe(false);
+  });
+});
+
+describe('webhookUrlErrorKey', () => {
+  const err = (code: string, reason?: string) => [{ extensions: { code, reason } }];
+
+  it('maps the SSRF rejection to the specific private-URL copy', () => {
+    expect(webhookUrlErrorKey(err('BAD_USER_INPUT', 'PRIVATE_URL'))).toBe(
+      'settings.webhooks.urlPrivate',
+    );
+  });
+
+  it('maps a malformed URL to the invalid-URL copy', () => {
+    expect(webhookUrlErrorKey(err('BAD_USER_INPUT', 'INVALID_URL'))).toBe(
+      'settings.webhooks.urlInvalid',
+    );
+  });
+
+  it('returns null for anything else so the caller keeps its generic message', () => {
+    expect(webhookUrlErrorKey(err('BAD_USER_INPUT'))).toBeNull();
+    expect(webhookUrlErrorKey(err('FORBIDDEN', 'PRIVATE_URL'))).toBeNull();
+    expect(webhookUrlErrorKey(undefined)).toBeNull();
   });
 });

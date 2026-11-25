@@ -19,7 +19,8 @@ Nothing is deployed yet, so **anything the Prisma DSL can express belongs in the
 regenerated `00000000000000_init` baseline**, not stacked on as an additive
 migration. Only SQL Prisma cannot express lives in
 `00000000000001_custom_constraints_and_triggers` — partial and expression
-indexes, the FTS GIN index, and `NOT NULL` on `String[]` columns.
+indexes, the FTS GIN index, the `pg_trgm` extension and its trigram index, and
+`NOT NULL` on `String[]` columns.
 
 ## Procedure
 
@@ -40,17 +41,22 @@ docker rm -f mig-verify
 
 ## Three traps
 
-**1. `migrate diff` is expected to be non-empty.** It emits exactly one
-statement, and this is structural, not drift:
+**1. `migrate diff` is expected to be non-empty.** It emits exactly two
+statements, and this is structural, not drift:
 
 ```sql
+DROP INDEX "idx_issues_title_trgm";
 DROP INDEX "sync_actions_organization_id_xact_id_id_idx";
 ```
+
+The first is the `pg_trgm` title index (`USING GIN (title gin_trgm_ops)`):
+Prisma can declare neither the extension nor the opclass. **Never apply it**
+either — it serves the CJK/Thai duplicate-suggestion fallback.
 
 `SyncAction.xactId` is `Unsupported("xid8")` and Prisma cannot put `@@index` on
 an `Unsupported` field, so the covering index lives in the custom migration and a
 schema-derived diff proposes dropping a thing it cannot declare. **Never apply
-that statement** — it is what makes the commit-order fence's
+the `xact_id` statement** — it is what makes the commit-order fence's
 `ORDER BY (xact_id, id)` read cheap. Treat *any other* statement as real drift
 and fold it into the baseline.
 
@@ -71,7 +77,7 @@ that the custom migration failed to apply; use `yarn db:verify:schema` for that.
 ## If you change what the custom migration creates
 
 `scripts/verify-schema.mjs` hardcodes the expected index names and `String[]`
-columns. Update `EXPECTED_INDEXES` / `EXPECTED_NOT_NULL_ARRAYS` alongside the
+columns. Update `EXPECTED_INDEXES` / `EXPECTED_EXTENSIONS` / `EXPECTED_NOT_NULL_ARRAYS` alongside the
 migration, then prove the check still has teeth by dropping one of the objects
 and confirming a non-zero exit — per this repo's rule that a test which cannot
 fail is not a test.

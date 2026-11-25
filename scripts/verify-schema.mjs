@@ -7,7 +7,7 @@
  * `schema.prisma`, and everything in
  * `00000000000001_custom_constraints_and_triggers` is by definition something
  * the Prisma DSL cannot express — partial indexes, an expression index, a GIN
- * FTS index, and `NOT NULL` on `String[]` columns. A no-op custom migration
+ * FTS index, the pg_trgm extension and its trigram index, and `NOT NULL` on `String[]` columns. A no-op custom migration
  * passes `migrate diff` cleanly while leaving the database missing every
  * object that makes the hot paths fast and the invariants hold.
  *
@@ -40,10 +40,14 @@ const EXPECTED_INDEXES = [
   'auth_tokens_token_hash_magic_link_idx',
   'auth_tokens_token_hash_refresh_key',
   'idx_issues_fts',
+  'idx_issues_title_trgm',
   'issues_team_id_state_id_active_idx',
   'sync_actions_organization_id_xact_id_id_idx',
   'teams_organization_id_key_key',
 ];
+
+/** Extensions the custom migration creates (Prisma cannot declare these). */
+const EXPECTED_EXTENSIONS = ['pg_trgm'];
 
 /** `String[]` columns the custom migration re-asserts NOT NULL on. */
 const EXPECTED_NOT_NULL_ARRAYS = ['auth_tokens.scopes', 'webhooks.events'];
@@ -88,16 +92,35 @@ async function main() {
       `
       SELECT indexname FROM pg_indexes
        WHERE schemaname = 'public'
-         AND (indexdef ILIKE '%WHERE%' OR indexname IN ($1, $2))
+         AND (indexdef ILIKE '%WHERE%' OR indexname IN ($1, $2, $3))
        ORDER BY 1
     `,
-      ['sync_actions_organization_id_xact_id_id_idx', 'idx_issues_fts'],
+      ['sync_actions_organization_id_xact_id_id_idx', 'idx_issues_fts', 'idx_issues_title_trgm'],
     );
     compare(
       'indexes',
       idx.map(r => r.indexname),
       EXPECTED_INDEXES,
     );
+
+    // The trigram index is useless (and `CREATE INDEX` would already have
+    // failed) without its extension, but assert both so a refactor that moves
+    // one without the other is caught, and that the opclass really is trigram.
+    const { rows: ext } = await client.query(
+      "SELECT extname FROM pg_extension WHERE extname = 'pg_trgm'",
+    );
+    compare(
+      'extensions',
+      ext.map(r => r.extname),
+      EXPECTED_EXTENSIONS,
+    );
+    const { rows: trgm } = await client.query(
+      "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'idx_issues_title_trgm'",
+    );
+    if (trgm.length === 1 && !/USING gin \(title gin_trgm_ops\)/.test(trgm[0].indexdef)) {
+      console.log(`  ✗ idx_issues_title_trgm has the wrong definition: ${trgm[0].indexdef}`);
+      problems.push('idx_issues_title_trgm is not GIN (title gin_trgm_ops)');
+    }
 
     // Prisma 7 drops NOT NULL on String[] when the baseline is regenerated,
     // so the custom migration puts it back. Scoping to `public` is load-bearing.

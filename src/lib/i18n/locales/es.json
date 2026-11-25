@@ -1100,8 +1100,6 @@
         "dueDate": "fecha límite",
         "estimate": "estimación",
         "labels": "etiquetas",
-        "labelsDroppedOnMove_one": "Movida. Se quitó la etiqueta porque no existe en el nuevo equipo: {labels}",
-        "labelsDroppedOnMove_other": "Movida. Se quitaron las etiquetas porque no existen en el nuevo equipo: {labels}",
         "parent": "tarea principal",
         "priority": "prioridad",
         "project": "proyecto",
@@ -1315,6 +1313,8 @@
     "unsubscribeShortcut": "Cancelar suscripción (Mayús+S)"
   },
   "issues": {
+    "labelsDroppedOnMove_one": "Movida. Se quitó la etiqueta porque no existe en el nuevo equipo: {labels}",
+    "labelsDroppedOnMove_other": "Movida. Se quitaron las etiquetas porque no existen en el nuevo equipo: {labels}",
     "actionsFor": "Acciones para {title}",
     "add": "Agregar",
     "addFilter": "Añadir filtro",
@@ -2067,6 +2067,7 @@
       "exportTruncated": "La exportación se limitó a las {rows} entradas más recientes.",
       "filterByUserId": "Filtrar por ID de usuario",
       "forbidden": "Necesitas acceso de administrador para ver el registro de auditoría.",
+      "ipUnavailable": "IP no disponible: configura TRUST_PROXY_HEADERS detrás de un proxy de confianza",
       "loadMore": "Cargar más",
       "noEntriesFound": "No se encontraron entradas en el registro de auditoría.",
       "resourceTypes": {
@@ -2573,6 +2574,23 @@
         "colStatus": "Estado",
         "colTime": "Hora",
         "empty": "Aún no hay entregas",
+        "errors": {
+          "EAI_AGAIN": "Fallo temporal de DNS al resolver {target}",
+          "EAI_AGAINNoDetail": "Fallo temporal de DNS al resolver el host",
+          "ECONNREFUSED": "Conexión rechazada por {target}",
+          "ECONNREFUSEDNoDetail": "Conexión rechazada por el servidor",
+          "ECONNRESET": "El servidor restableció la conexión",
+          "ENOTFOUND": "No se pudo resolver el host {target}",
+          "ENOTFOUNDNoDetail": "No se pudo resolver el host",
+          "HTTP_STATUS": "El endpoint respondió con HTTP {status}",
+          "PRIVATE_ADDRESS": "La URL apunta a una dirección privada o interna",
+          "TIMEOUT": "Tiempo de espera agotado tras {ms} ms",
+          "TIMEOUTNoDetail": "Tiempo de espera agotado esperando al servidor",
+          "TLS": "Problema con el certificado TLS ({tlsCode})",
+          "TLSNoDetail": "Problema con el certificado TLS",
+          "URL_NOT_ALLOWED": "La URL del webhook ya no está permitida",
+          "WEBHOOK_DISABLED": "El webhook fue deshabilitado"
+        },
         "loadError": "Error al cargar las entregas",
         "title": "Entregas recientes"
       },
@@ -2611,6 +2629,7 @@
       "updateError": "Error al actualizar el webhook",
       "url": "URL",
       "urlInvalid": "Ingresa una URL http(s) válida, p. ej. https://example.com/hook.",
+      "urlPrivate": "La URL no puede apuntar a una dirección privada o interna. Usa una URL accesible públicamente.",
       "urlRequired": "Ingresa la URL que recibirá los eventos.",
       "webhookCreated": "Webhook creado",
       "webhookDeleted": "Webhook eliminado",

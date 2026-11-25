@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '../../generated/prisma';
 import { TEST_ORG, TEST_USER } from '../../test/fixtures';
 import { createMockPrisma, type MockPrismaClient } from '../../test/prisma-mock';
 import {
@@ -50,7 +51,9 @@ const TEST_DELIVERY = {
   attempts: 0,
   createdAt: new Date('2026-06-01T00:00:00Z'),
   deliveredAt: null,
+  errorCode: null,
   errorMessage: null,
+  errorParams: null,
   event: 'issue.created',
   id: '00000000-0000-0000-0000-000000000b00',
   nextAttemptAt: new Date('2026-06-01T00:00:00Z'),
@@ -597,7 +600,9 @@ describe('WebhookService', () => {
           data: {
             attempts: 1,
             deliveredAt: FROZEN_NOW,
+            errorCode: null,
             errorMessage: null,
+            errorParams: Prisma.DbNull,
             nextAttemptAt: null,
             responseBody: '',
             responseStatus: 204,
@@ -636,7 +641,9 @@ describe('WebhookService', () => {
         expect(prisma.webhookDelivery.update).toHaveBeenCalledWith({
           data: {
             attempts: 1,
-            errorMessage: null,
+            errorCode: 'HTTP_STATUS',
+            errorMessage: 'Received HTTP 500',
+            errorParams: { status: 500 },
             nextAttemptAt: new Date(FROZEN_NOW.getTime() + RETRY_BACKOFF_SECONDS[0] * 1000),
             responseBody: 'server error',
             responseStatus: 500,
@@ -668,7 +675,9 @@ describe('WebhookService', () => {
         expect(prisma.webhookDelivery.update).toHaveBeenCalledWith({
           data: {
             attempts: 2,
+            errorCode: null,
             errorMessage: 'ECONNREFUSED',
+            errorParams: Prisma.DbNull,
             nextAttemptAt: new Date(FROZEN_NOW.getTime() + RETRY_BACKOFF_SECONDS[1] * 1000),
             responseBody: null,
             responseStatus: null,
@@ -695,7 +704,9 @@ describe('WebhookService', () => {
         expect(prisma.webhookDelivery.update).toHaveBeenCalledWith({
           data: {
             attempts: MAX_ATTEMPTS,
-            errorMessage: null,
+            errorCode: 'HTTP_STATUS',
+            errorMessage: 'Received HTTP 503',
+            errorParams: { status: 503 },
             nextAttemptAt: null,
             responseBody: 'down',
             responseStatus: 503,

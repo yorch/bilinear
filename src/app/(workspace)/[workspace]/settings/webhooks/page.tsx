@@ -6,6 +6,7 @@ import {
   changedWebhookFields,
   WebhookForm,
   type WebhookFormValues,
+  webhookUrlErrorKey,
 } from '@/components/settings/webhook-form';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { LoadError } from '@/components/shared/load-error';
@@ -22,7 +23,7 @@ import { useTranslations } from '@/hooks/use-translations';
 import { gql, gqlQuery, isPermissionError } from '@/lib/graphql';
 import { toast } from '@/lib/toast';
 import { cn, TOUCH_TARGET } from '@/lib/utils';
-import { deliveryTone } from '@/lib/webhook-delivery';
+import { deliveryErrorText, deliveryTone } from '@/lib/webhook-delivery';
 
 /**
  * Webhook management page (admins only).
@@ -50,7 +51,9 @@ interface Webhook {
 interface WebhookDelivery {
   attempts: number;
   createdAt: string;
+  errorCode: string | null;
   errorMessage: string | null;
+  errorParams: Record<string, number | string> | null;
   event: string;
   id: string;
   responseStatus: number | null;
@@ -67,7 +70,7 @@ const WEBHOOKS_QUERY = `
 const WEBHOOK_DELIVERIES_QUERY = `
   query WebhookDeliveries($webhookId: ID!, $limit: Int) {
     webhookDeliveries(webhookId: $webhookId, limit: $limit) {
-      id event status attempts responseStatus errorMessage createdAt
+      id event status attempts responseStatus errorCode errorParams errorMessage createdAt
     }
   }
 `;
@@ -100,14 +103,16 @@ const WEBHOOK_TEST_MUTATION = `
   mutation WebhookTest($id: ID!) {
     webhookTest(id: $id) {
       success
-      delivery { id status responseStatus errorMessage attempts }
+      delivery { id status responseStatus errorCode errorParams errorMessage attempts }
     }
   }
 `;
 
 interface WebhookTestResult {
   attempts: number;
+  errorCode: string | null;
   errorMessage: string | null;
+  errorParams: Record<string, number | string> | null;
   id: string;
   responseStatus: number | null;
   status: string;
@@ -196,7 +201,7 @@ function WebhookDeliveries({ webhookId }: { webhookId: string }) {
                 className="max-w-xs truncate px-3 py-1.5 text-muted-foreground"
                 title={d.errorMessage ?? undefined}
               >
-                {d.errorMessage ?? '—'}
+                {deliveryErrorText(t, d) ?? '—'}
               </td>
               <td className="whitespace-nowrap px-3 py-1.5 font-mono tabular-nums text-muted-foreground">
                 {formatDateTime(d.createdAt, {
@@ -284,7 +289,7 @@ export default function WebhooksSettingsPage() {
       const res = await gql(WEBHOOK_CREATE_MUTATION, { input: values });
       if (res.errors?.length) {
         // Localized fallback, never the server's raw text (see the frontend rules).
-        toast.error(t('settings.webhooks.createError'));
+        toast.error(t(webhookUrlErrorKey(res.errors) ?? 'settings.webhooks.createError'));
         return;
       }
       const created = (res.data as { webhookCreate?: { webhook?: Webhook } } | undefined)
@@ -313,7 +318,7 @@ export default function WebhooksSettingsPage() {
     try {
       const res = await gql(WEBHOOK_UPDATE_MUTATION, { id: hook.id, input: changed });
       if (res.errors?.length) {
-        toast.error(t('settings.webhooks.updateError'));
+        toast.error(t(webhookUrlErrorKey(res.errors) ?? 'settings.webhooks.updateError'));
         return;
       }
       const updated = (res.data as { webhookUpdate?: { webhook?: Webhook | null } } | undefined)
@@ -339,7 +344,7 @@ export default function WebhooksSettingsPage() {
         toast.error(
           code === 'RATELIMITED'
             ? t('settings.webhooks.testRateLimited')
-            : t('settings.webhooks.testError'),
+            : t(webhookUrlErrorKey(res.errors) ?? 'settings.webhooks.testError'),
         );
         return;
       }
@@ -581,7 +586,7 @@ export default function WebhooksSettingsPage() {
                               })
                             : t('settings.webhooks.testFailedDetail', {
                                 detail:
-                                  testResults[hook.id]?.errorMessage ??
+                                  deliveryErrorText(t, testResults[hook.id] ?? {}) ??
                                   `HTTP ${testResults[hook.id]?.responseStatus ?? '—'}`,
                               })}
                         </p>

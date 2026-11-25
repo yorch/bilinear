@@ -38,6 +38,28 @@ const WEBHOOK_ERROR_MAP = {
 } as const;
 
 /**
+ * Machine-readable `extensions.reason` for the BAD_USER_INPUT webhook errors the
+ * UI wants to word specifically. The SSRF rejection in particular used to be
+ * indistinguishable from any other bad input, so the client could only show a
+ * generic "failed" toast.
+ */
+const WEBHOOK_ERROR_REASONS: Record<string, string> = {
+  WebhookInvalidUrlError: 'INVALID_URL',
+  WebhookPrivateUrlError: 'PRIVATE_URL',
+};
+
+function mapWebhookError(err: unknown): never {
+  const name = (err as { name?: string }).name;
+  const reason = name ? WEBHOOK_ERROR_REASONS[name] : undefined;
+  if (reason) {
+    throw new GraphQLError((err as Error).message, {
+      extensions: { code: 'BAD_USER_INPUT', reason },
+    });
+  }
+  return mapServiceError(err, WEBHOOK_ERROR_MAP);
+}
+
+/**
  * Webhook management is restricted to org owners and admins. The signing
  * secret is sensitive and the URL is fetched by the server, so we don't
  * want regular members to manage subscriptions.
@@ -87,7 +109,7 @@ export const webhookResolvers = {
         auditWebhook(auth, 'webhook.archived', webhook);
         return { success: true, webhook };
       } catch (err) {
-        mapServiceError(err, WEBHOOK_ERROR_MAP);
+        mapWebhookError(err);
       }
     },
 
@@ -102,7 +124,7 @@ export const webhookResolvers = {
         auditWebhook(auth, 'webhook.created', webhook, { events: webhook.events });
         return { success: true, webhook };
       } catch (err) {
-        mapServiceError(err, WEBHOOK_ERROR_MAP);
+        mapWebhookError(err);
       }
     },
 
@@ -113,7 +135,7 @@ export const webhookResolvers = {
         auditWebhook(auth, 'webhook.deleted', deleted);
         return { success: true };
       } catch (err) {
-        mapServiceError(err, WEBHOOK_ERROR_MAP);
+        mapWebhookError(err);
       }
     },
 
@@ -124,7 +146,7 @@ export const webhookResolvers = {
         auditWebhook(auth, 'webhook.secret_rotated', webhook);
         return { success: true, webhook };
       } catch (err) {
-        mapServiceError(err, WEBHOOK_ERROR_MAP);
+        mapWebhookError(err);
       }
     },
 
@@ -157,7 +179,7 @@ export const webhookResolvers = {
         );
         return { delivery, success: delivery.status === 'success' };
       } catch (err) {
-        mapServiceError(err, WEBHOOK_ERROR_MAP);
+        mapWebhookError(err);
       }
     },
 
@@ -176,7 +198,7 @@ export const webhookResolvers = {
         });
         return { success: true, webhook };
       } catch (err) {
-        mapServiceError(err, WEBHOOK_ERROR_MAP);
+        mapWebhookError(err);
       }
     },
   },

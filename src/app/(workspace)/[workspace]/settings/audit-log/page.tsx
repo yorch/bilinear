@@ -11,6 +11,7 @@ import {
   resolveAuditResourceName,
   startOfDayIso,
 } from '@/components/settings/audit-action';
+import { AuditIpCell } from '@/components/settings/audit-ip-cell';
 import { LoadError } from '@/components/shared/load-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -445,13 +446,7 @@ const AuditLogPage = observer(function AuditLogPage() {
                           )}
                         </td>
                         <td className="px-4 py-2">
-                          {entry.ipAddress ? (
-                            <span className="font-mono text-xs text-muted-foreground">
-                              {entry.ipAddress}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-foreground-faint">—</span>
-                          )}
+                          <AuditIpCell ip={entry.ipAddress} />
                         </td>
                         <td className="whitespace-nowrap px-4 py-2">
                           <span className="text-xs text-muted-foreground">
