@@ -190,7 +190,9 @@ export const IssueReminderPanel = observer(function IssueReminderPanel({
             id="reminder-custom-note"
           >
             {error ??
-              (result?.ok && result.shifted ? t('reminders.shifted', { when: when(result.at) }) : '')}
+              (result?.ok && result.shifted
+                ? t('reminders.shifted', { when: when(result.at) })
+                : '')}
           </p>
           <Button disabled={!result?.ok} size="sm" type="submit">
             {t('reminders.setCustom')}

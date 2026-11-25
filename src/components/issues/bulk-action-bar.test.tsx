@@ -85,26 +85,31 @@ describe('BulkActionBar', () => {
     const onUpdate = vi.fn();
     render(<BulkActionBar {...base} onUpdate={onUpdate} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'issues.project' }));
+    const openMore = (entry: string) => {
+      fireEvent.click(screen.getByRole('button', { name: 'issues.bulkMore' }));
+      fireEvent.click(screen.getByRole('button', { name: entry }));
+    };
+    openMore('issues.project');
     fireEvent.click(screen.getByRole('button', { name: 'Apollo' }));
     expect(onUpdate).toHaveBeenLastCalledWith({ projectId: 'p1', projectMilestoneId: null });
 
-    fireEvent.click(screen.getByRole('button', { name: 'issues.cycle' }));
+    openMore('issues.cycle');
     fireEvent.click(screen.getByRole('button', { name: /Sprint 7/ }));
     expect(onUpdate).toHaveBeenLastCalledWith({ cycleId: 'c1' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'issues.dueDate' }));
+    // Desktop primary trigger (the More copy is the phone-only twin).
+    fireEvent.click(screen.getAllByRole('button', { name: 'issues.dueDate' })[0]);
     // The themed calendar replaces the native date input: picking a day writes `YYYY-MM-DD`.
     const now = new Date();
     const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-15`;
     fireEvent.click(document.querySelector(`[data-date="${key}"]`) as HTMLElement);
     expect(onUpdate).toHaveBeenLastCalledWith({ dueDate: key });
 
-    fireEvent.click(screen.getByRole('button', { name: 'issues.dueDate' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'issues.dueDate' })[0]);
     fireEvent.click(screen.getByRole('button', { name: 'properties.dueDate.clearDate' }));
     expect(onUpdate).toHaveBeenLastCalledWith({ dueDate: null });
 
-    fireEvent.click(screen.getByRole('button', { name: 'issues.moveToTeam' }));
+    openMore('issues.moveToTeam');
     fireEvent.click(screen.getByRole('button', { name: /OPS/ }));
     expect(onUpdate).toHaveBeenLastCalledWith({ teamId: 't-ops' });
   });
@@ -115,11 +120,13 @@ describe('BulkActionBar', () => {
       cycleStore.applySyncAction('I', 'c1', { id: 'c1', number: 1, teamId: 't-eng' } as DBCycle);
     });
     const { rerender } = render(<BulkActionBar {...base} mixedTeams />);
+    fireEvent.click(screen.getByRole('button', { name: 'issues.bulkMore' }));
     const cycle = screen.getByRole('button', { name: 'issues.cycle' }) as HTMLButtonElement;
     expect(cycle.disabled).toBe(true);
     expect(cycle.title).toBe('issues.bulkCycleNeedsSameTeam');
 
     rerender(<BulkActionBar {...base} mixedTeams={false} teamId="t-eng" />);
+    // The panel stays open across the rerender; the entry is now enabled.
     expect(
       (screen.getByRole('button', { name: 'issues.cycle' }) as HTMLButtonElement).disabled,
     ).toBe(false);
@@ -139,7 +146,18 @@ describe('BulkActionBar', () => {
     const bar = screen.getByTestId('bulk-action-bar');
     expect(bar.className).toContain('inset-x-0');
     expect(bar.className).toContain('flex-wrap');
-    expect(bar.className).not.toContain('flex-nowrap');
+    // md+ is held to one row (a bare `flex-nowrap` would also stop phones wrapping).
+    expect(bar.className.split(' ')).not.toContain('flex-nowrap');
+    expect(bar.className).toContain('md:flex-nowrap');
     expect(bar.className).not.toContain('overflow-x-auto');
+  });
+
+  it('keeps Archive and Delete together in one group, after the rest of the actions', () => {
+    render(<BulkActionBar {...base} onArchive={vi.fn()} onDelete={vi.fn()} />);
+    const archive = screen.getByRole('button', { name: 'issues.archive' });
+    const del = screen.getByRole('button', { name: 'common.delete' });
+    expect(archive.parentElement).toBe(del.parentElement);
+    const more = screen.getByRole('button', { name: 'issues.bulkMore' });
+    expect(more.compareDocumentPosition(archive) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

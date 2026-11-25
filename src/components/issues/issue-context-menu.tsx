@@ -473,9 +473,7 @@ export const IssueContextMenu = observer(function IssueContextMenu({
             className={cn(
               'overflow-y-auto',
               // Size to content: viewport-aware rather than a fixed 16rem clip.
-              submenu === 'remind'
-                ? 'max-h-[min(34rem,calc(100dvh-6rem))]'
-                : 'max-h-64',
+              submenu === 'remind' ? 'max-h-[min(34rem,calc(100dvh-6rem))]' : 'max-h-64',
             )}
           >
             {submenu === 'status' &&

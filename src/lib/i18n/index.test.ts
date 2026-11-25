@@ -80,3 +80,29 @@ describe('pickLocaleFromAcceptLanguage', () => {
     expect(pickLocaleFromAcceptLanguage('es;q=0,en;q=0.5')).toBe('en');
   });
 });
+
+describe('bulk move dropped-labels copy', () => {
+  it('never prints a literal "(s)" for any label/issue count combination', () => {
+    for (const locale of ['en', 'es'] as const) {
+      for (const labels of [1, 2]) {
+        for (const issues of [1, 2]) {
+          const issuesPhrase = translate(locale, 'issues.issuesCount', { count: issues });
+          const out = translate(locale, 'issues.labelsDroppedOnBulkMove', {
+            count: labels,
+            issues: issuesPhrase,
+            labels: 'x',
+          });
+          expect(out).not.toContain('(s)');
+          expect(out).toContain(issuesPhrase);
+        }
+      }
+    }
+    expect(
+      translate('en', 'issues.labelsDroppedOnBulkMove', {
+        count: 1,
+        issues: '1 issue',
+        labels: 'x',
+      }),
+    ).toContain('Label removed from 1 issue because');
+  });
+});

@@ -3,7 +3,7 @@
 import { Archive, LayoutList, Map as MapIcon, Plus } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
 import { useParams } from 'next/navigation';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { CreateProjectModal } from '@/components/projects/create-project-modal';
 import { ProjectArchivedView } from '@/components/projects/project-archived-view';
 import { ProjectListView } from '@/components/projects/project-list-view';
@@ -39,13 +39,18 @@ export default observer(function ProjectsPage() {
   useDocumentTitle(t('nav.projects'));
   const { workspace } = useParams<{ workspace: string }>();
   const { projectStore, uiStore } = useStore();
-  const [layout, setLayout] = useState<ProjectsLayout>(() => {
-    if (typeof window === 'undefined') {
-      return 'list';
+  // Starts as 'list' on both server and first client render; the stored layout
+  // is applied in an effect so hydration never sees a different tree.
+  const [layout, setLayout] = useState<ProjectsLayout>('list');
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(STORAGE_KEY) === 'roadmap') {
+        setLayout('roadmap');
+      }
+    } catch {
+      // Storage blocked: stay on the list.
     }
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    return saved === 'roadmap' ? 'roadmap' : 'list';
-  });
+  }, []);
 
   const setLayoutPersisted = useCallback((next: ProjectsLayout) => {
     setLayout(next);
