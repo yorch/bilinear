@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { useCallback } from 'react';
 import { usePopover } from '@/hooks/use-popover';
-import { usePopoverFlip } from '@/hooks/use-popover-flip';
+import { usePopoverPlacement } from '@/hooks/use-popover-flip';
 import { usePopoverPanel } from '@/hooks/use-popover-panel';
 import { cn } from '@/lib/utils';
 
@@ -69,7 +69,7 @@ export function SelectPopover({
     panelRef,
     triggerRef,
   } = usePopoverPanel({ itemSelector: 'button:not([disabled])' }, open);
-  const openUpward = usePopoverFlip(open, triggerRef, panelRef);
+  const { maxHeight, openUpward } = usePopoverPlacement(open, triggerRef, panelRef);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -119,6 +119,7 @@ export function SelectPopover({
           onKeyDown={handlePanelKeyDown}
           ref={panelRef}
           role={listbox ? 'listbox' : undefined}
+          style={maxHeight === null ? undefined : { maxHeight, overflowY: 'auto' }}
         >
           {children(close)}
         </div>

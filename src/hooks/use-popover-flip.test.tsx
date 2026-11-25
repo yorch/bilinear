@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { usePopoverFlip } from './use-popover-flip';
+import { usePopoverFlip, usePopoverPlacement } from './use-popover-flip';
 
 function rect(partial: Partial<DOMRect>): DOMRect {
   return {
@@ -168,5 +168,36 @@ describe('usePopoverFlip with a measured panel', () => {
 
   it('stays down when there is less room above than below', () => {
     expect(setup(380, 100).result.current).toBe(false);
+  });
+});
+
+describe('usePopoverPlacement neither side fits', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  function setup(triggerTop: number, triggerBottom: number, panelHeight = 450) {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    const trigger = document.createElement('div');
+    const panel = document.createElement('div');
+    document.body.append(trigger, panel);
+    trigger.getBoundingClientRect = () => rect({ bottom: triggerBottom, top: triggerTop });
+    panel.getBoundingClientRect = () => rect({ height: panelHeight });
+    return renderHook(() => usePopoverPlacement(true, { current: trigger }, { current: panel }));
+  }
+
+  it('stays down and clamps to the room below minus gap and margin', () => {
+    // 420 below, 350 above, 450 panel: fits neither.
+    expect(setup(320, 380).result.current).toEqual({ maxHeight: 408, openUpward: false });
+  });
+
+  it('flips up and clamps when above is the roomier side', () => {
+    // 350 below, 420 above.
+    expect(setup(420, 450).result.current).toEqual({ maxHeight: 408, openUpward: true });
+  });
+
+  it('does not clamp when the panel fits', () => {
+    expect(setup(100, 130, 300).result.current.maxHeight).toBeNull();
   });
 });
