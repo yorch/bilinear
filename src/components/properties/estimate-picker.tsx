@@ -54,6 +54,11 @@ interface EstimatePickerProps {
   forceOpen?: boolean;
   /** Show a gauge icon before the value below `lg`, where the detail view hides property labels. */
   iconBelowLg?: boolean;
+  /**
+   * Short field name shown below `lg` — before a set value, and beside the icon
+   * while empty — where the detail view hides the property labels.
+   */
+  labelBelowLg?: string;
   /** onChange receives null to clear the estimate */
   onChange: (estimate: number | null) => void;
   onClose?: () => void;
@@ -64,14 +69,16 @@ interface EstimatePickerProps {
 function EstimateBadge({
   value,
   estimationType,
+  labelBelowLg,
 }: {
   value?: number | null;
   estimationType?: string;
+  labelBelowLg?: string;
 }) {
   if (!value) {
     // An en-dash per row is the same noise as the word "Estimate" was: it
     // reports absence in a column the reader already scans for presence.
-    return <PropertyPlaceholder icon={Gauge} />;
+    return <PropertyPlaceholder icon={Gauge} label={labelBelowLg} labelBelowLg />;
   }
 
   if (estimationType === 'tShirt') {
@@ -93,6 +100,7 @@ export function EstimatePicker({
   estimationType = 'notUsed',
   forceOpen,
   iconBelowLg,
+  labelBelowLg,
   onClose,
   onChange,
 }: EstimatePickerProps) {
@@ -111,13 +119,20 @@ export function EstimatePicker({
       panelClassName="min-w-[120px] py-1"
       triggerChildren={
         <>
-          {iconBelowLg && value ? (
+          {labelBelowLg && value ? (
+            <span className="text-xs text-muted-foreground lg:hidden">{labelBelowLg}</span>
+          ) : null}
+          {iconBelowLg && !labelBelowLg && value ? (
             <Gauge
               aria-hidden="true"
               className="h-3 w-3 shrink-0 text-muted-foreground lg:hidden"
             />
           ) : null}
-          <EstimateBadge estimationType={estimationType} value={value} />
+          <EstimateBadge
+            estimationType={estimationType}
+            labelBelowLg={labelBelowLg}
+            value={value}
+          />
         </>
       }
       triggerClassName={cn('gap-1 px-1 py-0.5', TOUCH_TARGET, 'max-md:justify-start')}

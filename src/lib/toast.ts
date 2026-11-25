@@ -41,9 +41,12 @@ export const toast = {
  *
  * Tinted fills are mixed into `--popover` rather than using the translucent
  * `-subtle` tokens directly: a toast floats over list rows and must be opaque.
+ * Every surface (fill AND border) is therefore either `--popover` itself or a
+ * mix whose base is `--popover`; `--border` is a translucent hairline, so the
+ * neutral border is mixed too. Nothing here may be `transparent` or an alpha token.
  */
 const tint = (role: 'danger' | 'info' | 'success' | 'warning') =>
-  `color-mix(in oklab, var(--${role}) 14%, var(--popover))`;
+  `color-mix(in oklab, var(--${role}) 14%, transparent)`;
 const edge = (role: 'danger' | 'info' | 'success' | 'warning') =>
   `color-mix(in oklab, var(--${role}) 35%, var(--popover))`;
 

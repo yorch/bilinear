@@ -160,4 +160,21 @@ describe('BulkActionBar', () => {
     const more = screen.getByRole('button', { name: 'issues.bulkMore' });
     expect(more.compareDocumentPosition(archive) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  it('phone Due date drill-in (via More) is a tall sheet: no inner scroll for the calendar, explicit close', () => {
+    render(<BulkActionBar {...base} />);
+    fireEvent.click(screen.getByRole('button', { name: 'issues.bulkMore' }));
+    const moreEntry = screen
+      .getAllByRole('button', { name: 'issues.dueDate' })
+      .at(-1) as HTMLElement;
+    const sheet = moreEntry.closest('.max-md\\:fixed');
+    expect(sheet?.className).toContain('max-md:max-h-[calc(100dvh-8rem');
+    fireEvent.click(moreEntry);
+    const body = screen.getByTestId('bulk-more-body');
+    expect(body.className).not.toContain('overflow-y-auto');
+    expect(body.className).not.toContain('max-h-');
+    expect(document.querySelector('[data-date]')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'common.close' }));
+    expect(screen.queryByTestId('bulk-more-body')).toBeNull();
+  });
 });

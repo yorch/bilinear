@@ -19,6 +19,22 @@ describe('Toaster theming', () => {
     }
   });
 
+  it('keeps every toast surface fully opaque: fills and borders are --popover or a mix onto it', () => {
+    const surfaces = Object.entries(el.props.style).filter(([k]) => /-(bg|border)$/.test(k));
+    // 5 variants (error, info, normal, success, warning) x fill + border.
+    expect(surfaces).toHaveLength(10);
+    for (const [key, value] of surfaces) {
+      const opaque =
+        value === 'var(--popover)' ||
+        /^color-mix\(in oklab, var\(--[a-z-]+\) \d+%, var\(--popover\)\)$/.test(value);
+      expect(opaque, `${key}: ${value}`).toBe(true);
+      // Translucent tokens/keywords would let list rows show through the toast.
+      expect(value).not.toMatch(
+        /transparent|-subtle(?!-foreground)|var\(--border\)|var\(--(?:accent|muted)\)|\/\s*[\d.]+%?\s*\)/,
+      );
+    }
+  });
+
   it('lifts above the docked bulk bar on phones', () => {
     expect(el.props.className).toContain('bulk-action-bar');
   });

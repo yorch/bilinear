@@ -13,6 +13,8 @@ import { useStore } from '@/providers/store-provider';
 interface CycleSelectProps {
   /** Text shown beside the icon while no cycle is set. */
   label?: string;
+  /** Show `label` only below `lg`, where the detail view hides its row labels. */
+  labelBelowLg?: boolean;
   onChange: (cycleId: string | null) => void;
   onClose?: () => void;
   open?: boolean;
@@ -24,6 +26,7 @@ export const CycleSelect = observer(function CycleSelect({
   value,
   teamId,
   label,
+  labelBelowLg,
   onChange,
   open,
   onClose,
@@ -71,7 +74,7 @@ export const CycleSelect = observer(function CycleSelect({
             <span className="max-w-[100px] truncate">{getCycleDisplayName(current)}</span>
           </>
         ) : (
-          <PropertyPlaceholder icon={RefreshCw} label={label} />
+          <PropertyPlaceholder icon={RefreshCw} label={label} labelBelowLg={labelBelowLg} />
         )
       }
       triggerClassName={cn(TOUCH_TARGET, 'max-md:justify-start')}

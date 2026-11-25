@@ -37,6 +37,13 @@ const DUE_PRESET_LABEL = {
 const MOBILE_SHEET =
   'max-md:fixed max-md:inset-x-2 max-md:bottom-[calc(6.5rem+env(safe-area-inset-bottom))] max-md:top-auto max-md:mb-0 max-md:mt-0 max-md:max-h-[min(24rem,calc(100dvh-14rem))] max-md:w-auto max-md:overflow-y-auto';
 
+/**
+ * A drill-in that needs its whole body visible (the due-date month grid) lifts
+ * the sheet's height cap to what the viewport allows, above the bar, so nothing
+ * inside it has to scroll.
+ */
+const MOBILE_SHEET_TALL = 'max-md:max-h-[calc(100dvh-8rem-env(safe-area-inset-bottom))]';
+
 const ACTION_BUTTON =
   'flex shrink-0 items-center gap-1 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground-secondary';
 
@@ -74,17 +81,20 @@ function BulkPopover({
   children,
   className,
   label,
+  sheetClassName,
   widthClass = 'w-48',
 }: {
   children: (close: () => void) => ReactNode;
   className?: string;
   label: string;
+  /** Replaces the phone sheet's default height cap (see `MOBILE_SHEET_TALL`). */
+  sheetClassName?: string;
   widthClass?: string;
 }) {
   return (
     <SelectPopover
       className={cn('shrink-0', className)}
-      panelClassName={cn(widthClass, MOBILE_SHEET)}
+      panelClassName={cn(widthClass, MOBILE_SHEET, sheetClassName)}
       triggerChildren={
         <span className="whitespace-nowrap px-2 py-1 text-xs font-medium text-muted-foreground">
           {label}
@@ -104,25 +114,42 @@ interface MoreEntry {
   /** Shown only below `md`, where the matching desktop trigger is hidden. */
   mobileOnly?: boolean;
   render: (close: () => void) => ReactNode;
+  /** Phone: render the drill-in at full height, with no inner scroll region. */
+  tall?: boolean;
   title?: string;
 }
 
 /** "More" panel body: a list of actions, each drilling into its own option list. */
 function BulkMoreMenu({ close, entries }: { close: () => void; entries: MoreEntry[] }) {
+  const t = useTranslations();
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const active = entries.find(e => e.key === activeKey);
   if (active) {
     return (
       <>
-        <button
-          className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent"
-          onClick={() => setActiveKey(null)}
-          type="button"
+        <div className="flex items-center">
+          <button
+            className="flex min-w-0 flex-1 items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent"
+            onClick={() => setActiveKey(null)}
+            type="button"
+          >
+            <ArrowLeft className="h-3 w-3 shrink-0" />
+            {active.label}
+          </button>
+          {/* Phone sheet: an explicit close, since the sheet has no backdrop to tap. */}
+          <button
+            aria-label={t('common.close')}
+            className="mr-1 shrink-0 rounded p-1 text-muted-foreground hover:bg-accent md:hidden"
+            onClick={close}
+            type="button"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div
+          className={cn('border-t border-border', 'max-h-64 overflow-y-auto')}
+          data-testid="bulk-more-body"
         >
-          <ArrowLeft className="h-3 w-3" />
-          {active.label}
-        </button>
-        <div className="max-h-64 overflow-y-auto border-t border-border">
           {active.render(close)}
         </div>
       </>
@@ -341,7 +368,13 @@ export const BulkActionBar = observer(function BulkActionBar({
     ...(labels.length > 0
       ? [{ key: 'label', label: t('issues.label'), mobileOnly: true, render: renderLabel }]
       : []),
-    { key: 'dueDate', label: t('issues.dueDate'), mobileOnly: true, render: renderDue },
+    {
+      key: 'dueDate',
+      label: t('issues.dueDate'),
+      mobileOnly: true,
+      render: renderDue,
+      tall: true,
+    },
     ...(projects.length > 0
       ? [{ key: 'project', label: t('issues.project'), render: renderProject }]
       : []),
@@ -477,7 +510,11 @@ export const BulkActionBar = observer(function BulkActionBar({
         </BulkPopover>
 
         {moreEntries.length > 0 && (
-          <BulkPopover label={t('issues.bulkMore')} widthClass="w-64">
+          <BulkPopover
+            label={t('issues.bulkMore')}
+            
+            widthClass="w-64"
+          >
             {close => <BulkMoreMenu close={close} entries={moreEntries} />}
           </BulkPopover>
         )}

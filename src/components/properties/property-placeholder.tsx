@@ -25,11 +25,14 @@ export function PropertyPlaceholder({
   className,
   icon: Icon,
   label,
+  labelBelowLg,
 }: {
   className?: string;
   icon: LucideIcon;
   /** Optional text beside the icon (forms such as the create modal); lists omit it. */
   label?: string;
+  /** Show `label` only below `lg` — the detail view hides its own row labels there. */
+  labelBelowLg?: boolean;
 }) {
   const icon = (
     <Icon
@@ -44,7 +47,9 @@ export function PropertyPlaceholder({
   return (
     <span className="inline-flex items-center gap-1.5">
       {icon}
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className={cn('text-xs text-muted-foreground', labelBelowLg && 'lg:hidden')}>
+        {label}
+      </span>
     </span>
   );
 }

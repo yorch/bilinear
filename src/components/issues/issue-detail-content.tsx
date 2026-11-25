@@ -354,6 +354,8 @@ export const IssueDetailContent = observer(function IssueDetailContent({
 
       <span className={labelClass}>{t('issueDetail.properties.project')}</span>
       <ProjectSelect
+        label={t('issueDetail.properties.project')}
+        labelBelowLg
         onChange={projectId =>
           // A milestone belongs to its project, so moving projects clears it.
           handleUpdate(issue.id, { projectId, projectMilestoneId: null })
@@ -378,6 +380,8 @@ export const IssueDetailContent = observer(function IssueDetailContent({
       <span className={labelClass}>{t('issueDetail.properties.cycle')}</span>
       <div className="flex min-w-0 items-center gap-1.5">
         <CycleSelect
+          label={t('issueDetail.properties.cycle')}
+          labelBelowLg
           onChange={cycleId => handleUpdate(issue.id, { cycleId })}
           onClose={closeOpened}
           open={openProperty === 'cycle'}
@@ -393,6 +397,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
       <DueDatePicker
         iconBelowLg
         kind="start"
+        labelBelowLg={t('issueDetail.properties.startDate')}
         onChange={startDate => handleUpdate(issue.id, { startDate })}
         tone="neutral"
         value={issue.startDate}
@@ -403,6 +408,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
         <DueDatePicker
           forceOpen={openProperty === 'dueDate'}
           iconBelowLg
+          labelBelowLg={t('issueDetail.properties.dueDate')}
           onChange={dueDate => handleUpdate(issue.id, { dueDate })}
           onClose={closeOpened}
           stateType={states.find(st => st.id === issue.stateId)?.type}
@@ -418,6 +424,7 @@ export const IssueDetailContent = observer(function IssueDetailContent({
             estimationType={estimationType}
             forceOpen={openProperty === 'estimate'}
             iconBelowLg
+            labelBelowLg={t('issueDetail.properties.estimate')}
             onChange={estimate => handleUpdate(issue.id, { estimate: estimate ?? undefined })}
             onClose={closeOpened}
             value={issue.estimate}

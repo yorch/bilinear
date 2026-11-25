@@ -3,6 +3,7 @@
 import { CalendarClock, CalendarDays } from 'lucide-react';
 import { getDueDatePresets } from '@/components/properties/due-date-presets';
 import { PropertyPlaceholder } from '@/components/properties/property-placeholder';
+import { DatePanel } from '@/components/ui/date-field';
 import { POPOVER_ITEM_CLASS, SelectPopover } from '@/components/ui/select-popover';
 import { useFormatters } from '@/hooks/use-formatters';
 import { useTranslations } from '@/hooks/use-translations';
@@ -25,6 +26,16 @@ interface DueDatePickerProps {
   kind?: 'due' | 'start';
   /** Empty-state trigger text; defaults to "Due date". The start-date picker overrides it. */
   label?: string;
+  /**
+   * Short field name shown below `lg` — before a set date, and beside the icon
+   * while empty — where the detail view hides the property labels. Hidden from
+   * `lg` up. Supersedes `iconBelowLg` for the set state.
+   */
+  labelBelowLg?: string;
+  /** Inclusive latest selectable day, `YYYY-MM-DD`. */
+  max?: string;
+  /** Inclusive earliest selectable day, `YYYY-MM-DD`. */
+  min?: string;
   onChange: (date: string | null) => void;
   onClose?: () => void;
   /** Workflow state type of the owning issue; done/canceled work is never shown as overdue. */
@@ -52,6 +63,9 @@ export function DueDatePicker({
   iconBelowLg,
   kind = 'due',
   label,
+  labelBelowLg,
+  max,
+  min,
   onClose,
   stateType,
   tone = 'urgency',
@@ -79,7 +93,11 @@ export function DueDatePicker({
       triggerChildren={
         value ? (
           <>
+            {labelBelowLg && (
+              <span className="text-muted-foreground lg:hidden">{labelBelowLg}</span>
+            )}
             {iconBelowLg &&
+              !labelBelowLg &&
               (isStart ? (
                 <CalendarClock aria-hidden="true" className="h-3 w-3 shrink-0 lg:hidden" />
               ) : (
@@ -88,7 +106,13 @@ export function DueDatePicker({
             {formatDueDate(value)}
           </>
         ) : (
-          (label ?? <PropertyPlaceholder icon={isStart ? CalendarClock : CalendarDays} />)
+          (label ?? (
+            <PropertyPlaceholder
+              icon={isStart ? CalendarClock : CalendarDays}
+              label={labelBelowLg}
+              labelBelowLg
+            />
+          ))
         )
       }
       triggerClassName={cn(
@@ -125,31 +149,19 @@ export function DueDatePicker({
           <p className="mt-1 border-t border-border px-3 pt-2 pb-1 text-xs text-muted-foreground">
             {t('properties.dueDate.orPickDate')}
           </p>
-          {/* Claims initial focus: the "Clear date" button below sits after this
-              field in document order, so without the marker opening the picker
-              focuses Clear and the first Enter wipes the date. */}
-          <input
-            className="mx-2 mb-1 rounded border border-input bg-transparent px-2 py-1 text-sm"
-            data-autofocus
-            onChange={e => {
-              onChange(e.target.value || null);
-              close();
-            }}
-            type="date"
+          {/* A set date focuses its own day in the grid (the Calendar marks it
+              `data-autofocus`), so the first Enter re-picks it rather than
+              wiping it; with no date the typed-entry field takes focus. The
+              clear action sits last, after both, so it can never claim focus. */}
+          <DatePanel
+            autoFocusInput={!value}
+            clearLabel={t('properties.dueDate.clearDate')}
+            max={max}
+            min={min}
+            onChange={d => onChange(d || null)}
+            onClose={close}
             value={value ?? ''}
           />
-          {value && (
-            <button
-              className="mt-1 block w-full rounded px-2 py-1 text-center text-xs text-muted-foreground hover:bg-accent"
-              onClick={() => {
-                onChange(null);
-                close();
-              }}
-              type="button"
-            >
-              {t('properties.dueDate.clearDate')}
-            </button>
-          )}
         </>
       )}
     </SelectPopover>
