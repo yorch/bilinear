@@ -354,8 +354,8 @@ export const IssueDetailContent = observer(function IssueDetailContent({
 
       <span className={labelClass}>{t('issueDetail.properties.project')}</span>
       <ProjectSelect
-        label={t('issueDetail.properties.project')}
-        labelBelowLg
+        label={isPage ? t('issueDetail.properties.project') : undefined}
+        labelBelowLg={isPage}
         onChange={projectId =>
           // A milestone belongs to its project, so moving projects clears it.
           handleUpdate(issue.id, { projectId, projectMilestoneId: null })
@@ -380,8 +380,8 @@ export const IssueDetailContent = observer(function IssueDetailContent({
       <span className={labelClass}>{t('issueDetail.properties.cycle')}</span>
       <div className="flex min-w-0 items-center gap-1.5">
         <CycleSelect
-          label={t('issueDetail.properties.cycle')}
-          labelBelowLg
+          label={isPage ? t('issueDetail.properties.cycle') : undefined}
+          labelBelowLg={isPage}
           onChange={cycleId => handleUpdate(issue.id, { cycleId })}
           onClose={closeOpened}
           open={openProperty === 'cycle'}
@@ -395,9 +395,10 @@ export const IssueDetailContent = observer(function IssueDetailContent({
 
       <span className={labelClass}>{t('issueDetail.properties.startDate')}</span>
       <DueDatePicker
-        iconBelowLg
+        iconBelowLg={isPage}
         kind="start"
-        labelBelowLg={t('issueDetail.properties.startDate')}
+        labelBelowLg={isPage ? t('issueDetail.properties.startDate') : undefined}
+        max={issue.dueDate?.slice(0, 10)}
         onChange={startDate => handleUpdate(issue.id, { startDate })}
         tone="neutral"
         value={issue.startDate}
@@ -407,8 +408,9 @@ export const IssueDetailContent = observer(function IssueDetailContent({
       <div className="flex min-w-0 items-center gap-1.5">
         <DueDatePicker
           forceOpen={openProperty === 'dueDate'}
-          iconBelowLg
-          labelBelowLg={t('issueDetail.properties.dueDate')}
+          iconBelowLg={isPage}
+          labelBelowLg={isPage ? t('issueDetail.properties.dueDate') : undefined}
+          min={issue.startDate?.slice(0, 10)}
           onChange={dueDate => handleUpdate(issue.id, { dueDate })}
           onClose={closeOpened}
           stateType={states.find(st => st.id === issue.stateId)?.type}
@@ -423,8 +425,8 @@ export const IssueDetailContent = observer(function IssueDetailContent({
           <EstimatePicker
             estimationType={estimationType}
             forceOpen={openProperty === 'estimate'}
-            iconBelowLg
-            labelBelowLg={t('issueDetail.properties.estimate')}
+            iconBelowLg={isPage}
+            labelBelowLg={isPage ? t('issueDetail.properties.estimate') : undefined}
             onChange={estimate => handleUpdate(issue.id, { estimate: estimate ?? undefined })}
             onClose={closeOpened}
             value={issue.estimate}

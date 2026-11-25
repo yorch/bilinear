@@ -74,16 +74,16 @@ const { HocuspocusProvider, HocuspocusProviderWebsocket } = require('@hocuspocus
 
 import { server, sweepRevokedYjsConnections } from './server';
 
-const PORT = 18236;
+// Bound in beforeAll on an ephemeral port, so concurrent test runs cannot collide.
+let port = 0;
 const DOC_NAME = `document:${DOC_ID}`;
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 const clients: Array<{ close: () => void }> = [];
 
 function connect(userId: string) {
   const doc = new Y.Doc();
   const ws = new HocuspocusProviderWebsocket({
-    url: `ws://127.0.0.1:${PORT}`,
+    url: `ws://127.0.0.1:${port}`,
     WebSocketPolyfill: WebSocket,
   });
   const provider = new HocuspocusProvider({
@@ -111,6 +111,9 @@ function serverConnections(userId: string) {
   const found = [...(document?.getConnections() ?? [])].filter(
     c => (c.context as { userId?: string } | undefined)?.userId === userId,
   );
+  // Exactly one server connection per user: destructuring the first of several
+  // would silently assert about the wrong socket.
+  expect(found).toHaveLength(1);
   return found.map(connection => ({
     closeSpy: vi.spyOn(connection, 'close'),
     connection,
@@ -119,7 +122,11 @@ function serverConnections(userId: string) {
 
 describe('yjs periodic access sweep', () => {
   beforeAll(async () => {
-    await server.listen(PORT);
+    // `listen(0)` is treated as "no port given" by Hocuspocus, so ask for an
+    // ephemeral port through the configuration and read the bound one back.
+    server.configuration.port = 0;
+    await server.listen();
+    port = server.address.port;
   });
   afterAll(async () => {
     await server.destroy();
@@ -128,7 +135,9 @@ describe('yjs periodic access sweep', () => {
     state.active = new Set(['member', 'other']);
     state.teamMembers = new Set(['member', 'other']);
     state.roles = { member: 'member', other: 'member' };
-    await sleep(200); // let the previous test's rooms unload
+    // The previous test's clients are destroyed in afterEach; wait for the
+    // server to unload their room so a stale connection cannot be spied on.
+    await vi.waitFor(() => expect(server.hocuspocus.documents.size).toBe(0), { timeout: 5000 });
   });
   afterEach(() => {
     for (const c of clients.splice(0)) {
