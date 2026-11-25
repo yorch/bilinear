@@ -30,8 +30,6 @@ const { IssueReminderPanel } = await import('./issue-reminder-panel');
 
 // Wednesday 10:00 local.
 const NOW = new Date(2026, 10, 25, 10, 0, 0);
-const local = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
 beforeEach(() => {
   vi.useFakeTimers({ now: NOW });
