@@ -85,7 +85,9 @@ export function useIssuesBulkUpdate(): (ids: string[], patch: Record<string, unk
             toast.info(
               t('issues.labelsDroppedOnBulkMove', {
                 count: droppedNames.size,
-                issues: droppedIssues,
+                // Its own plural lookup: `count` (labels) picks _one/_other of the sentence,
+                // so the issue count must be pre-pluralised or it reads "1 issue(s)".
+                issues: t('issues.issuesCount', { count: droppedIssues }),
                 labels: [...droppedNames].join(', '),
               }),
             );

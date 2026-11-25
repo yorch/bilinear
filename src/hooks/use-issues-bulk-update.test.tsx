@@ -99,7 +99,7 @@ describe('useIssuesBulkUpdate team move', () => {
     expect(toastInfo).toHaveBeenCalledWith('issues.labelsDroppedOnBulkMove');
     expect(translate).toHaveBeenCalledWith('issues.labelsDroppedOnBulkMove', {
       count: 2,
-      issues: 2,
+      issues: 'issues.issuesCount',
       labels: 'eng-only, infra',
     });
   });

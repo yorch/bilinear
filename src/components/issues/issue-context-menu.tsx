@@ -410,7 +410,14 @@ export const IssueContextMenu = observer(function IssueContextMenu({
   return (
     <div
       aria-label={t('issues.actionsFor', { title })}
-      className="max-h-[calc(100vh-1rem)] min-w-[200px] overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-e2"
+      className={cn(
+        'max-h-[calc(100dvh-1rem)] min-w-[200px] overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-e2',
+        // The reminder picker is too wide and tall for a pointer-anchored popover on a
+        // phone (it covered the issue title and clipped its button): dock it as a
+        // full-width bottom sheet. `!` beats the inline pointer position.
+        submenu === 'remind' &&
+          'max-md:!inset-x-0 max-md:!bottom-0 max-md:!left-0 max-md:!top-auto max-md:w-full max-md:rounded-b-none max-md:pb-[env(safe-area-inset-bottom)]',
+      )}
       onKeyDown={handleMenuKeyDown}
       ref={menuRef}
       role="menu"
@@ -462,7 +469,15 @@ export const IssueContextMenu = observer(function IssueContextMenu({
             {t(submenuTitleKey[submenu])}
           </button>
           <div className="my-1 border-t border-border" />
-          <div className="max-h-64 overflow-y-auto">
+          <div
+            className={cn(
+              'overflow-y-auto',
+              // Size to content: viewport-aware rather than a fixed 16rem clip.
+              submenu === 'remind'
+                ? 'max-h-[min(34rem,calc(100dvh-6rem))]'
+                : 'max-h-64',
+            )}
+          >
             {submenu === 'status' &&
               states.map(s => (
                 <button

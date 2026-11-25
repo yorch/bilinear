@@ -23,6 +23,24 @@ export function deliveryTone(status: string): DeliveryTone {
   }
 }
 
+type StatusTranslate = (key: string) => string;
+
+/**
+ * Localised delivery status chip text. An unrecognised status (the server owns
+ * the enum) falls back to the raw value rather than a missing-key string.
+ */
+export function deliveryStatusLabel(t: StatusTranslate, status: string): string {
+  switch (status) {
+    case 'success':
+    case 'failed':
+    case 'pending':
+    case 'in_flight':
+      return t(`settings.webhooks.deliveries.status.${status}`);
+    default:
+      return status;
+  }
+}
+
 /** The failure classes the server records on a delivery (`errorCode`). */
 export const DELIVERY_ERROR_CODES = [
   'ECONNREFUSED',

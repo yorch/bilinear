@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { translate } from './i18n';
 import en from './i18n/locales/en.json';
 import es from './i18n/locales/es.json';
-import { DELIVERY_ERROR_CODES, deliveryErrorText, deliveryTone } from './webhook-delivery';
+import {
+  DELIVERY_ERROR_CODES,
+  deliveryErrorText,
+  deliveryStatusLabel,
+  deliveryTone,
+} from './webhook-delivery';
 
 describe('deliveryTone', () => {
   it('renders the terminal states as success and danger', () => {
@@ -81,5 +86,29 @@ describe('deliveryErrorText', () => {
         }
       }
     }
+  });
+});
+
+describe('deliveryStatusLabel', () => {
+  const tEn = (key: string) => translate('en', key);
+  const tEs = (key: string) => translate('es', key);
+  const statuses = ['pending', 'in_flight', 'success', 'failed'];
+
+  it('localises every known status and never leaks the raw enum in es', () => {
+    for (const s of statuses) {
+      expect(deliveryStatusLabel(tEs, s)).not.toBe(s);
+      expect(deliveryStatusLabel(tEs, s)).not.toBe(deliveryStatusLabel(tEn, s));
+    }
+    expect(deliveryStatusLabel(tEs, 'pending')).toBe('Pendiente');
+    expect(deliveryStatusLabel(tEn, 'failed')).toBe('Failed');
+  });
+
+  it('passes an unknown status through unchanged', () => {
+    expect(deliveryStatusLabel(tEs, 'quarantined')).toBe('quarantined');
+  });
+
+  it('keeps the es nav label short enough not to truncate in the 208px rail', () => {
+    expect(es.settings.workspace.navLabel.length).toBeLessThanOrEqual(20);
+    expect(en.settings.workspace.navLabel.length).toBeLessThanOrEqual(20);
   });
 });

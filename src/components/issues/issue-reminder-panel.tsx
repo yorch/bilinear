@@ -138,7 +138,7 @@ export const IssueReminderPanel = observer(function IssueReminderPanel({
         </button>
       ))}
       <form
-        className="flex flex-col gap-1.5 px-3 py-1.5"
+        className="flex flex-col gap-1.5 px-3 pt-1.5"
         noValidate
         onKeyDown={onKeyDown}
         onSubmit={submit}
@@ -154,44 +154,48 @@ export const IssueReminderPanel = observer(function IssueReminderPanel({
           }}
           value={day}
         />
-        <label
-          className="flex items-center gap-2 text-xs text-muted-foreground"
-          htmlFor={`${timeId}-time`}
-        >
-          {t('calendar.time')}
-          <Input
-            aria-describedby="reminder-custom-note"
-            aria-invalid={error ? true : undefined}
-            className="w-auto px-2 py-1"
-            data-autofocus
-            id={`${timeId}-time`}
-            onChange={e => {
-              setTime(e.target.value);
-              // A time typed before any day means today.
-              if (!day) {
-                setDay(reminderInputMin().slice(0, 10));
-              }
-              setTouched(true);
-            }}
-            type="time"
-            value={customTime}
-          />
-        </label>
-        <p
-          aria-live="polite"
-          className={
-            error
-              ? 'text-xs text-danger-subtle-foreground'
-              : 'text-xs text-warning-subtle-foreground'
-          }
-          id="reminder-custom-note"
-        >
-          {error ??
-            (result?.ok && result.shifted ? t('reminders.shifted', { when: when(result.at) }) : '')}
-        </p>
-        <Button disabled={!result?.ok} size="sm" type="submit">
-          {t('reminders.setCustom')}
-        </Button>
+        {/* Footer stays pinned to the bottom of the scrolling menu, so the time
+            and "Set reminder" are reachable however much of the Calendar fits. */}
+        <div className="sticky bottom-0 -mx-3 flex flex-col gap-1.5 border-t border-border bg-card px-3 pb-2 pt-2">
+          <label
+            className="flex items-center gap-2 text-xs text-muted-foreground"
+            htmlFor={`${timeId}-time`}
+          >
+            {t('calendar.time')}
+            <Input
+              aria-describedby="reminder-custom-note"
+              aria-invalid={error ? true : undefined}
+              className="w-auto px-2 py-1"
+              data-autofocus
+              id={`${timeId}-time`}
+              onChange={e => {
+                setTime(e.target.value);
+                // A time typed before any day means today.
+                if (!day) {
+                  setDay(reminderInputMin().slice(0, 10));
+                }
+                setTouched(true);
+              }}
+              type="time"
+              value={customTime}
+            />
+          </label>
+          <p
+            aria-live="polite"
+            className={
+              error
+                ? 'text-xs text-danger-subtle-foreground'
+                : 'text-xs text-warning-subtle-foreground'
+            }
+            id="reminder-custom-note"
+          >
+            {error ??
+              (result?.ok && result.shifted ? t('reminders.shifted', { when: when(result.at) }) : '')}
+          </p>
+          <Button disabled={!result?.ok} size="sm" type="submit">
+            {t('reminders.setCustom')}
+          </Button>
+        </div>
       </form>
       {existing && (
         <>

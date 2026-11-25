@@ -27,7 +27,7 @@ interface SettingsSection {
 }
 
 const SECTIONS: readonly SettingsSection[] = [
-  { href: '', icon: SettingsIcon, labelKey: 'settings.workspace.title' },
+  { href: '', icon: SettingsIcon, labelKey: 'settings.workspace.navLabel' },
   {
     adminOnly: true,
     href: '/integrations',
@@ -113,7 +113,9 @@ export const SettingsNav = observer(function SettingsNav() {
                   href={target}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{t(labelKey)}</span>
+                  <span className="truncate" title={t(labelKey)}>
+                    {t(labelKey)}
+                  </span>
                 </Link>
               </li>
             );
