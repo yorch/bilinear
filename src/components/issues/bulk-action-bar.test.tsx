@@ -97,7 +97,7 @@ describe('BulkActionBar', () => {
     // The themed calendar replaces the native date input: picking a day writes `YYYY-MM-DD`.
     const now = new Date();
     const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-15`;
-    fireEvent.click(screen.getByRole('button', { name: '15' }));
+    fireEvent.click(document.querySelector(`[data-date="${key}"]`) as HTMLElement);
     expect(onUpdate).toHaveBeenLastCalledWith({ dueDate: key });
 
     fireEvent.click(screen.getByRole('button', { name: 'issues.dueDate' }));
